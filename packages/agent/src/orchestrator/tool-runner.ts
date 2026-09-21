@@ -74,6 +74,7 @@ import { analyzeVerificationInvocation } from "../verification-command.js";
 import { parseChildPolicy } from "./agent-args.js";
 import { SUB_AGENT_TOOL_NAME } from "./constants.js";
 import { DefaultContextSummarizer } from "./context-summarizer.js";
+import { type ToolCallPlan, createToolCallPlans } from "./tool-batch-plan.js";
 import { truncatePayloadWithOutcome } from "./truncate-payload.js";
 
 /** 文件锁等待超时（毫秒）：超时后该工具调用按冲突失败返回 */
@@ -415,7 +416,6 @@ export async function executeToolCalls(
         : undefined;
     }),
   );
-  const blockedByPolicy = policyBlocks.map(Boolean);
   const effectPolicyApplies = calls.map((call) =>
     toolCtx.toolEffectPolicy && !isManagedJobControlTool(call.tool)
       ? (toolCtx.toolEffectPolicy.appliesTo?.({
@@ -425,14 +425,15 @@ export async function executeToolCalls(
         }) ?? true)
       : false,
   );
+  // 逐调用计划：取代原先 7 个下标对齐的并行数组（docs/CODE-REVIEW.md §A3）
+  const plans = createToolCallPlans(calls, policyBlocks, effectPolicyApplies);
 
   // 步骤 1.5：并行子 Agent 的文件锁（仅当注入 fileLock，即子 Agent 场景）
   // 占用语义：先到先得，后来的等待，超时按冲突失败。
-  const lockConflict: (string | undefined)[] = calls.map(() => undefined);
   if (toolCtx.fileLock) {
-    for (let i = 0; i < calls.length; i++) {
-      const call = calls[i]!;
-      if (blockedByPolicy[i]) continue;
+    for (const plan of plans) {
+      const call = plan.call;
+      if (plan.policyBlock) continue;
       // shell 目标不可预测，跳过锁（与 checkpoint 的 __shell_cmd__ 一致）
       if (!isMutatingTool(call.tool) || call.tool === "workspace.run_shell") {
         continue;
@@ -455,7 +456,7 @@ export async function executeToolCalls(
         },
       );
       if (!r.ok) {
-        lockConflict[i] = r.path ?? targets[0]!;
+        plan.lockConflict = r.path ?? targets[0]!;
         toolCtx.emit({
           type: "agent.file_lock",
           status: "denied",
@@ -467,12 +468,10 @@ export async function executeToolCalls(
   }
 
   // 步骤 2：收集审批结果（串行 — UI 交互必须有序）
-  const approvals: boolean[] = [];
-  for (let i = 0; i < calls.length; i++) {
-    const call = calls[i]!;
-    // 已被策略阻止 → 跳过审批
-    if (blockedByPolicy[i]) {
-      approvals.push(false);
+  for (const plan of plans) {
+    const call = plan.call;
+    // 已被策略阻止 → 跳过审批（plan.approval 默认 false）
+    if (plan.policyBlock) {
       continue;
     }
     const needsApproval = toolNeedsApprovalGate(
@@ -499,7 +498,7 @@ export async function executeToolCalls(
           tool: call.tool,
           approved,
         });
-        approvals.push(approved);
+        plan.approval = approved;
       } else {
         // 无审批回调 → 拒绝修改性工具（安全优先）
         toolCtx.emit({
@@ -512,27 +511,29 @@ export async function executeToolCalls(
           tool: call.tool,
           approved: false,
         });
-        approvals.push(false);
+        plan.approval = false;
       }
     } else {
       // 不需要审批 → 直接放行
-      approvals.push(true);
+      plan.approval = true;
     }
   }
 
   // 步骤 3：为修改性工具预分配 checkpoint 序列号
   // checkpoint 用于断点续跑时恢复文件状态
-  const checkpointNums: Array<number | undefined> = calls.map((call, index) => {
+  for (const plan of plans) {
+    const call = plan.call;
     if (
-      blockedByPolicy[index] ||
-      !approvals[index] ||
+      plan.policyBlock ||
+      !plan.approval ||
       !isMutatingTool(call.tool) ||
       call.tool === UNDO_LAST_EDIT
-    )
-      return undefined;
+    ) {
+      continue;
+    }
     toolCtx.checkpointSeq.n += 1;
-    return toolCtx.checkpointSeq.n;
-  });
+    plan.checkpointNum = toolCtx.checkpointSeq.n;
+  }
   const serializeToolCalls =
     effectPolicyApplies.some(Boolean) ||
     calls.some(
@@ -541,21 +542,19 @@ export async function executeToolCalls(
   const mutationCallCount = serializeToolCalls
     ? 1
     : calls.filter((call) => isMutatingTool(call.tool)).length;
-  const mutationCaptures: Array<LoopV2ShadowMutationCapture | undefined> = calls.map(
-    () => undefined,
-  );
 
   // 步骤 4：执行工具。注入 effect policy 时必须串行，确保每个 before/after
   // 快照只归因于一个工具；没有 effect policy 时保留原有并行语义。
   // 使用动态 import 避免循环依赖
   const { executeTool } = await import("@paw/harness");
-  const executeOne = async (call: AgentToolCallAction, i: number): Promise<ToolRunResult> => {
+  const executeOne = async (plan: ToolCallPlan): Promise<ToolRunResult> => {
+    const call = plan.call;
     // 被策略阻止 → 返回 block 结果
-    if (blockedByPolicy[i]) {
+    const block = plan.policyBlock;
+    if (block) {
       if (toolCtx.captureLoopV2Facts) {
-        mutationCaptures[i] = createLoopV2NoMutationCapture();
+        plan.mutationCapture = createLoopV2NoMutationCapture();
       }
-      const block = policyBlocks[i]!;
       return {
         ok: false,
         summary: `[ToolPolicy:${block.reason}] ${block.message}`,
@@ -568,10 +567,10 @@ export async function executeToolCalls(
       };
     }
     // 文件锁冲突 → 返回冲突结果（模型可改派/重试）
-    const conflictPath = lockConflict[i];
+    const conflictPath = plan.lockConflict;
     if (conflictPath !== undefined) {
       if (toolCtx.captureLoopV2Facts) {
-        mutationCaptures[i] = createLoopV2NoMutationCapture();
+        plan.mutationCapture = createLoopV2NoMutationCapture();
       }
       return {
         ok: false,
@@ -580,9 +579,9 @@ export async function executeToolCalls(
       };
     }
     // 被用户拒绝 → 返回 deny 结果
-    if (!approvals[i]) {
+    if (!plan.approval) {
       if (toolCtx.captureLoopV2Facts) {
-        mutationCaptures[i] = createLoopV2NoMutationCapture();
+        plan.mutationCapture = createLoopV2NoMutationCapture();
       }
       return {
         ok: false,
@@ -597,13 +596,13 @@ export async function executeToolCalls(
 
     // Capture the product state before checkpoint infrastructure writes under
     // .paw, then save the rollback snapshot for the actual tool target.
-    const cpNum = checkpointNums[i];
+    const cpNum = plan.checkpointNum;
     if (cpNum !== undefined) {
       try {
         saveCheckpoint(toolCtx.workspaceRoot, toolCtx.runId, cpNum, call.tool, call.args);
       } catch (error) {
         if (toolCtx.captureLoopV2Facts) {
-          mutationCaptures[i] = createLoopV2NoMutationCapture();
+          plan.mutationCapture = createLoopV2NoMutationCapture();
         }
         const message = error instanceof Error ? error.message : String(error);
         return {
@@ -621,7 +620,7 @@ export async function executeToolCalls(
     }
 
     let prepared: unknown;
-    if (toolCtx.toolEffectPolicy && effectPolicyApplies[i]) {
+    if (toolCtx.toolEffectPolicy && plan.effectPolicyApplies) {
       try {
         prepared = await toolCtx.toolEffectPolicy.prepare({
           tool: call.tool,
@@ -630,7 +629,7 @@ export async function executeToolCalls(
         });
       } catch (error) {
         if (toolCtx.captureLoopV2Facts) {
-          mutationCaptures[i] = createLoopV2NoMutationCapture();
+          plan.mutationCapture = createLoopV2NoMutationCapture();
         }
         const message = error instanceof Error ? error.message : String(error);
         return {
@@ -682,7 +681,7 @@ export async function executeToolCalls(
           }),
         ...(toolCtx.shellSandbox ? { shellSandbox: toolCtx.shellSandbox } : {}),
         // Unified approval bus: tool gate approval covers shell "ask"
-        ...(approvals[i] && call.tool === "workspace.run_shell"
+        ...(plan.approval && call.tool === "workspace.run_shell"
           ? { shellCommandPreApproved: true }
           : {}),
         ...(toolCtx.memoryRuntime ? { memoryRuntime: toolCtx.memoryRuntime } : {}),
@@ -696,7 +695,7 @@ export async function executeToolCalls(
     );
 
     let settledResult = rawResult;
-    if (toolCtx.toolEffectPolicy && effectPolicyApplies[i]) {
+    if (toolCtx.toolEffectPolicy && plan.effectPolicyApplies) {
       try {
         const decision = await toolCtx.toolEffectPolicy.settle(
           {
@@ -771,7 +770,7 @@ export async function executeToolCalls(
       }
     }
     if (beforeCapture) {
-      mutationCaptures[i] = captureMutationAfter(
+      plan.mutationCapture = captureMutationAfter(
         toolCtx.workspaceRoot,
         beforeCapture,
         settledResult,
@@ -782,14 +781,14 @@ export async function executeToolCalls(
 
   const results: ToolRunResult[] = [];
   if (serializeToolCalls) {
-    for (const [i, call] of calls.entries()) {
-      results.push(await executeOne(call, i));
+    for (const plan of plans) {
+      results.push(await executeOne(plan));
     }
   } else {
-    results.push(...(await Promise.all(calls.map(executeOne))));
+    results.push(...(await Promise.all(plans.map((plan) => executeOne(plan)))));
   }
 
-  return { results, mutationCaptures };
+  return { results, mutationCaptures: plans.map((plan) => plan.mutationCapture) };
 }
 
 const V2_PARALLEL_TOOLS = new Set([

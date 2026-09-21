@@ -720,7 +720,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 20 | 拆 `initializeRun`（1282 行）与 `AgentOrchestrator`（4922 行）（§2.1、§A1–A3） | 可读性最大单点收益 | 中大 |
 | 21 | ✅ 完成：拆 `executeTool`（1355 行、37 个分支）—— `execution.ts` 1768 → 38 行，处理器分到 9 个文件 + 派发表；导出面与测试数字逐项不变（见 11.9） | 工具层的可读性单点最大收益 | 中大 |
 | 22 | 拆 `apps/desktop` 的 931 行 `useEffect` + 引入 `useReducer`（§D1） | 订阅泄漏风险 + 状态机单一迁移点 | 中大 |
-| 23 | `tool-runner` 的 7 个并行数组 → `ToolCallPlan[]`（§A3） | 消掉 flag soup 与一个 `!` | 中 |
+| 23 | ✅ 完成：7 个并行数组 → `ToolCallPlan[]`，`executeOne(call, i)` → `executeOne(plan)`，3 处 `!` 归零；`planToolBatch` 本身未抽（规划步骤含 3 个交错的 `await`，属行为面重构，见 11.19） | 消掉 flag soup 与 `!` | 中 |
 | 24 | 🟡 部分完成：`TURN_FLAG_CODECS` 登记表已落地并**被编译器强制**（新增 `TurnFlags` 字段不登记就编译失败，已 A/B 验证），`restore` 的返回类型改为由它推导、22 名字的 `Pick` 清单删除；编码/解码函数体仍是手工 spread（§A5） | 消掉"加字段就静默丢状态"的悬崖 | 中 |
 | 25 | 拆 `resolveEvidencePass`（1324 行）（§M4） | 让承重不变量可被 review | 中大 |
 | 26 | 渲染进程边界：导出 `DesktopRunEvent` 联合类型，`agentId` 改真字段（§D2） | 消掉"改一句摘要就静默破坏子 Agent 名册" | 中 |
@@ -1073,3 +1073,26 @@ const specId = fromCall ?? fromArgs ?? fromSummary;
 - v2 的拒绝信息 "File durable JSON payload runtime policy is invalid" 不在 `product-manifest-v2.ts` 里，来自它依赖的共享校验。
 
 也就是说要驱动这两个构造函数，得先构造**完整合法的 runtime policy 输入**（策略版本常量、审计模式组合、long-task 阶段图……彼此还有相互约束）。这是那两个函数各自的契约测试，不是给现有用例补两行。所以这一轮**没有改代码**，只把校验链的位置与约束记在这里；下一步若要覆盖它们，应从 `CreatePawNextProductManifestInputV3` 的类型与那 9 个 `throw` 反推一份最小合法输入，而不是继续试错。
+
+### 11.19 #23（§A3）完成：7 个并行数组 → `ToolCallPlan[]`
+
+**做法与报告建议的略有出入，理由在下面。** 报告写的是"新建 `tool-runner/tool-batch-plan.ts` 导出 `planToolBatch(...)`，把规划整体搬过去"。我把**数据表示**收敛了，但没有把规划**步骤**搬走 —— 因为步骤 1.5/2/3 里各有一个 `await` 穿插着 `emit`（文件锁等待、审批回调、checkpoint 分配时递增 `toolCtx.checkpointSeq.n`），要一次性算完就得把这些副作用从流程里抽走。那是一次**行为面**的重构，不是可读性重构；而 §A3 真正报的缺陷是**下标对齐**，不是"规划代码放错了文件"。所以本轮只消下标，不搬 `await`。
+
+新增 `packages/agent/src/orchestrator/tool-batch-plan.ts`：`ToolPolicyBlock`、`ToolCallPlan`、以及唯一的构造点 `createToolCallPlans(calls, policyBlocks, effectPolicyApplies)`。
+
+**改动前后对照：**
+
+| 原先 | 现在 |
+|---|---|
+| 7 个数组：`policyBlocks` / `blockedByPolicy` / `effectPolicyApplies` / `lockConflict` / `approvals` / `checkpointNums` / `mutationCaptures` | 1 个 `plans: ToolCallPlan[]` |
+| `approvals` 靠 4 处 `push`，其余靠下标赋值，两种风格混用 | 全部是记录字段赋值，构造顺序即语义顺序 |
+| `executeOne(call, i)` —— 索引进入签名 | `executeOne(plan)` —— 索引从签名消失 |
+| 3 处 `!`：`calls[i]!`×2、`policyBlocks[i]!` | 0 处（`plan.policyBlock` 收敛为非可选） |
+
+`createToolCallPlans` 用一次 `calls.map` 同时喂三条输入，**长度与顺序一致从"需要维护的不变量"变成"构造出来的事实"**。原先那处 `!` 的成因（编译器证不出数组同步）随之消失 —— 这也解释了 lint 计数为什么恰好降 3。
+
+**一处显式行为收口**：`effectPolicyApplies[index] ?? false`。原先越界读会拿到 `undefined`（`noUncheckedIndexedAccess` 下属于"读到了不该读的格子"），在布尔上下文里恰好也是假值，所以行为等价；`?? false` 只是把"碰巧对"写成"明确对"。测试里有一条专门钉它。
+
+**验证**：`packages/agent` 874 pass / 12 fail —— 12 条与 §11.8 记录的既有失败**逐条同名同数**（`candidate-review`、`ContextCompactor`、`context-assembler`×4、`loop-authority`、`loop-v2-provider-terminal`、`operations-run-session`、`orchestrator`、`status-snapshot`、`worktree`），无新增。新增 `packages/agent/test/tool-batch-plan.test.ts` 5 个用例（1:1 与顺序、策略阻止穿透、暂存字段默认值、越界兜底、空批次）。lint 0 error / **432** warning（435 − 3 个 `!`，与上表吻合）；typecheck 23/23。
+
+**没做的部分**：`planToolBatch` 这个函数本身。要它成立，得先把规划阶段那三个 `await` 的副作用改成显式依赖（比如把 `emit`/`checkpointSeq` 作为参数传入并在外部按序驱动），那是独立的一步。**当前的 `ToolCallPlan` 已经为那一步准备好了形状** —— 一旦规划能一次算完，`lockConflict`/`approval`/`checkpointNum` 就能从可变字段升为 `readonly`，构造点仍然只有 `createToolCallPlans` 一处。
