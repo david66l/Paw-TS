@@ -737,7 +737,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 32 | 🟡 (a) 已完成：(b) **早已由批次 B #6 顺带做完**（两个 `canonicalJsonStringifyV1` 现在都收 `unknown`，§R7 的前提过期）。4 个形状校验器改成 `asserts` 谓词，**实测消掉 13 处断言**（3 个 `as unknown as` + 10 个具名断言，去掉注释后计数）。**剩余**：`assertCheckpointSourcesInRange`/`assertJournalCommitShape` 是**关系**校验器，结构上不可能是 `asserts` 谓词（§11.22），`session-execution-lease.ts:1485` 那处需另想办法 | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
 | 33 | 🟡 可区分性已完整解决：全文件唯一的那对重复文案消除（实测重复数为 0），14 处 work-segment 守卫改为带稳定 `code` + `detectedAt` 的 `LifecycleInvariantErrorV1`；§R2 第二半（把不变量陈述搬到 `reduceEvent`）也做了。**剩余**：`LifecycleInvariantV1` 表与 29 个累加器的状态对象未立 —— 报告写作时它的收益是"可区分"，那部分已拿到；剩下的只有"可发现性"，**建议与 #25 的 `ResolutionPassState` 一起做**（同类改动、同类风险，见 11.23） | 让"work segment 启动前必须成立什么"可被单点回答 |
 | 34 | 给 `packages/paw-next` 补测试（它是桌面端唯一入口，却零测试，§C7） | 风险最高的模块从零保障到有保障 |
-| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例，含优先级与大小写）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）、`run_skill` ✅（7 例，见 11.31）。仍为 0 命中：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp`（其中网络类需要桩） | 该包测试比 0.28，而它决定策略与审计 |
+| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例，含优先级与大小写）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）、`run_skill` ✅（7 例，见 11.31）、`todo_write` ✅（7 例，重点是输入净化，见 11.33）。仍为 0 命中：`browser_check`、`web_fetch`、`web_search`、`notebook_edit`、`workspace.lsp`（网络类需要桩） | 该包测试比 0.28，而它决定策略与审计 |
 
 > 建议在第 12 条之前先落地第 6 条：`canonicalJsonStringifyV1` 签名一变，`orchestrator.ts` 里若干 `as never` / `as unknown as` 会自然消失，重构时的噪声更少。
 
@@ -1546,3 +1546,19 @@ case "unknown":
 **收敛这件事该怎么排优先级（本轮结论，供后续轮次直接采用）**：它的收益是"模型能看到语义 code"，不是崩溃恢复，因此**不是** high；而且 48 处一次改完会同时改动多条 payload 形状，需要逐条确认消费者（desktop 会读工具结果）。建议**按 handler 分批**，从模型最依赖分类信息的那些开始（`agents.ts` 的委派失败首当其冲），每批配用例。
 
 **本轮没有功能性改动落地** —— 只有 `run-skill.test.ts` 里那段注释的更正，以及这一节。
+
+### 11.33 #35 再补一个：`todo_write`，重点是它那层输入净化
+
+`workspace.todo_write` 此前在 `packages/harness/test` 里 **0 命中**。新增 `packages/harness/test/todo-write.test.ts`（7 例），`packages/harness` 从 236 涨到 **243 pass / 0 fail**。
+
+**为什么挑它**：它有两条后端路径（`taskProgress` 优先，其次 `todoStore`）和一层**输入净化**（`handlers/task.ts:37-55`）。净化规则是那种会静默漂移的东西 —— 缺 `id` 或 `content` 的条目被丢弃、非法 `status` 落回 `"pending"`、非法 `priority` 整个键被省略。漂移了不会报错，只会让模型看到一份和它写的不一样的清单，所以逐条钉住：
+
+- 两个后端都没配 → 拒绝，且确认这是**裸 payload**（无 `error_code`，§11.32 记的那类）；
+- store 路径 → `set` 收到的就是净化后的列表，摘要计数正确；
+- 净化 → `{id:"ok",content:"keep me",status:"nonsense",priority:"urgent"}` 变成 `{id:"ok",content:"keep me",status:"pending"}`，并断言 `priority` **键不存在**（不是值为 `undefined`）；缺 id / 空 content / `content` 是数字 / `null` / 字符串条目全部丢弃；
+- 进度侧失败 → `E_USER` 且带原因，并断言**此时没有顺手写进 store**（两条后端不该都动）；
+- 进度侧成功 → 摘要含完成百分比，同样断言没动 store。
+
+**又被实测纠正一次（同一个模式第四次出现）**："`todos` 不是数组"我以为会走到处理器里的 `Array.isArray(rec.todos) ? rec.todos : []`，实测是 schema 直接拦下 —— `todos` 在 `definitions.ts` 里是数组且 `required: ["todos"]`。于是拆成两条用例：类型不对由 schema 报 `E_SCHEMA_INVALID`（带 `field: "todos"`），而处理器那句兜底**只在键存在、值为 `undefined`** 时才可达。这与 §11.20 的 `list_dir`/`glob`/`grep`、§11.31 的 `run_skill` 是**同一个形状**：声明式 schema 与处理器各自维护一份"什么是合法输入"，两者不一致时没有任何信号。
+
+**§D9 剩余**：`browser_check`、`web_fetch`、`web_search`、`notebook_edit`、`workspace.lsp`（网络类需要桩）。
