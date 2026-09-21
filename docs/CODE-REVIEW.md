@@ -720,7 +720,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 21 | ✅ 完成：拆 `executeTool`（1355 行、37 个分支）—— `execution.ts` 1768 → 38 行，处理器分到 9 个文件 + 派发表；导出面与测试数字逐项不变（见 11.9） | 工具层的可读性单点最大收益 | 中大 |
 | 22 | 拆 `apps/desktop` 的 931 行 `useEffect` + 引入 `useReducer`（§D1） | 订阅泄漏风险 + 状态机单一迁移点 | 中大 |
 | 23 | `tool-runner` 的 7 个并行数组 → `ToolCallPlan[]`（§A3） | 消掉 flag soup 与一个 `!` | 中 |
-| 24 | `TURN_FLAG_CODECS` 映射类型替掉三处手工镜像（§A5） | 消掉一个"加字段就静默丢状态"的悬崖 | 中 |
+| 24 | 🟡 部分完成：`TURN_FLAG_CODECS` 登记表已落地并**被编译器强制**（新增 `TurnFlags` 字段不登记就编译失败，已 A/B 验证），`restore` 的返回类型改为由它推导、22 名字的 `Pick` 清单删除；编码/解码函数体仍是手工 spread（§A5） | 消掉"加字段就静默丢状态"的悬崖 | 中 |
 | 25 | 拆 `resolveEvidencePass`（1324 行）（§M4） | 让承重不变量可被 review | 中大 |
 | 26 | 渲染进程边界：导出 `DesktopRunEvent` 联合类型，`agentId` 改真字段（§D2） | 消掉"改一句摘要就静默破坏子 Agent 名册" | 中 |
 | 27 | 跨包同名不同义改名去歧义（§3） | 消除读者陷阱 | 中（面广但机械） |
