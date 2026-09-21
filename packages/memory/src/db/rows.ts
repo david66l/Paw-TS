@@ -56,3 +56,41 @@ export type MemoryItemRow = {
   readonly created_at: Date;
   readonly updated_at: Date;
 };
+
+/**
+ * `memory_candidates` 的一行（`V004__memory_candidates.sql`）。
+ *
+ * 与 `memory_items` 不同，这张表有**两个可空列**：`proposed_subject_key` 与
+ * `expires_at`。可空写成 `| null` —— 驱动给的是 `null`，不是 `undefined`。
+ * 原先的映射写 `row.proposed_subject_key as string | undefined`，于是运行期
+ * 漏出的是 `null` 而类型声称 `string | undefined`；映射里用 `?? undefined`
+ * 把类型兑现（与 `createdAt` 那处同一类修正）。
+ */
+export type MemoryCandidateRow = {
+  readonly id: string;
+  readonly schema_version: number;
+  readonly status: string;
+  readonly proposed_type: string;
+  /** 可空列：驱动返回 `null`。 */
+  readonly proposed_subject_key: string | null;
+  readonly subject_key_version: number;
+  readonly proposed_title: string;
+  readonly proposed_summary: string;
+  readonly proposed_payload: unknown;
+  readonly proposed_scope: unknown;
+  readonly proposed_confidence: number;
+  readonly source_task_ids: string[];
+  readonly source_refs: unknown;
+  readonly evidence_refs: unknown;
+  readonly possible_duplicate_ids: string[];
+  readonly possible_conflict_ids: string[];
+  readonly risk_level: string;
+  readonly review_required: boolean;
+  readonly generated_by: unknown;
+  readonly generation_reason: string;
+  readonly sensitivity: string;
+  readonly created_at: Date;
+  readonly updated_at: Date;
+  /** 可空列：驱动返回 `null`。 */
+  readonly expires_at: Date | null;
+};

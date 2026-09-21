@@ -725,7 +725,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 25 | 🟡 第一轮完成：相对时间窗口解析 + 稳定重排抽到 `memory-core/src/evidence-resolution/relative-time-window.ts`（16 个用例钉住"软加权不是硬过滤"、引用相等的零触发、半开区间、失败保持原序），两处重复前导合一，函数净减 24 行。**剩余**：主函数仍 1593 行；下一刀必须先立 `ResolutionPassState`（selector 门不是自包含的，见 11.21），不是继续找函数抽 | 让承重不变量可被 review | 中大 |
 | 26 | 渲染进程边界：导出 `DesktopRunEvent` 联合类型，`agentId` 改真字段（§D2） | 消掉"改一句摘要就静默破坏子 Agent 名册" | 中 |
 | 27 | 跨包同名不同义改名去歧义（§3） | 消除读者陷阱 | 中（面广但机械） |
-| 28 | 🟡 第一刀完成：`db/rows.ts` 落地 `MemoryItemRow`（按驱动实际返回值描述，时间列是 `Date`），`rowToItem` 标量列零断言、断言集中在驱动边界 `sql.unsafe<MemoryItemRow[]>`；`memoryItem.ts` 断言 **40 → 17**；**A/B 实测**列改名现在报 `TS2339`（§M1 的危害已关闭）；顺带修掉 `timestamptz`→`Date` 被断言成 `string` 的类型谎言，并暴露出被双重断言掩盖的两个既有问题（payload 联合不匹配、`RETURNING *` 可能为 undefined）。**剩余**：其余 DAO 无行类型、`db/` 仍有 45 处 `as any`/`as unknown as`、§M7 未动 | 把静默 `undefined` 变编译错误 | 中大 |
+| 28 | 🟡 两刀完成：`db/rows.ts` 落地 `MemoryItemRow` 与 `MemoryCandidateRow`（按驱动实际返回值描述：时间列是 `Date`、可空列是 `| null`），两个 DAO 的标量列零断言、断言集中在驱动边界 `sql.unsafe<Row[]>`；`memoryItem.ts` 断言 **40 → 17**；**A/B 实测**列改名现在报 `TS2339`（§M1 的危害已关闭）；顺带修掉三处类型谎言（`timestamptz`→`Date` 被断言成 `string`、可空列的 `null` 被断言成 `| undefined`），并暴露出被双重断言掩盖的两个既有问题。**剩余**：`governanceDecision.ts`（8 个可空列，须先读迁移）、`db/` 仍有 45 处 `as any`/`as unknown as`、§M7 未动（见 11.25 的接续清单） | 把静默 `undefined` 变编译错误 | 中大 |
 | 29 | 🟡 三分之二完成：`toWorkspaceRelPath()` ✅（4 处副本 → `workspace/src/workspace-path.ts` 的两个操作）、共享 `summarizeToolArgs` ✅（审批卡漏了 `pattern`，glob/grep/search 此前给审批人显示空摘要；两侧截断长度差异保留并说明理由）；`sse.ts` + `ToolCallAccumulator` 未抽 —— 实测两处副本只有写法差异、无可观测行为差异（§11.11），剩下的纯属可读性 | 消掉已分叉副本 | 中 |
 | 30 | 📏 已测量、未接线：`benchmarks/tsconfig.json` 已加，实测 **496 个类型错误**（报告估的"小"偏低）；未并入 `check:ts`，否则闸门立刻变红。修法见 §11.10 | 3 万行回到闸门内 | 小（实为中大） |
 
@@ -1282,3 +1282,28 @@ jb   typeof=object ctor=Object
 **测试基线 A/B**：`bun test packages/memory`（需 `DATABASE_URL`，本机容器 `paw-ts-memory-pg`）在**改动前**是 1009 pass / 5 fail，改动后**同样是 1009 pass / 5 fail 且失败用例同名**（`6.0b Memory Evaluator`、`readonly 切换`、`Governor §5.8-3`、`trial 容量`、`memory-mechanism fixtures`）。即那 5 条是 §11.3.5 记的跨文件污染，与本次改动无关 —— 我用 `git stash push -u -- packages/memory/src/db` 做了真正的 A/B，不是凭印象。
 
 **#28 未完成的部分**：其余 DAO（`workingMemory.ts`、`memoryCandidate.ts`、版本表等）还没有行类型；`db/` 里仍有 **45** 处 `as any`/`as unknown as`；§M7（三套 SQL 约定并存、`textArrayLiteral` 零调用、`j()` 无调用者）未动。
+
+### 11.25 #28 第二刀：`memoryCandidate` 也拿到行类型，可空列把 `null` 兑现成 `undefined`
+
+同一套做法推广到 `db/dao/memoryCandidate.ts`（原先把 24 个字段逐一断言、5 个读取点各写一次 `as Record<string, unknown>`）。
+
+**这张表与 `memory_items` 的关键差别是它有可空列**，所以行类型里写 `| null` 而不是 `| undefined` —— 驱动对可空列返回的就是 `null`：
+
+```
+proposed_subject_key    text,          -- 可空
+expires_at              timestamptz    -- 可空
+```
+
+原先的映射写 `row.proposed_subject_key as string | undefined`，于是**运行期漏出的是 `null`，而类型声称 `string | undefined`** —— 与 `createdAt` 那处是同一类谎言，只是方向相反（一个是 `Date` 冒充 `string`，一个是 `null` 冒充 `undefined`）。现在映射里显式 `?? undefined` / `?.toISOString()` 把声明的类型兑现。
+
+**改前核实过消费者**：全仓 `proposedSubjectKey` 的 12 处使用要么是 `if (candidate.proposedSubjectKey)` 真值判断（`memoryGovernance.ts:72`、`:148`），要么是 `?? fallback`（`governanceExecutor.ts:128`、`memoryStore.ts:89`），**没有任何一处区分 `null` 与 `undefined`**；`expiresAt` 除类型声明外无消费者。所以这次收窄对行为是惰性的 —— 是核实过的结论，不是推断。
+
+**同时补上 `create` 的 `RETURNING *` 守卫**（原先 `row as Record<string, unknown>` 连"可能为 undefined"也断言掉了），5 个读取点统一打上 `sql.unsafe<MemoryCandidateRow[]>` / `sql<MemoryCandidateRow[]>`。
+
+**测试基线 A/B**：`bun test packages/memory` 仍是 **1009 pass / 5 fail**，失败用例与 §11.24 记的同名同数。
+
+**#28 剩下的部分（下一刀从这里接，不用重新勘察）**：
+
+- `db/dao/governanceDecision.ts` 是最后一个有盲断言的 DAO（8 处）。它比前两个麻烦：有 **8 个可空列**（`resulting_memory_id`、`adjusted_type`、`adjusted_scope`、`adjusted_confidence`、`adjusted_payload`、`target_memory_id`、`expected_version`、`executed_at`），而且它已经在两处写了 `?? undefined`、另几处仍是会漏 `null` 的 `as string | undefined`。做之前**必须先读 `V0xx__governance_decisions.sql` 逐列确认可空性**，不能照抄前两个的形状。
+- `workingMemory.ts` / `taskSession.ts` 该目录下断言数为 0，但仍应确认它们的映射是否直接返回驱动行。
+- §M7：`workingMemory.ts:40` 用 `JSON.stringify(wm)` 而非 `sql.json`（同一目录两种 JSONB 序列化）；`db/` 内 `textArrayLiteral`（`connection.ts:56`，注释里明确说它是为冷连接数组 bug 准备的解法）**零调用**，而 DAO 仍在用 `sql.array`；`j()`（`connection.ts:39`）全仓无调用者。
