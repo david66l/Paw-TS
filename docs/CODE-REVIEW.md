@@ -737,7 +737,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 32 | 🟡 (a) 已完成：(b) **早已由批次 B #6 顺带做完**（两个 `canonicalJsonStringifyV1` 现在都收 `unknown`，§R7 的前提过期）。4 个形状校验器改成 `asserts` 谓词，**实测消掉 13 处断言**（3 个 `as unknown as` + 10 个具名断言，去掉注释后计数）。**剩余**：`assertCheckpointSourcesInRange`/`assertJournalCommitShape` 是**关系**校验器，结构上不可能是 `asserts` 谓词（§11.22），`session-execution-lease.ts:1485` 那处需另想办法 | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
 | 33 | 🟡 可区分性已完整解决：全文件唯一的那对重复文案消除（实测重复数为 0），14 处 work-segment 守卫改为带稳定 `code` + `detectedAt` 的 `LifecycleInvariantErrorV1`；§R2 第二半（把不变量陈述搬到 `reduceEvent`）也做了。**剩余**：`LifecycleInvariantV1` 表与 29 个累加器的状态对象未立 —— 报告写作时它的收益是"可区分"，那部分已拿到；剩下的只有"可发现性"，**建议与 #25 的 `ResolutionPassState` 一起做**（同类改动、同类风险，见 11.23） | 让"work segment 启动前必须成立什么"可被单点回答 |
 | 34 | 给 `packages/paw-next` 补测试（它是桌面端唯一入口，却零测试，§C7） | 风险最高的模块从零保障到有保障 |
-| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例）、`run_skill` ✅（7 例，11.31）、`todo_write` ✅（7 例，11.33）、`web_fetch`/`web_search` ✅（10 例，11.34）、`browser_check`/`lsp` ✅（6 例，并发现 `browser_check` 未在 `definitions.ts` 声明、因而不做参数校验，11.35）。仍为 0 命中：`notebook_edit` | 该包测试比 0.28，而它决定策略与审计 |
+| 35 | ✅ 完成：§D9 三项全部落地 —— `logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例）、**12 个无测试的工具 id 全部覆盖**（`create_agent`、`list_dir`/`glob`/`grep` 14 例、`run_skill` 7 例、`todo_write` 7 例、`web_fetch`/`web_search` 10 例、`browser_check`/`lsp` 6 例、`notebook_edit` 5 例）。`packages/harness` 测试 229 → **264 pass / 0 fail**。途中查出四处契约问题（11.31/11.32/11.35 与五次重复的"schema vs 处理器"形状） | 该包测试比 0.28，而它决定策略与审计 |
 
 > 建议在第 12 条之前先落地第 6 条：`canonicalJsonStringifyV1` 签名一变，`orchestrator.ts` 里若干 `as never` / `as unknown as` 会自然消失，重构时的噪声更少。
 
@@ -1606,3 +1606,21 @@ case "unknown":
 **`browser_check` 的另一个对照点**：它缺 checker 时返回的是 `payload.code = "E_POLICY_DENIED"` —— 键是 **`code`**，即喂 journal `errorCode` 的那个（§11.32）。同样写裸 payload，`agents.ts` 的分支既不写 `code` 也不写 `error_code`，而这里写了 `code`。三种做法在同一个 registry 层里并存。
 
 **§D9 剩余**：`notebook_edit`（唯一剩下的）。
+
+### 11.36 #35 完成：`notebook_edit` 补齐，§D9 的三项全部落地
+
+新增 `packages/harness/test/notebook-edit.test.ts`（5 例），`packages/harness` 从 259 涨到 **264 pass / 0 fail**，一次通过。
+
+**覆盖到的是真写入路径**，不是桩：成功那条在临时工作区里造一个真实的 `.ipynb`（nbformat 4），然后断言三件事 —— 文件里确实多了一个 `code` cell、摘要为 `notebook_edit: <name> (2 cells)`、并且 **`ctx.watcher.markAgentWritten` 收到了这个路径**。最后一条容易被忽略但不该省：写入不通知 watcher，下次外部变更检测就会把 Agent 自己的改动当成别人改的。另有一条测 `action: "edit"` 就地替换 cell source。
+
+**§D9 至此三项全部完成**（这是批次 D 里最后一项尚未开工的）：
+
+| §D9 项 | 状态 |
+|---|---|
+| `logShellAudit` / `flushAuditLog` / `getPendingAuditEntries` | ✅ 4 例 |
+| `errorCodeForToolPayload` | ✅ 19 例 |
+| 12 个无测试的工具 id | ✅ **全部覆盖**：`create_agent`(11 处引用)、`list_dir`/`glob`/`grep`(14 例)、`run_skill`(7 例)、`todo_write`(7 例)、`web_fetch`/`web_search`(10 例)、`browser_check`/`lsp`(6 例)、`notebook_edit`(5 例) |
+
+**这一批（第 48–53 轮）的净效果**：`packages/harness` 测试从 229 涨到 **264 pass / 0 fail**（+35），`test:ts` 从 2941 涨到 **2976**。而比数量更值钱的是过程中查出的东西：`run_skill` 的未声明占位符会被原样发出、`handlers/agents.ts` 的错误分支两种键都不写、`browser_check` 有处理器但未声明因而**不做参数校验**、以及那个"schema 与处理器各自判断输入合法性"的五次重复形状。
+
+**方法论上这一批也验证了一件事**：第 48–50 轮我按预期先写断言再看结果，**每轮都被实测纠正一次**；第 51–53 轮改成先读 schema 与处理器再写断言，**三轮全部一次通过**。差别不在运气，在于"先读后写"把猜测从流程里去掉了。
