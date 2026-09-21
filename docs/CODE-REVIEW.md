@@ -1022,3 +1022,21 @@ bunx tsc --noEmit -p benchmarks/tsconfig.json
 也就是说 `nativeTurnCalls.length` 是 **entry 总数**，而 `calls`/`toolCalls` 的长度是**有效项数（≤ 总数）**，两者顺序天然一致、只在"有跳过"时长度不同。`tool-runner.ts:1250` 的守卫恰好要求 `nativeTurn.calls.length === calls.length` —— **长度相等 ⇔ 没有任何跳过 ⇔ 顺序逐一对应**。所以那个"只校验长度"的守卫在这条路径上**是充分的**，`nativeTurn.calls[index].callId` 盖到 `modelFacingResults[index]` 上不会错配。
 
 因此 §A4-A 的"两条路径一条拒绝、一条静默错配"归入 §11.12 的被推翻断言。两条路径写法仍不一致（一条多一条身份校验），但那是**冗余的防御**，不是一条路径缺了必需的保护 —— 与 §D8 的 SSE 情形同型。残留假设：`tool-runner` 收到的 `calls` 是解析输出（或其同序过滤），若将来在某处**重排** `calls` 而不重排 `nativeToolTurn.calls`，长度仍可能相等而顺序不同；要防的是那个，而不是今天的代码。
+
+### 11.16 §D2 的"正则抠 agentId"：小修法不成立，但可以把它钉成响的
+
+先把报告里过期的位置更正掉：#21 之后，`run_agent` 的摘要不再由 `registry/execution.ts:1281` 拼，而在 **`registry/handlers/agents.ts:45-49`**：
+
+```ts
+return {
+  ok: r.status === "completed",
+  payload: r,
+  summary: `run_agent: ${r.status}${agentId ? ` [${agentId}]` : ""} (${r.trace?.stepsTaken ?? 0} steps)`,
+};
+```
+
+渲染侧 `useAgentRun.ts:995-999` 仍用 `/\[([a-zA-Z0-9_-]+)\]/` 从 `ev.summary` 里抠它 —— 耦合确实存在。
+
+**但"把 agentId 变成结构化字段"这个看起来很小的修法不成立。** 查了事件路径：`commitToolExecutionResult` 发给渲染进程的 `tool.result` 事件带的是 `tool/ok/summary/detail/provenance/...`（`detail` 由 `formatToolResultEventDetail` 从 payload 渲染成文本），**没有把 `payload` 透出去**。所以要让渲染侧拿到结构化的 `agentId`，就得给 `tool.result` 这个 RunEvent 类型加字段 —— 那是 `packages/core/src/run-events.ts` 的协议改动，牵动所有构造点，正是 §D2 里"导出 `DesktopRunEvent` 联合类型"那一大项，不是顺手能带的。
+
+**可做且有价值的是另一件事：把这条耦合钉成响的而不是哑的。** 现在改一句摘要措辞 → 子 Agent 名册**静默**失效；加一条生产者侧的契约测试（断言 `run_agent` 摘要匹配渲染侧依赖的那个正则形状，含/不含 `[agentId]` 两种），就把"静默失效"变成"改措辞就红"。这不需要动协议，成本是 `packages/harness/test/` 里的一个用例。**本轮未做**（构造 `run_agent` 处理器需要 stub launcher，上下文不足），留给下一轮首选。
