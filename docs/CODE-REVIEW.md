@@ -884,3 +884,27 @@ await expect(
 需要一并搬走的模块级常量（`READ`/`WRITE`/… 40 个工具名）应当先进 `tool-names.ts`，否则 dispatcher 与 handlers 之间会形成 import 环。
 
 规模预估：40 个处理器，按域分 5–6 个文件（文件读写、job、shell/web、git、agent、memory）。这条建议在下一轮作为独立改动完成，不要与其它条目混在一次提交里。
+
+### 11.10 #30 的成本被低估了：benchmarks 有 496 个类型错误
+
+§2.4 把「给 `benchmarks/` 加 tsconfig 并纳入 typecheck」估为**小**。实测不是：加上 `benchmarks/tsconfig.json`（继承 `tsconfig.base.json`，`noEmit`）后跑一次得到 **496 个 error**：
+
+| 错误码 | 数量 | 含义 |
+| --- | --- | --- |
+| TS7006 | 308 | 参数隐式 `any` |
+| TS18046 | 50 | 值是 `unknown` |
+| TS2339 | 29 | 属性不存在 |
+| TS2345 | 26 | 实参类型不符 |
+| TS2307 | 25 | 找不到模块 |
+| TS18048 | 16 | 可能为 `undefined` |
+| TS5097 | 12 | import 路径带 `.ts` 后缀 |
+
+分布高度集中：`amb/paw-memory-bridge.ts` 一个文件 217 个，其次 `amb/state-semantic-audit-observer.ts` 53、`amb/run_aspect_edge_candidate_gate.ts` 44。
+
+所以这条不是接线，而是「把 3 万行从未进过闸门的代码拉到 strict 下」的工作量。**我没有把它接进 `check:ts`** —— 那会立刻把闸门变红，违反「保持 green」的前提。`benchmarks/tsconfig.json` 保留在仓库里，作用是把这批错误变成可复现的一条命令：
+
+```
+bunx tsc --noEmit -p benchmarks/tsconfig.json
+```
+
+建议的推进方式：按文件修（先 `amb/paw-memory-bridge.ts`，一个文件就占 44%），每修一批就缩小 `exclude`，等降到 0 再并入 `check:ts`。不要用放宽 `strict` 的方式换一个绿 —— 那样只是把「未检查」换成「看起来检查过」。
