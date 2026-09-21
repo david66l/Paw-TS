@@ -898,6 +898,42 @@ await expect(
 
 **方法论提醒（写给后续的脚本化重构）**：用 AST 统计「自由标识符」时，`ts.forEachChild(node.expression, visit)` **不会访问 `node.expression` 本身** —— 对 Identifier 调用 `forEachChild` 得到的是它的子节点（没有）。本次第一版脚本因此漏掉了所有 `ctx.foo` / `rec.bar` 形式的基名，生成的处理器缺参数。正确写法是直接 `visit(node.expression)`。同一类偏差会让「这个块需要多少输入」的估算偏低，进而把不可机械化的重构误判成可机械化。
 
+### 11.10 #22 与 #24 的实测结构（下一步直接照着做）
+
+这两条都需要比一轮更多的预算，因此本轮只做了测量，**没有改动源码**。数据如下，供下一轮直接执行。
+
+#### #22 桌面端那个巨型 `useEffect`
+
+先纠正定位：报告说「931 行」，实测（AST 遍历 `apps/desktop/src` 全部 `useEffect` 调用并按函数体行数排序）是 **`useAgentRun.ts:523` 的 830 行函数体**，行数因批次 A 的格式化而下降。`useRightPanelData.ts:365` 是第二名，271 行；其余 15 个都不到 30 行。
+
+830 行内部是 **26 条顶层语句**，接缝很清楚：
+
+| 行 | 行数 | 内容 | 自由标识符 |
+| --- | --- | --- | --- |
+| 531–608 | 78 | 7 个 activity / tool-batch 辅助闭包（`commitActivities`、`patchActivity`、`upsertAgent`、`finalizeOpenActivity`、`commitToolBatches`、`finalizeOpenToolBatch`、`finalizeChangesCard`） | 2–6 |
+| 614–661 | 48 | 宿主刷新辅助（`refreshHostStatus`/`refreshSettings`/`refreshMeta` + 2 个一次性标志 + `metaTimer`） | 0–8 |
+| **674–1193** | **520** | **`desk.onEvent(...)` 的单个回调** | **63（写 10）** |
+| 1195–1338 | 124 | 另外 8 个订阅（`onRunDone` 56L/free=28、`onError` 22L/18、`onHostExit` 28L/17、`onApprovalRequest`、`onAskUserRequest`、`onLog`、`onReady`、`onApprovalClosed`） | 4–28 |
+| 1340–1351 | 12 | cleanup（`clearInterval` + 8 个 `off*()`） | 11 |
+
+也就是说它其实是「1 个 520 行的巨型回调 + 8 个中等回调 + 一堆小辅助」。**那 8 个中等回调（124 行）与 78 行的辅助闭包是可用 #21 手法机械抽出的**（自由标识符 2–28，配一个显式 deps 对象即可）；**只有 520 行那个不行**（63 个自由标识符、写 10 个外层变量），它需要报告说的 `useReducer` 或等价的「单一路径迁移」设计。
+
+建议分两次提交：先抽小的（可机械完成、有 `test:desktop` 兜底），再单独做 reducer。
+
+#### #24 `TURN_FLAG_CODECS`
+
+目标文件是 `packages/agent/src/loop-control-state.ts`（**754 行**，不是报告里的路径），并且**已有测试** `packages/agent/test/loop-control-state.test.ts` —— 这是它比 #22 更该先做的理由之一。
+
+`TurnFlags`（`orchestrator/types.ts:137–186`）实测 **恰好 24 个字段**（其中 4 个是 `_` 前缀的内部字段：`_maxStepsWarned`、`_budgetGuardWarned`、`_convergenceEvidenceKey`、`_implementationWarned`）。
+
+改造面是两段函数、共 **约 270 行**：
+- `checkpointLoopControlV1`（`:126–241`，116 行，7 组手工 spread，并在 `:200–219` 做 `_` 前缀改名）
+- `restoreLoopControlFlagsV1`（`:283–437`，155 行，19 个条件 spread 反向改名 + 一个 22 字段名的 `Omit<TurnFlags, …>` 豁免清单）
+
+其余 315 行是 10 个 `parseX` 校验器（`:438–753`），只要 `LoopControlCheckpointV1` 的字段集合不变就不必动。
+
+落地顺序：先写 `TURN_FLAG_CODECS`（`{ readonly [K in keyof TurnFlags]-?: { toCheckpoint; fromCheckpoint } }`），让编译器把 24 个字段全部点出来；再用它替换两个函数体里的手工 spread；最后删掉 `Omit` 豁免清单。**先把 `loop-control-state.test.ts` 跑一遍留基线，改完必须逐项一致。**
+
 ### 11.10 #30 的成本被低估了：benchmarks 有 496 个类型错误
 
 §2.4 把「给 `benchmarks/` 加 tsconfig 并纳入 typecheck」估为**小**。实测不是：加上 `benchmarks/tsconfig.json`（继承 `tsconfig.base.json`，`noEmit`）后跑一次得到 **496 个 error**：
