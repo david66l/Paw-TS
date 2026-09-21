@@ -737,7 +737,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 32 | 🟡 (a) 已完成：(b) **早已由批次 B #6 顺带做完**（两个 `canonicalJsonStringifyV1` 现在都收 `unknown`，§R7 的前提过期）。4 个形状校验器改成 `asserts` 谓词，**实测消掉 13 处断言**（3 个 `as unknown as` + 10 个具名断言，去掉注释后计数）。**剩余**：`assertCheckpointSourcesInRange`/`assertJournalCommitShape` 是**关系**校验器，结构上不可能是 `asserts` 谓词（§11.22），`session-execution-lease.ts:1485` 那处需另想办法 | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
 | 33 | 🟡 可区分性已完整解决：全文件唯一的那对重复文案消除（实测重复数为 0），14 处 work-segment 守卫改为带稳定 `code` + `detectedAt` 的 `LifecycleInvariantErrorV1`；§R2 第二半（把不变量陈述搬到 `reduceEvent`）也做了。**剩余**：`LifecycleInvariantV1` 表与 29 个累加器的状态对象未立 —— 报告写作时它的收益是"可区分"，那部分已拿到；剩下的只有"可发现性"，**建议与 #25 的 `ResolutionPassState` 一起做**（同类改动、同类风险，见 11.23） | 让"work segment 启动前必须成立什么"可被单点回答 |
 | 34 | 给 `packages/paw-next` 补测试（它是桌面端唯一入口，却零测试，§C7） | 风险最高的模块从零保障到有保障 |
-| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例，含优先级与大小写）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）、`run_skill` ✅（7 例，见 11.31）、`todo_write` ✅（7 例，重点是输入净化，见 11.33）。仍为 0 命中：`browser_check`、`web_fetch`、`web_search`、`notebook_edit`、`workspace.lsp`（网络类需要桩） | 该包测试比 0.28，而它决定策略与审计 |
+| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）、`run_skill` ✅（7 例，11.31）、`todo_write` ✅（7 例，重点是输入净化，11.33）、`web_fetch`/`web_search` ✅（10 例，注入 service 不碰网络，11.34）。仍为 0 命中：`browser_check`、`notebook_edit`、`workspace.lsp` | 该包测试比 0.28，而它决定策略与审计 |
 
 > 建议在第 12 条之前先落地第 6 条：`canonicalJsonStringifyV1` 签名一变，`orchestrator.ts` 里若干 `as never` / `as unknown as` 会自然消失，重构时的噪声更少。
 
@@ -1562,3 +1562,22 @@ case "unknown":
 **又被实测纠正一次（同一个模式第四次出现）**："`todos` 不是数组"我以为会走到处理器里的 `Array.isArray(rec.todos) ? rec.todos : []`，实测是 schema 直接拦下 —— `todos` 在 `definitions.ts` 里是数组且 `required: ["todos"]`。于是拆成两条用例：类型不对由 schema 报 `E_SCHEMA_INVALID`（带 `field: "todos"`），而处理器那句兜底**只在键存在、值为 `undefined`** 时才可达。这与 §11.20 的 `list_dir`/`glob`/`grep`、§11.31 的 `run_skill` 是**同一个形状**：声明式 schema 与处理器各自维护一份"什么是合法输入"，两者不一致时没有任何信号。
 
 **§D9 剩余**：`browser_check`、`web_fetch`、`web_search`、`notebook_edit`、`workspace.lsp`（网络类需要桩）。
+
+### 11.34 #35：`web_fetch` / `web_search` 补齐（用注入的 service，不碰网络）
+
+新增 `packages/harness/test/web-tools.test.ts`（10 例），`packages/harness` 从 243 涨到 **253 pass / 0 fail**。
+
+**关键点是不碰网络**：两条工具都有 `ctx.webAccess` 的注入路径，只要注入了 service 就不会走 `fetchWebPage`/`searchWeb` 那条真实请求的兜底。所以桩是**必需**的，不是可选 —— 不注入就等于在测试里发真实请求。桩同时记录调用参数，用来断言转发规则。
+
+**钉住的契约：**
+
+- 两条工具的 `{}` 都由 schema 拦下（`url` / `query` 是必填），报 `E_SCHEMA_INVALID` 并带 `field`；
+- `web_fetch` 失败 → 摘要与 `payload.error` 都是服务的 `reason` 原文；成功 → `web_fetch: <title> (<content.length> chars)`；**无 title 时回退到 `finalUrl`**（这条容易写漏）；
+- `max_length` → 转发为 `maxLength`，`max_results` → 转发为 `maxResults`（下划线进、驼峰出）；
+- `web_search` 成功 → `web_search: N result(s)`；失败 → `web_search: <reason>`。
+
+**又一处"两种形态"**：空白 query（`"   "`）**能过 schema**（它是字符串、键也在），落到处理器自己的 `!query.trim()` 分支 —— 那是**裸 payload、无 `error_code`**，与 §11.32 记的那类一致。第 5 次遇到这个形状了（§11.20、§11.17、§11.31、§11.33），所以这里也把两种形态分开钉。
+
+**这一轮第一次没被实测纠正** —— 因为先读了 schema 与处理器再写断言，而不是先猜。前四轮各被纠正一次，代价是若干次往返；这次没有，方法上的差别是明显的。
+
+**§D9 剩余**：`browser_check`、`notebook_edit`、`workspace.lsp`。
