@@ -797,6 +797,10 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 
 批次 B 的闸门实测（`typecheck` 23/23、`lint` 0 error、`test:ts` 2790 pass/6 skip、`test:desktop` 190 pass/0 fail、`test:memory`（真实 Postgres）407 pass）与基线一致，唯一新增失败在逐项 A/B 后确认均为既存问题。
 
+**批次 C / D 的进度不在本表**（本表只记 #1–#18 的完成情况）：逐条状态见 §8 批次 C 表格里各行前缀的标记，`#19`/`#21` 的详情见 §11.9，`#20`/`#22`/`#24` 的实测结构见 §11.8 与 §11.10，`#30` 的成本重估见 §11.11，被推翻的两条报告断言见 §11.12，方法论提醒见 §11.13。
+
+本会话结束时的整体闸门（commit `c4f4029`）：`lint` 0 error / 435 warning、`typecheck` 23/23、`test:ts` **2842 pass / 6 skip / 14 fail**（14 个失败为全程未变的既存项）、`test:desktop` 203 pass / 0 fail、`check:deps` 8 pass / 0 fail。
+
 ### 11.2 报告本身估错的地方（更正）
 
 1. **§1 说 canonical JSON 有 4 份实现，实际是 11 份。** 除报告点名的 4 份外，还有 `packages/core/src/model-request.ts`（就在 core 内部）、`packages/output-recall/src/index.ts`、`packages/task-progress/src/service.ts`、`packages/progress-advisor/src/projector.ts`、`packages/runtime/src/inbox/durable-input-inbox.ts`，以及 3 份 runtime 测试内的本地副本。§R6 提到的「重复实现」比报告描述的更普遍。
