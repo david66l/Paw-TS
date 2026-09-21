@@ -346,12 +346,13 @@ interface Authority {
 /**
  * Acquire the sole executor lease for one canonical workspace + Session.
  *
- * Claim, heartbeat, release, journal commit and recovery-snapshot commit all
- * CAS the same immutable S+1 event slot. Only claims increment fencingToken.
- * Snapshot commits are cache refs: they never advance the journal head or the
- * scanner inventory. FileRunSession uses issued, workspace-bound capabilities
- * and committed artifact refs from this authority; recovery coordination and
- * automatic heartbeat remain outer Runtime concerns.
+ * FileRunSession uses issued, workspace-bound capabilities and committed
+ * artifact refs from this authority; recovery coordination and automatic
+ * heartbeat remain outer Runtime concerns.
+ *
+ * The slot/fencing invariant that every transition must obey is stated on
+ * `reduceEvent` below, where all five event types are actually dispatched --
+ * it is not a property of acquisition, so it does not live here (§R2).
  */
 export function acquireFileSessionExecutionLeaseV1(
   options: FileSessionExecutionLeaseOptionsV1,
@@ -1329,6 +1330,23 @@ function readAuthority(
   };
 }
 
+/**
+ * Fold one transition event into the lease projection, enforcing the slot and
+ * fencing invariant on the way.
+ *
+ * **The invariant** (moved here from `acquireFileSessionExecutionLeaseV1`,
+ * which is not where it takes effect — §R2):
+ *
+ * Claim, heartbeat, release, journal commit and recovery-snapshot commit all
+ * CAS the same immutable S+1 event slot. Only claims increment fencingToken.
+ * Snapshot commits are cache refs: they never advance the journal head or the
+ * scanner inventory.
+ *
+ * Consequences enforced below: fencingToken is contiguous per claim
+ * (`:1341`), a claim cannot replace an active owner (`:1345`), a snapshot
+ * commit cannot move the journal head, and every non-claim event must carry
+ * the fencingToken of the claim that owns the slot.
+ */
 function reduceEvent(
   current: Projection | undefined,
   event: TransitionEvent,

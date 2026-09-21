@@ -6,6 +6,7 @@ import {
   type RunJournalRecordV1,
   isCrashRecoveryIncompleteActionV1,
 } from "./facts.js";
+import { LIFECYCLE_INVARIANT_CODES_V1, lifecycleInvariant } from "./lifecycle-invariant.js";
 import type { DurableJsonPayloadV1, JsonValue } from "./primitives.js";
 import { assertInputFact } from "./validate-input-fact.js";
 import { assertExactKeys, expectObject } from "./validate-primitives.js";
@@ -200,7 +201,11 @@ export function assertLifecycleIdentities(envelopes: readonly RunJournalEnvelope
           terminalBoundaryReducerVersion !== undefined
         ) {
           if (enabledSegmentReducerVersions.has(terminalBoundaryReducerVersion)) {
-            throw new Error("terminal promotion requires a work segment marker");
+            throw lifecycleInvariant(
+              LIFECYCLE_INVARIANT_CODES_V1.terminalPromotionNeedsSegmentMarker,
+              "terminal promotion requires a work segment marker",
+              "input.promoted",
+            );
           }
           unauthorizedPromotionReducerVersions.add(terminalBoundaryReducerVersion);
         }
@@ -208,11 +213,19 @@ export function assertLifecycleIdentities(envelopes: readonly RunJournalEnvelope
       }
       case "work.segment_started": {
         if (fact.segmentIndex !== expectedSegmentIndex) {
-          throw new Error("work segment indexes must be contiguous from 1");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentIndexContiguous,
+            "work segment indexes must be contiguous from 1",
+            "work.segment_started",
+          );
         }
         const previous = envelopes[envelopeIndex - 1];
         if (!previous || previous.record.kind !== "derived_decision") {
-          throw new Error("work segment must immediately follow a decision");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentFollowsDecision,
+            "work segment must immediately follow a decision",
+            "work.segment_started",
+          );
         }
         const decision = previous.record.decision;
         if (
@@ -220,25 +233,53 @@ export function assertLifecycleIdentities(envelopes: readonly RunJournalEnvelope
           !(decision.action.kind === "wait" && decision.action.waitFor === "user") &&
           !isCrashRecoveryIncompleteActionV1(decision.action)
         ) {
-          throw new Error("work segment requires an eligible terminal decision");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentTerminalDecisionEligible,
+            "work segment requires an eligible terminal decision",
+            "work.segment_started",
+          );
         }
         if (fact.reducerVersion !== decision.reducerVersion) {
-          throw new Error("work segment reducerVersion does not match decision");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentReducerVersionMatchesDecision,
+            "work segment reducerVersion does not match decision",
+            "work.segment_started",
+          );
         }
         if (fact.previousDecisionStateHash !== decision.stateHash) {
-          throw new Error("work segment previous decision stateHash mismatch");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentPreviousStateHashMatches,
+            "work segment previous decision stateHash mismatch",
+            "work.segment_started",
+          );
         }
         if (!sameControlDecisionAction(fact.previousAction, decision.action)) {
-          throw new Error("work segment previous action mismatch");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentPreviousActionMatches,
+            "work segment previous action mismatch",
+            "work.segment_started",
+          );
         }
         if (unauthorizedPromotionReducerVersions.has(fact.reducerVersion)) {
-          throw new Error("terminal promotion requires a work segment marker");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.terminalPromotionNeedsSegmentMarker,
+            "terminal promotion requires a work segment marker",
+            "work.segment_started",
+          );
         }
         if (!acceptedInputs.has(fact.inputId)) {
-          throw new Error(`work segment input has no durable admission: ${fact.inputId}`);
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentInputDurablyAdmitted,
+            `work segment input has no durable admission: ${fact.inputId}`,
+            "work.segment_started",
+          );
         }
         if (promotedInputIds.has(fact.inputId)) {
-          throw new Error(`work segment input is already promoted: ${fact.inputId}`);
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentInputNotAlreadyPromoted,
+            `work segment input is already promoted: ${fact.inputId}`,
+            "work.segment_started",
+          );
         }
         const next = envelopes[envelopeIndex + 1];
         if (
@@ -247,16 +288,32 @@ export function assertLifecycleIdentities(envelopes: readonly RunJournalEnvelope
           next.record.fact.type !== "input.promoted" ||
           next.record.fact.inputId !== fact.inputId
         ) {
-          throw new Error("work segment must immediately precede its promotion");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentPrecedesPromotion,
+            "work segment must immediately precede its promotion",
+            "work.segment_started",
+          );
         }
         if ([...models.values()].some((model) => !model.settled)) {
-          throw new Error("work segment cannot cross an unsettled model call");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentNoUnsettledModel,
+            "work segment cannot cross an unsettled model call",
+            "work.segment_started",
+          );
         }
         if ([...tools.values()].some((tool) => !tool.settled)) {
-          throw new Error("work segment cannot cross an unsettled tool lifecycle");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentNoUnsettledTool,
+            "work segment cannot cross an unsettled tool lifecycle",
+            "work.segment_started",
+          );
         }
         if (openCheckpointClaimId || completedUnrecordedClaimId) {
-          throw new Error("work segment cannot cross pending checkpoint distillation");
+          throw lifecycleInvariant(
+            LIFECYCLE_INVARIANT_CODES_V1.segmentNoPendingCheckpointDistillation,
+            "work segment cannot cross pending checkpoint distillation",
+            "work.segment_started",
+          );
         }
         expectedSegmentIndex += 1;
         enabledSegmentReducerVersions.add(fact.reducerVersion);

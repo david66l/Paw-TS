@@ -735,7 +735,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | --- | --- | --- |
 | 31 | `packages/agent` 的 `exports` 收成 `"."` + `"./internal"`，去掉 `export *`（§A7） | 让 788 个符号里的 8 个真正成为契约，其余变内部；此后所有内部重构不再是"潜在破坏性变更" |
 | 32 | 🟡 (a) 已完成：(b) **早已由批次 B #6 顺带做完**（两个 `canonicalJsonStringifyV1` 现在都收 `unknown`，§R7 的前提过期）。4 个形状校验器改成 `asserts` 谓词，**实测消掉 13 处断言**（3 个 `as unknown as` + 10 个具名断言，去掉注释后计数）。**剩余**：`assertCheckpointSourcesInRange`/`assertJournalCommitShape` 是**关系**校验器，结构上不可能是 `asserts` 谓词（§11.22），`session-execution-lease.ts:1485` 那处需另想办法 | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
-| 33 | `run-journal.ts` 的不变量表化 + 唯一 error code（§R2） | 让"work segment 启动前必须成立什么"可被单点回答 |
+| 33 | 🟡 可区分性已完整解决：全文件唯一的那对重复文案消除（实测重复数为 0），14 处 work-segment 守卫改为带稳定 `code` + `detectedAt` 的 `LifecycleInvariantErrorV1`；§R2 第二半（把不变量陈述搬到 `reduceEvent`）也做了。**剩余**：`LifecycleInvariantV1` 表与 29 个累加器的状态对象未立 —— 报告写作时它的收益是"可区分"，那部分已拿到；剩下的只有"可发现性"，**建议与 #25 的 `ResolutionPassState` 一起做**（同类改动、同类风险，见 11.23） | 让"work segment 启动前必须成立什么"可被单点回答 |
 | 34 | 给 `packages/paw-next` 补测试（它是桌面端唯一入口，却零测试，§C7） | 风险最高的模块从零保障到有保障 |
 | 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例，含优先级与大小写）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）。仍为 0 命中：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp`、`run_skill`（见 11.20，其中网络类需要桩，`run_skill` 只差一个桩注册表） | 该包测试比 0.28，而它决定策略与审计 |
 
@@ -1202,3 +1202,40 @@ if (checkpoint.kind === "inline") {
 `task-checkpoint-distillation.ts:249` 同理，但方向相反：原先写 `immutableCanonicalJsonCloneV1(parseTaskCheckpointV1(x))` 再把克隆 `as unknown as TaskCheckpointV1` —— 断言的是"canonical 克隆保持形状"这个**未验证的假设**，而下游编码与哈希用的正是那个克隆。改成先克隆再 `parseTaskCheckpointV1(克隆)`：校验的正好是被使用的那个值。（注意这里需要**两个视图**：codec 收 `JsonValue`，而 `TaskCheckpointV1` 缺索引签名不可赋值给它；范围校验收收窄后的类型。两者运行时是同一个对象。）
 
 **验证**：protocol 69 pass / 0 fail；protocol + runtime 438 pass / 3 skip / 0 fail；lint 0 error / 432 warning（未变）；typecheck 23/23。
+
+### 11.23 #33（§R2）：重复文案已消除，并更正报告的三处描述
+
+**先更正位置。** §R2 引的 `run-journal.ts:1029–:1134` 已经不存在 —— #19 把 `journal/` 拆成 14 个模块后，那 29 个累加器与那个大 `switch` 现在在 **`packages/protocol/src/journal/validate-lifecycle.ts`**（`assertLifecycleIdentities`）。§R2 第二半引的 `session-execution-lease.ts:358–367` 与 `reduceEvent`（`:1396`）同样过期：不变量陈述实际在 `:346-355`（`acquireFileSessionExecutionLeaseV1` 的文档注释），而 `reduceEvent` 在 `:1332`。
+
+**重复文案：确认存在，而且它是唯一的一处。** 我把 HEAD 的全部 **121** 处 `throw new Error(` 的消息字面量抽出来做了分组统计：
+
+- 字面量消息中**重复的只有那一对**（`terminal promotion requires a work segment marker`，`:203` 与 `:235`）；
+- 其余是 46 条互不相同的字面量 + 带 id 的模板串（`` `duplicate tool dispatch: ${fact.callId}` `` 之类），后者本身就能在日志里区分是哪条事实失败的。
+
+所以 §R2 说的"日志和测试无法区分"这个危害，**范围就只有那一对**。改完之后全文件重复文案为 **0**。这也意味着 #33 关于"可区分性"的部分是**完整解决**，不是部分解决。
+
+**但 §R2 的因果描述不准确：那不是两条规则。** 报告写"两条不同的规则抛出完全相同的字符串"。我把状态追了一遍，它是**一个不变量、两个检测点**：
+
+```
+:262  expectedSegmentIndex += 1;
+:263  enabledSegmentReducerVersions.add(fact.reducerVersion);
+:264  terminalDecisionBoundaryOpen = false;
+:266  unauthorizedPromotionReducerVersions.delete(fact.reducerVersion);
+```
+
+工作段启动时会**登记** reducerVersion 并**清掉**该版本的待处理记录。于是：
+
+- `input.promoted`（`:203`）：该版本**已经**有工作段标记（说明带这个 reducer 的工作段已经跑过），此时边界又打开 → 就地拒绝这次 promotion；
+- `work.segment_started`（`:239`）：该版本此前被记为"未被标记的 promotion" → 拒绝这个**迟到的工作段**（工作段本应出现在 promotion 之前）。
+
+两者是同一条规则的两面，所以消息相同是**对的**；缺的是"哪一处触发的"。
+
+**做法**：新增 `packages/protocol/src/journal/lifecycle-invariant.ts` —— `LIFECYCLE_INVARIANT_CODES_V1` 登记表、`LifecycleInvariantErrorV1`（带 `code` 与 `detectedAt`）、工厂 `lifecycleInvariant(code, message, detectedAt?)`。**同一规则在两个检测点用同一个 code、不同的 `detectedAt`**；消息与改动前**逐字相同**（已逐条比对：12 条 `work segment …` 消息在 HEAD 与现在完全一致），因为 code 是新增的区分手段，不替代消息。已编码 **14 处**（work segment 的 13 个前置守卫 + 上面那个共享不变量的另一检测点），剩余 107 处仍是 `throw new Error`。
+
+> 一个数字上的自洽check：HEAD 有 **121** 处 `throw new Error(`，我转换了 **14** 处，剩下 **107** 处 —— 两处独立计数（正则与 `Select-String -AllMatches`）都在当前文件上得到 107。这三个数字互相吻合。
+
+**§R2 第二半也做了**：把那段不变量陈述从 `acquireFileSessionExecutionLeaseV1` 移到 `reduceEvent`（它实际生效的地方），并在 `reduceEvent` 的注释里点明四条后果分别在哪一行强制（fencingToken 连续 `:1341`、不能顶替活跃 owner `:1345`、快照提交不能推进 journal head、非 claim 事件必须携带持有槽位的 fencingToken）。`acquireFileSessionExecutionLeaseV1` 只留"获取租约"与调用方范围，并交叉引用 `reduceEvent`。
+
+**对剩余工作量的诚实判断（#33 未完成的部分）**：§R2 要的 `LifecycleInvariantV1` 表（`{id, code, check(state, fact, prefix)}`）**没有做**，29 个累加器的状态对象也没有立。但现在做它的**收益比报告写作时低了**：可区分性已经拿到（0 重复文案 + 14 个稳定 code + 61 处带 id 的模板串），表剩下的价值只有"可发现性"——能把"work segment 启动前必须成立什么"一次列出来。而代价是把 29 个跨分支共享的可变累加器收进一个类型化状态对象，那和 #25 的 `ResolutionPassState` 是同一类改动、同一类风险。**建议与 #25 的状态对象一起做，而不是单独做。**
+
+**验证**：protocol 75 pass / 0 fail（69 + 6 新增，含既有的 `canonical work segment protocol` 全套 11 例仍通过）；lint 0 error / 432 warning；typecheck 23/23；test:ts 2941 pass / 6 skip / 14 fail（+6 即本轮新增，14 条既有失败同名同数）。
