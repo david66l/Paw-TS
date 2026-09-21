@@ -566,10 +566,12 @@ export class OpenAICompatibleModel implements LanguageModel {
           }
           // 与上面三个分支同一守卫：终结标记不携带工具增量。
           //
-          // 循环内那条路径用 `continue` 短路了 [DONE]，这里改为逐个分支重测，而
-          // 唯独漏了这个循环 —— 于是一份落在尾部 flush 里的 [DONE] 仍会把工具片段
-          // 累加进去，「是否见到 [DONE]」与「工具调用是否完整」就取决于同一份载荷
-          // 落在哪个缓冲区。
+          // 循环内那条路径用 `continue` 短路了 [DONE]，这里改为逐个分支重测，唯独
+          // 这个循环此前没有判断。注意这**不是**行为修复：解析器对 "[DONE]" 只返回
+          // `{ textDelta: "", isDoneMarker: true }`，因此 `part.toolCallDeltas ?? []`
+          // 恒为空数组，循环本来就不会执行。加这层判断是为了让「终结标记不带增量」
+          // 这条不变量在两条路径上写法一致，并且在解析器将来真的给终结标记挂上字段
+          // 时不会静默改变行为（不变量本身由 openai-stream-parse.test.ts 钉住）。
           if (!part.isDoneMarker)
             for (const delta of part.toolCallDeltas ?? []) {
               let entry = toolCallAcc.get(delta.index);
