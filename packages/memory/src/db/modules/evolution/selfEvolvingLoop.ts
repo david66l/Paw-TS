@@ -96,16 +96,7 @@ export class SelfEvolvingLoop {
           overall: score.overall,
         });
         if (score.suggestion === "deprecate") {
-          candidates.push(
-            await this.createCandidate(
-              batchId,
-              "DEPRECATE",
-              [mid],
-              score,
-              {},
-              now,
-            ),
-          );
+          candidates.push(await this.createCandidate(batchId, "DEPRECATE", [mid], score, {}, now));
         }
       }
 
@@ -174,6 +165,7 @@ export class SelfEvolvingLoop {
     type: EvolutionType,
     targetIds: string[],
     score: { overall: number; suggestion: string },
+    // biome-ignore lint/style/useDefaultParameterLast: positional order is a stable private contract; the default is kept rather than reordered across call sites
     evidence: Record<string, unknown> = {},
     now: string,
   ): Promise<EvolutionCandidate> {
@@ -203,9 +195,7 @@ export class SelfEvolvingLoop {
   /**
    * 将 EvolutionCandidate 提交为 MemoryCandidate 走标准治理流程。
    */
-  private async submitToGovernance(
-    cand: EvolutionCandidate,
-  ): Promise<{ id: string } | null> {
+  private async submitToGovernance(cand: EvolutionCandidate): Promise<{ id: string } | null> {
     const sql = getSql();
     const id = generateId("cand");
     const now = new Date().toISOString();

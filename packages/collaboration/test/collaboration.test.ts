@@ -27,9 +27,7 @@ describe("collaboration plugin", () => {
       ],
     });
     const entry = registry.resolveProviderName("workspace_delegate");
-    expect(entry?.definition.function.description).toContain(
-      "must fit 100 characters total",
-    );
+    expect(entry?.definition.function.description).toContain("must fit 100 characters total");
     const validate = (goal: string) =>
       registry.validateAndClassify(
         {
@@ -50,12 +48,8 @@ describe("collaboration plugin", () => {
     expect(rejected.ok).toBe(false);
     if (rejected.ok) throw new Error("overlong task accepted");
     expect(rejected.result.summary).toContain("101/100 characters");
-    expect(rejected.result.summary).toContain(
-      "goal=87, scope=3, acceptance=0, formatting=11",
-    );
-    expect(rejected.result.summary).toContain(
-      "Shorten by at least 1 characters",
-    );
+    expect(rejected.result.summary).toContain("goal=87, scope=3, acceptance=0, formatting=11");
+    expect(rejected.result.summary).toContain("Shorten by at least 1 characters");
     expect(rejected.result.summary).toContain("reference workspace files");
   });
 
@@ -76,9 +70,7 @@ describe("collaboration plugin", () => {
           ],
         },
       }),
-    ).toThrow(
-      "task parse acceptance[1] has 501 characters; allowed range is 1-500",
-    );
+    ).toThrow("task parse acceptance[1] has 501 characters; allowed range is 1-500");
     const args = {
       goal: "Inspect",
       kind: "investigation",
@@ -196,9 +188,7 @@ describe("collaboration plugin", () => {
     });
     const entry = registry.resolveProviderName("workspace_delegate");
     expect(entry?.internalName).toBe("workspace.run_agent");
-    expect(entry?.definition.function.description).toContain(
-      "Current Team Brief:",
-    );
+    expect(entry?.definition.function.description).toContain("Current Team Brief:");
     expect(entry?.definition.function.description).toContain(
       "agent_id=verifier; specialties=testing; effect=execute; abilities=read,search,git,web,shell,job",
     );
@@ -242,9 +232,7 @@ describe("collaboration plugin", () => {
       ],
     });
     expect(validated.value.classification.concurrencyMode).toBe("parallel");
-    expect(validated.value.classification.lockDomain).toContain(
-      "collaboration",
-    );
+    expect(validated.value.classification.lockDomain).toContain("collaboration");
 
     const reviewer = registry.validateAndClassify(
       {
@@ -285,11 +273,8 @@ describe("collaboration plugin", () => {
       plugins: [createCollaborationToolPluginV1({ roster: writerRoster })],
     });
     expect(
-      writerRegistry.resolveProviderName("workspace_delegate")?.definition
-        .function.description,
-    ).toContain(
-      "agent_id=writer; specialties=implementation; effect=mutate; abilities=read,edit",
-    );
+      writerRegistry.resolveProviderName("workspace_delegate")?.definition.function.description,
+    ).toContain("agent_id=writer; specialties=implementation; effect=mutate; abilities=read,edit");
     const writer = writerRegistry.validateAndClassify(
       {
         id: "call-3",
@@ -310,9 +295,7 @@ describe("collaboration plugin", () => {
         concurrencyMode: "parallel",
         resources: [{ access: "write" }],
       });
-      expect(writer.value.classification.resources[0]?.key).toBe(
-        readerWorkspaceResource,
-      );
+      expect(writer.value.classification.resources[0]?.key).toBe(readerWorkspaceResource);
     }
     const mismatched = writerRegistry.validateAndClassify(
       {
@@ -328,9 +311,7 @@ describe("collaboration plugin", () => {
     );
     expect(mismatched.ok).toBe(false);
     if (!mismatched.ok) {
-      expect(mismatched.result.summary).toContain(
-        "writer does not provide investigation",
-      );
+      expect(mismatched.result.summary).toContain("writer does not provide investigation");
     }
   });
 
@@ -585,8 +566,7 @@ describe("collaboration plugin", () => {
     const events: string[] = [];
     const delegate: SubAgentLauncher = {
       async launch(_goal, _steps, options) {
-        const effect =
-          options?.args?.agent_id === "verifier" ? "execute" : "mutate";
+        const effect = options?.args?.agent_id === "verifier" ? "execute" : "mutate";
         events.push(`start:${effect}`);
         await Bun.sleep(5);
         events.push(`end:${effect}`);
@@ -649,12 +629,7 @@ describe("collaboration plugin", () => {
       args: { delegation_plan: plan },
     });
 
-    expect(events).toEqual([
-      "start:execute",
-      "end:execute",
-      "start:mutate",
-      "end:mutate",
-    ]);
+    expect(events).toEqual(["start:execute", "end:execute", "start:mutate", "end:mutate"]);
     expect(result.outcome).toMatchObject({
       effectProfile: "mixed",
       verdict: "pass",
@@ -716,10 +691,7 @@ describe("collaboration plugin", () => {
         return {
           status: "completed",
           summary: "x".repeat(7_000),
-          findings: Array.from(
-            { length: 30 },
-            (_, index) => `finding-${index}`,
-          ),
+          findings: Array.from({ length: 30 }, (_, index) => `finding-${index}`),
           changedFiles: ["unexpected.ts"],
         };
       },
@@ -754,11 +726,7 @@ describe("collaboration plugin", () => {
       },
     };
     const launcher = createBoundedReadOnlySubAgentLauncherV1({ delegate });
-    await Promise.all(
-      Array.from({ length: 7 }, (_, index) =>
-        launcher.launch(`goal-${index}`, 1),
-      ),
-    );
+    await Promise.all(Array.from({ length: 7 }, (_, index) => launcher.launch(`goal-${index}`, 1)));
     expect(highWater).toBe(3);
   });
 
@@ -791,16 +759,8 @@ describe("collaboration plugin", () => {
       args: { role: "reviewer" },
     };
 
-    const first = await coordinator.launch(
-      "Review the proposed fix",
-      4,
-      options,
-    );
-    const second = await coordinator.launch(
-      "Review the proposed fix",
-      4,
-      options,
-    );
+    const first = await coordinator.launch("Review the proposed fix", 4, options);
+    const second = await coordinator.launch("Review the proposed fix", 4, options);
     const projection = projectCollaborationTasksV1(facts);
 
     expect(delegateCalls).toBe(2);

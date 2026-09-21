@@ -38,14 +38,9 @@ export interface LoopV2RunResultShadowArtifactV1 {
   readonly artifactHash: string;
 }
 
-export function loopV2RunResultShadowArtifactPath(
-  workspaceRoot: string,
-  runId: string,
-): string {
+export function loopV2RunResultShadowArtifactPath(workspaceRoot: string, runId: string): string {
   if (!workspaceRoot.trim() || !runId.trim()) {
-    throw new Error(
-      "Loop v2 RunResult shadow path requires workspace and runId",
-    );
+    throw new Error("Loop v2 RunResult shadow path requires workspace and runId");
   }
   return path.join(
     path.resolve(workspaceRoot),
@@ -65,20 +60,13 @@ export function mapEligibleLoopV2RunResultV1(
 ): RunResult {
   const normalizedLegacy = normalizeRunResult(legacyResult);
   assertLegacyMatchesTerminal(normalizedLegacy, terminal);
-  const eligibility = assessLoopV2AuthorityEligibilityV1(
-    terminal,
-    candidate,
-    review,
-  );
+  const eligibility = assessLoopV2AuthorityEligibilityV1(terminal, candidate, review);
   if (!eligibility.eligible) {
     throw new Error(
       `Loop v2 RunResult mapping requires eligibility: ${eligibility.reasons.join(",")}`,
     );
   }
-  const payload = buildLoopV2LiveReviewPayloadV1(
-    candidate.report,
-    candidate.assessment.policy,
-  );
+  const payload = buildLoopV2LiveReviewPayloadV1(candidate.report, candidate.assessment.policy);
   const report = renderHostReportV2({
     candidate: payload.input,
     outcome: terminal.v2Outcome,
@@ -90,9 +78,7 @@ export function mapEligibleLoopV2RunResultV1(
     message: report.markdown,
     outcome: "verified",
     completionReason: terminal.v2Outcome.reasonCode,
-    ...(normalizedLegacy.evidence
-      ? { evidence: structuredClone(normalizedLegacy.evidence) }
-      : {}),
+    ...(normalizedLegacy.evidence ? { evidence: structuredClone(normalizedLegacy.evidence) } : {}),
   };
 }
 
@@ -105,19 +91,10 @@ export function buildLoopV2RunResultShadowArtifactV1(
   const normalizedLegacy = normalizeRunResult(legacyResult);
   assertLegacyMatchesTerminal(normalizedLegacy, terminal);
   assertLoopV2LiveTerminalArtifactV1(terminal, candidate, review);
-  const eligibility = assessLoopV2AuthorityEligibilityV1(
-    terminal,
-    candidate,
-    review,
-  );
+  const eligibility = assessLoopV2AuthorityEligibilityV1(terminal, candidate, review);
   const mappedResult =
     eligibility.eligible && candidate && review
-      ? mapEligibleLoopV2RunResultV1(
-          normalizedLegacy,
-          terminal,
-          candidate,
-          review,
-        )
+      ? mapEligibleLoopV2RunResultV1(normalizedLegacy, terminal, candidate, review)
       : undefined;
   const authorityFieldsEqual = Boolean(
     mappedResult &&
@@ -133,8 +110,7 @@ export function buildLoopV2RunResultShadowArtifactV1(
   const comparison = {
     authorityFieldsEqual,
     evidencePreserved,
-    cutoverReady:
-      eligibility.eligible && authorityFieldsEqual && evidencePreserved,
+    cutoverReady: eligibility.eligible && authorityFieldsEqual && evidencePreserved,
   };
   const withoutHash = {
     schemaVersion: LOOP_V2_RUN_RESULT_SHADOW_SCHEMA_VERSION,
@@ -197,9 +173,7 @@ export function assertLoopV2RunResultShadowArtifactV1(
     review,
   );
   if (canonicalJson(value) !== canonicalJson(expected)) {
-    throw new Error(
-      "Loop v2 RunResult shadow artifact does not match evidence",
-    );
+    throw new Error("Loop v2 RunResult shadow artifact does not match evidence");
   }
 }
 
@@ -220,11 +194,7 @@ function assertLegacyMatchesTerminal(
 }
 
 function normalizeRunResult(value: RunResult): RunResult {
-  if (
-    !isRecord(value) ||
-    typeof value.runId !== "string" ||
-    !value.runId.trim()
-  ) {
+  if (!isRecord(value) || typeof value.runId !== "string" || !value.runId.trim()) {
     throw new Error("Loop v2 RunResult shadow legacy result is invalid");
   }
   if (
@@ -243,9 +213,7 @@ function normalizeRunResult(value: RunResult): RunResult {
     status: value.status,
     message: value.message,
     ...(value.outcome ? { outcome: value.outcome } : {}),
-    ...(value.completionReason
-      ? { completionReason: value.completionReason }
-      : {}),
+    ...(value.completionReason ? { completionReason: value.completionReason } : {}),
     ...(value.evidence ? { evidence: normalizeEvidence(value.evidence) } : {}),
   };
 }

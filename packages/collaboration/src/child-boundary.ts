@@ -1,9 +1,6 @@
 import type { WorkspacePathPolicyV1 } from "@paw/workspace";
 
-import type {
-  CollaborationAgentSpecV1,
-  CollaborationEffectProfileV1,
-} from "./roster.js";
+import type { CollaborationAgentSpecV1, CollaborationEffectProfileV1 } from "./roster.js";
 
 export const COLLABORATION_CHILD_BOUNDARY_VERSION_V1 =
   "paw.collaboration-child-boundary.v1" as const;
@@ -13,11 +10,7 @@ export type CollaborationChildWorkspaceModeV1 =
   | "shared_exclusive"
   | "isolated_worktree";
 
-export type CollaborationChildShellPolicyV1 =
-  | "deny"
-  | "read_only"
-  | "verification"
-  | "allow";
+export type CollaborationChildShellPolicyV1 = "deny" | "read_only" | "verification" | "allow";
 
 /** Trusted runtime authority. Delegation scope text never grants permission. */
 export interface CollaborationChildBoundaryV1 {

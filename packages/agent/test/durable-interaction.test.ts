@@ -3,11 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  FileSystemAppStateStore,
-  type RunEventEnvelope,
-  isAppStateFinished,
-} from "@paw/core";
+import { FileSystemAppStateStore, type RunEventEnvelope, isAppStateFinished } from "@paw/core";
 
 import {
   appendUserReplyV1,
@@ -49,9 +45,7 @@ describe("durable waiting-user interaction", () => {
 
     const marker = `[User reply request_id=${waiting.requestId}`;
     expect(
-      second.state.messages.filter((message) =>
-        message.content.startsWith(marker),
-      ),
+      second.state.messages.filter((message) => message.content.startsWith(marker)),
     ).toHaveLength(1);
     expect(second.state.interaction).toMatchObject({
       status: "consumed",
@@ -111,18 +105,10 @@ describe("durable waiting-user interaction", () => {
       status: "incomplete",
       completionReason: "user_input_required",
     });
-    expect(
-      firstEvents.filter((event) => event.event.type === "tool.call"),
-    ).toHaveLength(1);
-    expect(firstEvents.some((event) => event.event.type === "run.paused")).toBe(
-      true,
-    );
-    expect(
-      firstEvents.some((event) => event.event.type === "run.completed"),
-    ).toBe(false);
-    expect(
-      firstEvents.filter((event) => event.event.type === "run.metrics"),
-    ).toHaveLength(1);
+    expect(firstEvents.filter((event) => event.event.type === "tool.call")).toHaveLength(1);
+    expect(firstEvents.some((event) => event.event.type === "run.paused")).toBe(true);
+    expect(firstEvents.some((event) => event.event.type === "run.completed")).toBe(false);
+    expect(firstEvents.filter((event) => event.event.type === "run.metrics")).toHaveLength(1);
 
     const savedWaiting = stateStore.load("durable-wait");
     expect(savedWaiting?.outcome).toBeUndefined();
@@ -151,9 +137,7 @@ describe("durable waiting-user interaction", () => {
             ),
           ).toHaveLength(1);
           expect(
-            messages.filter((message) =>
-              message.content.includes("Which color?"),
-            ),
+            messages.filter((message) => message.content.includes("Which color?")),
           ).toHaveLength(1);
           return {
             text: '{"action":"final_answer","summary":"The selected color is blue."}',
@@ -206,9 +190,7 @@ describe("durable waiting-user interaction", () => {
       message: "The selected color is blue.",
     });
     expect(resumedModelCalls).toBe(1);
-    expect(
-      resumedEvents.filter((event) => event.event.type === "tool.call"),
-    ).toHaveLength(0);
+    expect(resumedEvents.filter((event) => event.event.type === "tool.call")).toHaveLength(0);
     const finalState = stateStore.load("durable-wait");
     expect(finalState?.interaction).toMatchObject({
       status: "consumed",
@@ -236,9 +218,7 @@ describe("durable waiting-user interaction", () => {
       memoryExtraction: "off",
       memoryLlm: "off",
       resolveAskUser: async () => {
-        observedWaiting =
-          stateStore.load("inline-wait")?.interaction?.status ===
-          "waiting_user";
+        observedWaiting = stateStore.load("inline-wait")?.interaction?.status === "waiting_user";
         return "blue";
       },
       model: {

@@ -115,14 +115,9 @@ for (const stallsAgain of [false, true])
     expect(result.ok).toBe(!stallsAgain);
     expect(calls).toBe(stallsAgain ? 2 : 3);
     if (!stallsAgain) {
-      expect(fs.readFileSync(path.join(root, "recovered.txt"), "utf8")).toBe(
-        "recovered\n",
-      );
+      expect(fs.readFileSync(path.join(root, "recovered.txt"), "utf8")).toBe("recovered\n");
       // A new host invocation replays the original run; it must not regain an allowance.
-      const next = await runDesktopNext(
-        "Continue with another change",
-        options,
-      );
+      const next = await runDesktopNext("Continue with another change", options);
       expect(next.ok).toBe(false);
       expect(calls).toBe(4);
       expect(JSON.parse(next.text).runId).toBe(JSON.parse(result.text).runId);
@@ -135,9 +130,7 @@ function workspace() {
 }
 afterEach(() => {
   for (const root of roots.splice(0)) {
-    if (
-      !path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-hardening-"))
-    )
+    if (!path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-hardening-")))
       throw new Error("Unsafe fixture");
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -148,10 +141,7 @@ test("project guidance is bounded, scoped, and describes the real execution envi
   fs.mkdirSync(path.join(root, ".paw"));
   fs.writeFileSync(path.join(root, "PAW.md"), "project-rule-marker");
   fs.writeFileSync(path.join(root, ".paw/CLAUDE.md"), "committed-rule-marker");
-  fs.writeFileSync(
-    path.join(root, ".paw/CLAUDE.local.md"),
-    "local-rule-marker",
-  );
+  fs.writeFileSync(path.join(root, ".paw/CLAUDE.local.md"), "local-rule-marker");
   const context = desktopProjectContext(root, {
     mode: "strict",
     commandShell: "sh",
@@ -175,8 +165,7 @@ test("thinking projection sends linear-sized deltas and an exact final response"
   const projection = new DesktopNextEvents("run", (event) => {
     events.push(event.event);
   });
-  for (let i = 0; i < 1000; i++)
-    projection.stream({ type: "thinking", delta: "abcd" });
+  for (let i = 0; i < 1000; i++) projection.stream({ type: "thinking", delta: "abcd" });
   projection.stream({ type: "text", delta: "done" });
   projection.stream({ type: "done", finishReason: "stop" });
   await projection.flush();

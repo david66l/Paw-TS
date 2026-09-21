@@ -14,10 +14,7 @@ import {
   type MemoryFacetV2,
   projectMemoryFacetStateV2,
 } from "./facet-state.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
 export const PAW_MEMORY_FACET_SHADOW_SNAPSHOT_VERSION_V2 =
   "paw.memory-facet-shadow-snapshot.v2" as const;
@@ -80,20 +77,14 @@ export function applyMemoryFacetShadowReconciliationV2(
   try {
     const scopeFingerprint = memoryScopeFingerprintV1(input.scope);
     if (
-      input.previous.schemaVersion !==
-        PAW_MEMORY_FACET_SHADOW_SNAPSHOT_VERSION_V2 ||
+      input.previous.schemaVersion !== PAW_MEMORY_FACET_SHADOW_SNAPSHOT_VERSION_V2 ||
       input.previous.scopeFingerprint !== scopeFingerprint
     ) {
       throw namedError("MemoryFacetShadowScopeInvalid");
     }
-    const entries = new Map(
-      input.previous.entries.map((entry) => [entry.id, entry]),
-    );
+    const entries = new Map(input.previous.entries.map((entry) => [entry.id, entry]));
     const priorMemberships = new Map(
-      input.previous.memberships.map((membership) => [
-        membership.memoryId,
-        membership,
-      ]),
+      input.previous.memberships.map((membership) => [membership.memoryId, membership]),
     );
     const priorUnassigned = new Set(input.previous.unassignedMemoryIds);
     const observationIds = new Set<string>();
@@ -124,9 +115,7 @@ export function applyMemoryFacetShadowReconciliationV2(
       throw namedError("MemoryFacetShadowPartitionInvalid");
     }
 
-    const facets = new Map(
-      input.previous.facets.map((facet) => [facet.id, facet]),
-    );
+    const facets = new Map(input.previous.facets.map((facet) => [facet.id, facet]));
     for (const facet of input.reconciliation.facets) {
       if (facet.scopeFingerprint !== scopeFingerprint) {
         throw namedError("MemoryFacetShadowFacetScopeInvalid");
@@ -141,10 +130,7 @@ export function applyMemoryFacetShadowReconciliationV2(
     const memberships = new Map(priorMemberships);
     const unassigned = new Set(priorUnassigned);
     for (const membership of input.reconciliation.memberships) {
-      if (
-        !observationIds.has(membership.memoryId) ||
-        !facets.has(membership.facetId)
-      ) {
+      if (!observationIds.has(membership.memoryId) || !facets.has(membership.facetId)) {
         throw namedError("MemoryFacetShadowMembershipInvalid");
       }
       memberships.set(membership.memoryId, membership);
@@ -182,9 +168,7 @@ export function applyMemoryFacetShadowReconciliationV2(
       scopeFingerprint,
       facets: sortedFacets,
       memberships: sortedMemberships,
-      entries: [...entries.values()].sort((left, right) =>
-        left.id.localeCompare(right.id),
-      ),
+      entries: [...entries.values()].sort((left, right) => left.id.localeCompare(right.id)),
       projections,
       unassignedMemoryIds: [...unassigned].sort(),
     });
@@ -274,8 +258,7 @@ export function compactMemoryFacetReconcileCatalogV2(
     .map((item) => ({ item, score: catalogScore(item, observationTerms) }))
     .sort(
       (left, right) =>
-        right.score - left.score ||
-        left.item.facet.id.localeCompare(right.item.facet.id),
+        right.score - left.score || left.item.facet.id.localeCompare(right.item.facet.id),
     );
   const hydrated = new Set(
     ranked
@@ -317,12 +300,7 @@ export function createMemoryFacetEvidenceBatchesV2(
   entries: readonly MemoryEntry[],
   maxBatchSize = 16,
 ): readonly (readonly MemoryEntry[])[] {
-  const limit = boundedInteger(
-    maxBatchSize,
-    1,
-    32,
-    "MemoryFacetShadowBatchLimitInvalid",
-  );
+  const limit = boundedInteger(maxBatchSize, 1, 32, "MemoryFacetShadowBatchLimitInvalid");
   const components: Array<{
     family: string;
     refs: Set<string>;
@@ -336,8 +314,7 @@ export function createMemoryFacetEvidenceBatchesV2(
       .map((component, index) => ({ component, index }))
       .filter(
         ({ component }) =>
-          component.family === family &&
-          refs.some((ref) => component.refs.has(ref)),
+          component.family === family && refs.some((ref) => component.refs.has(ref)),
       );
     if (matching.length === 0) {
       components.push({ family, refs: new Set(refs), entries: [entry] });
@@ -347,11 +324,8 @@ export function createMemoryFacetEvidenceBatchesV2(
     if (!primary) throw namedError("MemoryFacetShadowComponentInvalid");
     primary.entries.push(entry);
     for (const ref of refs) primary.refs.add(ref);
-    for (const match of matching
-      .slice(1)
-      .sort((left, right) => right.index - left.index)) {
-      for (const member of match.component.entries)
-        primary.entries.push(member);
+    for (const match of matching.slice(1).sort((left, right) => right.index - left.index)) {
+      for (const member of match.component.entries) primary.entries.push(member);
       for (const ref of match.component.refs) primary.refs.add(ref);
       components.splice(match.index, 1);
     }
@@ -363,8 +337,7 @@ export function createMemoryFacetEvidenceBatchesV2(
     }))
     .sort(
       (left, right) =>
-        Date.parse(left.entries[0]?.tValid ?? "") -
-          Date.parse(right.entries[0]?.tValid ?? "") ||
+        Date.parse(left.entries[0]?.tValid ?? "") - Date.parse(right.entries[0]?.tValid ?? "") ||
         left.family.localeCompare(right.family),
     );
   const batches: MemoryEntry[][] = [];
@@ -385,8 +358,7 @@ export function createMemoryFacetEvidenceBatchesV2(
     }
     if (
       pending.length > 0 &&
-      (pendingFamily !== component.family ||
-        pending.length + component.entries.length > limit)
+      (pendingFamily !== component.family || pending.length + component.entries.length > limit)
     ) {
       flush();
     }
@@ -444,13 +416,7 @@ function catalogScore(
   observationTerms: ReadonlySet<string>,
 ): number {
   const identityTerms = new Set(
-    terms(
-      [
-        item.facet.canonicalKey,
-        item.facet.displayName,
-        ...item.facet.aliases,
-      ].join(" "),
-    ),
+    terms([item.facet.canonicalKey, item.facet.displayName, ...item.facet.aliases].join(" ")),
   );
   const memberTerms = new Set(
     item.members.slice(0, 16).flatMap((member) => terms(member.statement)),
@@ -488,15 +454,10 @@ function boundedInteger(
 
 function assertObservationEntry(
   entry: MemoryEntry,
-): asserts entry is Extract<
-  MemoryEntry,
-  { kind: "semantic" | "episodic" | "profile" }
-> {
+): asserts entry is Extract<MemoryEntry, { kind: "semantic" | "episodic" | "profile" }> {
   if (
     !entry.id.trim() ||
-    (entry.kind !== "semantic" &&
-      entry.kind !== "episodic" &&
-      entry.kind !== "profile")
+    (entry.kind !== "semantic" && entry.kind !== "episodic" && entry.kind !== "profile")
   ) {
     throw namedError("MemoryFacetShadowEntryInvalid");
   }
@@ -523,24 +484,15 @@ function evidenceFamily(ref: string): string {
   return fragment > 0 ? ref.slice(0, fragment) : ref;
 }
 
-function compareEntriesChronologically(
-  left: MemoryEntry,
-  right: MemoryEntry,
-): number {
-  return (
-    Date.parse(left.tValid) - Date.parse(right.tValid) ||
-    left.id.localeCompare(right.id)
-  );
+function compareEntriesChronologically(left: MemoryEntry, right: MemoryEntry): number {
+  return Date.parse(left.tValid) - Date.parse(right.tValid) || left.id.localeCompare(right.id);
 }
 
 function hashEntry(entry: MemoryEntry): string {
   return hashCanonicalJsonV1(entry as unknown as JsonValue);
 }
 
-function requiredEntry(
-  entries: ReadonlyMap<string, MemoryEntry>,
-  memoryId: string,
-): MemoryEntry {
+function requiredEntry(entries: ReadonlyMap<string, MemoryEntry>, memoryId: string): MemoryEntry {
   const entry = entries.get(memoryId);
   if (!entry) throw namedError("MemoryFacetShadowEntryMissing");
   return entry;
@@ -553,8 +505,7 @@ function hashFacet(facet: MemoryFacetV2): string {
 function stableReason(error: unknown): string {
   const name = error instanceof Error ? error.name : "Unknown";
   return (
-    `MemoryFacetShadow_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_") ||
-    "MemoryFacetShadow_Unknown"
+    `MemoryFacetShadow_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_") || "MemoryFacetShadow_Unknown"
   ).slice(0, 160);
 }
 

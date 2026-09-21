@@ -28,10 +28,7 @@ import path from "node:path";
  * @param argv - 命令行参数数组
  * @returns 解析后的绝对路径
  */
-export function parseRootFromArgv(
-  cwd: string,
-  argv: readonly string[],
-): string {
+export function parseRootFromArgv(cwd: string, argv: readonly string[]): string {
   const i = argv.indexOf("--root");
   if (i !== -1 && argv[i + 1]) {
     return path.resolve(argv[i + 1] ?? cwd);
@@ -56,10 +53,7 @@ export function parseRootFromArgv(
  * @param subcommand - 目标子命令名（如 "read"、"list"）
  * @returns 位置参数数组
  */
-export function tailPositionalArgs(
-  argv: readonly string[],
-  subcommand: string,
-): string[] {
+export function tailPositionalArgs(argv: readonly string[], subcommand: string): string[] {
   const i = argv.indexOf(subcommand);
   if (i === -1) {
     return [];

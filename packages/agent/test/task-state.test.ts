@@ -52,17 +52,12 @@ describe("TaskStateManager", () => {
       5,
     );
     expect(restored.acceptanceCriteria().at(-1)?.id).toBe("acceptance-003");
-    expect(formatTaskStateForContext(restored.snapshot())).toContain(
-      "acceptance-001 [pending]",
-    );
+    expect(formatTaskStateForContext(restored.snapshot())).toContain("acceptance-001 [pending]");
   });
 
   test("applies acceptance updates atomically", () => {
     const state = new TaskStateManager("preserve compatibility");
-    state.registerAcceptanceCriteria(
-      [{ text: "Keep old output", source: "repository" }],
-      1,
-    );
+    state.registerAcceptanceCriteria([{ text: "Keep old output", source: "repository" }], 1);
     const before = state.snapshot();
     const rejected = state.applyAcceptanceUpdate(
       {
@@ -96,9 +91,7 @@ describe("TaskStateManager", () => {
       2,
     );
     expect(accepted.ok).toBe(true);
-    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe(
-      "satisfied",
-    );
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe("satisfied");
   });
 
   test("makes satisfied acceptance evidence stale after a source mutation", () => {
@@ -113,17 +106,11 @@ describe("TaskStateManager", () => {
       ],
       1,
     );
-    expect(() =>
-      state.setAcceptanceCriterionStatus("acceptance-001", "satisfied"),
-    ).toThrow("requires evidence");
-    state.setAcceptanceCriterionStatus(
-      "acceptance-001",
-      "satisfied",
-      "tests/test_cli.py passed",
+    expect(() => state.setAcceptanceCriterionStatus("acceptance-001", "satisfied")).toThrow(
+      "requires evidence",
     );
-    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe(
-      "satisfied",
-    );
+    state.setAcceptanceCriterionStatus("acceptance-001", "satisfied", "tests/test_cli.py passed");
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe("satisfied");
 
     state.recordToolResult(
       {
@@ -138,17 +125,13 @@ describe("TaskStateManager", () => {
       },
     );
     expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe("stale");
-    expect(formatTaskStateForContext(state.snapshot())).toContain(
-      "acceptance-001 [stale]",
-    );
+    expect(formatTaskStateForContext(state.snapshot())).toContain("acceptance-001 [stale]");
     state.setAcceptanceCriterionStatus(
       "acceptance-001",
       "satisfied",
       "pytest tests/test_cli.py: 57 passed",
     );
-    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe(
-      "satisfied",
-    );
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe("satisfied");
   });
 
   test("records a successful final git diff shell segment at the current revision", () => {
@@ -173,8 +156,7 @@ describe("TaskStateManager", () => {
         type: "tool_call",
         tool: "workspace.run_shell",
         args: {
-          command:
-            "cd /testbed && git status --short && echo ==== && git --no-pager diff HEAD",
+          command: "cd /testbed && git status --short && echo ==== && git --no-pager diff HEAD",
         },
       },
       {
@@ -275,12 +257,8 @@ describe("TaskStateManager", () => {
       ],
       0,
     );
-    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe(
-      "external",
-    );
-    expect(formatTaskStateForContext(state.snapshot())).toContain(
-      "acceptance-001 [external]",
-    );
+    expect(acceptanceReadiness(state.snapshot())[0]?.readiness).toBe("external");
+    expect(formatTaskStateForContext(state.snapshot())).toContain("acceptance-001 [external]");
     expect(
       state.applyAcceptanceUpdate(
         {
@@ -395,12 +373,8 @@ describe("TaskStateManager", () => {
     );
 
     const snapshot = state.snapshot();
-    expect(
-      snapshot.constraints.some((c) => c.text === "must keep changes minimal"),
-    ).toBe(true);
-    expect(state.activeConstraints()[0]?.text).toBe(
-      "must keep changes minimal",
-    );
+    expect(snapshot.constraints.some((c) => c.text === "must keep changes minimal")).toBe(true);
+    expect(state.activeConstraints()[0]?.text).toBe("must keep changes minimal");
     expect(snapshot.filesRead).toContain("src/a.ts");
     expect(snapshot.filesChanged).toContain("src/a.ts");
     expect(snapshot.commandsRun).toHaveLength(2);
@@ -457,8 +431,7 @@ describe("TaskStateManager", () => {
         ok: true,
         summary: "diff",
         payload: {
-          stdout:
-            "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-old\n+new",
+          stdout: "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-old\n+new",
         },
       },
     );
@@ -467,9 +440,7 @@ describe("TaskStateManager", () => {
       "- Verification: passed for r1",
       "- Final diff: inspected for r1",
     ]);
-    expect(state.snapshot().testResults.at(-1)?.evidence).toBe(
-      "1 passed in 0.12s",
-    );
+    expect(state.snapshot().testResults.at(-1)?.evidence).toBe("1 passed in 0.12s");
     edit();
     expect(formatCompletionReadiness(state.snapshot())).toEqual([
       "Completion readiness:",
@@ -482,13 +453,9 @@ describe("TaskStateManager", () => {
         "python -m unittest forms_tests.tests.test_media.FormsMediaTestCase -v",
       ),
     ).toBe(true);
-    expect(isVerificationCommand("python3.11 -m unittest discover -v")).toBe(
-      true,
-    );
+    expect(isVerificationCommand("python3.11 -m unittest discover -v")).toBe(true);
     expect(
-      isVerificationCommand(
-        "python tests/runtests.py expressions.tests.BasicExpressionsTests",
-      ),
+      isVerificationCommand("python tests/runtests.py expressions.tests.BasicExpressionsTests"),
     ).toBe(true);
     expect(
       isVerificationCommand(
@@ -589,9 +556,7 @@ describe("TaskStateManager", () => {
     expect(harnessResult?.failureKind).toBe("missing_dependency");
     expect(harnessResult?.evidence).toContain("Error importing plugin");
     expect(harnessResult?.evidence).not.toContain("secret-value");
-    expect(formatCompletionReadiness(harness.snapshot())[1]).toContain(
-      "harness failed",
-    );
+    expect(formatCompletionReadiness(harness.snapshot())[1]).toContain("harness failed");
 
     const code = new TaskStateManager("fix bug");
     code.recordToolResult(
@@ -652,8 +617,7 @@ describe("TaskStateManager", () => {
     );
     expect(state.snapshot().testResults).toHaveLength(0);
 
-    const command =
-      '"C:\\Program Files\\Python310\\python.exe" -m pytest tests/test_a.py -q';
+    const command = '"C:\\Program Files\\Python310\\python.exe" -m pytest tests/test_a.py -q';
     state.recordToolResult(
       {
         type: "tool_call",
@@ -748,8 +712,7 @@ describe("TaskStateManager", () => {
         type: "tool_call",
         tool: "workspace.run_shell",
         args: {
-          command:
-            "set PYTHONPATH=.&&python tests\\runtests.py queries.test_q.QCheckTests",
+          command: "set PYTHONPATH=.&&python tests\\runtests.py queries.test_q.QCheckTests",
         },
       },
       {
@@ -864,8 +827,7 @@ describe("TaskStateManager", () => {
         type: "tool_call",
         tool: "workspace.run_shell",
         args: {
-          command:
-            "python -m pytest astropy/nddata/mixins/tests/test_ndarithmetic.py -q",
+          command: "python -m pytest astropy/nddata/mixins/tests/test_ndarithmetic.py -q",
         },
       },
       {
@@ -1039,9 +1001,7 @@ describe("TaskStateManager", () => {
     );
     expect(state.snapshot().mutationRevision).toBe(1);
     expect(state.snapshot().filesChanged).toEqual(["src/a.py"]);
-    expect(state.snapshot().pinnedFacts).toEqual([
-      "workspace.run_shell failed: run_shell: exit 1",
-    ]);
+    expect(state.snapshot().pinnedFacts).toEqual(["workspace.run_shell failed: run_shell: exit 1"]);
   });
 
   test("retains an unrecovered effect-policy failure as task evidence", () => {

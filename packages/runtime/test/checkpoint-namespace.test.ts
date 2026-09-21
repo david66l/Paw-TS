@@ -29,9 +29,7 @@ describe("Paw Next tool checkpoint physical namespace", () => {
         workspaceRoot: path.join(root, "."),
       }),
     );
-    expect(createToolCheckpointNamespaceIdV1(input)).toMatch(
-      /^pawnextv1_[0-9a-f]{64}$/,
-    );
+    expect(createToolCheckpointNamespaceIdV1(input)).toMatch(/^pawnextv1_[0-9a-f]{64}$/);
   });
 
   test("separates equal run ids owned by different sessions", () => {
@@ -92,14 +90,7 @@ describe("Paw Next tool checkpoint physical namespace", () => {
 
 function checkpointMeta(root: string, namespace: string, seq: number): boolean {
   return fs.existsSync(
-    path.join(
-      root,
-      ".paw",
-      "checkpoints",
-      namespace,
-      String(seq),
-      "_meta.json",
-    ),
+    path.join(root, ".paw", "checkpoints", namespace, String(seq), "_meta.json"),
   );
 }
 

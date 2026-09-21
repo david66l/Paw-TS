@@ -110,10 +110,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
   private readonly governance = new MemoryGovernance();
   private readonly executor = new GovernanceExecutor();
   private readonly retriever = new MemoryRetriever();
-  private readonly ctxBuilder = new ContextBuilder(
-    undefined,
-    sharedMemoryEstimator,
-  );
+  private readonly ctxBuilder = new ContextBuilder(undefined, sharedMemoryEstimator);
   private readonly toolProcessor = new ToolResultProcessor();
   private readonly candidateEnricher?: MemoryRuntimeOptions["candidateEnricher"];
 
@@ -162,15 +159,11 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     return { taskId: started.id, resumed: false };
   }
 
-  async buildContextSection(
-    input: BuildContextInput,
-  ): Promise<BuildContextResult> {
+  async buildContextSection(input: BuildContextInput): Promise<BuildContextResult> {
     const wm = await this.requireWm(input.taskId);
 
     let degraded = false;
-    let retrievalResult:
-      | Awaited<ReturnType<MemoryRetriever["retrieve"]>>
-      | undefined;
+    let retrievalResult: Awaited<ReturnType<MemoryRetriever["retrieve"]>> | undefined;
     try {
       retrievalResult = await this.retriever.retrieve({
         taskId: input.taskId,
@@ -193,8 +186,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       workingMemory: wm,
       retrievalResult,
       currentUserRequest: input.currentUserRequest,
-      tokenBudget:
-        input.tokenBudget > 0 ? input.tokenBudget : DEFAULT_CONTEXT_BUDGET,
+      tokenBudget: input.tokenBudget > 0 ? input.tokenBudget : DEFAULT_CONTEXT_BUDGET,
     });
 
     const items = (retrievalResult?.items ?? []).map((r) => ({
@@ -215,9 +207,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     };
   }
 
-  async onToolResult(
-    input: OnToolResultInput,
-  ): Promise<{ injected?: string } | undefined> {
+  async onToolResult(input: OnToolResultInput): Promise<{ injected?: string } | undefined> {
     const rawOutput =
       typeof input.rawPayload === "string"
         ? input.rawPayload
@@ -256,9 +246,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
 
     await this.withWmRetry(input.taskId, async (wm) => {
       const now = new Date().toISOString();
-      const toolStatus: ToolExecutionSummary["status"] = input.ok
-        ? "success"
-        : "failure";
+      const toolStatus: ToolExecutionSummary["status"] = input.ok ? "success" : "failure";
       const executedTools: ToolExecutionSummary[] = [
         ...wm.executedTools,
         {
@@ -273,13 +261,9 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       let readFiles = [...wm.readFiles];
       let modifiedFiles = [...wm.modifiedFiles];
 
-      const filePath =
-        stringArg(input.args, "path") ?? stringArg(input.args, "file");
+      const filePath = stringArg(input.args, "path") ?? stringArg(input.args, "file");
       if (filePath && input.ok) {
-        if (
-          input.toolName.includes("read") ||
-          input.toolName.endsWith("read_file")
-        ) {
+        if (input.toolName.includes("read") || input.toolName.endsWith("read_file")) {
           const activity: FileActivity = {
             filePath,
             action: "read",
@@ -305,9 +289,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       let currentTestSummary = wm.currentTestSummary;
       if (
         !input.ok &&
-        /test|vitest|jest|pytest|bun test/i.test(
-          `${input.toolName} ${input.summary}`,
-        )
+        /test|vitest|jest|pytest|bun test/i.test(`${input.toolName} ${input.summary}`)
       ) {
         currentTestSummary = {
           total: 1,
@@ -429,17 +411,15 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
 
       if (patch.pinnedFacts !== undefined) {
         const now = new Date().toISOString();
-        const pinned: WorkingConstraint[] = patch.pinnedFacts.map(
-          (text, i) => ({
-            id: `pin_${i}`,
-            text,
-            source: "runtime" as const,
-            priority: 20,
-            confirmed: true,
-            temporary: false,
-            createdAt: now,
-          }),
-        );
+        const pinned: WorkingConstraint[] = patch.pinnedFacts.map((text, i) => ({
+          id: `pin_${i}`,
+          text,
+          source: "runtime" as const,
+          priority: 20,
+          confirmed: true,
+          temporary: false,
+          createdAt: now,
+        }));
         const nonPinned = (next.constraints ?? wm.constraints).filter(
           (c) => !c.id.startsWith("pin_"),
         );
@@ -448,17 +428,15 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
 
       if (patch.knownNonGoals !== undefined) {
         const now = new Date().toISOString();
-        const nonGoals: WorkingConstraint[] = patch.knownNonGoals.map(
-          (text, i) => ({
-            id: `nongoal_${i}`,
-            text: `Non-goal: ${text}`,
-            source: "runtime" as const,
-            priority: 5,
-            confirmed: true,
-            temporary: true,
-            createdAt: now,
-          }),
-        );
+        const nonGoals: WorkingConstraint[] = patch.knownNonGoals.map((text, i) => ({
+          id: `nongoal_${i}`,
+          text: `Non-goal: ${text}`,
+          source: "runtime" as const,
+          priority: 5,
+          confirmed: true,
+          temporary: true,
+          createdAt: now,
+        }));
         const base = (next.constraints ?? wm.constraints).filter(
           (c) => !c.id.startsWith("nongoal_"),
         );
@@ -540,10 +518,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
           goal: wm.goal,
           workingMemoryGoal: wm.goal,
         });
-        const extra = await this.materializeEnrichmentDrafts(
-          input.taskId,
-          drafts ?? [],
-        );
+        const extra = await this.materializeEnrichmentDrafts(input.taskId, drafts ?? []);
         if (extra.length > 0) {
           candidates = [...candidates, ...extra];
         }
@@ -596,10 +571,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
         updatedAt: byId.updatedAt,
       });
     }
-    const bySubject = await memoryItemDao.findBySubjectKey(
-      idOrSubject,
-      "active",
-    );
+    const bySubject = await memoryItemDao.findBySubjectKey(idOrSubject, "active");
     const hit = bySubject[0];
     if (!hit) return null;
     return toListItem({
@@ -697,9 +669,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
 
   private async withWmRetry(
     taskId: string,
-    buildPatch: (
-      wm: WorkingMemory,
-    ) => Promise<Partial<WorkingMemory>> | Partial<WorkingMemory>,
+    buildPatch: (wm: WorkingMemory) => Promise<Partial<WorkingMemory>> | Partial<WorkingMemory>,
   ): Promise<WorkingMemory> {
     let lastErr: unknown;
     for (let i = 0; i < MAX_WM_RETRIES; i++) {
@@ -714,9 +684,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
     }
     throw lastErr instanceof Error
       ? lastErr
-      : new Error(
-          `WorkingMemory update failed after ${MAX_WM_RETRIES} retries`,
-        );
+      : new Error(`WorkingMemory update failed after ${MAX_WM_RETRIES} retries`);
   }
 
   /** enricher 草稿 → memory_candidates 行 */
@@ -735,9 +703,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
       if (!d.title?.trim() || !d.summary?.trim()) continue;
       const type = normalizeMemoryType(d.type);
       const conf =
-        typeof d.confidence === "number"
-          ? Math.min(1, Math.max(0.3, d.confidence))
-          : 0.7;
+        typeof d.confidence === "number" ? Math.min(1, Math.max(0.3, d.confidence)) : 0.7;
       const cand: MemoryCandidate = {
         id: generateId("cand"),
         schemaVersion: 1,
@@ -776,9 +742,7 @@ export class MemoryRuntimeImpl implements MemoryRuntime {
    * 对候选批量：evaluate → persist decision → execute APPROVED。
    * APPROVE_MERGE 时补全 targetMemoryId。
    */
-  private async promoteCandidates(
-    candidates: MemoryCandidate[],
-  ): Promise<CompleteTaskResult> {
+  private async promoteCandidates(candidates: MemoryCandidate[]): Promise<CompleteTaskResult> {
     let approved = 0;
     let rejected = 0;
     let pendingReview = 0;
@@ -847,10 +811,7 @@ function summarizeArgs(args: unknown): string {
   }
 }
 
-function upsertFile(
-  list: FileActivity[],
-  activity: FileActivity,
-): FileActivity[] {
+function upsertFile(list: FileActivity[], activity: FileActivity): FileActivity[] {
   const idx = list.findIndex((f) => f.filePath === activity.filePath);
   if (idx === -1) return [...list, activity];
   const next = [...list];
@@ -892,8 +853,6 @@ function shaShort(text: string): string {
 }
 
 /** 工厂：创建 MemoryRuntime */
-export async function createMemoryRuntime(
-  opts: MemoryRuntimeOptions,
-): Promise<MemoryRuntime> {
+export async function createMemoryRuntime(opts: MemoryRuntimeOptions): Promise<MemoryRuntime> {
   return new MemoryRuntimeImpl(opts);
 }

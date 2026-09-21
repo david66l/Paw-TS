@@ -12,10 +12,7 @@ describe("memory HostState projection", () => {
   test("renders fixed provenance-wrapped channels under the total cap", () => {
     const rendered = renderRelevantMemoryV1({
       primary: "P".repeat(10_000),
-      latestHint: createMemoryHintCheckpointV1(
-        "action_failed",
-        "H".repeat(4_000),
-      ),
+      latestHint: createMemoryHintCheckpointV1("action_failed", "H".repeat(4_000)),
       coldResume: {
         task: "T".repeat(1_000),
         state: "S".repeat(3_000),
@@ -32,10 +29,7 @@ describe("memory HostState projection", () => {
   });
 
   test("validates one bounded crash-safe latest hint", () => {
-    const hint = createMemoryHintCheckpointV1(
-      "post_compact",
-      `  ${"x".repeat(3_000)}  `,
-    );
+    const hint = createMemoryHintCheckpointV1("post_compact", `  ${"x".repeat(3_000)}  `);
     expect(hint?.text).toHaveLength(2_000);
     expect(parseMemoryHintCheckpointV1(hint)).toEqual(hint);
     expect(
@@ -51,9 +45,8 @@ describe("memory HostState projection", () => {
     const xml =
       '<agent-memory source="semantic" id="m1" status="verified">\nuse port 42\n</agent-memory>';
     expect(
-      migrateLegacyMemoryProjectionsV1([
-        { role: "user", content: `[Memory hint]\n${xml}` },
-      ]).latestHint,
+      migrateLegacyMemoryProjectionsV1([{ role: "user", content: `[Memory hint]\n${xml}` }])
+        .latestHint,
     ).toMatchObject({ kind: "action_failed", text: xml });
     expect(
       migrateLegacyMemoryProjectionsV1([

@@ -12,10 +12,7 @@ import {
   normalizeMemoryFacetKeyV2,
 } from "./facet-state.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
 export const PAW_MEMORY_FACET_RECONCILER_VERSION_V2 =
   "paw.memory-facet-reconciler.json.v2:id-only" as const;
@@ -117,9 +114,7 @@ export function createJsonMemoryFacetReconcilerV2(
       signal: AbortSignal,
     ): Promise<MemoryFacetReconciliationV2> {
       const started = now();
-      const sourceRevisionHash = safeRevisionHash(
-        reconciliation.sourceRevision,
-      );
+      const sourceRevisionHash = safeRevisionHash(reconciliation.sourceRevision);
       let repaired = false;
       let salvaged = false;
       try {
@@ -130,9 +125,7 @@ export function createJsonMemoryFacetReconcilerV2(
         );
         if (signal.aborted || first.status === "cancelled") throw abortError();
         if (first.status !== "completed") {
-          throw namedError(
-            `MemoryFacetReconciler_${stableCode(first.errorCode)}`,
-          );
+          throw namedError(`MemoryFacetReconciler_${stableCode(first.errorCode)}`);
         }
         let result: MemoryFacetReconciliationV2;
         try {
@@ -144,31 +137,20 @@ export function createJsonMemoryFacetReconcilerV2(
             buildMemoryFacetRepairRequestV2(
               reconciliation,
               first.text,
-              error instanceof Error
-                ? error.name
-                : "MemoryFacetReconcileInvalid",
+              error instanceof Error ? error.name : "MemoryFacetReconcileInvalid",
             ),
             { signal },
           );
-          if (signal.aborted || second.status === "cancelled")
-            throw abortError();
+          if (signal.aborted || second.status === "cancelled") throw abortError();
           if (second.status !== "completed") {
-            throw namedError(
-              `MemoryFacetReconciler_${stableCode(second.errorCode)}`,
-            );
+            throw namedError(`MemoryFacetReconciler_${stableCode(second.errorCode)}`);
           }
           try {
-            result = parseMemoryFacetReconciliationV2(
-              second.text,
-              reconciliation,
-            );
+            result = parseMemoryFacetReconciliationV2(second.text, reconciliation);
           } catch (error) {
             if (signal.aborted || isAbort(error)) throw abortError();
             salvaged = true;
-            result = salvageMemoryFacetReconciliationV2(
-              second.text,
-              reconciliation,
-            );
+            result = salvageMemoryFacetReconciliationV2(second.text, reconciliation);
           }
         }
         emit(input.onEvent, {
@@ -278,10 +260,7 @@ export function parseMemoryFacetReconciliationV2(
 ): MemoryFacetReconciliationV2 {
   validateInput(input);
   const parsed = jsonObject(text);
-  if (
-    !Array.isArray(parsed.decisions) ||
-    !Array.isArray(parsed.deferredMemoryIds)
-  ) {
+  if (!Array.isArray(parsed.decisions) || !Array.isArray(parsed.deferredMemoryIds)) {
     throw namedError("MemoryFacetReconcilePacketInvalid");
   }
   const observations = new Map(
@@ -290,9 +269,7 @@ export function parseMemoryFacetReconciliationV2(
   if (parsed.decisions.length > observations.size) {
     throw namedError("MemoryFacetReconcileDecisionCountInvalid");
   }
-  const existingFacets = new Map(
-    input.catalog.map((item) => [item.facet.id, item.facet]),
-  );
+  const existingFacets = new Map(input.catalog.map((item) => [item.facet.id, item.facet]));
   const existingFacetByKey = new Map(
     input.catalog.map((item) => [item.facet.canonicalKey, item.facet]),
   );
@@ -328,11 +305,7 @@ export function parseMemoryFacetReconciliationV2(
       "targetMemoryIds",
       "confidence",
     ]);
-    const memoryId = boundedString(
-      raw.memoryId,
-      256,
-      "MemoryFacetReconcileMemoryInvalid",
-    );
+    const memoryId = boundedString(raw.memoryId, 256, "MemoryFacetReconcileMemoryInvalid");
     if (!observations.has(memoryId) || seen.has(memoryId)) {
       throw namedError("MemoryFacetReconcileMemoryUnknown");
     }
@@ -344,10 +317,7 @@ export function parseMemoryFacetReconciliationV2(
       memoryId,
       role: memberRole(raw.role),
       linkKind: linkKind(raw.linkKind),
-      targetMemoryIds: stringArray(
-        raw.targetMemoryIds,
-        "MemoryFacetReconcileTargetsInvalid",
-      ),
+      targetMemoryIds: stringArray(raw.targetMemoryIds, "MemoryFacetReconcileTargetsInvalid"),
       confidence: confidence(raw.confidence),
     });
     memberships.push(membership);
@@ -411,9 +381,7 @@ export function parseMemoryFacetReconciliationV2(
     [...facets.values()].sort((left, right) => left.id.localeCompare(right.id)),
   );
   const sortedMemberships = Object.freeze(
-    normalizedMemberships.sort((left, right) =>
-      left.memoryId.localeCompare(right.memoryId),
-    ),
+    normalizedMemberships.sort((left, right) => left.memoryId.localeCompare(right.memoryId)),
   );
   const sortedDeferred = Object.freeze([...deferredMemoryIds].sort());
   const body = {
@@ -468,11 +436,7 @@ export function salvageMemoryFacetReconciliationV2(
         "targetMemoryIds",
         "confidence",
       ]);
-      memoryId = boundedString(
-        raw.memoryId,
-        256,
-        "MemoryFacetReconcileMemoryInvalid",
-      );
+      memoryId = boundedString(raw.memoryId, 256, "MemoryFacetReconcileMemoryInvalid");
       if (!observationIds.has(memoryId) || seen.has(memoryId)) continue;
       parseMemoryFacetReconciliationV2(
         JSON.stringify({
@@ -489,9 +453,7 @@ export function salvageMemoryFacetReconciliationV2(
     seen.add(memoryId);
     accepted.push(value);
   }
-  const deferredMemoryIds = input.observations
-    .map((item) => item.id)
-    .filter((id) => !seen.has(id));
+  const deferredMemoryIds = input.observations.map((item) => item.id).filter((id) => !seen.has(id));
   try {
     const result = parseMemoryFacetReconciliationV2(
       JSON.stringify({ decisions: accepted, deferredMemoryIds }),
@@ -524,11 +486,7 @@ function resolveFacet(
   proposedNewFacets: ReadonlyMap<string, MemoryFacetV2>,
 ): MemoryFacetV2 {
   if (typeof raw.facetId === "string") {
-    const facetId = boundedString(
-      raw.facetId,
-      256,
-      "MemoryFacetReconcileFacetInvalid",
-    );
+    const facetId = boundedString(raw.facetId, 256, "MemoryFacetReconcileFacetInvalid");
     const existing = existingFacets.get(facetId);
     if (!existing) throw namedError("MemoryFacetReconcileFacetUnknown");
     if (raw.canonicalKey !== null || raw.displayName !== null) {
@@ -539,8 +497,7 @@ function resolveFacet(
     }
     return existing;
   }
-  if (raw.facetId !== null)
-    throw namedError("MemoryFacetReconcileFacetInvalid");
+  if (raw.facetId !== null) throw namedError("MemoryFacetReconcileFacetInvalid");
   const canonicalKey = safeFacetKey(raw.canonicalKey);
   const facet = proposedNewFacets.get(canonicalKey);
   if (!facet) throw namedError("MemoryFacetReconcileNewFacetInvalid");
@@ -585,19 +542,11 @@ function materializeProposedNewFacets(
       throw namedError("MemoryFacetReconcileMustReuseExisting");
     }
     const proposal = Object.freeze({
-      memoryId: boundedString(
-        raw.memoryId,
-        256,
-        "MemoryFacetReconcileMemoryInvalid",
-      ),
-      displayName: safeText(
-        raw.displayName,
-        160,
-        "MemoryFacetReconcileDisplayInvalid",
-      ),
+      memoryId: boundedString(raw.memoryId, 256, "MemoryFacetReconcileMemoryInvalid"),
+      displayName: safeText(raw.displayName, 160, "MemoryFacetReconcileDisplayInvalid"),
       aliases: Object.freeze(
-        stringArray(raw.aliases, "MemoryFacetReconcileAliasesInvalid").map(
-          (item) => safeAlias(item),
+        stringArray(raw.aliases, "MemoryFacetReconcileAliasesInvalid").map((item) =>
+          safeAlias(item),
         ),
       ),
     });
@@ -613,14 +562,8 @@ function materializeProposedNewFacets(
       const first = ordered[0];
       if (!first) throw namedError("MemoryFacetReconcileNewFacetInvalid");
       const displayName = first.displayName;
-      const aliases = ordered.flatMap((item) => [
-        item.displayName,
-        ...item.aliases,
-      ]);
-      return [
-        canonicalKey,
-        createMemoryFacetV2({ scope, canonicalKey, displayName, aliases }),
-      ];
+      const aliases = ordered.flatMap((item) => [item.displayName, ...item.aliases]);
+      return [canonicalKey, createMemoryFacetV2({ scope, canonicalKey, displayName, aliases })];
     }),
   );
 }
@@ -661,8 +604,7 @@ function validateInput(input: MemoryFacetReconciliationInputV2): void {
     if (
       facetIds.has(item.facet.id) ||
       item.facet.scopeFingerprint !== memoryScopeFingerprintV1(input.scope) ||
-      item.facet.canonicalKey !==
-        normalizeMemoryFacetKeyV2(item.facet.canonicalKey) ||
+      item.facet.canonicalKey !== normalizeMemoryFacetKeyV2(item.facet.canonicalKey) ||
       item.facet.id !==
         deriveMemoryFacetIdV2({
           scope: input.scope,
@@ -704,12 +646,7 @@ function projectObservation(value: MemoryFacetReconcileObservationV2) {
 }
 
 function memberRole(value: unknown): MemoryFacetMemberRoleV2 {
-  if (
-    value !== "state" &&
-    value !== "event" &&
-    value !== "cause" &&
-    value !== "condition"
-  ) {
+  if (value !== "state" && value !== "event" && value !== "cause" && value !== "condition") {
     throw namedError("MemoryFacetReconcileRoleInvalid");
   }
   return value;
@@ -730,9 +667,7 @@ function linkKind(value: unknown): MemoryFacetMembershipV2["linkKind"] {
 }
 
 function safeFacetKey(value: unknown): string {
-  const key = normalizeMemoryFacetKeyV2(
-    safeText(value, 160, "MemoryFacetReconcileKeyInvalid"),
-  );
+  const key = normalizeMemoryFacetKeyV2(safeText(value, 160, "MemoryFacetReconcileKeyInvalid"));
   if (scanForSecrets(key).action !== "pass") {
     throw namedError("MemoryFacetReconcileKeySecret");
   }
@@ -748,12 +683,7 @@ function safeAlias(value: string): string {
 }
 
 function confidence(value: unknown): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value < 0 ||
-    value > 1
-  ) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
     throw namedError("MemoryFacetReconcileConfidenceInvalid");
   }
   return value;
@@ -784,8 +714,7 @@ function exactRecord(
 function jsonObject(text: string): Record<string, unknown> {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start)
-    throw namedError("MemoryFacetReconcileJsonMissing");
+  if (start < 0 || end <= start) throw namedError("MemoryFacetReconcileJsonMissing");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text.slice(start, end + 1));
@@ -821,17 +750,10 @@ function safeRevisionHash(value: string): string {
 }
 
 function validCandidateRole(value: unknown): value is MemoryFacetMemberRoleV2 {
-  return (
-    value === "state" ||
-    value === "event" ||
-    value === "cause" ||
-    value === "condition"
-  );
+  return value === "state" || value === "event" || value === "cause" || value === "condition";
 }
 
-function validCandidateStatus(
-  value: unknown,
-): value is MemoryFacetCandidateStatusV2 {
+function validCandidateStatus(value: unknown): value is MemoryFacetCandidateStatusV2 {
   return (
     value === "current" ||
     value === "historical" ||
@@ -846,10 +768,10 @@ function validCandidateStatus(
 
 function stableReason(error: unknown): string {
   const name = error instanceof Error ? error.name : "Unknown";
-  return (
-    `MemoryFacetReconciler_${stableCode(name)}` ||
-    "MemoryFacetReconciler_Unknown"
-  ).slice(0, 160);
+  return (`MemoryFacetReconciler_${stableCode(name)}` || "MemoryFacetReconciler_Unknown").slice(
+    0,
+    160,
+  );
 }
 
 function stableCode(value: string): string {

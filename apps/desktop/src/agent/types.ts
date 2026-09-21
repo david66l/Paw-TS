@@ -1,12 +1,6 @@
 export type UiMessage = {
   readonly id: string;
-  readonly role:
-    | "user"
-    | "assistant"
-    | "system"
-    | "activity"
-    | "toolbatch"
-    | "changes";
+  readonly role: "user" | "assistant" | "system" | "activity" | "toolbatch" | "changes";
   readonly content: string;
   /** 模型思考过程（DeepSeek 等 reasoning 通道 / 内嵌 think 标签） */
   readonly thinking?: string;

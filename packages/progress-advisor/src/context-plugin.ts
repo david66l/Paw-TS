@@ -1,12 +1,5 @@
-import type {
-  Context,
-  PortCallOptions,
-  SessionInputSnapshot,
-} from "@paw/agent-loop";
-import {
-  type ModelRequestV1,
-  materializeModelRequestMessagesV1,
-} from "@paw/core";
+import type { Context, PortCallOptions, SessionInputSnapshot } from "@paw/agent-loop";
+import { type ModelRequestV1, materializeModelRequestMessagesV1 } from "@paw/core";
 import type { InputFactV1 } from "@paw/protocol";
 
 import { projectProgressAdviceV1 } from "./projector.js";
@@ -59,22 +52,15 @@ export function createProgressAdvisorContextPluginV1(options: {
   }
   const build = options.context.build.bind(options.context);
   return Object.freeze({
-    async build(
-      snapshot: SessionInputSnapshot<InputFactV1>,
-      callOptions: PortCallOptions,
-    ) {
+    async build(snapshot: SessionInputSnapshot<InputFactV1>, callOptions: PortCallOptions) {
       const request = await build(snapshot, callOptions);
       const advice = projectProgressAdviceV1(snapshot);
       if (!advice) return request;
       const candidate: ModelRequestV1 = Object.freeze({
         ...request,
-        messages: Object.freeze([
-          ...request.messages,
-          renderProgressAdviceMessageV1(advice),
-        ]),
+        messages: Object.freeze([...request.messages, renderProgressAdviceMessageV1(advice)]),
       });
-      return estimatedInputTokens(candidate, options.estimator) <=
-        options.hardInputLimitTokens
+      return estimatedInputTokens(candidate, options.estimator) <= options.hardInputLimitTokens
         ? candidate
         : request;
     },
@@ -88,21 +74,13 @@ function estimatedInputTokens(
     countMessages(messages: readonly import("@paw/core").ChatMessage[]): number;
   }>,
 ): number {
-  const messages = estimator.countMessages(
-    materializeModelRequestMessagesV1(request),
-  );
+  const messages = estimator.countMessages(materializeModelRequestMessagesV1(request));
   const tools = request.options?.tools;
-  return (
-    messages + (tools?.length ? estimator.count(canonicalUnknown(tools)) : 0)
-  );
+  return messages + (tools?.length ? estimator.count(canonicalUnknown(tools)) : 0);
 }
 
 function canonicalUnknown(value: unknown): string {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return JSON.stringify(value);
   }
   if (typeof value === "number" && Number.isFinite(value)) {

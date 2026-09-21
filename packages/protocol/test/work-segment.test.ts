@@ -16,9 +16,7 @@ const COMPLETE = { kind: "complete", reasonCode: "segment-done" } as const;
 describe("canonical work segment protocol", () => {
   test("strictly parses the exact marker shape", () => {
     const exact = marker(1, "next-input", COMPLETE, "state-terminal");
-    expect(parseRunJournalEnvelopeV1(envelope(5, exact))).toEqual(
-      envelope(5, exact),
-    );
+    expect(parseRunJournalEnvelopeV1(envelope(5, exact))).toEqual(envelope(5, exact));
 
     for (const invalid of [
       { ...exact, segmentIndex: 0 },
@@ -60,9 +58,7 @@ describe("canonical work segment protocol", () => {
       decision(8, 7, COMPLETE, "state-segment-2"),
       envelope(9, promoted("segment-2", "segment-2-content")),
     ];
-    expect(() => parseRunJournalPrefixV1(segmented)).toThrow(
-      /requires a work segment marker/i,
-    );
+    expect(() => parseRunJournalPrefixV1(segmented)).toThrow(/requires a work segment marker/i);
   });
 
   test("rejects half segments and every previous-decision identity drift", () => {
@@ -113,9 +109,7 @@ describe("canonical work segment protocol", () => {
     // 用户决策（2026-08-21）：repair 结算的 unknown 族 incomplete 可接续段。
     for (const reasonCode of CRASH_RECOVERY_INCOMPLETE_REASONS_V1) {
       expect(() =>
-        parseRunJournalPrefixV1(
-          segmentPrefix({ action: { kind: "incomplete", reasonCode } }),
-        ),
+        parseRunJournalPrefixV1(segmentPrefix({ action: { kind: "incomplete", reasonCode } })),
       ).not.toThrow();
     }
   });
@@ -128,13 +122,9 @@ describe("canonical work segment protocol", () => {
     );
 
     const wrongPromotion = valid.map((item) =>
-      item.seq === 6
-        ? envelope(6, promoted("next-input", "different-content"))
-        : item,
+      item.seq === 6 ? envelope(6, promoted("next-input", "different-content")) : item,
     );
-    expect(() => parseRunJournalPrefixV1(wrongPromotion)).toThrow(
-      /identity mismatch/i,
-    );
+    expect(() => parseRunJournalPrefixV1(wrongPromotion)).toThrow(/identity mismatch/i);
 
     const gap = replaceMarker(valid, { ...markerFrom(valid), segmentIndex: 2 });
     expect(() => parseRunJournalPrefixV1(gap)).toThrow(/contiguous from 1/i);
@@ -159,9 +149,7 @@ describe("canonical work segment protocol", () => {
         requestHash: "request-after-terminal",
       }),
     ];
-    expect(() => parseRunJournalPrefixV1(terminalThenDispatch)).toThrow(
-      /work segment/i,
-    );
+    expect(() => parseRunJournalPrefixV1(terminalThenDispatch)).toThrow(/work segment/i);
 
     const openModel = boundaryPrefix([
       {
@@ -171,9 +159,7 @@ describe("canonical work segment protocol", () => {
         requestHash: "open-request",
       },
     ]);
-    expect(() => parseRunJournalPrefixV1(openModel)).toThrow(
-      /unsettled model/i,
-    );
+    expect(() => parseRunJournalPrefixV1(openModel)).toThrow(/unsettled model/i);
 
     const openTool = boundaryPrefix(openToolFacts());
     expect(() => parseRunJournalPrefixV1(openTool)).toThrow(/tool lifecycle/i);
@@ -194,9 +180,7 @@ describe("canonical work segment protocol", () => {
         },
       },
     ]);
-    expect(() => parseRunJournalPrefixV1(completedUnrecorded)).toThrow(
-      /distillation/i,
-    );
+    expect(() => parseRunJournalPrefixV1(completedUnrecorded)).toThrow(/distillation/i);
   });
 
   test("keeps model turns globally increasing across a segment marker", () => {
@@ -233,13 +217,9 @@ describe("canonical work segment protocol", () => {
   });
 
   test("allows any positive first turn but rejects reset, duplicate, or decreasing turns after a segment", () => {
-    expect(parseRunJournalPrefixV1(globalTurnPrefix(6))).toEqual(
-      globalTurnPrefix(6),
-    );
+    expect(parseRunJournalPrefixV1(globalTurnPrefix(6))).toEqual(globalTurnPrefix(6));
     for (const turn of [1, 4, 5]) {
-      expect(() => parseRunJournalPrefixV1(globalTurnPrefix(turn))).toThrow(
-        /model dispatch turn/i,
-      );
+      expect(() => parseRunJournalPrefixV1(globalTurnPrefix(turn))).toThrow(/model dispatch turn/i);
     }
   });
 });
@@ -270,9 +250,7 @@ function segmentPrefix(input: {
   ];
 }
 
-function boundaryPrefix(
-  interveningFacts: readonly unknown[],
-): readonly RunJournalEnvelopeV1[] {
+function boundaryPrefix(interveningFacts: readonly unknown[]): readonly RunJournalEnvelopeV1[] {
   const prefix: RunJournalEnvelopeV1[] = [
     envelope(1, {
       type: "attempt.started",
@@ -294,12 +272,8 @@ function boundaryPrefix(
   const stateHash = "boundary-state";
   const decisionSeq = prefix.length + 1;
   prefix.push(decision(decisionSeq, decisionSeq - 1, COMPLETE, stateHash));
-  prefix.push(
-    envelope(prefix.length + 1, marker(1, "next-input", COMPLETE, stateHash)),
-  );
-  prefix.push(
-    envelope(prefix.length + 1, promoted("next-input", "next-content")),
-  );
+  prefix.push(envelope(prefix.length + 1, marker(1, "next-input", COMPLETE, stateHash)));
+  prefix.push(envelope(prefix.length + 1, promoted("next-input", "next-content")));
   return prefix;
 }
 
@@ -529,15 +503,9 @@ function envelope(seq: number, fact: unknown): RunJournalEnvelopeV1 {
 
 function markerFrom(prefix: readonly RunJournalEnvelopeV1[]): Marker {
   const fact = prefix.find(
-    (item) =>
-      item.record.kind === "input_fact" &&
-      item.record.fact.type === "work.segment_started",
+    (item) => item.record.kind === "input_fact" && item.record.fact.type === "work.segment_started",
   )?.record;
-  if (
-    !fact ||
-    fact.kind !== "input_fact" ||
-    fact.fact.type !== "work.segment_started"
-  ) {
+  if (!fact || fact.kind !== "input_fact" || fact.fact.type !== "work.segment_started") {
     throw new Error("missing marker fixture");
   }
   return fact.fact;
@@ -548,16 +516,13 @@ function replaceMarker(
   next: Marker,
 ): readonly RunJournalEnvelopeV1[] {
   return prefix.map((item) =>
-    item.record.kind === "input_fact" &&
-    item.record.fact.type === "work.segment_started"
+    item.record.kind === "input_fact" && item.record.fact.type === "work.segment_started"
       ? envelope(item.seq, next)
       : item,
   );
 }
 
-function resequence(
-  prefix: readonly RunJournalEnvelopeV1[],
-): readonly RunJournalEnvelopeV1[] {
+function resequence(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
   return prefix.map((item, index) => ({
     ...item,
     seq: index + 1,

@@ -5,11 +5,7 @@ import type {
   TaskProgressServiceV1,
   TaskProgressSnapshotV1,
 } from "@paw/harness";
-import type {
-  JsonValue,
-  RunJournalEnvelopeV1,
-  ToolSettledFactV1,
-} from "@paw/protocol";
+import type { JsonValue, RunJournalEnvelopeV1, ToolSettledFactV1 } from "@paw/protocol";
 import {
   type VerifiedCanonicalPayloadEvidenceV1,
   projectCanonicalSessionInputSnapshotV1,
@@ -32,9 +28,7 @@ export interface CreateTaskProgressServiceOptionsV1 {
   readonly loadPayloadEvidence: (
     prefix: readonly RunJournalEnvelopeV1[],
     signal?: AbortSignal,
-  ) =>
-    | VerifiedCanonicalPayloadEvidenceV1
-    | Promise<VerifiedCanonicalPayloadEvidenceV1>;
+  ) => VerifiedCanonicalPayloadEvidenceV1 | Promise<VerifiedCanonicalPayloadEvidenceV1>;
   readonly listActivities?: () => readonly ManagedJobSnapshotV1[];
   readonly clock?: () => number;
   readonly policy?: TaskProgressPolicyV1;
@@ -43,9 +37,7 @@ export interface CreateTaskProgressServiceOptionsV1 {
 interface LocatedProgressPayloadV1 {
   readonly callId: string;
   readonly carrierSeq: number;
-  readonly payload: NonNullable<
-    NonNullable<ToolSettledFactV1["observation"]>["payload"]
-  >;
+  readonly payload: NonNullable<NonNullable<ToolSettledFactV1["observation"]>["payload"]>;
 }
 
 export function createTaskProgressServiceV1(
@@ -57,9 +49,7 @@ export function createTaskProgressServiceV1(
   if (typeof options.loadPayloadEvidence !== "function") {
     throw new Error("Task progress payload-evidence loader is invalid");
   }
-  const policy = freezeTaskProgressPolicyV1(
-    options.policy ?? DEFAULT_TASK_PROGRESS_POLICY_V1,
-  );
+  const policy = freezeTaskProgressPolicyV1(options.policy ?? DEFAULT_TASK_PROGRESS_POLICY_V1);
   const clock = options.clock ?? Date.now;
   const service: TaskProgressServiceV1 = {
     async write(input, signal) {
@@ -100,9 +90,7 @@ export function createTaskProgressServiceV1(
         );
         const now = clock();
         const activities = Object.freeze(
-          (options.listActivities?.() ?? []).map((job) =>
-            projectActivity(job, now),
-          ),
+          (options.listActivities?.() ?? []).map((job) => projectActivity(job, now)),
         );
         return {
           ok: true,
@@ -120,17 +108,12 @@ export function createTaskProgressServiceV1(
   return Object.freeze(service);
 }
 
-function countPendingProgressWrites(
-  prefix: readonly RunJournalEnvelopeV1[],
-): number {
+function countPendingProgressWrites(prefix: readonly RunJournalEnvelopeV1[]): number {
   const pending = new Set<string>();
   for (const envelope of prefix) {
     if (envelope.record.kind !== "input_fact") continue;
     const fact = envelope.record.fact;
-    if (
-      fact.type === "tool.call_observed" &&
-      fact.tool === TASK_PROGRESS_PROVIDER_TOOL_V1
-    ) {
+    if (fact.type === "tool.call_observed" && fact.tool === TASK_PROGRESS_PROVIDER_TOOL_V1) {
       pending.add(fact.callId);
     } else if (fact.type === "tool.settled") {
       pending.delete(fact.callId);
@@ -197,8 +180,7 @@ export function parseTaskProgressSnapshotV1(
   const record = input as Readonly<Record<string, JsonValue>>;
   const keys = Object.keys(record).sort().join("\0");
   if (
-    keys !==
-      "completed\0current\0items\0percent\0revision\0schemaVersion\0status\0total" &&
+    keys !== "completed\0current\0items\0percent\0revision\0schemaVersion\0status\0total" &&
     keys !== "completed\0items\0percent\0revision\0schemaVersion\0status\0total"
   ) {
     throw new Error("Task progress snapshot fields are invalid");
@@ -226,13 +208,7 @@ function createSnapshot(
   const current = items.find((item) => item.status === "in_progress")?.content;
   const total = items.length;
   const status =
-    total === 0
-      ? "empty"
-      : completed === total
-        ? "completed"
-        : current
-          ? "in_progress"
-          : "pending";
+    total === 0 ? "empty" : completed === total ? "completed" : current ? "in_progress" : "pending";
   return Object.freeze({
     schemaVersion: TASK_PROGRESS_SCHEMA_V1,
     revision,
@@ -245,10 +221,7 @@ function createSnapshot(
   });
 }
 
-function projectActivity(
-  job: ManagedJobSnapshotV1,
-  now: number,
-): TaskProgressActivityV1 {
+function projectActivity(job: ManagedJobSnapshotV1, now: number): TaskProgressActivityV1 {
   const end = job.finishedAt ?? now;
   return Object.freeze({
     id: job.id,

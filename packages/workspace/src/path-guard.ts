@@ -35,12 +35,7 @@ export const SENSITIVE_PATH_SEGMENTS = new Set([
   "known_hosts",
 ]);
 
-export type PathRisk =
-  | "safe"
-  | "sensitive"
-  | "escaped"
-  | "out_of_scope"
-  | "invalid";
+export type PathRisk = "safe" | "sensitive" | "escaped" | "out_of_scope" | "invalid";
 
 export type WorkspacePathOperationV1 = "read" | "write";
 
@@ -68,10 +63,7 @@ export interface PathDecision {
 }
 
 /** 判断 target 是否在 root 内部（含符号链接检查前的逻辑检查）。 */
-export function isPathInsideRoot(
-  rootResolved: string,
-  targetResolved: string,
-): boolean {
+export function isPathInsideRoot(rootResolved: string, targetResolved: string): boolean {
   const root = path.resolve(rootResolved);
   const target = path.resolve(targetResolved);
   if (root === target) return true;
@@ -79,9 +71,7 @@ export function isPathInsideRoot(
   // Windows resource identities are case-folded; path.relative recognizes
   // equivalent roots even when the original strings differ in case.
   if (rel === "") return true;
-  return (
-    !rel.startsWith(`..${path.sep}`) && rel !== ".." && !path.isAbsolute(rel)
-  );
+  return !rel.startsWith(`..${path.sep}`) && rel !== ".." && !path.isAbsolute(rel);
 }
 
 /** 找到路径上最近的存在父目录（用于解析符号链接）。 */
@@ -222,9 +212,7 @@ function checkPathPolicy(
 ): PathDecision | undefined {
   if (!policy) return undefined;
   const resolvePolicyPath = (value: string): string =>
-    path.isAbsolute(value)
-      ? path.resolve(value)
-      : path.resolve(workspaceRoot, value);
+    path.isAbsolute(value) ? path.resolve(value) : path.resolve(workspaceRoot, value);
   const denyPaths = policy.denyPaths ?? [];
   for (const denied of denyPaths) {
     const deniedPath = resolvePolicyPath(denied);
@@ -242,14 +230,11 @@ function checkPathPolicy(
   }
 
   const roots =
-    operation === "write"
-      ? policy.writeRoots
-      : [...policy.readRoots, ...policy.writeRoots];
+    operation === "write" ? policy.writeRoots : [...policy.readRoots, ...policy.writeRoots];
   const allowed = roots.some((root) => {
     const boundary = resolvePolicyPath(root);
     return (
-      path.resolve(boundary) === path.resolve(candidate) ||
-      isPathInsideRoot(boundary, candidate)
+      path.resolve(boundary) === path.resolve(candidate) || isPathInsideRoot(boundary, candidate)
     );
   });
   if (allowed) return undefined;

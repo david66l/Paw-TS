@@ -77,9 +77,7 @@ export function sourceEntries(): readonly {
   ];
 }
 
-export function validCheckpoint(
-  override: Partial<TaskCheckpointV1> = {},
-): TaskCheckpointV1 {
+export function validCheckpoint(override: Partial<TaskCheckpointV1> = {}): TaskCheckpointV1 {
   return {
     schemaVersion: TASK_CHECKPOINT_SCHEMA_VERSION_V1,
     goal: item("Fix src/a.ts and run bun test", [1]),

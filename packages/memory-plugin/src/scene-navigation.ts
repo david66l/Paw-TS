@@ -7,13 +7,9 @@ import type {
   SourceGroundedMemorySceneInputV1,
 } from "./scene-projector.js";
 
-export const PAW_MEMORY_SCENE_NAVIGATION_VERSION_V1 =
-  "paw.memory-scene-navigation.v1" as const;
+export const PAW_MEMORY_SCENE_NAVIGATION_VERSION_V1 = "paw.memory-scene-navigation.v1" as const;
 
-export type MemoryQueryRouteKindV1 =
-  | "l0_fallback"
-  | "scene_causal"
-  | "scene_exploratory";
+export type MemoryQueryRouteKindV1 = "l0_fallback" | "scene_causal" | "scene_exploratory";
 
 export interface MemoryQueryRouteV1 {
   readonly route: MemoryQueryRouteKindV1;
@@ -137,10 +133,7 @@ export function createMemorySceneSnapshotV1(input: {
   readonly summaryMaxChars?: number;
 }): MemorySceneSnapshotV1 {
   const scopeFingerprint = stableIdentity(input.scopeFingerprint, "scope");
-  const projectionRevision = stableIdentity(
-    input.projectionRevision,
-    "projection revision",
-  );
+  const projectionRevision = stableIdentity(input.projectionRevision, "projection revision");
   const maxIndexChars = boundedInteger(
     input.maxIndexChars ?? 4_096,
     512,
@@ -156,10 +149,7 @@ export function createMemorySceneSnapshotV1(input: {
   const sources = [...input.sources]
     .map(normalizeSource)
     .filter((source) => source.atoms.length > 0)
-    .sort(
-      (left, right) =>
-        left.rank - right.rank || left.sourceId.localeCompare(right.sourceId),
-    );
+    .sort((left, right) => left.rank - right.rank || left.sourceId.localeCompare(right.sourceId));
   const bodies: Record<string, MemorySceneBodyV1> = {};
   const candidates = sources.map((source) => {
     const path = `scene/${hashTextV1(source.sourceId).slice(0, 20)}`;
@@ -294,20 +284,14 @@ export function selectMemorySceneEvidenceV1(input: {
       entry,
       score: overlapScore(queryTerms, terms(entry.summary)),
     }))
-    .sort(
-      (left, right) =>
-        right.score - left.score || left.entry.rank - right.entry.rank,
-    )
+    .sort((left, right) => right.score - left.score || left.entry.rank - right.entry.rank)
     .slice(0, route.maxSceneReads);
   const reads: MemorySceneSelectionV1["reads"][number][] = [];
   let usedChars = 0;
   for (const candidate of ranked) {
     const body = input.snapshot.bodies[candidate.entry.path];
     if (!body) continue;
-    const selected = selectAtoms(body.atoms, queryTerms, route).slice(
-      0,
-      route.maxAtomsPerScene,
-    );
+    const selected = selectAtoms(body.atoms, queryTerms, route).slice(0, route.maxAtomsPerScene);
     const lines: string[] = [];
     const atomIds: string[] = [];
     const sourceSeqs = new Set<number>();
@@ -339,10 +323,7 @@ export function selectMemorySceneEvidenceV1(input: {
       stablePrefixHash: input.snapshot.snapshotKey,
       stablePrefixChars: input.snapshot.indexText.length,
       sceneReadCount: reads.length,
-      selectedAtomCount: reads.reduce(
-        (total, read) => total + read.atomIds.length,
-        0,
-      ),
+      selectedAtomCount: reads.reduce((total, read) => total + read.atomIds.length, 0),
       dynamicChars: reads.reduce((total, read) => total + read.text.length, 0),
       fallback: false,
     }),
@@ -401,10 +382,7 @@ export function createMemorySceneSnapshotContextV1(
       }
       return Object.freeze({
         ...request,
-        contextSections: Object.freeze([
-          section,
-          ...(request.contextSections ?? []),
-        ]),
+        contextSections: Object.freeze([section, ...(request.contextSections ?? [])]),
       });
     },
   });
@@ -429,11 +407,7 @@ function emptySelection(
 }
 
 function normalizeSource(source: SourceGroundedMemorySceneInputV1) {
-  if (
-    !source.sourceId.trim() ||
-    !Number.isSafeInteger(source.rank) ||
-    source.rank < 0
-  ) {
+  if (!source.sourceId.trim() || !Number.isSafeInteger(source.rank) || source.rank < 0) {
     throw namedError("MemorySceneSourceInvalid");
   }
   const ids = new Set<string>();
@@ -448,9 +422,7 @@ function normalizeSource(source: SourceGroundedMemorySceneInputV1) {
       }
       if (
         atom.confidence !== undefined &&
-        (!Number.isFinite(atom.confidence) ||
-          atom.confidence < 0 ||
-          atom.confidence > 1)
+        (!Number.isFinite(atom.confidence) || atom.confidence < 0 || atom.confidence > 1)
       ) {
         throw namedError("MemorySceneAtomConfidenceInvalid");
       }
@@ -460,9 +432,7 @@ function normalizeSource(source: SourceGroundedMemorySceneInputV1) {
         kind: atom.kind,
         statement: atom.statement.trim(),
         sourceSeqs: Object.freeze(sourceSeqs),
-        ...(atom.confidence === undefined
-          ? {}
-          : { confidence: atom.confidence }),
+        ...(atom.confidence === undefined ? {} : { confidence: atom.confidence }),
         ...(atom.validFrom === undefined ? {} : { validFrom: atom.validFrom }),
         ...(atom.validTo === undefined ? {} : { validTo: atom.validTo }),
       });
@@ -470,8 +440,7 @@ function normalizeSource(source: SourceGroundedMemorySceneInputV1) {
     .sort(
       (left, right) =>
         (left.sourceSeqs[0] ?? Number.MAX_SAFE_INTEGER) -
-          (right.sourceSeqs[0] ?? Number.MAX_SAFE_INTEGER) ||
-        left.id.localeCompare(right.id),
+          (right.sourceSeqs[0] ?? Number.MAX_SAFE_INTEGER) || left.id.localeCompare(right.id),
     );
   return Object.freeze({
     sourceId: source.sourceId.trim(),
@@ -480,10 +449,7 @@ function normalizeSource(source: SourceGroundedMemorySceneInputV1) {
   });
 }
 
-function summarizeAtoms(
-  atoms: readonly SourceGroundedMemoryAtomV1[],
-  maxChars: number,
-): string {
+function summarizeAtoms(atoms: readonly SourceGroundedMemoryAtomV1[], maxChars: number): string {
   const prioritized = [...atoms].sort((left, right) => {
     const weight = (kind: SourceGroundedMemoryAtomV1["kind"]) =>
       kind === "profile" ? 0 : kind === "semantic" ? 1 : 2;
@@ -492,9 +458,7 @@ function summarizeAtoms(
   const pieces: string[] = [];
   for (const atom of prioritized) {
     const candidate =
-      pieces.length > 0
-        ? `${pieces.join("; ")}; ${atom.statement}`
-        : atom.statement;
+      pieces.length > 0 ? `${pieces.join("; ")}; ${atom.statement}` : atom.statement;
     if (candidate.length > maxChars) {
       if (pieces.length === 0) pieces.push(truncate(atom.statement, maxChars));
       break;
@@ -528,27 +492,20 @@ function selectAtoms(
     .sort(
       (left, right) =>
         (left.sourceSeqs[0] ?? Number.MAX_SAFE_INTEGER) -
-          (right.sourceSeqs[0] ?? Number.MAX_SAFE_INTEGER) ||
-        left.id.localeCompare(right.id),
+          (right.sourceSeqs[0] ?? Number.MAX_SAFE_INTEGER) || left.id.localeCompare(right.id),
     );
 }
 
 function terms(text: string): ReadonlySet<string> {
-  const tokens =
-    text.toLocaleLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_'-]*/gu) ?? [];
-  return new Set(
-    tokens.filter((token) => token.length > 1 && !STOP_WORDS.has(token)),
-  );
+  const tokens = text.toLocaleLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_'-]*/gu) ?? [];
+  return new Set(tokens.filter((token) => token.length > 1 && !STOP_WORDS.has(token)));
 }
 
 function querySurface(query: string): string {
   return query.split(/\n\s*\([a-z]\)\s*/iu, 1)[0] ?? query;
 }
 
-function overlapScore(
-  left: ReadonlySet<string>,
-  right: ReadonlySet<string>,
-): number {
+function overlapScore(left: ReadonlySet<string>, right: ReadonlySet<string>): number {
   let score = 0;
   for (const value of left) if (right.has(value)) score += 1;
   return score;
@@ -576,12 +533,7 @@ function hasControlCharacter(value: string): boolean {
   return false;
 }
 
-function boundedInteger(
-  value: number,
-  min: number,
-  max: number,
-  errorName: string,
-): number {
+function boundedInteger(value: number, min: number, max: number, errorName: string): number {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
     throw namedError(errorName);
   }

@@ -54,9 +54,7 @@ export function createMemoryTopicEvidenceInputPortV1(
   options: MemoryTopicEvidenceInputPortOptionsV1,
 ): LoopInputPort {
   const report = options.baseInput.reportSafeBoundary.bind(options.baseInput);
-  const consume = options.baseInput.consumePromotedInputIds.bind(
-    options.baseInput,
-  );
+  const consume = options.baseInput.consumePromotedInputIds.bind(options.baseInput);
   const readSnapshot = options.session.readInputSnapshot.bind(options.session);
   const commitFacts = options.session.commitInputFacts.bind(options.session);
   const now = options.now ?? Date.now;
@@ -68,11 +66,7 @@ export function createMemoryTopicEvidenceInputPortV1(
         if (!options.signal.aborted && options.profile.mode === "read_write") {
           const snapshot = await readSnapshot();
           const query = projectCurrentMemoryQueryV1(snapshot, options.profile);
-          if (
-            query &&
-            hasRetrieval(snapshot, query.queryId) &&
-            !hasPlan(snapshot, query.queryId)
-          ) {
+          if (query && hasRetrieval(snapshot, query.queryId) && !hasPlan(snapshot, query.queryId)) {
             const fact = await settleEvidencePlanV1({
               queryId: query.queryId,
               query: query.text,
@@ -193,9 +187,7 @@ async function commitUniqueEvidenceFactV1(
   let snapshot = input.initialSnapshot;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     if (hasPlan(snapshot, input.fact.queryId)) return;
-    if (
-      (await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed"
-    ) {
+    if ((await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed") {
       return;
     }
     snapshot = await input.readSnapshot();
@@ -203,25 +195,16 @@ async function commitUniqueEvidenceFactV1(
   throw new Error("Memory topic evidence journal commit conflict");
 }
 
-function hasRetrieval(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasRetrieval(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   return snapshot.entries.some(
-    (entry) =>
-      entry.fact.type === "memory.retrieval_settled" &&
-      entry.fact.queryId === queryId,
+    (entry) => entry.fact.type === "memory.retrieval_settled" && entry.fact.queryId === queryId,
   );
 }
 
-function hasPlan(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasPlan(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   return snapshot.entries.some(
     (entry) =>
-      entry.fact.type === "memory.topic_evidence_settled" &&
-      entry.fact.queryId === queryId,
+      entry.fact.type === "memory.topic_evidence_settled" && entry.fact.queryId === queryId,
   );
 }
 
@@ -242,9 +225,8 @@ function assertExactScope(
 function stableReasonCode(error: unknown): string {
   const name = error instanceof Error ? error.name : "Unknown";
   return (
-    `MemoryTopicEvidence_${name}`
-      .replace(/[^A-Za-z0-9_.:-]/g, "_")
-      .slice(0, 160) || "MemoryTopicEvidence_Unknown"
+    `MemoryTopicEvidence_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160) ||
+    "MemoryTopicEvidence_Unknown"
   );
 }
 

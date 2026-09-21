@@ -2,30 +2,19 @@
  * CompletionPolicy — honest run completion from TaskState evidence.
  */
 
-import type {
-  CompletionOutcome,
-  RunEvidence,
-  RunResult,
-  RunStatus,
-} from "@paw/core";
+import type { CompletionOutcome, RunEvidence, RunResult, RunStatus } from "@paw/core";
 import type { TaskState } from "../task-state.js";
 import type { VerificationDecision } from "./verification-gate.js";
 
 export interface CompletionDecision {
-  readonly status: Extract<
-    RunStatus,
-    "completed" | "failed" | "aborted" | "incomplete"
-  >;
+  readonly status: Extract<RunStatus, "completed" | "failed" | "aborted" | "incomplete">;
   readonly outcome: CompletionOutcome;
   readonly reason: string;
   readonly message: string;
   readonly evidence: RunEvidence;
 }
 
-export function evidenceFromTaskState(
-  state: TaskState,
-  skipVerifyReason?: string,
-): RunEvidence {
+export function evidenceFromTaskState(state: TaskState, skipVerifyReason?: string): RunEvidence {
   return {
     filesChanged: [...state.filesChanged],
     commandsRun: state.commandsRun.map((c) => ({
@@ -42,12 +31,8 @@ export function evidenceFromTaskState(
       ...(t.retryability ? { retryability: t.retryability } : {}),
       summary: t.summary,
       ...(t.evidence ? { evidence: t.evidence } : {}),
-      ...(t.shellCommandRevision != null
-        ? { shellCommandRevision: t.shellCommandRevision }
-        : {}),
-      ...(t.mutationRevision != null
-        ? { mutationRevision: t.mutationRevision }
-        : {}),
+      ...(t.shellCommandRevision != null ? { shellCommandRevision: t.shellCommandRevision } : {}),
+      ...(t.mutationRevision != null ? { mutationRevision: t.mutationRevision } : {}),
     })),
     mutationRevision: state.mutationRevision ?? 0,
     ...(skipVerifyReason ? { skipVerifyReason } : {}),
@@ -75,10 +60,7 @@ export interface DecideIncompleteInput {
   readonly reason: string;
   readonly message: string;
   readonly taskState: TaskState;
-  readonly outcome?: Extract<
-    CompletionOutcome,
-    "incomplete" | "budget_exhausted"
-  >;
+  readonly outcome?: Extract<CompletionOutcome, "incomplete" | "budget_exhausted">;
 }
 
 export interface DecideFailedInput {
@@ -88,9 +70,7 @@ export interface DecideFailedInput {
 }
 
 /** Creates one authoritative incomplete decision without parsing its prose. */
-export function decideIncomplete(
-  input: DecideIncompleteInput,
-): CompletionDecision {
+export function decideIncomplete(input: DecideIncompleteInput): CompletionDecision {
   const reason = input.reason.trim();
   if (!reason) throw new Error("Incomplete completion reason is required");
   return {
@@ -118,9 +98,7 @@ export function decideFailed(input: DecideFailedInput): CompletionDecision {
 /**
  * Decide final Run status/outcome. Never marks budget exhaustion as completed.
  */
-export function decideCompletion(
-  input: DecideCompletionInput,
-): CompletionDecision {
+export function decideCompletion(input: DecideCompletionInput): CompletionDecision {
   const skipReason =
     input.verification?.ok && input.verification.mode === "skipped"
       ? input.verification.skipVerifyReason
@@ -148,10 +126,7 @@ export function decideCompletion(
     };
   }
 
-  if (
-    input.intent === "budget_exhausted" ||
-    input.intent === "max_steps_after_tools"
-  ) {
+  if (input.intent === "budget_exhausted" || input.intent === "max_steps_after_tools") {
     return {
       status: "incomplete",
       outcome: "budget_exhausted",
@@ -195,10 +170,7 @@ export function decideCompletion(
     };
   }
 
-  if (
-    input.verification?.ok &&
-    input.verification.mode === "external_pending"
-  ) {
+  if (input.verification?.ok && input.verification.mode === "external_pending") {
     return {
       status: "completed",
       outcome: "model_declared",
@@ -215,9 +187,7 @@ export function decideCompletion(
     return {
       status: "completed",
       outcome: "model_declared",
-      reason: input.hasEverUsedTools
-        ? "final_answer_no_file_changes"
-        : "final_answer_dialogue",
+      reason: input.hasEverUsedTools ? "final_answer_no_file_changes" : "final_answer_dialogue",
       message,
       evidence,
     };
@@ -232,10 +202,7 @@ export function decideCompletion(
   };
 }
 
-export function toRunResult(
-  runId: string,
-  decision: CompletionDecision,
-): RunResult {
+export function toRunResult(runId: string, decision: CompletionDecision): RunResult {
   return {
     runId,
     status: decision.status,

@@ -1,9 +1,5 @@
 import { sha256Canonical } from "./canonical.js";
-import type {
-  EvidenceObservation,
-  ReadCoverageV2,
-  ReadEvidenceObservation,
-} from "./schema.js";
+import type { EvidenceObservation, ReadCoverageV2, ReadEvidenceObservation } from "./schema.js";
 
 interface Interval {
   readonly start: number;
@@ -87,21 +83,16 @@ function validateReadRange(observation: ReadEvidenceObservation): void {
   }
 }
 
-function isCovered(
-  intervals: readonly Interval[],
-  incoming: Interval,
-): boolean {
+function isCovered(intervals: readonly Interval[], incoming: Interval): boolean {
   return intervals.some(
     (interval) =>
-      interval.start <= incoming.start &&
-      interval.endExclusive >= incoming.endExclusive,
+      interval.start <= incoming.start && interval.endExclusive >= incoming.endExclusive,
   );
 }
 
 function mergeIntervals(intervals: readonly Interval[]): readonly Interval[] {
   const sorted = [...intervals].sort(
-    (left, right) =>
-      left.start - right.start || left.endExclusive - right.endExclusive,
+    (left, right) => left.start - right.start || left.endExclusive - right.endExclusive,
   );
   const merged: Interval[] = [];
   for (const interval of sorted) {

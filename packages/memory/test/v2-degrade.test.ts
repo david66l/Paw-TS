@@ -60,22 +60,13 @@ afterAll(async () => {
   try {
     const sql = getSql();
     for (const id of createdIds) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-        id,
-      ]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [id]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [id]);
     }
-    await sql.unsafe("DELETE FROM memory_op_log WHERE run_id LIKE $1", [
-      "v2d-%",
-    ]);
+    await sql.unsafe("DELETE FROM memory_op_log WHERE run_id LIKE $1", ["v2d-%"]);
     for (const tid of taskIds) {
-      await sql.unsafe(
-        "DELETE FROM memory_trial_lessons WHERE origin_task_id = $1",
-        [tid],
-      );
-      await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [
-        tid,
-      ]);
+      await sql.unsafe("DELETE FROM memory_trial_lessons WHERE origin_task_id = $1", [tid]);
+      await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [tid]);
     }
     await runtime.shutdown();
     resetMemoryV2Core();
@@ -147,9 +138,7 @@ describe("v2 降级路径", () => {
     const degraded = rows.filter((r) => r.degraded === "true");
     expect(degraded.length).toBeGreaterThan(0);
     expect(degraded.every((r) => r.confidence === 0.3)).toBe(true);
-    expect(degraded.every((r) => r.verification_status === "unverified")).toBe(
-      true,
-    );
+    expect(degraded.every((r) => r.verification_status === "unverified")).toBe(true);
     for (const r of rows) createdIds.push(r.id);
   });
 

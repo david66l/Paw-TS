@@ -42,9 +42,7 @@ describe("deterministic aspect candidate builder v1", () => {
       scope,
       snapshot,
       observedAt: feb,
-      claims: [
-        evidence(combined.id, "Joined a gardening club with cooking workshops"),
-      ],
+      claims: [evidence(combined.id, "Joined a gardening club with cooking workshops")],
       catalog: [
         evidence(cookingClaim.id, "Enjoys cooking workshops"),
         evidence(gardeningClaim.id, "Enjoys gardening clubs"),
@@ -53,14 +51,11 @@ describe("deterministic aspect candidate builder v1", () => {
     };
     const result = buildMemoryAspectLinkCandidatesV1(input);
 
-    expect(
-      result.linkingInput.aspectCandidates.map((item) => item.aspectId),
-    ).toEqual(expect.arrayContaining([cooking.id, gardening.id]));
-    const relationTargets =
-      result.linkingInput.relationCandidates[0]?.targetClaimIds ?? [];
-    expect(relationTargets).toEqual(
-      expect.arrayContaining([cookingClaim.id, gardeningClaim.id]),
+    expect(result.linkingInput.aspectCandidates.map((item) => item.aspectId)).toEqual(
+      expect.arrayContaining([cooking.id, gardening.id]),
     );
+    const relationTargets = result.linkingInput.relationCandidates[0]?.targetClaimIds ?? [];
+    expect(relationTargets).toEqual(expect.arrayContaining([cookingClaim.id, gardeningClaim.id]));
     expect(new Set(relationTargets).size).toBe(relationTargets.length);
     expect(result.metrics).toEqual(
       expect.objectContaining({
@@ -91,9 +86,7 @@ describe("deterministic aspect candidate builder v1", () => {
       maxNewAspects: 0,
     });
     expect(enrichment.linkingInput.aspectCandidates).toEqual([]);
-    expect(
-      enrichment.linkingInput.relationCandidates[0]?.targetClaimIds,
-    ).toEqual([]);
+    expect(enrichment.linkingInput.relationCandidates[0]?.targetClaimIds).toEqual([]);
   });
 
   test("ignores non-global memberships and rejects statement receipt mismatch", () => {
@@ -168,16 +161,10 @@ describe("deterministic aspect candidate builder v1", () => {
       snapshot,
       observedAt: feb,
       claims: [
-        evidence(
-          current.id,
-          "Topic0 Topic1 Topic2 Topic3 Topic4 Topic5 Topic6 activity update",
-        ),
+        evidence(current.id, "Topic0 Topic1 Topic2 Topic3 Topic4 Topic5 Topic6 activity update"),
       ],
       catalog: existingClaims.map((item) =>
-        evidence(
-          item.id,
-          `Topic${item.id.split("-")[1]} activity memory ${item.id}`,
-        ),
+        evidence(item.id, `Topic${item.id.split("-")[1]} activity memory ${item.id}`),
       ),
       maxNewAspects: 1,
     });

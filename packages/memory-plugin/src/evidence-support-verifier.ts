@@ -61,53 +61,39 @@ export function createJsonMemoryEvidenceSupportVerifierV1(input: {
   if (!input.model || typeof input.model.complete !== "function") {
     throw namedError("MemoryEvidenceSupportModelInvalid");
   }
-  const verifierVersion =
-    input.verifierVersion ?? PAW_MEMORY_EVIDENCE_SUPPORT_VERIFIER_VERSION_V1;
+  const verifierVersion = input.verifierVersion ?? PAW_MEMORY_EVIDENCE_SUPPORT_VERIFIER_VERSION_V1;
   if (!verifierVersion.trim()) {
     throw namedError("MemoryEvidenceSupportVerifierVersionInvalid");
   }
   return Object.freeze({
     verifierVersion,
-    async verify(
-      verification: MemoryEvidenceSupportVerificationInputV1,
-      signal: AbortSignal,
-    ) {
+    async verify(verification: MemoryEvidenceSupportVerificationInputV1, signal: AbortSignal) {
       if (signal.aborted) throw abortError();
-      const first = await input.model.complete(
-        buildMemoryEvidenceSupportRequestV1(verification),
-        { signal },
-      );
+      const first = await input.model.complete(buildMemoryEvidenceSupportRequestV1(verification), {
+        signal,
+      });
       if (signal.aborted || first.status === "cancelled") throw abortError();
       if (first.status !== "completed") {
         throw namedError(stableName(first.errorCode));
       }
       let assessments: readonly MemoryEvidenceSupportAssessmentV1[];
       try {
-        assessments = parseMemoryEvidenceSupportProposalV1(
-          first.text,
-          verification,
-        );
+        assessments = parseMemoryEvidenceSupportProposalV1(first.text, verification);
       } catch (error) {
         if (signal.aborted || isAbort(error)) throw abortError();
         const repaired = await input.model.complete(
           buildMemoryEvidenceSupportRepairRequestV1(
             verification,
             first.text,
-            error instanceof Error
-              ? error.name
-              : "MemoryEvidenceSupportInvalid",
+            error instanceof Error ? error.name : "MemoryEvidenceSupportInvalid",
           ),
           { signal },
         );
-        if (signal.aborted || repaired.status === "cancelled")
-          throw abortError();
+        if (signal.aborted || repaired.status === "cancelled") throw abortError();
         if (repaired.status !== "completed") {
           throw namedError(stableName(repaired.errorCode));
         }
-        assessments = parseMemoryEvidenceSupportProposalV1(
-          repaired.text,
-          verification,
-        );
+        assessments = parseMemoryEvidenceSupportProposalV1(repaired.text, verification);
       }
       return Object.freeze({
         verifierVersion,
@@ -150,11 +136,7 @@ export function buildMemoryEvidenceSupportRequestV1(
     ].join("\n"),
     user: JSON.stringify({
       schemaVersion: "paw.memory-evidence-support-input.v1",
-      query: boundedText(
-        input.query,
-        8_192,
-        "MemoryEvidenceSupportQueryInvalid",
-      ),
+      query: boundedText(input.query, 8_192, "MemoryEvidenceSupportQueryInvalid"),
       requirements: input.requirements.slice(0, 6),
       evidence: input.evidence.slice(0, 16),
       rawSpans: input.spans.slice(0, 16).map((span) => ({
@@ -204,9 +186,7 @@ export function parseMemoryEvidenceSupportProposalV1(
     input.requirements.map((item) => [item.requirementId, item] as const),
   );
   const evidenceIds = new Set(input.evidence.map((item) => item.memoryId));
-  const spanByHash = new Map(
-    input.spans.map((span) => [span.contentHash, span] as const),
-  );
+  const spanByHash = new Map(input.spans.map((span) => [span.contentHash, span] as const));
   const seenRequirements = new Set<string>();
   const assessments = parsed.assessments.map((value, index) => {
     const raw = exactRecord(
@@ -282,9 +262,7 @@ export function parseMemoryEvidenceSupportProposalV1(
     );
     const unknownMemoryIds = Object.freeze([
       ...proposedUnknownMemoryIds,
-      ...proposedSupportingMemoryIds.filter(
-        (memoryId) => !supportingMemoryIds.includes(memoryId),
-      ),
+      ...proposedSupportingMemoryIds.filter((memoryId) => !supportingMemoryIds.includes(memoryId)),
       ...proposedContradictingMemoryIds.filter(
         (memoryId) => !contradictingMemoryIds.includes(memoryId),
       ),
@@ -364,9 +342,7 @@ function hasGrounding(
   spanHashes: readonly string[],
   spans: ReadonlyMap<string, MemoryRawEvidenceSpanV1>,
 ): boolean {
-  return spanHashes.some((hash) =>
-    spans.get(hash)?.memoryIds.includes(memoryId),
-  );
+  return spanHashes.some((hash) => spans.get(hash)?.memoryIds.includes(memoryId));
 }
 
 function knownIds(
@@ -391,11 +367,9 @@ function extractJsonObject(text: string): Record<string, unknown> {
   if (start < 0 || end <= start) {
     throw namedError("MemoryEvidenceSupportOutputInvalid");
   }
-  return exactRecord(
-    JSON.parse(text.slice(start, end + 1)),
-    "MemoryEvidenceSupportOutput",
-    ["assessments"],
-  );
+  return exactRecord(JSON.parse(text.slice(start, end + 1)), "MemoryEvidenceSupportOutput", [
+    "assessments",
+  ]);
 }
 
 function exactRecord(
@@ -413,11 +387,7 @@ function exactRecord(
   return record;
 }
 
-function boundedText(
-  value: unknown,
-  maximum: number,
-  errorName: string,
-): string {
+function boundedText(value: unknown, maximum: number, errorName: string): string {
   if (typeof value !== "string") throw namedError(errorName);
   const normalized = value.trim().replace(/\s+/g, " ");
   if (!normalized || normalized.length > maximum) throw namedError(errorName);

@@ -29,8 +29,7 @@ export class Observability {
   log(entry: Omit<LogEntry, "timestamp">): void {
     const record: LogEntry = { ...entry, timestamp: new Date().toISOString() };
     this.logs.push(record);
-    if (this.logs.length > this.maxLogs)
-      this.logs.splice(0, this.logs.length - this.maxLogs);
+    if (this.logs.length > this.maxLogs) this.logs.splice(0, this.logs.length - this.maxLogs);
     if (entry.level === "ERROR")
       console.error(`[${entry.module}] ${entry.event}: ${entry.message}`);
   }

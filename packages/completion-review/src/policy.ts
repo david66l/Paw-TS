@@ -81,14 +81,10 @@ export function freezeCompletionReviewTriggerPolicyV1(
   });
 }
 
-function explicitlyRequestsReview(
-  candidate: CompletionReviewCandidateV1,
-): boolean {
+function explicitlyRequestsReview(candidate: CompletionReviewCandidateV1): boolean {
   if (/(?:\breview\b|审查|评审|检查)/iu.test(candidate.goal)) return true;
   const requestsVerification =
-    /(?:\bverify\b|\bverification\b|\btest(?:s|ing)?\b|验证|测试)/iu.test(
-      candidate.goal,
-    );
+    /(?:\bverify\b|\bverification\b|\btest(?:s|ing)?\b|验证|测试)/iu.test(candidate.goal);
   return requestsVerification && !hasFreshCommandEvidence(candidate);
 }
 
@@ -103,9 +99,7 @@ export function hasCompletionReviewSourceMutationV1(
   );
 }
 
-function hasFreshCommandEvidence(
-  candidate: CompletionReviewCandidateV1,
-): boolean {
+function hasFreshCommandEvidence(candidate: CompletionReviewCandidateV1): boolean {
   return candidate.toolEvidence.some(
     (item) =>
       item.afterLatestMutation &&

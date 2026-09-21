@@ -15,11 +15,7 @@
 import { isToolResultMessage } from "../tool-result/format.js";
 import type { ChatMessage } from "./manager.js";
 
-export type TriggerReason =
-  | "subtask_end"
-  | "low_density"
-  | "critical_issue"
-  | "budget_critical";
+export type TriggerReason = "subtask_end" | "low_density" | "critical_issue" | "budget_critical";
 
 export interface MonitorDecision {
   readonly triggered: boolean;
@@ -49,8 +45,7 @@ const COMPLETION_EVIDENCE =
   /final_answer|final answer|all tests? (?:pass|passed)|测试(?:全部|都)?通过|✅ done|completed|sub-?agent.*(?:completed|done)/i;
 
 /** 错误证据（跨轮未解检测） */
-const ERROR_EVIDENCE =
-  /error|fail(?:ed|ure)?|exception|traceback|exit code|✗|panic/i;
+const ERROR_EVIDENCE = /error|fail(?:ed|ure)?|exception|traceback|exit code|✗|panic/i;
 
 /** 低密度：单条消息 token 数低于此值视为低密度（chars/4 近似） */
 const LOW_DENSITY_CHARS = 120;

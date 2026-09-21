@@ -30,9 +30,7 @@ export function buildGoalWithHistory(
   const maxTurns = options?.maxTurns ?? 16;
   const maxChars = options?.maxChars ?? 12_000;
 
-  const trimmed = history
-    .filter((t) => t.content.trim().length > 0)
-    .slice(-maxTurns);
+  const trimmed = history.filter((t) => t.content.trim().length > 0).slice(-maxTurns);
 
   if (trimmed.length === 0) return goal;
 
@@ -48,8 +46,7 @@ export function buildGoalWithHistory(
   let historyBlock = lines.join("\n");
   if (historyBlock.length > maxChars) {
     historyBlock =
-      "…(earlier turns truncated)…\n" +
-      historyBlock.slice(historyBlock.length - maxChars);
+      "…(earlier turns truncated)…\n" + historyBlock.slice(historyBlock.length - maxChars);
   }
 
   return `${historyBlock}\n\n[Current user request]\n${goal}`;

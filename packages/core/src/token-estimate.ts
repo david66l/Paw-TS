@@ -51,8 +51,6 @@ export function estimateMessageTokens(message: ChatMessage): number {
  *
  * Token count for an array of messages (e.g. the full conversation).
  */
-export function estimateMessagesTokens(
-  messages: readonly ChatMessage[],
-): number {
+export function estimateMessagesTokens(messages: readonly ChatMessage[]): number {
   return getSharedFastEstimator().countMessages(messages);
 }

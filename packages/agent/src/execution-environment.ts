@@ -4,8 +4,7 @@ import path from "node:path";
 import type { AgentToolCallAction } from "@paw/core";
 import type { ShellSandboxConfig, ToolRunResult } from "@paw/harness";
 
-export const EXECUTION_ENVIRONMENT_SCHEMA_V1 =
-  "paw.execution-environment.v1" as const;
+export const EXECUTION_ENVIRONMENT_SCHEMA_V1 = "paw.execution-environment.v1" as const;
 
 export interface ExecutionRuntimeV1 {
   readonly platform: string;
@@ -118,9 +117,7 @@ export function currentExecutionRuntimeV1(): ExecutionRuntimeV1 {
     shell: process.env.ComSpec ?? process.env.SHELL ?? "unknown",
     node: process.version,
     bun:
-      typeof Bun !== "undefined" && typeof Bun.version === "string"
-        ? Bun.version
-        : "unavailable",
+      typeof Bun !== "undefined" && typeof Bun.version === "string" ? Bun.version : "unavailable",
     python: probePythonVersion(),
   });
 }
@@ -177,12 +174,7 @@ function parseSandbox(value: unknown): ExecutionSandboxV1 {
   ) {
     throw new Error("Invalid execution environment sandbox policy");
   }
-  for (const key of [
-    "runtime",
-    "image",
-    "containerWorkspaceRoot",
-    "commandShell",
-  ] as const) {
+  for (const key of ["runtime", "image", "containerWorkspaceRoot", "commandShell"] as const) {
     if (sandbox[key] !== undefined && typeof sandbox[key] !== "string") {
       throw new Error(`Invalid execution environment sandbox.${key}`);
     }
@@ -190,16 +182,12 @@ function parseSandbox(value: unknown): ExecutionSandboxV1 {
   return Object.freeze({
     mode: sandbox.mode as ExecutionSandboxV1["mode"],
     network: sandbox.network as ExecutionSandboxV1["network"],
-    ...(typeof sandbox.runtime === "string"
-      ? { runtime: sandbox.runtime }
-      : {}),
+    ...(typeof sandbox.runtime === "string" ? { runtime: sandbox.runtime } : {}),
     ...(typeof sandbox.image === "string" ? { image: sandbox.image } : {}),
     ...(typeof sandbox.containerWorkspaceRoot === "string"
       ? { containerWorkspaceRoot: sandbox.containerWorkspaceRoot }
       : {}),
-    ...(typeof sandbox.commandShell === "string"
-      ? { commandShell: sandbox.commandShell }
-      : {}),
+    ...(typeof sandbox.commandShell === "string" ? { commandShell: sandbox.commandShell } : {}),
   });
 }
 
@@ -220,9 +208,7 @@ function parseEvent(value: unknown, index: number): ShellExecutionObservedV1 {
     typeof event.ok !== "boolean" ||
     (event.exitCode !== null && typeof event.exitCode !== "number") ||
     typeof event.timedOut !== "boolean" ||
-    !["none", "command", "infrastructure", "policy"].includes(
-      String(event.failureKind),
-    )
+    !["none", "command", "infrastructure", "policy"].includes(String(event.failureKind))
   ) {
     throw new Error(`Invalid execution environment event ${index + 1}`);
   }
@@ -272,11 +258,9 @@ export function parseExecutionEnvironmentSnapshotV1(
     !Number.isSafeInteger(jobs.running) ||
     (jobs.running as number) < 0 ||
     (jobs.stopping !== undefined &&
-      (!Number.isSafeInteger(jobs.stopping) ||
-        (jobs.stopping as number) < 0)) ||
+      (!Number.isSafeInteger(jobs.stopping) || (jobs.stopping as number) < 0)) ||
     (jobs.pendingSettlements !== undefined &&
-      (!Number.isSafeInteger(jobs.pendingSettlements) ||
-        (jobs.pendingSettlements as number) < 0))
+      (!Number.isSafeInteger(jobs.pendingSettlements) || (jobs.pendingSettlements as number) < 0))
   ) {
     throw new Error("Invalid execution environment recovery/job state");
   }
@@ -300,9 +284,7 @@ export function parseExecutionEnvironmentSnapshotV1(
         ? { pendingSettlements: jobs.pendingSettlements }
         : {}),
     }),
-    events: Object.freeze(
-      snapshot.events.map((event, index) => parseEvent(event, index)),
-    ),
+    events: Object.freeze(snapshot.events.map((event, index) => parseEvent(event, index))),
   });
 }
 
@@ -318,15 +300,13 @@ function reconciliationIssues(
     issues.push("workspace_root_changed");
   }
   for (const key of ["platform", "arch", "shell"] as const) {
-    if (prior.runtime[key] !== runtime[key])
-      issues.push(`runtime_${key}_changed`);
+    if (prior.runtime[key] !== runtime[key]) issues.push(`runtime_${key}_changed`);
   }
   if (prior.sandbox.mode !== sandbox.mode) issues.push("sandbox_mode_changed");
   if (prior.sandbox.network !== sandbox.network) {
     issues.push("sandbox_network_changed");
   }
-  if (prior.sandbox.image !== sandbox.image)
-    issues.push("sandbox_image_changed");
+  if (prior.sandbox.image !== sandbox.image) issues.push("sandbox_image_changed");
   if (prior.sandbox.containerWorkspaceRoot !== sandbox.containerWorkspaceRoot) {
     issues.push("sandbox_container_workspace_root_changed");
   }
@@ -347,15 +327,11 @@ function resultFacts(result: ToolRunResult): {
     result.payload && typeof result.payload === "object"
       ? (result.payload as Record<string, unknown>)
       : {};
-  const exitCode =
-    typeof payload.exit_code === "number" ? payload.exit_code : null;
-  const timedOut =
-    payload.timed_out === true || /(?:timeout|timed out)/i.test(result.summary);
+  const exitCode = typeof payload.exit_code === "number" ? payload.exit_code : null;
+  const timedOut = payload.timed_out === true || /(?:timeout|timed out)/i.test(result.summary);
   const code = typeof payload.code === "string" ? payload.code : "";
   const sandbox =
-    payload.sandbox &&
-    typeof payload.sandbox === "object" &&
-    !Array.isArray(payload.sandbox)
+    payload.sandbox && typeof payload.sandbox === "object" && !Array.isArray(payload.sandbox)
       ? (payload.sandbox as Record<string, unknown>)
       : undefined;
   const failureKind = result.ok
@@ -383,8 +359,7 @@ function effectiveShellCwd(
   configuredContainerWorkspaceRoot?: string,
 ): { readonly cwd: string; readonly hostCwd?: string } {
   const hostCwd = facts.cwd ?? path.resolve(hostWorkspaceRoot, requestedCwd);
-  const containerWorkspaceRoot =
-    facts.containerWorkspaceRoot ?? configuredContainerWorkspaceRoot;
+  const containerWorkspaceRoot = facts.containerWorkspaceRoot ?? configuredContainerWorkspaceRoot;
   if (!containerWorkspaceRoot) return { cwd: hostCwd };
   const normalizedRelative = requestedCwd.replace(/\\/g, "/");
   const containerCwd =
@@ -405,38 +380,24 @@ export class ExecutionEnvironmentRegistryV1 {
     if (prior && prior.runId !== options.runId) {
       throw new Error("Execution environment runId does not match resumed run");
     }
-    this.runtime = Object.freeze(
-      options.runtime ?? currentExecutionRuntimeV1(),
-    );
+    this.runtime = Object.freeze(options.runtime ?? currentExecutionRuntimeV1());
     this.sandbox = sandboxSnapshot(options.shellSandbox);
     this.issues = Object.freeze([
       ...new Set([
-        ...reconciliationIssues(
-          prior,
-          options.workspaceRoot,
-          this.runtime,
-          this.sandbox,
-        ),
+        ...reconciliationIssues(prior, options.workspaceRoot, this.runtime, this.sandbox),
         ...(options.additionalRecoveryIssues ?? []),
       ]),
     ]);
     this.events = prior ? [...prior.events] : [];
   }
 
-  observeToolResult(
-    turn: number,
-    call: AgentToolCallAction,
-    result: ToolRunResult,
-  ): void {
+  observeToolResult(turn: number, call: AgentToolCallAction, result: ToolRunResult): void {
     if (call.tool !== "workspace.run_shell") return;
     const args =
-      call.args && typeof call.args === "object"
-        ? (call.args as Record<string, unknown>)
-        : {};
+      call.args && typeof call.args === "object" ? (call.args as Record<string, unknown>) : {};
     const command = typeof args.command === "string" ? args.command : "";
     const facts = resultFacts(result);
-    const requestedCwd =
-      typeof args.cwd === "string" && args.cwd.trim() ? args.cwd : ".";
+    const requestedCwd = typeof args.cwd === "string" && args.cwd.trim() ? args.cwd : ".";
     const timeout =
       typeof args.timeout_sec === "number"
         ? args.timeout_sec

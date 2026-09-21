@@ -23,16 +23,10 @@ describe("typed leaf temporal constraints v1", () => {
       ["latest", "as_of"],
     ] as const;
     for (const [envelope, leaf] of accepted) {
-      expect(memoryEvidenceLeafTemporalModeAllowedV1(envelope, leaf)).toBe(
-        true,
-      );
+      expect(memoryEvidenceLeafTemporalModeAllowedV1(envelope, leaf)).toBe(true);
     }
-    expect(memoryEvidenceLeafTemporalModeAllowedV1("range", "history")).toBe(
-      false,
-    );
-    expect(memoryEvidenceLeafTemporalModeAllowedV1("as_of", "latest")).toBe(
-      false,
-    );
+    expect(memoryEvidenceLeafTemporalModeAllowedV1("range", "history")).toBe(false);
+    expect(memoryEvidenceLeafTemporalModeAllowedV1("as_of", "latest")).toBe(false);
   });
 
   test("binds a frozen leaf capability only to query text and trusted cutoff", () => {
@@ -100,9 +94,7 @@ describe("typed leaf temporal constraints v1", () => {
 
   test("separates duration intent from temporal range filtering", () => {
     expect(
-      compileMemoryEvidenceDurationRequestV1(
-        "How many days elapsed between the two events?",
-      ),
+      compileMemoryEvidenceDurationRequestV1("How many days elapsed between the two events?"),
     ).toMatchObject({
       basis: "calendar",
       unit: "day",
@@ -134,18 +126,12 @@ describe("typed leaf temporal constraints v1", () => {
       queryAnchor: "2025-01-01T00:00:00.000Z",
       calendarTimeZone: "UTC",
     });
+    expect(compileMemoryEvidenceDurationRequestV1("What happened last week?")).toBeNull();
     expect(
-      compileMemoryEvidenceDurationRequestV1("What happened last week?"),
+      compileMemoryEvidenceDurationRequestV1("How many days did I spend camping across all trips?"),
     ).toBeNull();
     expect(
-      compileMemoryEvidenceDurationRequestV1(
-        "How many days did I spend camping across all trips?",
-      ),
-    ).toBeNull();
-    expect(
-      compileMemoryEvidenceDurationRequestV1(
-        "How long did I take to finish both books combined?",
-      ),
+      compileMemoryEvidenceDurationRequestV1("How long did I take to finish both books combined?"),
     ).toBeNull();
     expect(
       compileMemoryEvidenceDurationRequestV1(
@@ -185,9 +171,10 @@ describe("typed leaf temporal constraints v1", () => {
       "first-snapshot",
       "later-state",
     ]);
-    expect(
-      plan.requirements.map((item) => item.temporalConstraint?.mode),
-    ).toEqual(["as_of", "latest"]);
+    expect(plan.requirements.map((item) => item.temporalConstraint?.mode)).toEqual([
+      "as_of",
+      "latest",
+    ]);
   });
 
   test("partitions source-local cache identity by leaf constraint revision", () => {
@@ -290,9 +277,7 @@ describe("typed leaf temporal constraints v1", () => {
       query,
       intent,
     );
-    expect(valid.requirements[1]?.dependsOnRequirementIds).toEqual([
-      "user-request",
-    ]);
+    expect(valid.requirements[1]?.dependsOnRequirementIds).toEqual(["user-request"]);
 
     expect(() =>
       parseMemoryEvidenceQueryPlanV3(

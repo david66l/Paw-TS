@@ -40,18 +40,14 @@ export function freezeSessionLeaseHeartbeatPolicyV1(
     throw new Error("Unsupported Session lease heartbeat policy version");
   }
   if (!Number.isSafeInteger(input.ttlMs) || input.ttlMs <= 0) {
-    throw new Error(
-      "Session lease heartbeat ttlMs must be a positive safe integer",
-    );
+    throw new Error("Session lease heartbeat ttlMs must be a positive safe integer");
   }
   if (
     !Number.isSafeInteger(input.intervalMs) ||
     input.intervalMs <= 0 ||
     input.intervalMs > Math.floor(input.ttlMs / 3)
   ) {
-    throw new Error(
-      "Session lease heartbeat intervalMs must be positive and at most ttlMs / 3",
-    );
+    throw new Error("Session lease heartbeat intervalMs must be positive and at most ttlMs / 3");
   }
   return Object.freeze({
     policyVersion: input.policyVersion,
@@ -63,30 +59,29 @@ export function freezeSessionLeaseHeartbeatPolicyV1(
 export const WALL_CLOCK_SESSION_LEASE_SCHEDULER_ID_V1 =
   "paw.wall-clock-session-lease-scheduler.v1" as const;
 
-export const WALL_CLOCK_SESSION_LEASE_SCHEDULER_V1: SessionLeaseSchedulerV1 =
-  Object.freeze({
-    now: Date.now,
-    scheduleAt(deadlineMs: number, task: () => void) {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let cancelled = false;
-      const arm = (): void => {
-        if (cancelled) return;
-        const remainingMs = Math.max(0, deadlineMs - Date.now());
-        if (remainingMs > 2_147_483_647) {
-          timer = setTimeout(arm, 2_147_483_647);
-          return;
-        }
-        timer = setTimeout(task, remainingMs);
-      };
-      arm();
-      return Object.freeze({
-        cancel: () => {
-          cancelled = true;
-          if (timer) clearTimeout(timer);
-        },
-      });
-    },
-  });
+export const WALL_CLOCK_SESSION_LEASE_SCHEDULER_V1: SessionLeaseSchedulerV1 = Object.freeze({
+  now: Date.now,
+  scheduleAt(deadlineMs: number, task: () => void) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+    const arm = (): void => {
+      if (cancelled) return;
+      const remainingMs = Math.max(0, deadlineMs - Date.now());
+      if (remainingMs > 2_147_483_647) {
+        timer = setTimeout(arm, 2_147_483_647);
+        return;
+      }
+      timer = setTimeout(task, remainingMs);
+    };
+    arm();
+    return Object.freeze({
+      cancel: () => {
+        cancelled = true;
+        if (timer) clearTimeout(timer);
+      },
+    });
+  },
+});
 
 /**
  * Run one Session owner while renewing its issued cross-process lease.
@@ -104,14 +99,8 @@ export async function superviseSessionLeaseV1<TResult>(
     options.sessionId,
     options.runId,
   );
-  const heartbeatPolicy = freezeSessionLeaseHeartbeatPolicyV1(
-    options.heartbeatPolicy,
-  );
-  assertSupervisorConfig(
-    options.scheduler,
-    heartbeatPolicy,
-    capability.readLeaseDurationMs(),
-  );
+  const heartbeatPolicy = freezeSessionLeaseHeartbeatPolicyV1(options.heartbeatPolicy);
+  assertSupervisorConfig(options.scheduler, heartbeatPolicy, capability.readLeaseDurationMs());
   capability.assertHeld();
 
   const controller = new AbortController();
@@ -138,29 +127,24 @@ export async function superviseSessionLeaseV1<TResult>(
       assertTimestamp(now, "scheduler now");
       deadlineMs = addTimestamp(now, heartbeatPolicy.intervalMs);
       assertTimestamp(deadlineMs, "heartbeat deadline");
-      const candidate: unknown = options.scheduler.scheduleAt(
-        deadlineMs,
-        () => {
-          if (fired) return;
-          fired = true;
-          if (!timerArmed) return;
-          scheduled = undefined;
-          if (stopped || inFlight) return;
-          inFlight = capability
-            .renew()
-            .then(() => {
-              if (!stopped) scheduleNext();
-            })
-            .catch(abortForRenewFailure)
-            .finally(() => {
-              inFlight = undefined;
-            });
-        },
-      );
+      const candidate: unknown = options.scheduler.scheduleAt(deadlineMs, () => {
+        if (fired) return;
+        fired = true;
+        if (!timerArmed) return;
+        scheduled = undefined;
+        if (stopped || inFlight) return;
+        inFlight = capability
+          .renew()
+          .then(() => {
+            if (!stopped) scheduleNext();
+          })
+          .catch(abortForRenewFailure)
+          .finally(() => {
+            inFlight = undefined;
+          });
+      });
       if (!isScheduledTask(candidate)) {
-        throw new Error(
-          "Session lease scheduler returned no cancellation handle",
-        );
+        throw new Error("Session lease scheduler returned no cancellation handle");
       }
       if (fired) {
         candidate.cancel();
@@ -234,9 +218,7 @@ function assertSupervisorConfig(
     throw new Error("Session lease heartbeat scheduler is invalid");
   }
   if (leaseDurationMs !== heartbeatPolicy.ttlMs) {
-    throw new Error(
-      "Session lease duration does not match the frozen heartbeat policy",
-    );
+    throw new Error("Session lease duration does not match the frozen heartbeat policy");
   }
   assertTimestamp(scheduler.now(), "scheduler now");
 }
@@ -273,14 +255,10 @@ function abortOnce(controller: AbortController, reason: unknown): void {
 
 function assertTimestamp(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(
-      `Session lease ${label} must be a non-negative safe integer`,
-    );
+    throw new Error(`Session lease ${label} must be a non-negative safe integer`);
   }
 }
 
 function asError(value: unknown, fallback: string): Error {
-  return value instanceof Error
-    ? value
-    : new Error(`${fallback}: ${String(value)}`);
+  return value instanceof Error ? value : new Error(`${fallback}: ${String(value)}`);
 }

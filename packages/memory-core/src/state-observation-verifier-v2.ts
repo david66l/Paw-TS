@@ -39,8 +39,7 @@ export function createJsonMemoryStateObservationVerifierV2(input: {
   if (!input.model || typeof input.model.complete !== "function") {
     throw namedError("MemoryStateObservationVerifierModelInvalid");
   }
-  const verifierVersion =
-    input.verifierVersion ?? PAW_MEMORY_STATE_OBSERVATION_VERIFIER_VERSION_V2;
+  const verifierVersion = input.verifierVersion ?? PAW_MEMORY_STATE_OBSERVATION_VERIFIER_VERSION_V2;
   if (!verifierVersion.trim()) {
     throw namedError("MemoryStateObservationVerifierVersionInvalid");
   }
@@ -84,9 +83,7 @@ export function validateMemoryStateObservationVerificationBoundaryV2(input: {
     throw namedError("MemoryStateObservationVerificationBoundaryInvalid");
   }
   const expectedIds = new Set(
-    input.request.proposedObservations.map(
-      (observation) => observation.observationId,
-    ),
+    input.request.proposedObservations.map((observation) => observation.observationId),
   );
   const accepted = [...input.result.acceptedObservationIds];
   const rejected = [...input.result.rejectedObservationIds];
@@ -105,10 +102,7 @@ export function validateMemoryStateObservationVerificationBoundaryV2(input: {
     acceptedObservationIds: accepted,
     rejectedObservationIds: rejected,
   });
-  if (
-    hashCanonicalJsonV1(expected as never) !==
-    hashCanonicalJsonV1(input.result as never)
-  ) {
+  if (hashCanonicalJsonV1(expected as never) !== hashCanonicalJsonV1(input.result as never)) {
     throw namedError("MemoryStateObservationVerificationBoundaryInvalid");
   }
   return input.result;
@@ -126,18 +120,12 @@ type ProjectedInput = Readonly<{
 function projectVerificationInput(
   input: Readonly<MemoryStateObservationVerificationInputV2>,
 ): ProjectedInput {
-  const query = boundedString(
-    input.query,
-    512,
-    "MemoryStateObservationVerifierQueryInvalid",
-  );
+  const query = boundedString(input.query, 512, "MemoryStateObservationVerifierQueryInvalid");
   if (input.slots.length < 1 || input.slots.length > 4) {
     throw namedError("MemoryStateObservationVerifierSlotsInvalid");
   }
   const slotIds = new Set(input.slots.map((slot) => slot.slotId));
-  const itemRefs = new Set(
-    input.sourceLock.items.map((item) => item.evidenceRef),
-  );
+  const itemRefs = new Set(input.sourceLock.items.map((item) => item.evidenceRef));
   const observationIds = new Set<string>();
   for (const observation of input.proposedObservations) {
     if (
@@ -161,10 +149,8 @@ function projectVerificationInput(
           );
     if (
       (observation.lifecycleRelation === "none" &&
-        (observation.lifecycleTargetEvidenceRef !== undefined ||
-          targetCandidates.length !== 0)) ||
-      (observation.lifecycleRelation !== "none" &&
-        targetCandidates.length !== 1)
+        (observation.lifecycleTargetEvidenceRef !== undefined || targetCandidates.length !== 0)) ||
+      (observation.lifecycleRelation !== "none" && targetCandidates.length !== 1)
     ) {
       throw namedError("MemoryStateObservationVerifierLifecycleInvalid");
     }
@@ -191,9 +177,7 @@ function buildRequest(input: ProjectedInput): Readonly<{
   user: string;
 }> {
   const slotById = new Map(input.slots.map((slot) => [slot.slotId, slot]));
-  const itemByRef = new Map(
-    input.sourceLock.items.map((item) => [item.evidenceRef, item]),
-  );
+  const itemByRef = new Map(input.sourceLock.items.map((item) => [item.evidenceRef, item]));
   const lifecycleTarget = (observation: MemoryStateBoundObservationV2) => {
     if (
       observation.lifecycleRelation === "none" ||
@@ -217,10 +201,7 @@ function buildRequest(input: ProjectedInput): Readonly<{
     if (!slot || !item) {
       throw namedError("MemoryStateObservationVerifierInputInvalid");
     }
-    const supportSpan = compileMemoryStateClaimSupportSpanV1(
-      item.content,
-      observation.valueSpans,
-    );
+    const supportSpan = compileMemoryStateClaimSupportSpanV1(item.content, observation.valueSpans);
     return {
       observationId: input.rawToCompactId.get(observation.observationId),
       slot: {
@@ -294,8 +275,7 @@ function buildRequest(input: ProjectedInput): Readonly<{
           ...projected,
           typedClaim: {
             ...projected.typedClaim,
-            lifecycleTarget:
-              target === undefined ? null : projectedClaim(target),
+            lifecycleTarget: target === undefined ? null : projectedClaim(target),
           },
         };
       }),
@@ -312,8 +292,7 @@ function parsePartition(
 }> {
   const parsed = extractJsonObject(text);
   if (
-    Object.keys(parsed).sort().join("\0") !==
-      "acceptedObservationIds\0rejectedObservationIds" ||
+    Object.keys(parsed).sort().join("\0") !== "acceptedObservationIds\0rejectedObservationIds" ||
     !Array.isArray(parsed.acceptedObservationIds) ||
     !Array.isArray(parsed.rejectedObservationIds)
   ) {

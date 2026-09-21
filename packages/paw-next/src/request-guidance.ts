@@ -1,7 +1,4 @@
-import type {
-  InteractiveControlConfigV2,
-  SessionInputSnapshot,
-} from "@paw/agent-loop";
+import type { InteractiveControlConfigV2, SessionInputSnapshot } from "@paw/agent-loop";
 import { projectPendingCompletionReviewFeedbackV1 } from "@paw/completion-review";
 import {
   projectProgressAdviceTimelineV1,
@@ -9,10 +6,7 @@ import {
   renderProgressAdviceMessageV1,
 } from "@paw/progress-advisor";
 import type { InputFactV1 } from "@paw/protocol";
-import {
-  type JournalContextAnnotationV1,
-  projectLatestWorkSegmentBoundaryV1,
-} from "@paw/runtime";
+import { type JournalContextAnnotationV1, projectLatestWorkSegmentBoundaryV1 } from "@paw/runtime";
 import { projectExecutionBudgetV1 } from "./execution-budget.js";
 
 /** Pure, request-only projections. No delivery receipts or process-local state. */
@@ -68,17 +62,13 @@ export function projectPawNextRequestGuidanceV1(
       [...before]
         .reverse()
         .find(
-          (fact) =>
-            fact.type === "completion.review_settled" &&
-            fact.reviewId === pending.reviewId,
+          (fact) => fact.type === "completion.review_settled" && fact.reviewId === pending.reviewId,
         );
     if (
       pending?.inputId === boundary.inputId &&
       review?.type === "completion.review_settled" &&
       ["failed", "unknown"].includes(review.status) &&
-      ["AuditReportInvalid", "AuditEvidencePathInvalid"].includes(
-        review.reasonCode,
-      )
+      ["AuditReportInvalid", "AuditEvidencePathInvalid"].includes(review.reasonCode)
     ) {
       annotations.push({
         sourceThroughSeq: markerSeq,

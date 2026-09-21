@@ -45,9 +45,7 @@ export function validateMemoryStateObservationBindingBoundaryV2(input: {
   readonly result: MemoryStateObservationBindingV2;
 }): MemoryStateObservationBindingV2 {
   const projected = projectBindingInput(input.request);
-  const expectedGroupIds = [
-    ...new Set(projected.slots.map((slot) => slot.groupId)),
-  ];
+  const expectedGroupIds = [...new Set(projected.slots.map((slot) => slot.groupId))];
   if (
     input.result.binderVersion !== input.binder.binderVersion ||
     !input.result.bindingRevision.trim() ||
@@ -66,9 +64,7 @@ export function validateMemoryStateObservationBindingBoundaryV2(input: {
       seenGroups.has(group.groupId) ||
       (group.status !== "completed" && group.status !== "fallback") ||
       new Set(group.failureCodes).size !== group.failureCodes.length ||
-      group.failureCodes.some(
-        (code) => !/^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(code),
-      ) ||
+      group.failureCodes.some((code) => !/^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(code)) ||
       (group.status === "completed" && group.failureCodes.length !== 0) ||
       (group.status === "fallback" && group.observations.length !== 0)
     ) {
@@ -106,8 +102,7 @@ export function validateMemoryStateObservationBindingBoundaryV2(input: {
           ...(observation.lifecycleTargetEvidenceRef === undefined
             ? {}
             : {
-                lifecycleTargetEvidenceRef:
-                  observation.lifecycleTargetEvidenceRef,
+                lifecycleTargetEvidenceRef: observation.lifecycleTargetEvidenceRef,
               }),
           predicateKind: observation.predicateKind,
           polarity: observation.polarity,
@@ -115,8 +110,7 @@ export function validateMemoryStateObservationBindingBoundaryV2(input: {
         },
       });
       if (
-        hashCanonicalJsonV1(rebound as never) !==
-          hashCanonicalJsonV1(observation as never) ||
+        hashCanonicalJsonV1(rebound as never) !== hashCanonicalJsonV1(observation as never) ||
         !projected.slotScopes
           .find((scope) => scope.slotId === observation.slotId)
           ?.evidenceRefs.includes(observation.evidenceRef)
@@ -127,9 +121,7 @@ export function validateMemoryStateObservationBindingBoundaryV2(input: {
       seenPairs.add(`${observation.slotId}\0${observation.evidenceRef}`);
       observedSlots.add(observation.slotId);
     }
-    const expectedSlots = projected.slots.filter(
-      (slot) => slot.groupId === group.groupId,
-    );
+    const expectedSlots = projected.slots.filter((slot) => slot.groupId === group.groupId);
     if (
       group.status === "completed" &&
       expectedSlots.some((slot) => !observedSlots.has(slot.slotId))
@@ -165,17 +157,13 @@ export function createJsonMemoryStateObservationBinderV2(input: {
   if (!input.model || typeof input.model.complete !== "function") {
     throw namedError("MemoryStateObservationBinderModelInvalid");
   }
-  const binderVersion =
-    input.binderVersion ?? PAW_MEMORY_STATE_OBSERVATION_BINDER_VERSION_V2;
+  const binderVersion = input.binderVersion ?? PAW_MEMORY_STATE_OBSERVATION_BINDER_VERSION_V2;
   if (!binderVersion.trim()) {
     throw namedError("MemoryStateObservationBinderVersionInvalid");
   }
   return Object.freeze({
     binderVersion,
-    async bind(
-      bindingInput: Readonly<MemoryStateObservationBindingInputV2>,
-      signal: AbortSignal,
-    ) {
+    async bind(bindingInput: Readonly<MemoryStateObservationBindingInputV2>, signal: AbortSignal) {
       const projected = projectBindingInput(bindingInput);
       if (signal.aborted) throw abortError();
       const result = await input.model.complete(buildRequest(projected), {
@@ -229,22 +217,13 @@ type ProjectedInput = Readonly<{
 function projectBindingInput(
   input: Readonly<MemoryStateObservationBindingInputV2>,
 ): ProjectedInput {
-  const query = boundedString(
-    input.query,
-    512,
-    "MemoryStateObservationBinderQueryInvalid",
-  );
+  const query = boundedString(input.query, 512, "MemoryStateObservationBinderQueryInvalid");
   if (input.slots.length < 1 || input.slots.length > 4) {
     throw namedError("MemoryStateObservationBinderSlotsInvalid");
   }
   const slotById = new Map(input.slots.map((slot) => [slot.slotId, slot]));
-  const itemByRef = new Map(
-    input.sourceLock.items.map((item) => [item.evidenceRef, item]),
-  );
-  if (
-    slotById.size !== input.slots.length ||
-    input.slotScopes.length !== input.slots.length
-  ) {
+  const itemByRef = new Map(input.sourceLock.items.map((item) => [item.evidenceRef, item]));
+  if (slotById.size !== input.slots.length || input.slotScopes.length !== input.slots.length) {
     throw namedError("MemoryStateObservationBinderSlotsInvalid");
   }
   const seenScopes = new Set<string>();
@@ -283,14 +262,9 @@ function projectBindingInput(
   });
 }
 
-function buildRequest(
-  input: ProjectedInput,
-): Readonly<{ system: string; user: string }> {
+function buildRequest(input: ProjectedInput): Readonly<{ system: string; user: string }> {
   const scopes = new Map(
-    input.slotScopes.map((scope) => [
-      scope.slotId,
-      new Set(scope.evidenceRefs),
-    ]),
+    input.slotScopes.map((scope) => [scope.slotId, new Set(scope.evidenceRefs)]),
   );
   return Object.freeze({
     system: [
@@ -317,14 +291,13 @@ function buildRequest(
         searchText: slot.semanticDescriptor.searchText,
         descriptorRevision: slot.semanticDescriptor.descriptorRevision,
         operation: slot.operation,
-        durationEndpointContract:
-          slot.durationEndpointContractKind ?? "not_applicable",
+        durationEndpointContract: slot.durationEndpointContractKind ?? "not_applicable",
         roleConstraint: slot.roleConstraint,
         coverageMode: slot.coverageMode,
         minimumIndependentEvidence: slot.minimumIndependentEvidence,
         dependencySlotIds: slot.dependencySlotIds,
-        eligibleEvidenceRefs: [...(scopes.get(slot.slotId) ?? [])].map(
-          (evidenceRef) => input.rawToCompactRef.get(evidenceRef),
+        eligibleEvidenceRefs: [...(scopes.get(slot.slotId) ?? [])].map((evidenceRef) =>
+          input.rawToCompactRef.get(evidenceRef),
         ),
       })),
       evidence: input.sourceLock.items.map((item, index) => ({
@@ -354,18 +327,13 @@ function parseProjectedBinding(
   }
   const slotById = new Map(input.slots.map((slot) => [slot.slotId, slot]));
   const scopes = new Map(
-    input.slotScopes.map((scope) => [
-      scope.slotId,
-      new Set(scope.evidenceRefs),
-    ]),
+    input.slotScopes.map((scope) => [scope.slotId, new Set(scope.evidenceRefs)]),
   );
   const groupIds = [...new Set(input.slots.map((slot) => slot.groupId))];
   const observationsByGroup = new Map(
     groupIds.map((groupId) => [groupId, [] as MemoryStateBoundObservationV2[]]),
   );
-  const failuresByGroup = new Map(
-    groupIds.map((groupId) => [groupId, new Set<string>()]),
-  );
+  const failuresByGroup = new Map(groupIds.map((groupId) => [groupId, new Set<string>()]));
   const observedSlots = new Set<string>();
   const seenPairs = new Set<string>();
   for (const raw of parsed.observations) {
@@ -399,23 +367,17 @@ function parseProjectedBinding(
   }
   for (const slot of input.slots) {
     if (!observedSlots.has(slot.slotId)) {
-      failuresByGroup
-        .get(slot.groupId)
-        ?.add("MemoryStateObservationBindingSlotMissing");
+      failuresByGroup.get(slot.groupId)?.add("MemoryStateObservationBindingSlotMissing");
     }
   }
   return Object.freeze(
     groupIds.map((groupId) => {
-      const failureCodes = Object.freeze(
-        [...(failuresByGroup.get(groupId) ?? [])].sort(),
-      );
+      const failureCodes = Object.freeze([...(failuresByGroup.get(groupId) ?? [])].sort());
       const completed = failureCodes.length === 0;
       return Object.freeze({
         groupId,
         status: completed ? ("completed" as const) : ("fallback" as const),
-        observations: Object.freeze(
-          completed ? [...(observationsByGroup.get(groupId) ?? [])] : [],
-        ),
+        observations: Object.freeze(completed ? [...(observationsByGroup.get(groupId) ?? [])] : []),
         failureCodes,
       });
     }),
@@ -434,8 +396,7 @@ function parseProposal(
   const typedLifecycleFieldShape =
     "durationEndpointRole\0eventTimeBasis\0eventTimeSpans\0evidenceRef\0lifecycleRelation\0lifecycleTargetEvidenceRef\0modality\0polarity\0predicateKind\0slotId\0valueSpans";
   const hasTypedLifecycleFields = fieldShape === typedLifecycleFieldShape;
-  const hasTypedTemporalFields =
-    fieldShape === typedTemporalFieldShape || hasTypedLifecycleFields;
+  const hasTypedTemporalFields = fieldShape === typedTemporalFieldShape || hasTypedLifecycleFields;
   if (
     (!hasTypedTemporalFields && fieldShape !== legacyFieldShape) ||
     typeof raw.evidenceRef !== "string" ||
@@ -443,11 +404,9 @@ function parseProposal(
     !Array.isArray(raw.valueSpans) ||
     !Array.isArray(raw.eventTimeSpans) ||
     (hasTypedTemporalFields &&
-      !new Set([
-        "explicit_span",
-        "source_session_contemporaneous",
-        "unbound",
-      ]).has(raw.eventTimeBasis as string)) ||
+      !new Set(["explicit_span", "source_session_contemporaneous", "unbound"]).has(
+        raw.eventTimeBasis as string,
+      )) ||
     (hasTypedTemporalFields &&
       !new Set(["start", "end", "evidence", "not_applicable"]).has(
         raw.durationEndpointRole as string,
@@ -460,25 +419,16 @@ function parseProposal(
       raw.lifecycleTargetEvidenceRef !== null &&
       (typeof raw.lifecycleTargetEvidenceRef !== "string" ||
         !input.compactToRawRef.has(raw.lifecycleTargetEvidenceRef))) ||
-    !new Set([
-      "assert",
-      "update",
-      "retract",
-      "confirm",
-      "prefer",
-      "disprefer",
-    ]).has(raw.predicateKind as string) ||
+    !new Set(["assert", "update", "retract", "confirm", "prefer", "disprefer"]).has(
+      raw.predicateKind as string,
+    ) ||
     !new Set(["positive", "negative"]).has(raw.polarity as string) ||
-    !new Set(["observed", "goal", "plan", "forecast"]).has(
-      raw.modality as string,
-    )
+    !new Set(["observed", "goal", "plan", "forecast"]).has(raw.modality as string)
   ) {
     throw namedError("MemoryStateObservationBindingFieldsInvalid");
   }
   const evidenceRef = input.compactToRawRef.get(raw.evidenceRef) as string;
-  const content = input.sourceLock.items.find(
-    (item) => item.evidenceRef === evidenceRef,
-  )?.content;
+  const content = input.sourceLock.items.find((item) => item.evidenceRef === evidenceRef)?.content;
   if (content === undefined) {
     throw namedError("MemoryStateObservationBindingScopeInvalid");
   }
@@ -503,11 +453,7 @@ function parseProposal(
         ) {
           throw namedError("MemoryStateObservationBindingSpanInvalid");
         }
-        const start = nthOccurrence(
-          content,
-          span.text,
-          span.occurrence as number,
-        );
+        const start = nthOccurrence(content, span.text, span.occurrence as number);
         if (start < 0) {
           throw namedError("MemoryStateObservationBindingSpanInvalid");
         }
@@ -522,8 +468,7 @@ function parseProposal(
     eventTimeSpans: quoteSpans(raw.eventTimeSpans, 0),
     ...(hasTypedTemporalFields
       ? {
-          eventTimeBasis:
-            raw.eventTimeBasis as MemoryStateObservationProposalV2["eventTimeBasis"],
+          eventTimeBasis: raw.eventTimeBasis as MemoryStateObservationProposalV2["eventTimeBasis"],
           durationEndpointRole:
             raw.durationEndpointRole as MemoryStateObservationProposalV2["durationEndpointRole"],
           ...(hasTypedLifecycleFields
@@ -541,18 +486,13 @@ function parseProposal(
             : {}),
         }
       : {}),
-    predicateKind:
-      raw.predicateKind as MemoryStateObservationProposalV2["predicateKind"],
+    predicateKind: raw.predicateKind as MemoryStateObservationProposalV2["predicateKind"],
     polarity: raw.polarity as MemoryStateObservationProposalV2["polarity"],
     modality: raw.modality as MemoryStateObservationProposalV2["modality"],
   });
 }
 
-function nthOccurrence(
-  content: string,
-  value: string,
-  occurrence: number,
-): number {
+function nthOccurrence(content: string, value: string, occurrence: number): number {
   let from = 0;
   for (let index = 0; index <= occurrence; index += 1) {
     const found = content.indexOf(value, from);

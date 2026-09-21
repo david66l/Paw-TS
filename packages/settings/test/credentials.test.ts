@@ -50,26 +50,20 @@ describe("credentials", () => {
       },
       deepseek_base_url: "https://legacy.deepseek.com",
     };
-    expect(resolveBaseUrl(settings, "deepseek")).toBe(
-      "https://custom.deepseek.com",
-    );
+    expect(resolveBaseUrl(settings, "deepseek")).toBe("https://custom.deepseek.com");
   });
 
   test("resolveBaseUrl falls back to legacy flat field", () => {
     const settings: PawSettingsLocal = {
       qwen_base_url: "https://legacy.dashscope.com",
     };
-    expect(resolveBaseUrl(settings, "qwen")).toBe(
-      "https://legacy.dashscope.com",
-    );
+    expect(resolveBaseUrl(settings, "qwen")).toBe("https://legacy.dashscope.com");
   });
 
   test("resolveBaseUrl falls back to env var", () => {
     process.env.DEEPSEEK_BASE_URL = "https://env.deepseek.com";
     const settings: PawSettingsLocal = {};
-    expect(resolveBaseUrl(settings, "deepseek")).toBe(
-      "https://env.deepseek.com",
-    );
+    expect(resolveBaseUrl(settings, "deepseek")).toBe("https://env.deepseek.com");
     delete process.env.DEEPSEEK_BASE_URL;
   });
 
@@ -89,9 +83,7 @@ describe("credentials", () => {
       provider: "deepseek",
       model: "top-level-model",
     };
-    expect(resolveModel(settings, "deepseek", "fallback")).toBe(
-      "top-level-model",
-    );
+    expect(resolveModel(settings, "deepseek", "fallback")).toBe("top-level-model");
   });
 
   test("hasApiKey returns false when missing", () => {
@@ -118,10 +110,7 @@ describe("credentials", () => {
       model: "gpt-4o",
     };
     const redacted = redactSecrets(settings);
-    const models = redacted.models as Record<
-      string,
-      { apiKey: unknown; baseUrl?: string }
-    >;
+    const models = redacted.models as Record<string, { apiKey: unknown; baseUrl?: string }>;
     expect(models.deepseek?.apiKey).toContain("…");
     expect(models.deepseek?.apiKey).not.toContain("deepseek-secret");
     expect(models.deepseek?.baseUrl).toBe("https://api.deepseek.com");
@@ -143,9 +132,7 @@ test("GLM credentials resolve nested, legacy and environment values and redact s
       glm_api_key: "test-legacy-secret",
       models: { glm: { apiKey: "test-nested-secret" } },
     };
-    expect(resolveApiKey({ glm_api_key: settings.glm_api_key }, "glm")).toBe(
-      "test-legacy-secret",
-    );
+    expect(resolveApiKey({ glm_api_key: settings.glm_api_key }, "glm")).toBe("test-legacy-secret");
     expect(resolveApiKey(settings, "glm")).toBe("test-nested-secret");
     const redacted = JSON.stringify(redactSecrets(settings));
     expect(redacted).not.toContain("test-legacy-secret");
@@ -191,9 +178,7 @@ describe("redactSecrets MCP servers", () => {
   });
 
   test("tolerates a missing or malformed mcp_servers field", () => {
-    expect(() =>
-      redactSecrets({ provider: "glm" } as PawSettingsLocal),
-    ).not.toThrow();
+    expect(() => redactSecrets({ provider: "glm" } as PawSettingsLocal)).not.toThrow();
     expect(() =>
       redactSecrets({
         mcp_servers: "not-an-array",

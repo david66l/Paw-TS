@@ -87,23 +87,15 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
                 disabled={!c.diff}
                 title={c.diff ? c.path : `${c.path}（无 diff 预览）`}
               >
-                <span
-                  className={`${styles.badge} ${isNew ? styles.badgeNew : styles.badgeMod}`}
-                >
+                <span className={`${styles.badge} ${isNew ? styles.badgeNew : styles.badgeMod}`}>
                   {isNew ? "A" : "M"}
                 </span>
                 <span className={styles.path}>{c.path}</span>
                 <span className={styles.rowStat}>
-                  {c.added > 0 ? (
-                    <span className={styles.statAdd}>+{c.added}</span>
-                  ) : null}
-                  {c.removed > 0 ? (
-                    <span className={styles.statDel}>−{c.removed}</span>
-                  ) : null}
+                  {c.added > 0 ? <span className={styles.statAdd}>+{c.added}</span> : null}
+                  {c.removed > 0 ? <span className={styles.statDel}>−{c.removed}</span> : null}
                 </span>
-                {c.diff ? (
-                  <span className={styles.caret}>{open ? "▴" : "▾"}</span>
-                ) : null}
+                {c.diff ? <span className={styles.caret}>{open ? "▴" : "▾"}</span> : null}
               </button>
               {open && c.diff ? <DiffView diff={c.diff} /> : null}
             </li>

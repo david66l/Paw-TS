@@ -39,16 +39,15 @@ const requirements: readonly MemoryEvidenceRequirementV3[] = Object.freeze([
   }),
 ]);
 
-const temporalConstraints: readonly MemoryEvidenceBoundTemporalConstraintV1[] =
-  Object.freeze(
-    requirements.map((requirement) =>
-      bindMemoryEvidenceTemporalConstraintV1({
-        query: "What were both operands?",
-        queryEnvelopeMode: intent.temporalMode,
-        leafMode: requirement.temporalMode,
-      }),
-    ),
-  );
+const temporalConstraints: readonly MemoryEvidenceBoundTemporalConstraintV1[] = Object.freeze(
+  requirements.map((requirement) =>
+    bindMemoryEvidenceTemporalConstraintV1({
+      query: "What were both operands?",
+      queryEnvelopeMode: intent.temporalMode,
+      leafMode: requirement.temporalMode,
+    }),
+  ),
+);
 
 const candidateScopes = Object.freeze([
   Object.freeze({
@@ -75,9 +74,7 @@ if (!selectorGroupOne || !selectorGroupTwo || !temporalOne || !temporalTwo) {
 function assessment(requirementId: string, evidenceRef?: string) {
   return Object.freeze({
     requirementId,
-    supportingEvidenceRefs: Object.freeze(
-      evidenceRef === undefined ? [] : [evidenceRef],
-    ),
+    supportingEvidenceRefs: Object.freeze(evidenceRef === undefined ? [] : [evidenceRef]),
     contradictingEvidenceRefs: Object.freeze([]),
     unknownEvidenceRefs: Object.freeze([]),
     evidenceDispositions: Object.freeze(
@@ -134,9 +131,7 @@ describe("selector execution snapshot v1", () => {
 
     expect(snapshot.groups[0]?.requirements[0]?.status).toBe("assessed");
     expect(snapshot.groups[0]?.requirements[0]?.assessment).toBeDefined();
-    expect(snapshot.groups[1]?.requirements[0]?.status).toBe(
-      "unassessed_group_failed",
-    );
+    expect(snapshot.groups[1]?.requirements[0]?.status).toBe("unassessed_group_failed");
     expect(snapshot.groups[1]?.requirements[0]?.assessment).toBeUndefined();
   });
 
@@ -156,9 +151,7 @@ describe("selector execution snapshot v1", () => {
       }),
     ]);
 
-    expect(
-      snapshot.groups[0]?.requirements[0]?.assessment?.supportingEvidenceRefs,
-    ).toEqual([]);
+    expect(snapshot.groups[0]?.requirements[0]?.assessment?.supportingEvidenceRefs).toEqual([]);
     expect(snapshot.groups[1]?.requirements[0]?.assessment).toBeUndefined();
   });
 
@@ -169,9 +162,7 @@ describe("selector execution snapshot v1", () => {
           groupId: selectorGroupOne.groupId,
           requirementIds: Object.freeze(["requirement-1", "requirement-2"]),
           status: "committed" as const,
-          assessments: Object.freeze([
-            assessment("requirement-1", "evidence-1"),
-          ]),
+          assessments: Object.freeze([assessment("requirement-1", "evidence-1")]),
         }),
       ]),
     ).toThrow("MemorySelectorExecutionSnapshotGroupInvalid");
@@ -184,9 +175,7 @@ describe("selector execution snapshot v1", () => {
           groupId: selectorGroupOne.groupId,
           requirementIds: Object.freeze(["requirement-1"]),
           status: "failed" as const,
-          assessments: Object.freeze([
-            assessment("requirement-1", "evidence-1"),
-          ]),
+          assessments: Object.freeze([assessment("requirement-1", "evidence-1")]),
         }),
         Object.freeze({
           groupId: selectorGroupTwo.groupId,

@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  CircuitBreaker,
-  CircuitBreakerOpenError,
-} from "../src/resilience/circuit-breaker.js";
+import { CircuitBreaker, CircuitBreakerOpenError } from "../src/resilience/circuit-breaker.js";
 
 describe("CircuitBreaker", () => {
   test("starts in CLOSED state", () => {
@@ -169,9 +166,10 @@ describe("CircuitBreaker integration with AgentOrchestrator", () => {
     });
 
     // Pre-open the breaker by injecting an instance with failures
-    const breaker = new (
-      await import("../src/resilience/circuit-breaker.js")
-    ).CircuitBreaker("fake", { failureThreshold: 1 });
+    const breaker = new (await import("../src/resilience/circuit-breaker.js")).CircuitBreaker(
+      "fake",
+      { failureThreshold: 1 },
+    );
     breaker.recordFailure();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (o as any).circuitBreakers.set("fake", breaker);

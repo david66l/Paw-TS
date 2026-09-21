@@ -90,26 +90,17 @@ function conservativeTimeoutReport(): MeaAuditReportV1 {
  * 运行一次独立审计。解析失败、子 Agent 失败或超时都降级为保守报告
  * （incomplete + suspect）——审计通道的任何故障都不能被解释为通过。
  */
-export async function runMeaAuditor(
-  input: MeaAuditRunInput,
-): Promise<MeaAuditRunResult> {
+export async function runMeaAuditor(input: MeaAuditRunInput): Promise<MeaAuditRunResult> {
   const budget = { ...DEFAULT_MEA_AUDITOR_BUDGET, ...input.budget };
   const abort = new AbortController();
-  const timer = setTimeout(
-    () => abort.abort(new Error("mea_audit_timeout")),
-    budget.timeoutMs,
-  );
+  const timer = setTimeout(() => abort.abort(new Error("mea_audit_timeout")), budget.timeoutMs);
   const onAbort = () => abort.abort(input.signal?.reason);
   input.signal?.addEventListener("abort", onAbort, { once: true });
   try {
-    const result = await input.launcher.launch(
-      renderAuditGoal(input),
-      budget.maxSteps,
-      {
-        parentRunId: input.parentRunId,
-        signal: abort.signal,
-      },
-    );
+    const result = await input.launcher.launch(renderAuditGoal(input), budget.maxSteps, {
+      parentRunId: input.parentRunId,
+      signal: abort.signal,
+    });
     const { ok, report } = parseMeaAuditReportV1(result.summary);
     return {
       report,

@@ -51,9 +51,7 @@ describe("constraint-reconcile", () => {
 
   test("解析成功：keep/add/drop 生效", async () => {
     const result = await runConstraintReconcile({
-      model: modelResponding(
-        '{"keep":[0],"add":[{"text":"缓存换成 Memcached 吧"}],"drop":[1]}',
-      ),
+      model: modelResponding('{"keep":[0],"add":[{"text":"缓存换成 Memcached 吧"}],"drop":[1]}'),
       existing,
       newUserMessages: ["缓存换成 Memcached 吧"],
       currentTurn: 12,
@@ -116,21 +114,14 @@ describe("TaskStateManager 约束生命周期", () => {
   test("反转场景：用户说改用 Y → drop 旧约束，add 新约束", () => {
     const state = new TaskStateManager("不要用 X 方案");
     // 初始：goal 提取 1 条约束
-    expect(state.activeConstraints().map((c) => c.text)).toContain(
-      "不要用 X 方案",
-    );
+    expect(state.activeConstraints().map((c) => c.text)).toContain("不要用 X 方案");
     // LLM 调和：反转（drop [0] + add 改用 Y）
-    state.updateConstraints(
-      { keep: [], drop: [0], add: [{ text: "改用 Y 方案" }] },
-      8,
-    );
+    state.updateConstraints({ keep: [], drop: [0], add: [{ text: "改用 Y 方案" }] }, 8);
     const active = state.activeConstraints();
     expect(active.map((c) => c.text)).toEqual(["改用 Y 方案"]);
     expect(active[0]?.sourceTurn).toBe(8);
     // 旧约束标记 superseded（可追溯）
-    const superseded = state
-      .snapshot()
-      .constraints.filter((c) => c.status === "superseded");
+    const superseded = state.snapshot().constraints.filter((c) => c.status === "superseded");
     expect(superseded.map((c) => c.text)).toContain("不要用 X 方案");
   });
 

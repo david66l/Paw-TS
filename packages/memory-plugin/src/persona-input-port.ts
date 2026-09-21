@@ -54,9 +54,7 @@ export function createMemoryPersonaInputPortV1(
   options: MemoryPersonaInputPortOptionsV1,
 ): LoopInputPort {
   const report = options.baseInput.reportSafeBoundary.bind(options.baseInput);
-  const consume = options.baseInput.consumePromotedInputIds.bind(
-    options.baseInput,
-  );
+  const consume = options.baseInput.consumePromotedInputIds.bind(options.baseInput);
   const readSnapshot = options.session.readInputSnapshot.bind(options.session);
   const commitFacts = options.session.commitInputFacts.bind(options.session);
   const now = options.now ?? Date.now;
@@ -129,12 +127,7 @@ async function settleProjectionV1(
       maxClaims: input.options.maxClaims,
       maxChars: input.options.maxChars,
     });
-    const fact = projectionFact(
-      input.queryId,
-      projection,
-      input.now(),
-      input.options.profile,
-    );
+    const fact = projectionFact(input.queryId, projection, input.now(), input.options.profile);
     emit(input.options.onEvent, {
       schemaVersion: "paw.memory-persona-event.v1",
       type: "project",
@@ -197,9 +190,7 @@ async function commitUniqueProjectionFactV1(
   let snapshot = input.initialSnapshot;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     if (hasProjection(snapshot, input.fact.queryId)) return;
-    if (
-      (await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed"
-    ) {
+    if ((await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed") {
       return;
     }
     snapshot = await input.readSnapshot();
@@ -207,25 +198,16 @@ async function commitUniqueProjectionFactV1(
   throw new Error("Memory persona projection journal commit conflict");
 }
 
-function hasRetrieval(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasRetrieval(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   return snapshot.entries.some(
-    (entry) =>
-      entry.fact.type === "memory.retrieval_settled" &&
-      entry.fact.queryId === queryId,
+    (entry) => entry.fact.type === "memory.retrieval_settled" && entry.fact.queryId === queryId,
   );
 }
 
-function hasProjection(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasProjection(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   return snapshot.entries.some(
     (entry) =>
-      entry.fact.type === "memory.persona_projection_settled" &&
-      entry.fact.queryId === queryId,
+      entry.fact.type === "memory.persona_projection_settled" && entry.fact.queryId === queryId,
   );
 }
 

@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -56,9 +50,7 @@ describe("SkillRegistry", () => {
 
   test("catalogText includes skill info", () => {
     const reg = new SkillRegistry();
-    reg.register(
-      makeSkill({ id: "s1", name: "Skill One", description: "Does one thing" }),
-    );
+    reg.register(makeSkill({ id: "s1", name: "Skill One", description: "Does one thing" }));
     const text = reg.catalogText();
     expect(text).toContain("s1");
     expect(text).toContain("Skill One");
@@ -96,9 +88,7 @@ describe("renderSkillPrompt", () => {
   test("uses defaults for missing args", () => {
     const skill = makeSkill({
       prompt: "Hello {{name}}",
-      parameters: [
-        { name: "name", description: "Name", type: "string", default: "World" },
-      ],
+      parameters: [{ name: "name", description: "Name", type: "string", default: "World" }],
     });
     const result = renderSkillPrompt(skill, {});
     expect(result).toBe("Hello World");
@@ -107,9 +97,7 @@ describe("renderSkillPrompt", () => {
   test("shows missing marker for required params without value", () => {
     const skill = makeSkill({
       prompt: "Hello {{name}}",
-      parameters: [
-        { name: "name", description: "Name", type: "string", required: true },
-      ],
+      parameters: [{ name: "name", description: "Name", type: "string", required: true }],
     });
     const result = renderSkillPrompt(skill, {});
     expect(result).toBe("Hello [missing: name]");
@@ -185,11 +173,7 @@ describe("loadSkillsFromDirectory", () => {
       let dir = root;
       for (let i = 0; i < depth; i++) dir = path.join(dir, `level-${i}`);
       mkdirSync(dir, { recursive: true });
-      writeFileSync(
-        path.join(dir, "SKILL.md"),
-        "---\nname: deep\n---\nbody",
-        "utf8",
-      );
+      writeFileSync(path.join(dir, "SKILL.md"), "---\nname: deep\n---\nbody", "utf8");
       return dir;
     }
 
@@ -219,11 +203,7 @@ describe("loadSkillsFromDirectory", () => {
         rmSync(root, { recursive: true, force: true });
         return;
       }
-      writeFileSync(
-        path.join(root, "SKILL.md"),
-        "---\nname: top\n---\nbody",
-        "utf8",
-      );
+      writeFileSync(path.join(root, "SKILL.md"), "---\nname: top\n---\nbody", "utf8");
       const skills = loadSkillsFromDirectory(root);
       expect(skills.length).toBe(1);
       rmSync(root, { recursive: true, force: true });

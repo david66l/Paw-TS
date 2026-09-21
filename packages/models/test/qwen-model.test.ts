@@ -62,9 +62,7 @@ describe("createDefaultLanguageModel with qwen provider", () => {
         qwen_api_key: "sk-qwen",
       }),
     );
-    const moduleUrl = pathToFileURL(
-      path.resolve(import.meta.dir, "../src/default-model.ts"),
-    ).href;
+    const moduleUrl = pathToFileURL(path.resolve(import.meta.dir, "../src/default-model.ts")).href;
     const child = spawnSync(
       process.execPath,
       [

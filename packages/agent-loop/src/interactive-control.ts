@@ -3,10 +3,8 @@ import type { InputFactV1 } from "@paw/protocol";
 import type { ControlDecision, LoopControlState } from "./contracts.js";
 import type { ControlReducer } from "./ports.js";
 
-export const INTERACTIVE_CONTROL_REDUCER_VERSION_V1 =
-  "paw.interactive-control.v1" as const;
-export const INTERACTIVE_CONTROL_REDUCER_VERSION_V2 =
-  "paw.interactive-control.v2" as const;
+export const INTERACTIVE_CONTROL_REDUCER_VERSION_V1 = "paw.interactive-control.v1" as const;
+export const INTERACTIVE_CONTROL_REDUCER_VERSION_V2 = "paw.interactive-control.v2" as const;
 
 /** 一个 run 开始时冻结的最小交互控制规则。 */
 export interface InteractiveControlConfigV1 {
@@ -102,42 +100,26 @@ export function createInteractiveControlReducerV2(): ControlReducer<
     reduce(inputFacts, config) {
       assertConfigV2(config);
       const markers = inputFacts.filter(
-        (
-          fact,
-        ): fact is Extract<InputFactV1, { type: "work.segment_started" }> =>
+        (fact): fact is Extract<InputFactV1, { type: "work.segment_started" }> =>
           fact.type === "work.segment_started",
       );
-      if (
-        markers.some(
-          (fact) =>
-            fact.reducerVersion !== INTERACTIVE_CONTROL_REDUCER_VERSION_V2,
-        )
-      ) {
-        throw new Error(
-          "Work segment reducerVersion does not match interactive reducer v2",
-        );
+      if (markers.some((fact) => fact.reducerVersion !== INTERACTIVE_CONTROL_REDUCER_VERSION_V2)) {
+        throw new Error("Work segment reducerVersion does not match interactive reducer v2");
       }
       const latestMarker = markers.at(-1);
       const segmentIndex = latestMarker?.segmentIndex ?? 0;
-      const markerOffset = latestMarker
-        ? inputFacts.lastIndexOf(latestMarker) + 1
-        : 0;
+      const markerOffset = latestMarker ? inputFacts.lastIndexOf(latestMarker) + 1 : 0;
       const segmentFacts = inputFacts.slice(markerOffset);
       const segmentModelFacts = modelSettlements(segmentFacts);
       const allModelFacts = modelSettlements(inputFacts);
       const segmentToolFacts = toolSettlements(segmentFacts);
       const allToolFacts = toolSettlements(inputFacts);
-      const baseDecision = decide(
-        segmentFacts,
-        segmentModelFacts,
-        segmentToolFacts,
-        {
-          ...config,
-          allowReasoningRecovery:
-            config.recoverReasoningTimeout === true &&
-            allModelFacts.filter(isReasoningTimeout).length === 1,
-        },
-      );
+      const baseDecision = decide(segmentFacts, segmentModelFacts, segmentToolFacts, {
+        ...config,
+        allowReasoningRecovery:
+          config.recoverReasoningTimeout === true &&
+          allModelFacts.filter(isReasoningTimeout).length === 1,
+      });
       const budgetMayOverride =
         baseDecision.kind === "continue" || baseDecision.kind === "completed";
       const decision = freezeControlDecision(
@@ -156,10 +138,7 @@ export function createInteractiveControlReducerV2(): ControlReducer<
               : allModelFacts.length > config.maxTotalModelTurns ||
                   (allModelFacts.length === config.maxTotalModelTurns &&
                     baseDecision.kind === "continue" &&
-                    !(
-                      config.settleFinalToolBatch &&
-                      hasPendingToolBatch(segmentFacts)
-                    ))
+                    !(config.settleFinalToolBatch && hasPendingToolBatch(segmentFacts)))
                 ? {
                     kind: "incomplete",
                     reason: "total-model-turn-budget-exhausted",
@@ -192,9 +171,7 @@ function modelSettlements(
   );
 }
 
-function isReasoningTimeout(
-  fact: Extract<InputFactV1, { type: "model.settled" }>,
-): boolean {
+function isReasoningTimeout(fact: Extract<InputFactV1, { type: "model.settled" }>): boolean {
   return (
     fact.status === "unknown" &&
     fact.errorCode === "ModelReasoningWithoutActionTimeout" &&
@@ -207,8 +184,7 @@ function toolSettlements(
   facts: readonly InputFactV1[],
 ): readonly Extract<InputFactV1, { type: "tool.settled" }>[] {
   return facts.filter(
-    (fact): fact is Extract<InputFactV1, { type: "tool.settled" }> =>
-      fact.type === "tool.settled",
+    (fact): fact is Extract<InputFactV1, { type: "tool.settled" }> => fact.type === "tool.settled",
   );
 }
 
@@ -266,12 +242,11 @@ function decide(
         return { kind: "continue" };
       return {
         kind: "incomplete",
-        reason:
-          /^Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout$/.test(
-            latestModel.errorCode ?? "",
-          )
-            ? latestModel.errorCode!
-            : "model-result-unknown",
+        reason: /^Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout$/.test(
+          latestModel.errorCode ?? "",
+        )
+          ? latestModel.errorCode!
+          : "model-result-unknown",
       };
     case "cancelled":
       return { kind: "incomplete", reason: "model-cancelled" };
@@ -299,10 +274,7 @@ function decide(
     if (batch.some((fact) => fact.status === "rejected")) {
       return { kind: "await_user", reason: "tool-permission-rejected" };
     }
-    if (
-      modelFacts.length >= config.maxModelTurns &&
-      !hasPendingToolBatch(inputFacts)
-    ) {
+    if (modelFacts.length >= config.maxModelTurns && !hasPendingToolBatch(inputFacts)) {
       return { kind: "incomplete", reason: "model-turn-budget-exhausted" };
     }
     return { kind: "continue" };
@@ -326,21 +298,17 @@ function hasUnconsumedSteer(facts: readonly InputFactV1[]): boolean {
   let lastDispatch = -1;
   for (let index = 0; index < facts.length; index++) {
     const fact = facts[index]!;
-    if (fact.type === "input.accepted" && fact.delivery === "steer")
-      accepted.add(fact.inputId);
+    if (fact.type === "input.accepted" && fact.delivery === "steer") accepted.add(fact.inputId);
     if (fact.type === "input.promoted" && fact.delivery === "steer")
       promoted.set(fact.inputId, index);
     if (fact.type === "model.dispatch_recorded") lastDispatch = index;
   }
-  return [...accepted].some(
-    (id) => !promoted.has(id) || promoted.get(id)! > lastDispatch,
-  );
+  return [...accepted].some((id) => !promoted.has(id) || promoted.get(id)! > lastDispatch);
 }
 
 function hasPendingToolBatch(facts: readonly InputFactV1[]): boolean {
   const latest = findLast(facts, "model.settled");
-  if (!latest || latest.status !== "completed" || !latest.hasToolCalls)
-    return false;
+  if (!latest || latest.status !== "completed" || !latest.hasToolCalls) return false;
   const tail = facts.slice(facts.lastIndexOf(latest) + 1);
   const settled = new Set(
     tail.flatMap((fact) => (fact.type === "tool.settled" ? [fact.callId] : [])),
@@ -405,10 +373,8 @@ function assertConfig(config: InteractiveControlConfigV1): void {
 function assertConfigV2(config: InteractiveControlConfigV2): void {
   assertConfig(config);
   if (
-    (config.recoverReasoningTimeout !== undefined &&
-      config.recoverReasoningTimeout !== true) ||
-    (config.settleFinalToolBatch !== undefined &&
-      config.settleFinalToolBatch !== true) ||
+    (config.recoverReasoningTimeout !== undefined && config.recoverReasoningTimeout !== true) ||
+    (config.settleFinalToolBatch !== undefined && config.settleFinalToolBatch !== true) ||
     !Number.isSafeInteger(config.maxSegments) ||
     config.maxSegments <= 0 ||
     !Number.isSafeInteger(config.maxTotalModelTurns) ||
@@ -418,15 +384,11 @@ function assertConfigV2(config: InteractiveControlConfigV2): void {
         config.softModelTurns <= 0 ||
         config.softModelTurns > config.maxModelTurns)) ||
     (config.renewalModelTurns !== undefined &&
-      (!Number.isSafeInteger(config.renewalModelTurns) ||
-        config.renewalModelTurns <= 0)) ||
+      (!Number.isSafeInteger(config.renewalModelTurns) || config.renewalModelTurns <= 0)) ||
     (config.softNoProgressTurns !== undefined &&
-      (!Number.isSafeInteger(config.softNoProgressTurns) ||
-        config.softNoProgressTurns <= 0)) ||
-    (config.softModelTurns === undefined) !==
-      (config.renewalModelTurns === undefined) ||
-    (config.softModelTurns === undefined) !==
-      (config.softNoProgressTurns === undefined)
+      (!Number.isSafeInteger(config.softNoProgressTurns) || config.softNoProgressTurns <= 0)) ||
+    (config.softModelTurns === undefined) !== (config.renewalModelTurns === undefined) ||
+    (config.softModelTurns === undefined) !== (config.softNoProgressTurns === undefined)
   ) {
     throw new Error("Interactive control v2 config is invalid");
   }

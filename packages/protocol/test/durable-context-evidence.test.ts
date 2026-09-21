@@ -149,9 +149,7 @@ describe("durable model response v1", () => {
   });
 
   test("rejects unknown response fields and invalid usage counters", () => {
-    expect(isModelResponseV1({ ...modelResponse(), providerBlob: true })).toBe(
-      false,
-    );
+    expect(isModelResponseV1({ ...modelResponse(), providerBlob: true })).toBe(false);
     expect(
       isModelResponseV1({
         ...modelResponse(),
@@ -263,9 +261,7 @@ describe("durable promoted-input attachments", () => {
       });
 
     expect(isRunJournalEnvelopeV1(promoted([]))).toBe(false);
-    expect(
-      isRunJournalEnvelopeV1(promoted([attachment, { ...attachment }])),
-    ).toBe(false);
+    expect(isRunJournalEnvelopeV1(promoted([attachment, { ...attachment }]))).toBe(false);
     expect(
       isRunJournalEnvelopeV1(
         promoted([
@@ -276,9 +272,7 @@ describe("durable promoted-input attachments", () => {
         ]),
       ),
     ).toBe(false);
-    expect(
-      isRunJournalEnvelopeV1(promoted([{ ...attachment, mutable: true }])),
-    ).toBe(false);
+    expect(isRunJournalEnvelopeV1(promoted([{ ...attachment, mutable: true }]))).toBe(false);
   });
 });
 
@@ -291,13 +285,7 @@ describe("model-visible tool observation v1", () => {
   });
 
   test("supports every settlement status and retains legacy result hashes", () => {
-    for (const status of [
-      "completed",
-      "failed",
-      "cancelled",
-      "unknown",
-      "rejected",
-    ] as const) {
+    for (const status of ["completed", "failed", "cancelled", "unknown", "rejected"] as const) {
       const fact = {
         type: "tool.settled",
         callId: `call-${status}`,
@@ -305,9 +293,7 @@ describe("model-visible tool observation v1", () => {
         observation: observation(status !== "completed"),
         result: { legacyEvidence: true },
         resultHash: `legacy-result-hash-${status}`,
-        ...(status === "failed" || status === "rejected"
-          ? { errorCode: `error-${status}` }
-          : {}),
+        ...(status === "failed" || status === "rejected" ? { errorCode: `error-${status}` } : {}),
       };
       expect(isRunJournalEnvelopeV1(envelope(fact))).toBe(true);
     }

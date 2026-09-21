@@ -37,9 +37,7 @@ describe("convergence guidance", () => {
     expect(convergenceWindow(32)).toBe(7);
     expect(convergenceWindow(10)).toBe(4);
     expect(convergenceGuidance(state(), 13, 64)).toBeNull();
-    expect(convergenceGuidance(state(), 12, 64)).toContain(
-      "Run the narrowest high-signal",
-    );
+    expect(convergenceGuidance(state(), 12, 64)).toContain("Run the narrowest high-signal");
   });
 
   test("selects the next closeout action from revision-scoped evidence", () => {
@@ -102,16 +100,8 @@ describe("convergence guidance", () => {
       mutationRevision: 0,
     });
     expect(implementationGuidance(explored, 31, 64)).toBeNull();
-    expect(implementationGuidance(explored, 32, 64)).toContain(
-      "without a recorded source change",
-    );
-    expect(
-      implementationGuidance(
-        { ...explored, goal: "Explain the parser" },
-        40,
-        64,
-      ),
-    ).toBeNull();
+    expect(implementationGuidance(explored, 32, 64)).toContain("without a recorded source change");
+    expect(implementationGuidance({ ...explored, goal: "Explain the parser" }, 40, 64)).toBeNull();
   });
 
   test("keys closeout guidance by material evidence state", () => {
@@ -252,10 +242,7 @@ describe("convergence guidance", () => {
       goal: "Fix FK to M2M migration ordering",
       filesChanged: [],
       mutationRevision: 0,
-      filesRead: [
-        "django/db/migrations/autodetector.py",
-        "tests/migrations/test_autodetector.py",
-      ],
+      filesRead: ["django/db/migrations/autodetector.py", "tests/migrations/test_autodetector.py"],
       fileReadCounts: {
         "django/db/migrations/autodetector.py": 22,
         "tests/migrations/test_autodetector.py": 4,
@@ -275,9 +262,7 @@ describe("convergence guidance", () => {
         limit: 60,
       },
     };
-    expect(
-      convergenceToolBlockReason(unseenRange, explored, 49, 96),
-    ).toBeNull();
+    expect(convergenceToolBlockReason(unseenRange, explored, 49, 96)).toBeNull();
     expect(
       convergenceToolBlockReason(
         {
@@ -298,17 +283,11 @@ describe("convergence guidance", () => {
       tool: "workspace.grep",
       args: { pattern: "more" },
     };
-    expect(convergenceToolBlockReason(read, state(), 55, 64)).toContain(
-      "verify_current_revision",
-    );
+    expect(convergenceToolBlockReason(read, state(), 55, 64)).toContain("verify_current_revision");
     const passed = state({
-      testResults: [
-        { command: "pytest", passed: true, summary: "ok", mutationRevision: 1 },
-      ],
+      testResults: [{ command: "pytest", passed: true, summary: "ok", mutationRevision: 1 }],
     });
-    expect(convergenceToolBlockReason(read, passed, 55, 64)).toContain(
-      "inspect_final_diff",
-    );
+    expect(convergenceToolBlockReason(read, passed, 55, 64)).toContain("inspect_final_diff");
     expect(
       convergenceToolBlockReason(
         { type: "tool_call", tool: "workspace.git_diff", args: {} },
@@ -318,12 +297,7 @@ describe("convergence guidance", () => {
       ),
     ).toBeNull();
     expect(
-      convergenceToolBlockReason(
-        read,
-        { ...passed, diffInspectedRevision: 1 },
-        55,
-        64,
-      ),
+      convergenceToolBlockReason(read, { ...passed, diffInspectedRevision: 1 }, 55, 64),
     ).toContain("LoopPolicy:deliver");
   });
 
@@ -333,9 +307,7 @@ describe("convergence guidance", () => {
       tool: "workspace.read_file",
       args: { path: "more.ts" },
     };
-    expect(convergenceToolBlockReason(read, state(), 35, 64)).toContain(
-      "verify_current_revision",
-    );
+    expect(convergenceToolBlockReason(read, state(), 35, 64)).toContain("verify_current_revision");
     expect(
       convergenceToolBlockReason(
         {
@@ -355,12 +327,7 @@ describe("convergence guidance", () => {
     };
     expect(convergenceToolBlockReason(directCheck, state(), 35, 64)).toBeNull();
     expect(
-      convergenceToolBlockReason(
-        directCheck,
-        state({ shellCommandRevision: 2 }),
-        37,
-        64,
-      ),
+      convergenceToolBlockReason(directCheck, state({ shellCommandRevision: 2 }), 37, 64),
     ).toContain("verify_current_revision");
     const passed = state({
       testResults: [
@@ -481,22 +448,14 @@ describe("convergence guidance", () => {
       ),
     ).toBeNull();
     expect(
-      convergenceToolBlockReason(
-        read,
-        { ...failed, diffInspectedRevision: 1 },
-        41,
-        64,
-        { authority: "external" },
-      ),
+      convergenceToolBlockReason(read, { ...failed, diffInspectedRevision: 1 }, 41, 64, {
+        authority: "external",
+      }),
     ).toContain("deliver_external");
     expect(
-      convergenceToolBlockReason(
-        anotherTest,
-        { ...failed, diffInspectedRevision: 1 },
-        41,
-        64,
-        { authority: "external" },
-      ),
+      convergenceToolBlockReason(anotherTest, { ...failed, diffInspectedRevision: 1 }, 41, 64, {
+        authority: "external",
+      }),
     ).toContain("deliver_external");
   });
 
@@ -521,9 +480,9 @@ describe("convergence guidance", () => {
         authority: "external",
       }),
     ).toBeNull();
-    expect(
-      convergenceGuidance(failed, 10, 64, { authority: "external" }),
-    ).toContain("materially simpler direct command");
+    expect(convergenceGuidance(failed, 10, 64, { authority: "external" })).toContain(
+      "materially simpler direct command",
+    );
     expect(
       convergenceToolBlockReason(
         {
@@ -588,8 +547,7 @@ describe("convergence guidance", () => {
       type: "tool_call" as const,
       tool: "workspace.run_shell",
       args: {
-        command:
-          '"C:\\Program Files\\Python310\\python.exe" -m pytest tests/test_a.py -q',
+        command: '"C:\\Program Files\\Python310\\python.exe" -m pytest tests/test_a.py -q',
       },
     };
     expect(
@@ -664,13 +622,9 @@ describe("convergence guidance", () => {
       }),
     ).toBeNull();
     expect(
-      convergenceToolBlockReason(
-        read,
-        { ...failed, diffInspectedRevision: 1 },
-        41,
-        64,
-        { authority: "external" },
-      ),
+      convergenceToolBlockReason(read, { ...failed, diffInspectedRevision: 1 }, 41, 64, {
+        authority: "external",
+      }),
     ).toContain("Do not claim tests passed");
   });
 });

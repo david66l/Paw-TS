@@ -38,10 +38,7 @@ describe("in-memory reference store", () => {
       archive: store,
     });
 
-    const result = await index.search(
-      "How long was my Kyoto trip?",
-      new AbortController().signal,
-    );
+    const result = await index.search("How long was my Kyoto trip?", new AbortController().signal);
 
     expect(result.lists.map((list) => list.channel)).toEqual(["l0", "l1"]);
     expect(result.hits).toHaveLength(1);
@@ -59,8 +56,8 @@ describe("in-memory reference store", () => {
       createdAt: "2026-08-01T00:00:00.000Z",
     };
     store.putEvidence([original]);
-    expect(() =>
-      store.putEvidence([{ ...original, hitContent: "Rewritten evidence" }]),
-    ).toThrow("MemoryReferenceEvidenceConflict");
+    expect(() => store.putEvidence([{ ...original, hitContent: "Rewritten evidence" }])).toThrow(
+      "MemoryReferenceEvidenceConflict",
+    );
   });
 });

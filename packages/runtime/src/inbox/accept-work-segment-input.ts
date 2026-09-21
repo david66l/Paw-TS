@@ -6,15 +6,9 @@ import type {
   JsonValue,
   RunJournalEnvelopeV1,
 } from "@paw/protocol";
-import {
-  RUN_JOURNAL_SCHEMA_VERSION_V1,
-  parseRunJournalPrefixV1,
-} from "@paw/protocol";
+import { RUN_JOURNAL_SCHEMA_VERSION_V1, parseRunJournalPrefixV1 } from "@paw/protocol";
 
-import {
-  hashCanonicalJsonV1,
-  immutableCanonicalJsonCloneV1,
-} from "../context/canonical-json.js";
+import { hashCanonicalJsonV1, immutableCanonicalJsonCloneV1 } from "../context/canonical-json.js";
 import type { VerifiedCanonicalPayloadEvidenceV1 } from "../payload/verified-model-response-evidence.js";
 import { projectCanonicalSessionInputSnapshotV1 } from "../payload/verified-model-response-evidence.js";
 import {
@@ -102,10 +96,7 @@ export function freezeQueuedWorkSegmentInputRequestV1(
     ) {
       throw new Error("Work segment attachment mimeType must be non-empty");
     }
-    if (
-      attachment.content.kind !== "inline" ||
-      typeof attachment.content.value !== "string"
-    ) {
+    if (attachment.content.kind !== "inline" || typeof attachment.content.value !== "string") {
       throw new Error("Work segment attachment content must be inline string");
     }
     assertExactKeys(
@@ -125,9 +116,7 @@ export function freezeQueuedWorkSegmentInputRequestV1(
     delivery: "queue",
     content: fact.content,
     callerId: fact.callerId,
-    ...(fact.attachments === undefined
-      ? {}
-      : { attachments: fact.attachments }),
+    ...(fact.attachments === undefined ? {} : { attachments: fact.attachments }),
   });
 }
 
@@ -152,13 +141,7 @@ export function inspectQueuedWorkSegmentInputV1(
   }
   const accepted = acceptedEntries[0];
   if (accepted) {
-    assertLogicalAcceptedInput(
-      accepted.fact,
-      accepted.seq,
-      requestFact,
-      snapshot,
-      evidence,
-    );
+    assertLogicalAcceptedInput(accepted.fact, accepted.seq, requestFact, snapshot, evidence);
     return Object.freeze({
       status: "already_accepted",
       inputId: requestFact.inputId,
@@ -173,8 +156,7 @@ export function inspectQueuedWorkSegmentInputV1(
   if (collidingPromotion) {
     throw new Error(`Input idempotency conflict: ${requestFact.inputId}`);
   }
-  const firstQueued =
-    projectDurableInputInboxStateV1(snapshot).pendingQueueIds[0];
+  const firstQueued = projectDurableInputInboxStateV1(snapshot).pendingQueueIds[0];
   if (firstQueued !== undefined && firstQueued !== requestFact.inputId) {
     throw new Error(`Work segment queue is blocked by input: ${firstQueued}`);
   }
@@ -250,9 +232,7 @@ function appendAcceptedCandidate(
 }
 
 function createQueueFact(request: AcceptInputRequestV1): InputAcceptedFactV1 {
-  return createInputAcceptedFactV1(
-    freezeQueuedWorkSegmentInputRequestV1(request),
-  );
+  return createInputAcceptedFactV1(freezeQueuedWorkSegmentInputRequestV1(request));
 }
 
 function assertLogicalAcceptedInput(
@@ -310,10 +290,7 @@ function assertLogicalAcceptedInput(
   }
 }
 
-function sameAttachmentMetadata(
-  left: InputAttachmentV1,
-  right: InputAttachmentV1,
-): boolean {
+function sameAttachmentMetadata(left: InputAttachmentV1, right: InputAttachmentV1): boolean {
   return (
     left.attachmentId === right.attachmentId &&
     left.type === right.type &&
@@ -338,9 +315,7 @@ function captureSession(
   });
 }
 
-function detachedPrefix(
-  prefix: readonly RunJournalEnvelopeV1[],
-): readonly RunJournalEnvelopeV1[] {
+function detachedPrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
   return immutableCanonicalJsonCloneV1(
     parseRunJournalPrefixV1(prefix) as unknown as JsonValue,
   ) as unknown as readonly RunJournalEnvelopeV1[];
@@ -369,14 +344,8 @@ function assertExactKeys(
   }
 }
 
-function assertStableId(
-  value: unknown,
-  label: string,
-): asserts value is string {
-  if (
-    typeof value !== "string" ||
-    !/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,511}$/.test(value)
-  ) {
+function assertStableId(value: unknown, label: string): asserts value is string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,511}$/.test(value)) {
     throw new Error(`${label} must have a stable id`);
   }
 }

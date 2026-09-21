@@ -15,16 +15,11 @@ import {
 } from "@paw/harness";
 
 import type { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
-import type {
-  ToolEffectPolicy,
-  ToolExecutionPolicy,
-} from "./execution-policy.js";
+import type { ToolEffectPolicy, ToolExecutionPolicy } from "./execution-policy.js";
 import type { TaskStateManager } from "./task-state.js";
 
-export const MANAGED_JOB_CONTROLLER_SCHEMA_V1 =
-  "paw.managed-job-controller.v1" as const;
-export const MANAGED_JOB_PROJECTION_SCHEMA_V1 =
-  "paw.managed-job-projection.v1" as const;
+export const MANAGED_JOB_CONTROLLER_SCHEMA_V1 = "paw.managed-job-controller.v1" as const;
+export const MANAGED_JOB_PROJECTION_SCHEMA_V1 = "paw.managed-job-projection.v1" as const;
 
 export interface ManagedJobProjectionEntryV1 {
   readonly id: string;
@@ -74,10 +69,7 @@ export interface ManagedJobReadinessV1 {
   readonly blocksCompletion: boolean;
 }
 
-function gitText(
-  workspaceRoot: string,
-  args: readonly string[],
-): string | null {
+function gitText(workspaceRoot: string, args: readonly string[]): string | null {
   const result = Bun.spawnSync(["git", ...args], {
     cwd: workspaceRoot,
     stdout: "pipe",
@@ -87,10 +79,7 @@ function gitText(
   return new TextDecoder().decode(result.stdout).trim();
 }
 
-function hashWorkspacePath(
-  workspaceRoot: string,
-  relativePath: string,
-): string {
+function hashWorkspacePath(workspaceRoot: string, relativePath: string): string {
   const absolute = path.resolve(workspaceRoot, relativePath);
   if (!existsSync(absolute)) return "missing";
   try {
@@ -108,15 +97,7 @@ function hashWorkspacePath(
 function captureGitEffectV1(workspaceRoot: string): GitEffectSnapshotV1 {
   const head = gitText(workspaceRoot, ["rev-parse", "HEAD"]);
   const listed = Bun.spawnSync(
-    [
-      "git",
-      "ls-files",
-      "-z",
-      "--modified",
-      "--deleted",
-      "--others",
-      "--exclude-standard",
-    ],
+    ["git", "ls-files", "-z", "--modified", "--deleted", "--others", "--exclude-standard"],
     { cwd: workspaceRoot, stdout: "pipe", stderr: "pipe" },
   );
   if (head === null || listed.exitCode !== 0) {
@@ -131,10 +112,7 @@ function captureGitEffectV1(workspaceRoot: string): GitEffectSnapshotV1 {
     available: true,
     head,
     files: new Map(
-      paths.map((relativePath) => [
-        relativePath,
-        hashWorkspacePath(workspaceRoot, relativePath),
-      ]),
+      paths.map((relativePath) => [relativePath, hashWorkspacePath(workspaceRoot, relativePath)]),
     ),
   });
 }
@@ -147,9 +125,7 @@ function effectDeltaV1(
     return { available: false, paths: [] };
   }
   const paths = new Set([...before.files.keys(), ...after.files.keys()]);
-  const changed = [...paths].filter(
-    (file) => before.files.get(file) !== after.files.get(file),
-  );
+  const changed = [...paths].filter((file) => before.files.get(file) !== after.files.get(file));
   if (before.head !== after.head) changed.push(".git/HEAD");
   return {
     available: true,
@@ -166,9 +142,7 @@ const PROJECTION_STATUSES = new Set([
   "interrupted_orphaned",
 ]);
 
-export function parseManagedJobProjectionV1(
-  value: unknown,
-): ManagedJobProjectionV1 | undefined {
+export function parseManagedJobProjectionV1(value: unknown): ManagedJobProjectionV1 | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Invalid managed job projection");
@@ -214,9 +188,7 @@ export function parseManagedJobProjectionV1(
         row.settlementState !== "committed") ||
       ((row.status === "running" || row.status === "stopping") &&
         row.settlementState !== undefined) ||
-      (row.status !== "running" &&
-        row.status !== "stopping" &&
-        row.settlementState === undefined)
+      (row.status !== "running" && row.status !== "stopping" && row.settlementState === undefined)
     ) {
       throw new Error(`Invalid managed job projection entry ${index + 1}`);
     }
@@ -228,12 +200,9 @@ export function parseManagedJobProjectionV1(
       status: row.status as ManagedJobSnapshotV1["status"],
       ...(typeof row.detail === "string" ? { detail: row.detail } : {}),
       startedAt: row.startedAt,
-      ...(typeof row.finishedAt === "number"
-        ? { finishedAt: row.finishedAt }
-        : {}),
+      ...(typeof row.finishedAt === "number" ? { finishedAt: row.finishedAt } : {}),
       reported: row.reported,
-      ...(row.settlementState === "pending" ||
-      row.settlementState === "committed"
+      ...(row.settlementState === "pending" || row.settlementState === "committed"
         ? { settlementState: row.settlementState }
         : {}),
     });
@@ -266,10 +235,7 @@ export class ManagedJobControllerV1 {
   private readonly detachController: () => void;
   private readonly settlements: ManagedShellSettlementV1[] = [];
   private readonly recoveredJobs = new Map<string, ManagedJobSnapshotV1>();
-  private readonly settlementStates = new Map<
-    string,
-    "pending" | "committed"
-  >();
+  private readonly settlementStates = new Map<string, "pending" | "committed">();
   private readonly recoveryNotices: string[] = [];
 
   constructor(
@@ -294,9 +260,7 @@ export class ManagedJobControllerV1 {
     this.detachController = this.registry.attachController(options.ownerId);
     for (const job of prior?.jobs ?? []) {
       const effectUnknown =
-        job.status === "running" ||
-        job.status === "stopping" ||
-        job.settlementState === "pending";
+        job.status === "running" || job.status === "stopping" || job.settlementState === "pending";
       const status = effectUnknown ? "interrupted_orphaned" : job.status;
       const detail = effectUnknown
         ? "Paw stopped before this job's terminal effect was durably committed; the old PID was not reattached and its outcome is unknown."
@@ -352,8 +316,7 @@ export class ManagedJobControllerV1 {
       args: call.args,
       workspaceRoot: this.options.workspaceRoot,
     };
-    const executionDecision =
-      await this.options.toolExecutionPolicy?.(policyInput);
+    const executionDecision = await this.options.toolExecutionPolicy?.(policyInput);
     if (executionDecision && !executionDecision.allowed) {
       throw new Error(
         `[ToolExecutionPolicy:${executionDecision.reason}] ${executionDecision.message}`,
@@ -372,27 +335,19 @@ export class ManagedJobControllerV1 {
       ownerId: this.options.ownerId,
       kind: "shell",
       label: input.command.slice(0, 200),
-      ...(input.outputLimitBytes !== undefined
-        ? { outputLimitBytes: input.outputLimitBytes }
-        : {}),
+      ...(input.outputLimitBytes !== undefined ? { outputLimitBytes: input.outputLimitBytes } : {}),
       run: () => {
-        producer = startManagedShellInWorkspaceV1(
-          this.options.workspaceRoot,
-          input.command,
-          {
-            ...(input.cwd ? { cwd: input.cwd } : {}),
-            ...(this.options.shellSandbox
-              ? { shellSandbox: this.options.shellSandbox }
-              : {}),
-            skipApprovalGate: true,
-            ...(input.outputLimitBytes !== undefined
-              ? { outputLimitBytes: input.outputLimitBytes }
-              : {}),
-            ...(input.terminationGraceMs !== undefined
-              ? { terminationGraceMs: input.terminationGraceMs }
-              : {}),
-          },
-        );
+        producer = startManagedShellInWorkspaceV1(this.options.workspaceRoot, input.command, {
+          ...(input.cwd ? { cwd: input.cwd } : {}),
+          ...(this.options.shellSandbox ? { shellSandbox: this.options.shellSandbox } : {}),
+          skipApprovalGate: true,
+          ...(input.outputLimitBytes !== undefined
+            ? { outputLimitBytes: input.outputLimitBytes }
+            : {}),
+          ...(input.terminationGraceMs !== undefined
+            ? { terminationGraceMs: input.terminationGraceMs }
+            : {}),
+        });
         const rawDone = producer.hooks.done;
         return {
           ...producer.hooks,
@@ -484,27 +439,19 @@ export class ManagedJobControllerV1 {
       const reported = Object.freeze({ ...recovered, reported: true });
       this.recoveredJobs.set(id, reported);
       return Object.freeze({
-        text:
-          reported.detail ??
-          "Recovered terminal job metadata; process output is unavailable.",
+        text: reported.detail ?? "Recovered terminal job metadata; process output is unavailable.",
         snapshot: reported,
       });
     }
     return this.registry.read(this.options.ownerId, id);
   }
 
-  wait(
-    id: string,
-    timeoutMs: number,
-    signal?: AbortSignal,
-  ): Promise<ManagedJobWaitV1> {
+  wait(id: string, timeoutMs: number, signal?: AbortSignal): Promise<ManagedJobWaitV1> {
     const recovered = this.recoveredJobs.get(id);
     if (recovered) {
       const reported = Object.freeze({ ...recovered, reported: true });
       this.recoveredJobs.set(id, reported);
-      return Promise.resolve(
-        Object.freeze({ timedOut: false, snapshot: reported }),
-      );
+      return Promise.resolve(Object.freeze({ timedOut: false, snapshot: reported }));
     }
     return this.registry.wait(this.options.ownerId, id, timeoutMs, signal);
   }
@@ -521,9 +468,7 @@ export class ManagedJobControllerV1 {
   }
 
   takeRecoveryNotices(): readonly string[] {
-    return Object.freeze(
-      this.recoveryNotices.splice(0, this.recoveryNotices.length),
-    );
+    return Object.freeze(this.recoveryNotices.splice(0, this.recoveryNotices.length));
   }
 
   readiness(): ManagedJobReadinessV1 {
@@ -542,8 +487,7 @@ export class ManagedJobControllerV1 {
 
   takeSettlements(): readonly ManagedShellSettlementV1[] {
     const drained = this.settlements.splice(0, this.settlements.length);
-    for (const item of drained)
-      this.settlementStates.set(item.jobId, "pending");
+    for (const item of drained) this.settlementStates.set(item.jobId, "pending");
     return Object.freeze(drained);
   }
 
@@ -558,8 +502,7 @@ export class ManagedJobControllerV1 {
       runId: this.options.ownerId,
       jobs: Object.freeze(
         this.list().map((job) => {
-          const terminal =
-            job.status !== "running" && job.status !== "stopping";
+          const terminal = job.status !== "running" && job.status !== "stopping";
           const settlementState = terminal
             ? pending.has(job.id)
               ? "pending"
@@ -572,9 +515,7 @@ export class ManagedJobControllerV1 {
             status: job.status,
             ...(job.detail ? { detail: job.detail } : {}),
             startedAt: job.startedAt,
-            ...(job.finishedAt !== undefined
-              ? { finishedAt: job.finishedAt }
-              : {}),
+            ...(job.finishedAt !== undefined ? { finishedAt: job.finishedAt } : {}),
             reported: job.reported,
             ...(settlementState ? { settlementState } : {}),
           });

@@ -115,8 +115,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
   if (
     input.requirements.length !== input.temporalConstraints.length ||
     input.requirements.length !== input.requirementHits.length ||
-    input.selectorExecutionSnapshot.originRevision !==
-      input.origin.originRevision ||
+    input.selectorExecutionSnapshot.originRevision !== input.origin.originRevision ||
     input.selectorExecutionSnapshot.lockedSourceRevision !==
       hashCanonicalJsonV1({
         schemaVersion: "paw.memory-locked-source-set.v1",
@@ -132,14 +131,10 @@ export async function buildMemoryStateFrameShadowV2(input: {
       return [requirement.requirementId, temporal] as const;
     }),
   );
-  validateMemoryDialogueCertificateRegistryV1(
-    input.dialogueCertificateRegistry,
-  );
+  validateMemoryDialogueCertificateRegistryV1(input.dialogueCertificateRegistry);
   if (
-    input.dialogueCertificateRegistry.originRevision !==
-      input.origin.originRevision ||
-    input.dialogueCertificateRegistry.lockedSourceIds.length !==
-      input.lockedSourceIds.length ||
+    input.dialogueCertificateRegistry.originRevision !== input.origin.originRevision ||
+    input.dialogueCertificateRegistry.lockedSourceIds.length !== input.lockedSourceIds.length ||
     input.dialogueCertificateRegistry.lockedSourceIds.some(
       (sourceId, index) => sourceId !== input.lockedSourceIds[index],
     )
@@ -154,9 +149,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
   );
   const executionByRequirement = new Map(
     input.selectorExecutionSnapshot.groups.flatMap((group) =>
-      group.requirements.map(
-        (requirement) => [requirement.requirementId, requirement] as const,
-      ),
+      group.requirements.map((requirement) => [requirement.requirementId, requirement] as const),
     ),
   );
   if (
@@ -165,10 +158,8 @@ export async function buildMemoryStateFrameShadowV2(input: {
       const execution = executionByRequirement.get(requirement.requirementId);
       return (
         !execution ||
-        execution.requirementRevision !==
-          hashCanonicalJsonV1(requirement as never) ||
-        execution.temporalBindingRevision !==
-          input.temporalConstraints[index]?.bindingRevision
+        execution.requirementRevision !== hashCanonicalJsonV1(requirement as never) ||
+        execution.temporalBindingRevision !== input.temporalConstraints[index]?.bindingRevision
       );
     })
   ) {
@@ -220,24 +211,19 @@ export async function buildMemoryStateFrameShadowV2(input: {
   );
   const hitByRef = new Map<string, MemoryEvidenceNotebookHitV1>();
   let totalChars = 0;
-  const admittedRequirementIndexes = input.requirements.flatMap(
-    (requirement, index) =>
-      supportingRefsByRequirement.has(requirement.requirementId) ? [index] : [],
+  const admittedRequirementIndexes = input.requirements.flatMap((requirement, index) =>
+    supportingRefsByRequirement.has(requirement.requirementId) ? [index] : [],
   );
   const maxDepth = Math.max(
     0,
-    ...admittedRequirementIndexes.map(
-      (index) => input.requirementHits[index]?.length ?? 0,
-    ),
+    ...admittedRequirementIndexes.map((index) => input.requirementHits[index]?.length ?? 0),
   );
   for (let depth = 0; depth < maxDepth && hitByRef.size < 32; depth += 1) {
     for (const requirementIndex of admittedRequirementIndexes) {
       const hits = input.requirementHits[requirementIndex] ?? [];
       const requirement = input.requirements[requirementIndex];
       const rawHit = hits[depth];
-      const certificate = rawHit
-        ? certificateByAssistantRef.get(rawHit.evidenceRef)
-        : undefined;
+      const certificate = rawHit ? certificateByAssistantRef.get(rawHit.evidenceRef) : undefined;
       const hit =
         rawHit && certificate
           ? Object.freeze({
@@ -250,20 +236,15 @@ export async function buildMemoryStateFrameShadowV2(input: {
               ...(certificate.assistant.observedAt === undefined
                 ? {}
                 : { observedAt: certificate.assistant.observedAt }),
-              contextEvidenceRefs: Object.freeze([
-                certificate.assistant.evidenceRef,
-              ]),
+              contextEvidenceRefs: Object.freeze([certificate.assistant.evidenceRef]),
             })
           : rawHit;
       if (
         !hit ||
         !requirement ||
         !lockedSources.has(hit.sourceId) ||
-        !supportingRefsByRequirement
-          .get(requirement.requirementId)
-          ?.has(hit.evidenceRef) ||
-        (hit.sourceKind !== "user_input" &&
-          hit.sourceKind !== "assistant_output")
+        !supportingRefsByRequirement.get(requirement.requirementId)?.has(hit.evidenceRef) ||
+        (hit.sourceKind !== "user_input" && hit.sourceKind !== "assistant_output")
       ) {
         continue;
       }
@@ -274,8 +255,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
       // (or a non-conversation hit without a trace) is eligible here.
       if (
         hit.contextEvidenceRefs !== undefined &&
-        (hit.contextEvidenceRefs.length !== 1 ||
-          hit.contextEvidenceRefs[0] !== hit.evidenceRef)
+        (hit.contextEvidenceRefs.length !== 1 || hit.contextEvidenceRefs[0] !== hit.evidenceRef)
       ) {
         continue;
       }
@@ -303,33 +283,27 @@ export async function buildMemoryStateFrameShadowV2(input: {
       if (hitByRef.size >= 32) break;
     }
   }
-  const items: MemoryStateSourceLockItemV2[] = [...hitByRef.values()].map(
-    (hit) => {
-      const certificate = certificateByAssistantRef.get(hit.evidenceRef);
-      return Object.freeze({
-        sourceId: hit.sourceId,
-        evidenceRef: hit.evidenceRef,
-        content: hit.content,
-        authority: hit.authority,
-        role: hit.sourceKind === "assistant_output" ? "assistant" : "user",
-        ...(hit.observedAt === undefined ? {} : { observedAt: hit.observedAt }),
-        ...(hit.episodeOrder === undefined
-          ? {}
-          : { episodeOrder: hit.episodeOrder }),
-        ...(hit.turnOrder === undefined ? {} : { turnOrder: hit.turnOrder }),
-        ...(hit.eventKey === undefined ? {} : { eventKey: hit.eventKey }),
-        ...(certificate === undefined
-          ? {}
-          : {
-              certificateRevision: certificate.certificateRevision,
-            }),
-      });
-    },
-  );
+  const items: MemoryStateSourceLockItemV2[] = [...hitByRef.values()].map((hit) => {
+    const certificate = certificateByAssistantRef.get(hit.evidenceRef);
+    return Object.freeze({
+      sourceId: hit.sourceId,
+      evidenceRef: hit.evidenceRef,
+      content: hit.content,
+      authority: hit.authority,
+      role: hit.sourceKind === "assistant_output" ? "assistant" : "user",
+      ...(hit.observedAt === undefined ? {} : { observedAt: hit.observedAt }),
+      ...(hit.episodeOrder === undefined ? {} : { episodeOrder: hit.episodeOrder }),
+      ...(hit.turnOrder === undefined ? {} : { turnOrder: hit.turnOrder }),
+      ...(hit.eventKey === undefined ? {} : { eventKey: hit.eventKey }),
+      ...(certificate === undefined
+        ? {}
+        : {
+            certificateRevision: certificate.certificateRevision,
+          }),
+    });
+  });
   const sourceLock = compileMemoryStateSourceLockV2(items);
-  const itemByRef = new Map(
-    sourceLock.items.map((item) => [item.evidenceRef, item]),
-  );
+  const itemByRef = new Map(sourceLock.items.map((item) => [item.evidenceRef, item]));
   const requirementById = new Map(
     stateRequirements.map((requirement, index) => [
       requirement.requirementId,
@@ -347,9 +321,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
           .filter(
             (evidenceRef, index, values) =>
               values.indexOf(evidenceRef) === index &&
-              supportingRefsByRequirement
-                .get(slot.requirementId)
-                ?.has(evidenceRef) === true &&
+              supportingRefsByRequirement.get(slot.requirementId)?.has(evidenceRef) === true &&
               itemByRef.get(evidenceRef)?.role === slot.roleConstraint,
           ),
       ),
@@ -373,142 +345,121 @@ export async function buildMemoryStateFrameShadowV2(input: {
     rejectedObservationIds: readonly string[];
   }>;
   const stateGroupResults = await Promise.all(
-    committedSelectorGroups.map(
-      async (selectorGroup): Promise<StateGroupExecutionResult> => {
-        const groupSlots = slots.filter((slot) =>
-          selectorGroup.requirementIds.includes(slot.requirementId),
-        );
-        const groupSlotScopes = slotScopes.filter((scope) =>
-          groupSlots.some((slot) => slot.slotId === scope.slotId),
-        );
-        const fallback = (
-          failureCode: string,
-          bindingRevision?: string,
-        ): StateGroupExecutionResult =>
-          Object.freeze({
-            settlement: Object.freeze({
-              groupId: selectorGroup.groupId,
-              status: "fallback" as const,
-              ...(bindingRevision === undefined ? {} : { bindingRevision }),
-              failureCode,
-            }),
-            proposedObservations: Object.freeze([]),
-            observations: Object.freeze([]),
-            validatedObservations: Object.freeze([]),
-            rejectedObservationIds: Object.freeze([]),
-          });
+    committedSelectorGroups.map(async (selectorGroup): Promise<StateGroupExecutionResult> => {
+      const groupSlots = slots.filter((slot) =>
+        selectorGroup.requirementIds.includes(slot.requirementId),
+      );
+      const groupSlotScopes = slotScopes.filter((scope) =>
+        groupSlots.some((slot) => slot.slotId === scope.slotId),
+      );
+      const fallback = (failureCode: string, bindingRevision?: string): StateGroupExecutionResult =>
+        Object.freeze({
+          settlement: Object.freeze({
+            groupId: selectorGroup.groupId,
+            status: "fallback" as const,
+            ...(bindingRevision === undefined ? {} : { bindingRevision }),
+            failureCode,
+          }),
+          proposedObservations: Object.freeze([]),
+          observations: Object.freeze([]),
+          validatedObservations: Object.freeze([]),
+          rejectedObservationIds: Object.freeze([]),
+        });
+      if (
+        groupSlots.length !== selectorGroup.requirementIds.length ||
+        groupSlotScopes.length !== groupSlots.length ||
+        groupSlotScopes.some((scope) => scope.evidenceRefs.length === 0)
+      ) {
+        return fallback("MemoryStateGroupEvidenceMissing");
+      }
+      try {
+        const bindingRequest = Object.freeze({
+          query: input.query,
+          slots: Object.freeze(groupSlots),
+          sourceLock,
+          slotScopes: Object.freeze(groupSlotScopes),
+        });
+        const binding = validateMemoryStateObservationBindingBoundaryV2({
+          binder: input.binder,
+          request: bindingRequest,
+          result: await input.binder.bind(bindingRequest, input.signal),
+        });
+        const bindingGroup = binding.groups[0];
         if (
-          groupSlots.length !== selectorGroup.requirementIds.length ||
-          groupSlotScopes.length !== groupSlots.length ||
-          groupSlotScopes.some((scope) => scope.evidenceRefs.length === 0)
+          binding.groups.length !== 1 ||
+          !bindingGroup ||
+          bindingGroup.groupId !== selectorGroup.groupId ||
+          bindingGroup.status !== "completed"
         ) {
-          return fallback("MemoryStateGroupEvidenceMissing");
-        }
-        try {
-          const bindingRequest = Object.freeze({
-            query: input.query,
-            slots: Object.freeze(groupSlots),
-            sourceLock,
-            slotScopes: Object.freeze(groupSlotScopes),
-          });
-          const binding = validateMemoryStateObservationBindingBoundaryV2({
-            binder: input.binder,
-            request: bindingRequest,
-            result: await input.binder.bind(bindingRequest, input.signal),
-          });
-          const bindingGroup = binding.groups[0];
-          if (
-            binding.groups.length !== 1 ||
-            !bindingGroup ||
-            bindingGroup.groupId !== selectorGroup.groupId ||
-            bindingGroup.status !== "completed"
-          ) {
-            return fallback(
-              bindingGroup?.failureCodes[0] ?? "MemoryStateGroupBindingFailed",
-              binding.bindingRevision,
-            );
-          }
-          const groupProposals = bindingGroup.observations;
-          const verificationRequest = Object.freeze({
-            query: input.query,
-            slots: Object.freeze(groupSlots),
-            sourceLock,
-            proposedObservations: groupProposals,
-          });
-          const verification =
-            validateMemoryStateObservationVerificationBoundaryV2({
-              verifier: input.verifier,
-              request: verificationRequest,
-              result: await input.verifier.verify(
-                verificationRequest,
-                input.signal,
-              ),
-            });
-          const acceptedIds = new Set(verification.acceptedObservationIds);
-          const groupObservations = groupProposals.filter((observation) =>
-            acceptedIds.has(observation.observationId),
+          return fallback(
+            bindingGroup?.failureCodes[0] ?? "MemoryStateGroupBindingFailed",
+            binding.bindingRevision,
           );
-          const groupValidated = compileMemoryStateBindingCertificatesV1({
-            query: input.query,
-            slots: groupSlots,
-            sourceLock,
-            proposedObservations: groupProposals,
-            verification,
-          });
-          if (
-            groupValidated.length !== groupObservations.length ||
-            groupValidated.some(
-              (candidate, index) =>
-                candidate.observation.observationId !==
-                groupObservations[index]?.observationId,
-            )
-          ) {
-            throw namedError(
-              "MemoryStateFrameShadowCertificatePartitionInvalid",
-            );
-          }
-          return Object.freeze({
-            settlement: Object.freeze({
-              groupId: selectorGroup.groupId,
-              status: "completed" as const,
-              bindingRevision: binding.bindingRevision,
-              verificationRevision: verification.verificationRevision,
-            }),
-            proposedObservations: groupProposals,
-            observations: groupObservations,
-            validatedObservations: groupValidated,
-            bindingCertificateValidationContext: Object.freeze({
-              ...verificationRequest,
-              verification,
-            }),
-            rejectedObservationIds: verification.rejectedObservationIds,
-          });
-        } catch (error) {
-          if (input.signal.aborted || errorName(error) === "AbortError") {
-            throw error;
-          }
-          return fallback(stableFailureCode(error));
         }
-      },
-    ),
+        const groupProposals = bindingGroup.observations;
+        const verificationRequest = Object.freeze({
+          query: input.query,
+          slots: Object.freeze(groupSlots),
+          sourceLock,
+          proposedObservations: groupProposals,
+        });
+        const verification = validateMemoryStateObservationVerificationBoundaryV2({
+          verifier: input.verifier,
+          request: verificationRequest,
+          result: await input.verifier.verify(verificationRequest, input.signal),
+        });
+        const acceptedIds = new Set(verification.acceptedObservationIds);
+        const groupObservations = groupProposals.filter((observation) =>
+          acceptedIds.has(observation.observationId),
+        );
+        const groupValidated = compileMemoryStateBindingCertificatesV1({
+          query: input.query,
+          slots: groupSlots,
+          sourceLock,
+          proposedObservations: groupProposals,
+          verification,
+        });
+        if (
+          groupValidated.length !== groupObservations.length ||
+          groupValidated.some(
+            (candidate, index) =>
+              candidate.observation.observationId !== groupObservations[index]?.observationId,
+          )
+        ) {
+          throw namedError("MemoryStateFrameShadowCertificatePartitionInvalid");
+        }
+        return Object.freeze({
+          settlement: Object.freeze({
+            groupId: selectorGroup.groupId,
+            status: "completed" as const,
+            bindingRevision: binding.bindingRevision,
+            verificationRevision: verification.verificationRevision,
+          }),
+          proposedObservations: groupProposals,
+          observations: groupObservations,
+          validatedObservations: groupValidated,
+          bindingCertificateValidationContext: Object.freeze({
+            ...verificationRequest,
+            verification,
+          }),
+          rejectedObservationIds: verification.rejectedObservationIds,
+        });
+      } catch (error) {
+        if (input.signal.aborted || errorName(error) === "AbortError") {
+          throw error;
+        }
+        return fallback(stableFailureCode(error));
+      }
+    }),
   );
-  const stateGroupSettlements = stateGroupResults.map(
-    (result) => result.settlement,
-  );
-  const proposedObservations = stateGroupResults.flatMap(
-    (result) => result.proposedObservations,
-  );
-  const observations = stateGroupResults.flatMap(
-    (result) => result.observations,
-  );
-  const validatedObservations = stateGroupResults.flatMap(
-    (result) => result.validatedObservations,
-  );
-  const bindingCertificateValidationContexts = stateGroupResults.flatMap(
-    (result) =>
-      result.bindingCertificateValidationContext === undefined
-        ? []
-        : [result.bindingCertificateValidationContext],
+  const stateGroupSettlements = stateGroupResults.map((result) => result.settlement);
+  const proposedObservations = stateGroupResults.flatMap((result) => result.proposedObservations);
+  const observations = stateGroupResults.flatMap((result) => result.observations);
+  const validatedObservations = stateGroupResults.flatMap((result) => result.validatedObservations);
+  const bindingCertificateValidationContexts = stateGroupResults.flatMap((result) =>
+    result.bindingCertificateValidationContext === undefined
+      ? []
+      : [result.bindingCertificateValidationContext],
   );
   const rejectedObservationIds = stateGroupResults.flatMap(
     (result) => result.rejectedObservationIds,
@@ -543,10 +494,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
     observations: validatedObservations.map((item) => item.observation),
     sourceLock,
   });
-  if (
-    hashCanonicalJsonV1(frame as never) !==
-    hashCanonicalJsonV1(certifiedFrame as never)
-  ) {
+  if (hashCanonicalJsonV1(frame as never) !== hashCanonicalJsonV1(certifiedFrame as never)) {
     throw namedError("MemoryStateFrameShadowCertifiedFrameMismatch");
   }
   const executionProgram = compileMemoryEvidenceExecutionProgramV1({
@@ -587,38 +535,27 @@ export async function buildMemoryStateFrameShadowV2(input: {
       : { coverageCertificate: input.executionCoverageCertificate }),
     executionResult,
   });
-  const mechanicalBindingSummary =
-    summarizeMemoryStateMechanicalBindingProfilesV1(
-      compileMemoryStateMechanicalBindingProfilesV1({
-        slots,
-        sourceLock,
-        slotScopes,
-        validatedObservations,
-        frame: certifiedFrame,
-      }),
-    );
+  const mechanicalBindingSummary = summarizeMemoryStateMechanicalBindingProfilesV1(
+    compileMemoryStateMechanicalBindingProfilesV1({
+      slots,
+      sourceLock,
+      slotScopes,
+      validatedObservations,
+      frame: certifiedFrame,
+    }),
+  );
   const stateShadowAuditRevision = hashCanonicalJsonV1({
     policyVersion: PAW_MEMORY_STATE_BINDING_CERTIFICATE_POLICY_V1,
     selectorSnapshotRevision: input.selectorExecutionSnapshot.snapshotRevision,
     stateGroupSettlements,
     frameProgramRevision: frame.programRevision,
-    certificateIds: validatedObservations.map(
-      (item) => item.certificate.certificateId,
-    ),
+    certificateIds: validatedObservations.map((item) => item.certificate.certificateId),
     mechanicalBindingSummaryRevision: mechanicalBindingSummary.summaryRevision,
   } as never);
-  const completeSlotCount = frame.slots.filter(
-    (slot) => slot.status === "complete",
-  ).length;
-  const partialSlotCount = frame.slots.filter(
-    (slot) => slot.status === "partial",
-  ).length;
-  const missingSlotCount = frame.slots.filter(
-    (slot) => slot.status === "missing",
-  ).length;
-  const conflictSlotCount = frame.slots.filter(
-    (slot) => slot.status === "conflict",
-  ).length;
+  const completeSlotCount = frame.slots.filter((slot) => slot.status === "complete").length;
+  const partialSlotCount = frame.slots.filter((slot) => slot.status === "partial").length;
+  const missingSlotCount = frame.slots.filter((slot) => slot.status === "missing").length;
+  const conflictSlotCount = frame.slots.filter((slot) => slot.status === "conflict").length;
   const slotById = new Map(slots.map((slot) => [slot.slotId, slot]));
   const unsupportedCompleteSlotCount = frame.slots.filter((resolved) => {
     const slot = slotById.get(resolved.slotId);
@@ -633,14 +570,14 @@ export async function buildMemoryStateFrameShadowV2(input: {
   const assistantValidatedObservations = observations.filter(
     (observation) => observation.role === "assistant",
   );
-  const uncertifiedAssistantValidatedObservationCount =
-    assistantValidatedObservations.filter((observation) => {
+  const uncertifiedAssistantValidatedObservationCount = assistantValidatedObservations.filter(
+    (observation) => {
       const slot = slotById.get(observation.slotId);
       return (
-        slot?.authorityMode === "certified_dialogue_artifact" &&
-        !observation.certificateRevision
+        slot?.authorityMode === "certified_dialogue_artifact" && !observation.certificateRevision
       );
-    }).length;
+    },
+  ).length;
   const committedGroupCount = stateGroupSettlements.filter(
     (group) => group.status === "completed",
   ).length;
@@ -648,12 +585,9 @@ export async function buildMemoryStateFrameShadowV2(input: {
   const selectorCommittedGroupCount = committedSelectorGroups.length;
   const selectorFailedGroupCount =
     input.selectorExecutionSnapshot.groups.length - selectorCommittedGroupCount;
-  const unassessedRequirementCount =
-    input.selectorExecutionSnapshot.groups.flatMap((group) =>
-      group.requirements.filter(
-        (requirement) => requirement.status !== "assessed",
-      ),
-    ).length;
+  const unassessedRequirementCount = input.selectorExecutionSnapshot.groups.flatMap((group) =>
+    group.requirements.filter((requirement) => requirement.status !== "assessed"),
+  ).length;
   const unsupportedDerivedOperationCount = frame.derivedOperations.filter(
     (operation) => operation.status === "unsupported",
   ).length;
@@ -672,11 +606,9 @@ export async function buildMemoryStateFrameShadowV2(input: {
     verifierVersion: input.verifier.verifierVersion,
     bindingRevision,
     verificationRevision,
-    bindingCertificatePolicyVersion:
-      PAW_MEMORY_STATE_BINDING_CERTIFICATE_POLICY_V1,
+    bindingCertificatePolicyVersion: PAW_MEMORY_STATE_BINDING_CERTIFICATE_POLICY_V1,
     bindingCertificateCount: validatedObservations.length,
-    mechanicalBindingProfilePolicyVersion:
-      PAW_MEMORY_STATE_MECHANICAL_BINDING_PROFILE_POLICY_V1,
+    mechanicalBindingProfilePolicyVersion: PAW_MEMORY_STATE_MECHANICAL_BINDING_PROFILE_POLICY_V1,
     mechanicalBindingSummary,
     stateShadowAuditRevision,
     frame,
@@ -718,7 +650,5 @@ function errorName(error: unknown): string {
 
 function stableFailureCode(error: unknown): string {
   const name = errorName(error);
-  return /^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(name)
-    ? name
-    : "MemoryStateGroupFailed";
+  return /^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(name) ? name : "MemoryStateGroupFailed";
 }

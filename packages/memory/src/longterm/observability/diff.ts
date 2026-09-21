@@ -26,10 +26,7 @@ function iso(v: unknown): string {
   return v instanceof Date ? v.toISOString() : String(v);
 }
 
-export async function collectMemoryDiff(
-  since: string,
-  until?: string,
-): Promise<MemoryDiff> {
+export async function collectMemoryDiff(since: string, until?: string): Promise<MemoryDiff> {
   const sql = getSql();
   const untilTs = until ?? new Date().toISOString();
 
@@ -39,8 +36,7 @@ export async function collectMemoryDiff(
     GROUP BY op ORDER BY n DESC
   `;
   const opCounts: Record<string, number> = {};
-  for (const r of opRows as unknown as { op: string; n: number }[])
-    opCounts[r.op] = r.n;
+  for (const r of opRows as unknown as { op: string; n: number }[]) opCounts[r.op] = r.n;
 
   const addedRows = await sql`
     SELECT id, type, title, t_valid FROM memory_items
@@ -101,14 +97,12 @@ export async function collectMemoryDiff(
       tValid: iso(r.t_valid),
     })),
     updated,
-    invalidated: (invalidatedRows as unknown as Record<string, unknown>[]).map(
-      (r) => ({
-        id: r.id as string,
-        kind: r.type as string,
-        title: r.title as string,
-        tInvalid: iso(r.t_invalid),
-      }),
-    ),
+    invalidated: (invalidatedRows as unknown as Record<string, unknown>[]).map((r) => ({
+      id: r.id as string,
+      kind: r.type as string,
+      title: r.title as string,
+      tInvalid: iso(r.t_invalid),
+    })),
     purgedIds,
   };
 }
@@ -121,9 +115,7 @@ export function renderMemoryDiff(d: MemoryDiff): string {
   ];
 
   const ops = Object.entries(d.opCounts);
-  lines.push(
-    `  操作: ${ops.length > 0 ? ops.map(([op, n]) => `${op}×${n}`).join("  ") : "(无)"}`,
-  );
+  lines.push(`  操作: ${ops.length > 0 ? ops.map(([op, n]) => `${op}×${n}`).join("  ") : "(无)"}`);
 
   for (const e of d.added.slice(0, 20)) {
     lines.push(`  + [${e.kind}] ${e.id}  ${truncate(e.title, 60)}`);
@@ -133,16 +125,12 @@ export function renderMemoryDiff(d: MemoryDiff): string {
   for (const e of d.updated.slice(0, 20)) {
     lines.push(`  ~ [${e.kind || "?"}] ${e.id}  ${truncate(e.title, 60)}`);
   }
-  if (d.updated.length > 20)
-    lines.push(`  … 另有 ${d.updated.length - 20} 条更新`);
+  if (d.updated.length > 20) lines.push(`  … 另有 ${d.updated.length - 20} 条更新`);
 
   for (const e of d.invalidated.slice(0, 20)) {
-    lines.push(
-      `  − [${e.kind}] ${e.id}  ${truncate(e.title, 60)}（失效于 ${e.tInvalid}）`,
-    );
+    lines.push(`  − [${e.kind}] ${e.id}  ${truncate(e.title, 60)}（失效于 ${e.tInvalid}）`);
   }
-  if (d.invalidated.length > 20)
-    lines.push(`  … 另有 ${d.invalidated.length - 20} 条失效`);
+  if (d.invalidated.length > 20) lines.push(`  … 另有 ${d.invalidated.length - 20} 条失效`);
 
   return lines.join("\n");
 }

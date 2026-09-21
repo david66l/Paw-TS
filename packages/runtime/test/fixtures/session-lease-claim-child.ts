@@ -5,8 +5,7 @@ import {
   acquireFileSessionExecutionLeaseV1,
 } from "../../src/session/session-execution-lease.js";
 
-const [workspaceRoot, sessionId, runId, readyPath, barrierPath] =
-  process.argv.slice(2);
+const [workspaceRoot, sessionId, runId, readyPath, barrierPath] = process.argv.slice(2);
 if (!workspaceRoot || !sessionId || !runId || !readyPath || !barrierPath) {
   throw new Error("session lease child arguments are missing");
 }

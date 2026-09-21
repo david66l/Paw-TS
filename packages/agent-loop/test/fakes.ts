@@ -36,10 +36,7 @@ export class MemorySession implements Session<InputFactV1, DerivedDecisionV1> {
       }
     | undefined;
   failInputAppend?: (facts: readonly InputFactV1[]) => Error | undefined;
-  beforeCommit?: (
-    expectedTailSeq: number,
-    decision: DerivedDecisionV1,
-  ) => void | Promise<void>;
+  beforeCommit?: (expectedTailSeq: number, decision: DerivedDecisionV1) => void | Promise<void>;
   beforeDecisionAndInputCommit?: (
     expectedTailSeq: number,
     decision: DerivedDecisionV1,
@@ -106,9 +103,7 @@ export class MemorySession implements Session<InputFactV1, DerivedDecisionV1> {
         this.trace.push(`derived-idempotent:${decision.action.kind}`);
         return "committed";
       }
-      throw new Error(
-        "Canonical journal tail has a conflicting derived decision",
-      );
+      throw new Error("Canonical journal tail has a conflicting derived decision");
     }
     this.journalSeq += 1;
     this.trace.push(`derived:${decision.action.kind}`);
@@ -125,15 +120,11 @@ export class MemorySession implements Session<InputFactV1, DerivedDecisionV1> {
   ): Promise<"committed" | "conflict"> {
     await this.beforeDecisionAndInputCommit?.(expectedTailSeq, decision, facts);
     if (this.journalSeq !== expectedTailSeq) {
-      this.trace.push(
-        `decision-input-conflict:${expectedTailSeq}:${this.journalSeq}`,
-      );
+      this.trace.push(`decision-input-conflict:${expectedTailSeq}:${this.journalSeq}`);
       return "conflict";
     }
     if (this.latestRecord?.kind === "derived_decision") {
-      throw new Error(
-        "Canonical journal tail cannot append a consecutive derived decision",
-      );
+      throw new Error("Canonical journal tail cannot append a consecutive derived decision");
     }
     const failure = this.failInputAppend?.(facts);
     if (failure) throw failure;
@@ -149,10 +140,7 @@ export class MemorySession implements Session<InputFactV1, DerivedDecisionV1> {
   }
 }
 
-function sameDecision(
-  left: DerivedDecisionV1,
-  right: DerivedDecisionV1,
-): boolean {
+function sameDecision(left: DerivedDecisionV1, right: DerivedDecisionV1): boolean {
   return sameJson(left, right);
 }
 
@@ -170,12 +158,7 @@ function deepFreeze<T>(value: T): T {
 
 function sameJson(left: unknown, right: unknown): boolean {
   if (left === right) return true;
-  if (
-    left === null ||
-    right === null ||
-    typeof left !== "object" ||
-    typeof right !== "object"
-  ) {
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
     return false;
   }
   if (Array.isArray(left) || Array.isArray(right)) {
@@ -193,8 +176,7 @@ function sameJson(left: unknown, right: unknown): boolean {
   return (
     leftKeys.length === rightKeys.length &&
     leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] && sameJson(leftRecord[key], rightRecord[key]),
+      (key, index) => key === rightKeys[index] && sameJson(leftRecord[key], rightRecord[key]),
     )
   );
 }
@@ -204,10 +186,7 @@ export class MemoryLoopInput implements LoopInputPort {
   readonly trace: string[];
   readonly promotedBatches: string[][];
 
-  constructor(
-    promotedBatches: readonly (readonly string[])[] = [],
-    trace: string[] = [],
-  ) {
+  constructor(promotedBatches: readonly (readonly string[])[] = [], trace: string[] = []) {
     this.promotedBatches = promotedBatches.map((batch) => [...batch]);
     this.trace = trace;
   }

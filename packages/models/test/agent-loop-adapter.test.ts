@@ -5,11 +5,7 @@ import {
   toDurableModelResponseV1,
 } from "../src/index.js";
 import type { LanguageModel } from "../src/language-model.js";
-import type {
-  ChatMessage,
-  ModelCompletionResult,
-  ModelStreamChunk,
-} from "../src/types.js";
+import type { ChatMessage, ModelCompletionResult, ModelStreamChunk } from "../src/types.js";
 
 const originalFetch = global.fetch;
 
@@ -56,9 +52,7 @@ describe("LanguageModel Agent Loop adapter", () => {
     expect(received[0]?.content).toContain("[Paw Task Checkpoint]");
     expect(received[0]?.content).toContain("bounded evidence");
     expect(
-      received.filter((message) =>
-        message.content.includes("[Paw Task Checkpoint]"),
-      ),
+      received.filter((message) => message.content.includes("[Paw Task Checkpoint]")),
     ).toHaveLength(1);
   });
 
@@ -266,10 +260,7 @@ describe("LanguageModel Agent Loop adapter", () => {
     expect(result.message.thinking).toContain("provider-passback");
     expect(result.message.reasoningPassback).toBe("provider-passback");
     expect(result.message.usage?.totalTokens).toBe(20);
-    expect(result.toolCalls.map((call) => call.id)).toEqual([
-      "call-a",
-      "call-b",
-    ]);
+    expect(result.toolCalls.map((call) => call.id)).toEqual(["call-a", "call-b"]);
     expect(result.toolCalls.map((call) => call.rawArguments)).toEqual([
       '{ "path": "a.ts" }',
       '{"path":"b.ts"}',
@@ -431,10 +422,10 @@ describe("LanguageModel Agent Loop adapter", () => {
       signal: new AbortController().signal,
       onStreamEvent: () => {},
     };
-    const complete = await createAgentLoopModelAdapter(
-      model,
-      "complete",
-    ).execute({ messages: [] }, options);
+    const complete = await createAgentLoopModelAdapter(model, "complete").execute(
+      { messages: [] },
+      options,
+    );
     const stream = await createAgentLoopModelAdapter(model, "stream").execute(
       { messages: [] },
       options,
@@ -501,12 +492,9 @@ describe("LanguageModel Agent Loop adapter", () => {
 
   test("missing stream termination is unknown and never falls back to complete", async () => {
     let completeCalls = 0;
-    const model = scriptedStreamModel(
-      [{ type: "text", delta: "partial" }],
-      () => {
-        completeCalls += 1;
-      },
-    );
+    const model = scriptedStreamModel([{ type: "text", delta: "partial" }], () => {
+      completeCalls += 1;
+    });
     const adapter = createAgentLoopModelAdapter(model, "stream");
     const result = await adapter.execute(
       { messages: [] },
@@ -574,10 +562,7 @@ describe("LanguageModel Agent Loop adapter", () => {
   test("an aborted call settles as cancelled", async () => {
     const controller = new AbortController();
     controller.abort("user stopped");
-    const adapter = createAgentLoopModelAdapter(
-      scriptedStreamModel([{ type: "done" }]),
-      "stream",
-    );
+    const adapter = createAgentLoopModelAdapter(scriptedStreamModel([{ type: "done" }]), "stream");
     const result = await adapter.execute(
       { messages: [] },
       { signal: controller.signal, onStreamEvent: () => {} },
@@ -587,10 +572,7 @@ describe("LanguageModel Agent Loop adapter", () => {
   });
 });
 
-function scriptedStreamModel(
-  chunks: readonly ModelStreamChunk[],
-  onComplete?: () => void,
-) {
+function scriptedStreamModel(chunks: readonly ModelStreamChunk[], onComplete?: () => void) {
   return {
     label: "scripted",
     async complete(): Promise<ModelCompletionResult> {
@@ -603,10 +585,7 @@ function scriptedStreamModel(
   };
 }
 
-function jsonResponse(
-  body: unknown,
-  requests: Array<Record<string, unknown>>,
-): typeof fetch {
+function jsonResponse(body: unknown, requests: Array<Record<string, unknown>>): typeof fetch {
   return Object.assign(
     async (_input: string | URL | Request, init?: RequestInit) => {
       requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);

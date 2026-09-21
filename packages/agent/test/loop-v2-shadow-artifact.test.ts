@@ -22,10 +22,7 @@ import {
   serializeLoopV2ShadowArtifactV1,
 } from "../src/loop-v2/index.js";
 
-function envelope(
-  seq: number,
-  event: Readonly<{ type: string } & Record<string, unknown>>,
-) {
+function envelope(seq: number, event: Readonly<{ type: string } & Record<string, unknown>>) {
   return { runId: "shadow-artifact", seq, ts: 20_000 + seq, event };
 }
 
@@ -114,13 +111,10 @@ function completeCandidateReport() {
 async function reviewedCandidate(
   verificationAuthority: "local" | "external" | "not_required" = "local",
 ) {
-  const candidate = buildLoopV2LiveCandidateArtifactV1(
-    completeCandidateReport(),
-    {
-      requireProductMutation: true,
-      verificationAuthority,
-    },
-  );
+  const candidate = buildLoopV2LiveCandidateArtifactV1(completeCandidateReport(), {
+    requireProductMutation: true,
+    verificationAuthority,
+  });
   const payload = buildLoopV2LiveReviewPayloadV1(candidate.report);
   const reviewed = await reviewCandidateOnceV2(
     createSemanticReviewLedgerV2(),
@@ -207,9 +201,7 @@ describe("Loop Kernel v2 shadow artifacts", () => {
       },
     });
     expect(resultShadow.mappedResult?.message).toContain("# Paw Run Report");
-    expect(resultShadow.mappedResult?.message).not.toContain(
-      "Legacy implementing-model summary.",
-    );
+    expect(resultShadow.mappedResult?.message).not.toContain("Legacy implementing-model summary.");
     expect(
       parseLoopV2RunResultShadowArtifactV1(
         serializeLoopV2RunResultShadowArtifactV1(
@@ -237,11 +229,7 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     ).toThrow("does not match evidence");
     expect(
       parseLoopV2LiveTerminalArtifactV1(
-        serializeLoopV2LiveTerminalArtifactV1(
-          localTerminal,
-          local.candidate,
-          local.review,
-        ),
+        serializeLoopV2LiveTerminalArtifactV1(localTerminal, local.candidate, local.review),
         local.candidate,
         local.review,
       ),
@@ -259,15 +247,9 @@ describe("Loop Kernel v2 shadow artifacts", () => {
       candidateStatus: "certified",
       externalVerification: "pending",
     });
-    expect(externalTerminal.comparison).toBe(
-      "legacy_completed_v2_external_pending",
-    );
+    expect(externalTerminal.comparison).toBe("legacy_completed_v2_external_pending");
     expect(
-      assessLoopV2AuthorityEligibilityV1(
-        externalTerminal,
-        external.candidate,
-        external.review,
-      ),
+      assessLoopV2AuthorityEligibilityV1(externalTerminal, external.candidate, external.review),
     ).toMatchObject({
       eligible: false,
       reasons: expect.arrayContaining([
@@ -292,17 +274,10 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     });
     expect(terminal.comparison).toBe("equal");
     expect(
-      assessLoopV2AuthorityEligibilityV1(
-        terminal,
-        fixture.candidate,
-        fixture.review,
-      ),
+      assessLoopV2AuthorityEligibilityV1(terminal, fixture.candidate, fixture.review),
     ).toMatchObject({
       eligible: false,
-      reasons: [
-        "verification_authority_not_local",
-        "local_verification_not_passed",
-      ],
+      reasons: ["verification_authority_not_local", "local_verification_not_passed"],
     });
 
     const local = await reviewedCandidate("local");
@@ -317,11 +292,8 @@ describe("Loop Kernel v2 shadow artifacts", () => {
       },
     });
     expect(
-      assessLoopV2AuthorityEligibilityV1(
-        modelDeclaredTerminal,
-        local.candidate,
-        local.review,
-      ).reasons,
+      assessLoopV2AuthorityEligibilityV1(modelDeclaredTerminal, local.candidate, local.review)
+        .reasons,
     ).toContain("legacy_outcome_not_verified");
   });
 
@@ -398,29 +370,27 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     const firstBlob = contentTampered.report.artifactBlobs[0];
     if (!firstBlob) throw new Error("Missing fixture blob");
     firstBlob.content = "tampered";
-    expect(() =>
-      parseLoopV2ShadowArtifactV1(JSON.stringify(contentTampered)),
-    ).toThrow(/blob integrity/);
+    expect(() => parseLoopV2ShadowArtifactV1(JSON.stringify(contentTampered))).toThrow(
+      /blob integrity/,
+    );
 
     const assessmentTampered = structuredClone(original) as {
       assessment: { comparison: string };
     };
     assessmentTampered.assessment.comparison = "aligned_noncompleted";
-    expect(() =>
-      parseLoopV2ShadowArtifactV1(JSON.stringify(assessmentTampered)),
-    ).toThrow(/assessment does not match/);
+    expect(() => parseLoopV2ShadowArtifactV1(JSON.stringify(assessmentTampered))).toThrow(
+      /assessment does not match/,
+    );
 
     const hashTampered = { ...original, artifactHash: "bad" };
-    expect(() =>
-      parseLoopV2ShadowArtifactV1(JSON.stringify(hashTampered)),
-    ).toThrow(/artifact hash mismatch/);
+    expect(() => parseLoopV2ShadowArtifactV1(JSON.stringify(hashTampered))).toThrow(
+      /artifact hash mismatch/,
+    );
   });
 
   test("keeps legacy-only evidence gaps visible instead of upgrading completion", () => {
     const observer = createLoopV2ShadowObserver("shadow-artifact");
-    observer.observe(
-      envelope(1, { type: "run.started", goal: "Fix the old trace" }),
-    );
+    observer.observe(envelope(1, { type: "run.started", goal: "Fix the old trace" }));
     observer.observe(
       envelope(2, {
         type: "tool.result",
@@ -456,9 +426,7 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     expect(artifact.assessment.coverage.gapsByReason).toEqual({
       legacy_mutation_missing_content_refs: 1,
     });
-    expect(artifact.assessment.comparison).toBe(
-      "legacy_completed_v2_not_ready",
-    );
+    expect(artifact.assessment.comparison).toBe("legacy_completed_v2_not_ready");
   });
 
   test("offline legacy replay is model-free and keeps sparse source sequences", () => {
@@ -492,10 +460,7 @@ describe("Loop Kernel v2 shadow artifacts", () => {
       legacy_verification_missing_authority_scope: 1,
     });
     expect(() =>
-      replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", [
-        trace[1],
-        trace[0],
-      ]),
+      replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", [trace[1], trace[0]]),
     ).toThrow(/sequence must increase/);
   });
 
@@ -561,18 +526,13 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     for (const item of trace.slice(0, 3)) {
       observeLoopV2DurableEnvelopeV1(prefix, item);
     }
-    const checkpointPlusTail = restoreLoopV2ProjectionObserver(
-      prefix.snapshot(),
-    );
+    const checkpointPlusTail = restoreLoopV2ProjectionObserver(prefix.snapshot());
     for (const item of trace.slice(3)) {
       observeLoopV2DurableEnvelopeV1(checkpointPlusTail, item);
     }
 
     const liveReport = live.snapshot();
-    const replayed = replayLegacyTraceToLoopV2ShadowV1(
-      "shadow-artifact",
-      trace,
-    );
+    const replayed = replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", trace);
     expect(replayed).toEqual(liveReport);
     expect(checkpointPlusTail.snapshot()).toEqual(liveReport);
     expect(replayed.sourceThroughSeq).toBe(12);
@@ -581,9 +541,7 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     expect(Object.keys(replayed.state.evidence)).toHaveLength(1);
     expect(replayed.artifactBlobs).toHaveLength(3);
     expect(replayed.diagnostics).toHaveLength(3);
-    expect(
-      replayed.diagnostics.some((item) => item.sourceSeq === 2),
-    ).toBeFalse();
+    expect(replayed.diagnostics.some((item) => item.sourceSeq === 2)).toBeFalse();
   });
 
   test("rejects a malformed versioned rich tool commit before partial replay", () => {
@@ -646,10 +604,7 @@ describe("Loop Kernel v2 shadow artifacts", () => {
     ];
     const live = createLoopV2ShadowObserver("shadow-artifact");
     for (const item of trace) observeLoopV2DurableEnvelopeV1(live, item);
-    const replayed = replayLegacyTraceToLoopV2ShadowV1(
-      "shadow-artifact",
-      trace,
-    );
+    const replayed = replayLegacyTraceToLoopV2ShadowV1("shadow-artifact", trace);
     expect(replayed).toEqual(live.snapshot());
     expect(replayed.state.currentMutationRevision).toBe(0);
     expect(replayed.diagnostics.at(-1)).toMatchObject({
@@ -694,12 +649,8 @@ describe("Loop Kernel v2 shadow artifacts", () => {
 
   test("preserves a legacy runtime failure as an interrupted v2 outcome", () => {
     const observer = createLoopV2ShadowObserver("shadow-artifact");
-    observer.observe(
-      envelope(1, { type: "run.started", goal: "Inspect failure" }),
-    );
-    observer.observe(
-      envelope(2, { type: "run.failed", message: "provider timeout" }),
-    );
+    observer.observe(envelope(1, { type: "run.started", goal: "Inspect failure" }));
+    observer.observe(envelope(2, { type: "run.failed", message: "provider timeout" }));
     const artifact = buildLoopV2ShadowArtifactV1(observer.snapshot(), {
       requireProductMutation: false,
       verificationAuthority: "not_required",
@@ -715,8 +666,8 @@ describe("Loop Kernel v2 shadow artifacts", () => {
       candidateStatus: "none",
       reasonCode: "legacy_failed",
     });
-    expect(
-      parseLoopV2ShadowArtifactV1(serializeLoopV2ShadowArtifactV1(artifact)),
-    ).toEqual(artifact);
+    expect(parseLoopV2ShadowArtifactV1(serializeLoopV2ShadowArtifactV1(artifact))).toEqual(
+      artifact,
+    );
   });
 });

@@ -22,10 +22,7 @@ import {
   cosineSimilarity,
 } from "../platform/embeddingService.js";
 import { generateId } from "../platform/idGen.js";
-import {
-  type GovernancePolicy,
-  PolicyEngine,
-} from "../platform/policyEngine.js";
+import { type GovernancePolicy, PolicyEngine } from "../platform/policyEngine.js";
 
 export interface EvaluateInput {
   candidateId: string;
@@ -44,8 +41,7 @@ export class MemoryGovernance {
 
   constructor(policyEngine?: PolicyEngine) {
     this.policy =
-      policyEngine?.getDefaults().governance ??
-      new PolicyEngine().getDefaults().governance;
+      policyEngine?.getDefaults().governance ?? new PolicyEngine().getDefaults().governance;
   }
 
   /** 注入自定义策略（用于测试或动态更新） */
@@ -69,27 +65,15 @@ export class MemoryGovernance {
     // 1. 基础校验
     const schemaErrors = this.validateSchema(candidate);
     if (schemaErrors.length > 0) {
-      return this.decide(
-        candidate,
-        "REJECT",
-        schemaErrors,
-        decidedBy,
-        input.policyVersion,
-        now,
-      );
+      return this.decide(candidate, "REJECT", schemaErrors, decidedBy, input.policyVersion, now);
     }
 
     // 2. 查重：同 subjectKey + scope 的已有 active 记忆
     if (candidate.proposedSubjectKey) {
-      const existing = await memoryItemDao.findBySubjectKey(
-        candidate.proposedSubjectKey,
-        "active",
-      );
+      const existing = await memoryItemDao.findBySubjectKey(candidate.proposedSubjectKey, "active");
       if (existing.length > 0) {
         // 检查是否完全重复（同 subjectKey + 同 scope repo）
-        const dup = existing.find((e) =>
-          this.scopeOverlap(candidate.proposedScope, e.scope),
-        );
+        const dup = existing.find((e) => this.scopeOverlap(candidate.proposedScope, e.scope));
         if (dup) {
           const merge = this.decide(
             candidate,
@@ -162,9 +146,7 @@ export class MemoryGovernance {
 
     // 3. 冲突检测：同 subjectKey 但内容差异大 → 标记
     if (candidate.proposedSubjectKey) {
-      const allSameSubject = await memoryItemDao.findBySubjectKey(
-        candidate.proposedSubjectKey,
-      );
+      const allSameSubject = await memoryItemDao.findBySubjectKey(candidate.proposedSubjectKey);
       const conflicts = allSameSubject.filter(
         (m) => m.status === "active" && !this.isSimilar(candidate, m),
       );
@@ -173,10 +155,7 @@ export class MemoryGovernance {
           possibleConflictIds: conflicts.map((c) => c.id),
         });
         // 冲突且无法自动解决 → 人工 review
-        if (
-          candidate.riskLevel === "high" ||
-          candidate.riskLevel === "critical"
-        ) {
+        if (candidate.riskLevel === "high" || candidate.riskLevel === "critical") {
           return {
             ...this.decide(
               candidate,
@@ -238,10 +217,7 @@ export class MemoryGovernance {
       );
     }
 
-    if (
-      candidate.riskLevel === "medium" &&
-      candidate.proposedConfidence >= medThreshold
-    ) {
+    if (candidate.riskLevel === "medium" && candidate.proposedConfidence >= medThreshold) {
       return this.decide(
         candidate,
         "APPROVE_CREATE",
@@ -280,6 +256,7 @@ export class MemoryGovernance {
     action: GovernanceAction,
     reasons: { code: string; description: string }[],
     decidedBy: ActorRef,
+    // biome-ignore lint/style/useDefaultParameterLast: policyVersion and now are both strings, so reordering them would not be caught by the type checker; the positional order is a stable private contract and Biome's own autofix for this rule previously destroyed the default here
     policyVersion = "1.0",
     now: string,
   ): EvaluateResult {
@@ -292,8 +269,7 @@ export class MemoryGovernance {
       resultingMemoryId: undefined,
       resultingStatus: action.startsWith("APPROVE") ? "active" : undefined,
       adjustedType: candidate.proposedType,
-      adjustedScope:
-        candidate.proposedScope as GovernanceDecision["adjustedScope"],
+      adjustedScope: candidate.proposedScope as GovernanceDecision["adjustedScope"],
       adjustedConfidence: candidate.proposedConfidence,
       adjustedPayload: candidate.proposedPayload,
       requiredActions: [],
@@ -312,9 +288,7 @@ export class MemoryGovernance {
     return { decision };
   }
 
-  private validateSchema(
-    candidate: MemoryCandidate,
-  ): { code: string; description: string }[] {
+  private validateSchema(candidate: MemoryCandidate): { code: string; description: string }[] {
     const errors: { code: string; description: string }[] = [];
     if (!candidate.proposedTitle)
       errors.push({ code: "MISSING_TITLE", description: "Title is required" });
@@ -336,10 +310,7 @@ export class MemoryGovernance {
   }
 
   /** 简单相似度判断：title 前 100 字符相同视为相似 */
-  private isSimilar(
-    candidate: MemoryCandidate,
-    existing: { title: string },
-  ): boolean {
+  private isSimilar(candidate: MemoryCandidate, existing: { title: string }): boolean {
     const ct = candidate.proposedTitle.slice(0, 100).toLowerCase();
     const et = existing.title.slice(0, 100).toLowerCase();
     return ct === et;

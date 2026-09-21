@@ -11,11 +11,7 @@ export function createMemoryContextSectionV1(
   fact: MemoryRetrievalSettledFactV1,
   receiptSeq: number,
 ): ModelContextSectionV1 | undefined {
-  if (
-    fact.cards.length === 0 ||
-    fact.status === "failed" ||
-    fact.status === "disabled"
-  ) {
+  if (fact.cards.length === 0 || fact.status === "failed" || fact.status === "disabled") {
     return undefined;
   }
   const content = canonicalJsonStringifyV1({

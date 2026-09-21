@@ -43,24 +43,14 @@ describe("interactive control reducer v2 work segments", () => {
     expect(v2.reduce(JSON.parse(JSON.stringify(facts)), recovery)).toEqual(
       v2.reduce(facts, recovery),
     );
-    expect(v2.reduce([...facts, timeout(2)], recovery).decision.kind).toBe(
-      "incomplete",
-    );
+    expect(v2.reduce([...facts, timeout(2)], recovery).decision.kind).toBe("incomplete");
     expect(
       v2.reduce(
-        [
-          ...facts,
-          model(2, "completed", false),
-          segment(1),
-          promotion("next"),
-          timeout(3),
-        ],
+        [...facts, model(2, "completed", false), segment(1), promotion("next"), timeout(3)],
         recovery,
       ).decision.kind,
     ).toBe("incomplete");
-    expect(
-      v2.reduce(facts, { ...recovery, maxModelTurns: 1 }).decision.kind,
-    ).toBe("incomplete");
+    expect(v2.reduce(facts, { ...recovery, maxModelTurns: 1 }).decision.kind).toBe("incomplete");
     expect(
       v2.reduce(
         [
@@ -77,19 +67,11 @@ describe("interactive control reducer v2 work segments", () => {
       reason: "total-model-turn-budget-exhausted",
     });
     expect(
-      v2.reduce(
-        [...facts, { type: "abort.requested", source: "user" }],
-        recovery,
-      ).decision.kind,
+      v2.reduce([...facts, { type: "abort.requested", source: "user" }], recovery).decision.kind,
     ).toBe("aborted");
-    for (const errorCode of [
-      "ModelRequestIdleTimeout",
-      "ModelRequestWallTimeout",
-      "OtherError",
-    ]) {
+    for (const errorCode of ["ModelRequestIdleTimeout", "ModelRequestWallTimeout", "OtherError"]) {
       expect(
-        v2.reduce([{ ...model(1, "unknown", false), errorCode }], recovery)
-          .decision.kind,
+        v2.reduce([{ ...model(1, "unknown", false), errorCode }], recovery).decision.kind,
       ).toBe("incomplete");
     }
     expect(
@@ -145,23 +127,18 @@ describe("interactive control reducer v2 work segments", () => {
     ];
     expect(v2.reduce(facts, limit).decision.kind).toBe("continue");
     expect(
-      v2.reduce(facts, { ...config, maxModelTurns: 1, maxTotalModelTurns: 1 })
-        .decision.kind,
+      v2.reduce(facts, { ...config, maxModelTurns: 1, maxTotalModelTurns: 1 }).decision.kind,
     ).toBe("incomplete");
     facts.push(tool("a", "completed"));
     expect(v2.reduce(facts, limit).decision.kind).toBe("continue");
     // Replaying a partial batch produces the same decision, with no in-memory allowance.
-    expect(v2.reduce(JSON.parse(JSON.stringify(facts)), limit)).toEqual(
-      v2.reduce(facts, limit),
-    );
+    expect(v2.reduce(JSON.parse(JSON.stringify(facts)), limit)).toEqual(v2.reduce(facts, limit));
     facts.push(tool("b", "failed"));
     expect(v2.reduce(facts, limit).decision).toEqual({
       kind: "incomplete",
       reason: "model-turn-budget-exhausted",
     });
-    expect(v2.reduce([model(1, "completed", false)], limit).decision.kind).toBe(
-      "completed",
-    );
+    expect(v2.reduce([model(1, "completed", false)], limit).decision.kind).toBe("completed");
   });
 
   test("last-turn opt-in preserves cancellation, denied permission and unknown effects", () => {
@@ -171,26 +148,18 @@ describe("interactive control reducer v2 work segments", () => {
       maxTotalModelTurns: 1,
       settleFinalToolBatch: true as const,
     };
-    const facts: InputFactV1[] = [
-      model(1, "completed", true),
-      observed("a", 1),
-    ];
+    const facts: InputFactV1[] = [model(1, "completed", true), observed("a", 1)];
     expect(
-      v2.reduce([...facts, { type: "abort.requested", source: "user" }], limit)
-        .decision.kind,
+      v2.reduce([...facts, { type: "abort.requested", source: "user" }], limit).decision.kind,
     ).toBe("aborted");
-    expect(
-      v2.reduce([...facts, tool("a", "rejected")], limit).decision.kind,
-    ).toBe("await_user");
-    expect(
-      v2.reduce([...facts, tool("a", "unknown")], limit).decision,
-    ).toMatchObject({ reason: "tool-result-unknown" });
-    expect(
-      v2.reduce([...facts, tool("a", "cancelled")], limit).decision,
-    ).toMatchObject({ reason: "tool-cancelled" });
-    expect(v2.reduce([model(1, "completed", true)], limit).decision.kind).toBe(
-      "incomplete",
-    );
+    expect(v2.reduce([...facts, tool("a", "rejected")], limit).decision.kind).toBe("await_user");
+    expect(v2.reduce([...facts, tool("a", "unknown")], limit).decision).toMatchObject({
+      reason: "tool-result-unknown",
+    });
+    expect(v2.reduce([...facts, tool("a", "cancelled")], limit).decision).toMatchObject({
+      reason: "tool-cancelled",
+    });
+    expect(v2.reduce([model(1, "completed", true)], limit).decision.kind).toBe("incomplete");
   });
 
   test("total budget only admits pending tools in the active segment", () => {
@@ -200,27 +169,16 @@ describe("interactive control reducer v2 work segments", () => {
       maxTotalModelTurns: 2,
       settleFinalToolBatch: true as const,
     };
-    const past: InputFactV1[] = [
-      model(1, "completed", false),
-      segment(1),
-      promotion("segment-1"),
-    ];
-    const facts: InputFactV1[] = [
-      ...past,
-      model(2, "completed", true),
-      observed("last", 2),
-    ];
+    const past: InputFactV1[] = [model(1, "completed", false), segment(1), promotion("segment-1")];
+    const facts: InputFactV1[] = [...past, model(2, "completed", true), observed("last", 2)];
     expect(v2.reduce(facts, limit).decision.kind).toBe("continue");
-    expect(
-      v2.reduce([...facts, tool("last", "completed")], limit).decision,
-    ).toEqual({
+    expect(v2.reduce([...facts, tool("last", "completed")], limit).decision).toEqual({
       kind: "incomplete",
       reason: "total-model-turn-budget-exhausted",
     });
-    expect(
-      v2.reduce([...facts, segment(2), promotion("segment-2")], limit).decision
-        .kind,
-    ).toBe("incomplete");
+    expect(v2.reduce([...facts, segment(2), promotion("segment-2")], limit).decision.kind).toBe(
+      "incomplete",
+    );
   });
 
   test("keeps implicit segment zero decisions equivalent to reducer v1", () => {
@@ -240,9 +198,7 @@ describe("interactive control reducer v2 work segments", () => {
       ],
     ];
     for (const facts of cases) {
-      expect(v2.reduce(facts, config).decision).toEqual(
-        v1.reduce(facts, v1Config).decision,
-      );
+      expect(v2.reduce(facts, config).decision).toEqual(v1.reduce(facts, v1Config).decision);
     }
   });
 
@@ -266,10 +222,7 @@ describe("interactive control reducer v2 work segments", () => {
       },
       tool("old-call", "unknown"),
     ];
-    const state = v2.reduce(
-      [...oldControlFacts, segment(1), promotion("segment-1")],
-      config,
-    );
+    const state = v2.reduce([...oldControlFacts, segment(1), promotion("segment-1")], config);
 
     expect(state).toMatchObject({
       segmentIndex: 1,
@@ -282,16 +235,9 @@ describe("interactive control reducer v2 work segments", () => {
   });
 
   test("applies abort, runtime, policy, model and tool outcomes inside the active segment", () => {
-    const base = [
-      model(1, "completed", false),
-      segment(1),
-      promotion("segment-1"),
-    ];
+    const base = [model(1, "completed", false), segment(1), promotion("segment-1")];
     const cases: readonly [InputFactV1[], ControlDecision["kind"]][] = [
-      [
-        [{ type: "abort.requested", source: "user", reason: "new-abort" }],
-        "aborted",
-      ],
+      [[{ type: "abort.requested", source: "user", reason: "new-abort" }], "aborted"],
       [
         [
           {
@@ -318,18 +264,12 @@ describe("interactive control reducer v2 work segments", () => {
       ],
       [[model(2, "unknown", false)], "incomplete"],
       [
-        [
-          model(2, "completed", true),
-          observed("new-call", 2),
-          tool("new-call", "unknown"),
-        ],
+        [model(2, "completed", true), observed("new-call", 2), tool("new-call", "unknown")],
         "incomplete",
       ],
     ];
     for (const [facts, expected] of cases) {
-      expect(v2.reduce([...base, ...facts], config).decision.kind).toBe(
-        expected,
-      );
+      expect(v2.reduce([...base, ...facts], config).decision.kind).toBe(expected);
     }
   });
 
@@ -346,11 +286,9 @@ describe("interactive control reducer v2 work segments", () => {
       segmentModelTurns: 1,
       totalModelTurns: 2,
     });
-    expect(
-      facts
-        .filter((fact) => fact.type === "model.settled")
-        .map((fact) => fact.turn),
-    ).toEqual([1, 2]);
+    expect(facts.filter((fact) => fact.type === "model.settled").map((fact) => fact.turn)).toEqual([
+      1, 2,
+    ]);
   });
 
   test("enforces segment-count, per-segment turn, and total-turn budgets independently", () => {
@@ -398,10 +336,7 @@ describe("interactive control reducer v2 work segments", () => {
   test("never lets a budget replace a stronger active-segment terminal decision", () => {
     const exhausted = { ...config, maxSegments: 1, maxTotalModelTurns: 3 };
     const cases: readonly [InputFactV1[], ControlDecision["kind"]][] = [
-      [
-        [{ type: "abort.requested", source: "user", reason: "stop-now" }],
-        "aborted",
-      ],
+      [[{ type: "abort.requested", source: "user", reason: "stop-now" }], "aborted"],
       [
         [
           {
@@ -431,12 +366,7 @@ describe("interactive control reducer v2 work segments", () => {
     for (const [activeFacts, expected] of cases) {
       expect(
         v2.reduce(
-          [
-            model(1, "completed", true),
-            segment(1),
-            promotion("segment-1"),
-            ...activeFacts,
-          ],
+          [model(1, "completed", true), segment(1), promotion("segment-1"), ...activeFacts],
           exhausted,
         ).decision.kind,
       ).toBe(expected);
@@ -445,10 +375,7 @@ describe("interactive control reducer v2 work segments", () => {
 
   test("rejects marker reducer drift and returns deterministic detached frozen state", () => {
     expect(() =>
-      v2.reduce(
-        [{ ...segment(1), reducerVersion: "paw.interactive-control.v1" }],
-        config,
-      ),
+      v2.reduce([{ ...segment(1), reducerVersion: "paw.interactive-control.v1" }], config),
     ).toThrow(/does not match interactive reducer v2/i);
 
     const facts: InputFactV1[] = [segment(1), promotion("segment-1")];
@@ -541,11 +468,7 @@ function replayPrefix(): readonly RunJournalEnvelopeV1[] {
     previousDecisionStateHash: terminalHash,
     previousAction: actionFromDecision(terminal.decision),
   };
-  const allFacts: InputFactV1[] = [
-    ...initialFacts,
-    markerFact,
-    promotion("segment-1"),
-  ];
+  const allFacts: InputFactV1[] = [...initialFacts, markerFact, promotion("segment-1")];
   const continuing = reducer.reduce(allFacts, config);
   const continuingHash = JSON.stringify(continuing);
   return [
@@ -553,19 +476,12 @@ function replayPrefix(): readonly RunJournalEnvelopeV1[] {
     decisionEnvelope(6, 5, terminalHash, actionFromDecision(terminal.decision)),
     factEnvelope(7, markerFact),
     factEnvelope(8, promotion("segment-1")),
-    decisionEnvelope(
-      9,
-      8,
-      continuingHash,
-      actionFromDecision(continuing.decision),
-    ),
+    decisionEnvelope(9, 8, continuingHash, actionFromDecision(continuing.decision)),
   ];
 }
 
 function decisionFromState(input: {
-  readonly state: ReturnType<
-    ReturnType<typeof createInteractiveControlReducerV2>["reduce"]
-  >;
+  readonly state: ReturnType<ReturnType<typeof createInteractiveControlReducerV2>["reduce"]>;
   readonly inputThroughSeq: number;
   readonly stateHash: string;
   readonly reducerVersion: string;
@@ -579,9 +495,7 @@ function decisionFromState(input: {
   };
 }
 
-function actionFromDecision(
-  decision: ControlDecision,
-): ControlDecisionActionV1 {
+function actionFromDecision(decision: ControlDecision): ControlDecisionActionV1 {
   switch (decision.kind) {
     case "continue":
       return { kind: "continue", reasonCode: "continue" };
@@ -640,9 +554,7 @@ function decisionEnvelope(
   };
 }
 
-function segment(
-  segmentIndex: number,
-): Extract<InputFactV1, { type: "work.segment_started" }> {
+function segment(segmentIndex: number): Extract<InputFactV1, { type: "work.segment_started" }> {
   return {
     type: "work.segment_started",
     segmentIndex,
@@ -654,10 +566,7 @@ function segment(
   };
 }
 
-function promotion(
-  inputId: string,
-  delivery: "initial" | "queue" = "queue",
-): InputFactV1 {
+function promotion(inputId: string, delivery: "initial" | "queue" = "queue"): InputFactV1 {
   return {
     type: "input.promoted",
     inputId,
@@ -731,9 +640,7 @@ test("live steering is opt-in, survives natural stop, consumes once and respects
     content: "Follow up",
     contentHash: "follow-up",
   };
-  expect(reducer.reduce([...facts, promoted], live).decision.kind).toBe(
-    "continue",
-  );
+  expect(reducer.reduce([...facts, promoted], live).decision.kind).toBe("continue");
   expect(
     reducer.reduce(
       [
@@ -745,17 +652,14 @@ test("live steering is opt-in, survives natural stop, consumes once and respects
       live,
     ).decision.kind,
   ).toBe("completed");
-  expect(reducer.reduce(facts, { ...live, maxModelTurns: 1 }).decision).toEqual(
-    { kind: "incomplete", reason: "model-turn-budget-exhausted" },
-  );
+  expect(reducer.reduce(facts, { ...live, maxModelTurns: 1 }).decision).toEqual({
+    kind: "incomplete",
+    reason: "model-turn-budget-exhausted",
+  });
   expect(
-    reducer.reduce(
-      [...facts, { type: "abort.requested", source: "user" }],
-      live,
-    ).decision.kind,
+    reducer.reduce([...facts, { type: "abort.requested", source: "user" }], live).decision.kind,
   ).toBe("aborted");
-  expect(
-    reducer.reduce([...facts, segment(1), promotion("next")], live).decision
-      .kind,
-  ).toBe("continue");
+  expect(reducer.reduce([...facts, segment(1), promotion("next")], live).decision.kind).toBe(
+    "continue",
+  );
 });

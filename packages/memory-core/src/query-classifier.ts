@@ -8,9 +8,7 @@ import type {
   MemoryEvidenceTemporalModeV3,
 } from "./query-plan-contracts.js";
 
-export function classifyMemoryEvidenceQueryV3(
-  query: string,
-): MemoryEvidenceQueryIntentV3 {
+export function classifyMemoryEvidenceQueryV3(query: string): MemoryEvidenceQueryIntentV3 {
   const value = boundedQuery(query);
   const recallProvenance = classifyMemoryRecallProvenanceV1(value);
   const explicitSharedDialogue = isExplicitSharedDialogueQueryV1(value);
@@ -39,8 +37,7 @@ export function classifyMemoryEvidenceQueryV3(
               ? "any"
               : "user";
   const certifiedAssistantDialogueCandidate =
-    roleConstraint === "user" &&
-    needsCertifiedAssistantDialogueCandidateV1(value);
+    roleConstraint === "user" && needsCertifiedAssistantDialogueCandidateV1(value);
   const priorRecommendationRecall = isPriorRecommendationRecallV1(value);
   const compare =
     /\b(?:compared\s+to|difference\s+between|both|each|respectively)\b|(?:相比|比较|区别|差异|两者|分别|各自)/iu.test(
@@ -87,9 +84,7 @@ function isPriorRecommendationRecallV1(query: string): boolean {
     /\b(?:what|which)\b.{0,64}\b(?:did|had)\s+you\b.{0,48}\b(?:recommend|suggest|mention)\b/iu.test(
       query,
     ) ||
-    /\b(?:what|which)\s+(?:recommendation|suggestion)\b.{0,48}\bdid\b/iu.test(
-      query,
-    ) ||
+    /\b(?:what|which)\s+(?:recommendation|suggestion)\b.{0,48}\bdid\b/iu.test(query) ||
     /\b(?:remember|recall|remind)\b.{0,128}\b(?:recommend(?:ed|ation)?|suggest(?:ed|ion)?)\b/iu.test(
       query,
     ) ||
@@ -158,9 +153,7 @@ export function classifyMemoryQueryAnswerProvenanceFeaturesV1(
     ? firstAnswerClauseSubjectV1(answer.text, answer.language)
     : undefined;
   const answerSubjectOwner =
-    answerSubject && answerSubject !== "ambiguous"
-      ? answerSubject.owner
-      : undefined;
+    answerSubject && answerSubject !== "ambiguous" ? answerSubject.owner : undefined;
   const recallProvenance = classifyMemoryRecallProvenanceV1(value);
   return Object.freeze({
     secondPersonCue: /\b(?:you|your|yours)\b|(?:你|你的)/iu.test(value),
@@ -169,9 +162,7 @@ export function classifyMemoryQueryAnswerProvenanceFeaturesV1(
         value,
       ),
     recallActionCue:
-      /\b(?:remember|recall|remind|forgot|forget)\b|(?:记得|回忆|提醒|忘记|想不起来)/iu.test(
-        value,
-      ),
+      /\b(?:remember|recall|remind|forgot|forget)\b|(?:记得|回忆|提醒|忘记|想不起来)/iu.test(value),
     explicitUserAnswerAuthor:
       answerSubjectOwner === "user" || hasExplicitUserAnswerSubjectV1(value),
     explicitAssistantAnswerAuthor:
@@ -183,14 +174,11 @@ export function classifyMemoryQueryAnswerProvenanceFeaturesV1(
       recallProvenance === "shared" ||
       isExplicitSharedDialogueQueryV1(value),
     dialogueRoleResolutionCandidate: needsMemoryEvidenceRoleResolutionV1(value),
-    certifiedAssistantDialogueCandidate:
-      needsCertifiedAssistantDialogueCandidateV1(value),
+    certifiedAssistantDialogueCandidate: needsCertifiedAssistantDialogueCandidateV1(value),
   });
 }
 
-function classifyMemoryEvidenceTemporalModeV1(
-  query: string,
-): MemoryEvidenceTemporalModeV3 {
+function classifyMemoryEvidenceTemporalModeV1(query: string): MemoryEvidenceTemporalModeV3 {
   const latest =
     /\b(?:latest|currently|most\s+recent|now|today|at\s+present)\b|(?:最新|现在|目前|最近一次|今天)/iu.test(
       query,
@@ -230,9 +218,7 @@ function isExplicitUserOriginMemoryQueryV1(query: string): boolean {
       value,
     );
   const chinesePossessive =
-    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|多少).{0,64}(?:我的|本人(?:的)?)/u.test(
-      value,
-    );
+    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|多少).{0,64}(?:我的|本人(?:的)?)/u.test(value);
   return explicitUserSubject || possessiveUserState || chinesePossessive;
 }
 
@@ -271,36 +257,23 @@ function memoryRecallAnswerClauseV1(
   if (english?.groups?.answer) {
     return Object.freeze({ language: "en", text: english.groups.answer });
   }
-  const chinese = /(?:记得|回忆|提醒我|想不起来)(?<answer>.{0,120})/u.exec(
-    query,
-  );
+  const chinese = /(?:记得|回忆|提醒我|想不起来)(?<answer>.{0,120})/u.exec(query);
   if (
     chinese?.groups?.answer &&
-    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/u.test(
-      chinese.groups.answer,
-    )
+    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/u.test(chinese.groups.answer)
   ) {
     return Object.freeze({ language: "zh", text: chinese.groups.answer });
   }
   return undefined;
 }
 
-function classifyMemoryRecallProvenanceV1(
-  query: string,
-): MemoryRecallProvenanceV1 | undefined {
+function classifyMemoryRecallProvenanceV1(query: string): MemoryRecallProvenanceV1 | undefined {
   const answer = memoryRecallAnswerClauseV1(query);
   if (!answer) return undefined;
   const subject = firstAnswerClauseSubjectV1(answer.text, answer.language);
   if (subject === "ambiguous") return "ambiguous_subject";
   if (subject) {
-    if (
-      isPassiveAnswerSubjectV1(
-        answer.text,
-        subject.index,
-        subject.owner,
-        answer.language,
-      )
-    ) {
+    if (isPassiveAnswerSubjectV1(answer.text, subject.index, subject.owner, answer.language)) {
       return "passive_unresolved";
     }
     return subject.owner;
@@ -325,12 +298,8 @@ function firstAnswerClauseSubjectV1(
   if (language === "zh") {
     const joint = /(?:你和我|我和你|我们|咱们)/u.exec(clause);
     const withoutJoint = clause
-      .replace(/(?:你和我|我和你|我们|咱们)/gu, (text) =>
-        " ".repeat(text.length),
-      )
-      .replace(/(?:给|向|对|为|跟)(?:本人|我|您|你)/gu, (text) =>
-        " ".repeat(text.length),
-      );
+      .replace(/(?:你和我|我和你|我们|咱们)/gu, (text) => " ".repeat(text.length))
+      .replace(/(?:给|向|对|为|跟)(?:本人|我|您|你)/gu, (text) => " ".repeat(text.length));
     const user = /(?:本人|我)(?!的)/u.exec(withoutJoint);
     const assistant = /(?:您|你)(?!的)/u.exec(withoutJoint);
     const subject = earliestAnswerSubjectV1({
@@ -347,9 +316,7 @@ function firstAnswerClauseSubjectV1(
 
   const joint = /\b(?:you\s+and\s+i|i\s+and\s+you|we)\b/iu.exec(clause);
   const withoutJoint = clause
-    .replace(/\b(?:you\s+and\s+i|i\s+and\s+you|we)\b/giu, (text) =>
-      " ".repeat(text.length),
-    )
+    .replace(/\b(?:you\s+and\s+i|i\s+and\s+you|we)\b/giu, (text) => " ".repeat(text.length))
     .replace(/\b(?:for|to|by|with|about|from|of)\s+(?:i|you)\b/giu, (text) =>
       " ".repeat(text.length),
     );
@@ -361,16 +328,13 @@ function firstAnswerClauseSubjectV1(
     shared: joint?.index,
   });
   if (subject !== "ambiguous") {
-    return subject?.owner === "assistant" &&
-      canonicalEnglishAnswerSubjectV1(clause) !== "assistant"
+    return subject?.owner === "assistant" && canonicalEnglishAnswerSubjectV1(clause) !== "assistant"
       ? "ambiguous"
       : subject;
   }
   const canonicalOwner = canonicalEnglishAnswerSubjectV1(clause);
   const canonicalIndex = canonicalOwner
-    ? { user: user?.index, assistant: assistant?.index, shared: joint?.index }[
-        canonicalOwner
-      ]
+    ? { user: user?.index, assistant: assistant?.index, shared: joint?.index }[canonicalOwner]
     : undefined;
   return canonicalOwner !== undefined && canonicalIndex !== undefined
     ? Object.freeze({ owner: canonicalOwner, index: canonicalIndex })
@@ -391,9 +355,7 @@ function earliestAnswerSubjectV1(input: {
   const owners = (["user", "assistant", "shared"] as const)
     .map((owner) => ({ owner, index: input[owner] }))
     .filter(
-      (
-        entry,
-      ): entry is { owner: "user" | "assistant" | "shared"; index: number } =>
+      (entry): entry is { owner: "user" | "assistant" | "shared"; index: number } =>
         entry.index !== undefined,
     )
     .sort((left, right) => left.index - right.index);
@@ -420,8 +382,7 @@ function canonicalEnglishAnswerSubjectV1(
 
 function isCanonicalChineseAssistantSubjectV1(clause: string): boolean {
   if (!/^\s*(?:您|你)(?!的)/u.test(clause)) return false;
-  const questionWord =
-    /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/u.exec(clause);
+  const questionWord = /(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/u.exec(clause);
   return !clause.slice(0, questionWord?.index ?? clause.length).includes("的");
 }
 
@@ -525,16 +486,13 @@ function isUnresolvedDialogueRecallQueryV1(query: string): boolean {
     /\b(?:that|those|it|one|ones|earlier|previous|previously|prior|last|before|chat|conversation|discussion)\b|\b(?:was|were)\s+(?:ultimately|finally|eventually)?\s*(?:proposed|decided|chosen|selected|named|called|written|created|recommended|suggested|provided|answered)\b/iu.test(
       value,
     );
-  const chineseRecall =
-    /(?:你还?记得|你能?回忆|提醒我|我(?:不|没)记得|我想不起来)/u.test(value);
+  const chineseRecall = /(?:你还?记得|你能?回忆|提醒我|我(?:不|没)记得|我想不起来)/u.test(value);
   const chineseAnswerComplement =
     /(?:记得|回忆|提醒我|想不起来).{0,64}(?:什么|哪个|哪里|何时|什么时候|怎么|如何|谁|是否)/u.test(
       value,
     );
   const chinesePriorOrDeictic =
-    /(?:当时|那个|那些|它|之前|上次|此前|过去|聊天|对话|讨论|说过|提过)/u.test(
-      value,
-    );
+    /(?:当时|那个|那些|它|之前|上次|此前|过去|聊天|对话|讨论|说过|提过)/u.test(value);
   return (
     (englishRecall && englishAnswerComplement && englishPriorOrDeictic) ||
     (chineseRecall && chineseAnswerComplement && chinesePriorOrDeictic)
@@ -558,8 +516,7 @@ export function needsMemoryEvidenceRoleResolutionV1(query: string): boolean {
     /\b(?:repeat|reproduce|restate|provide|share|give|tell|show|write|create|generate|recommend|suggest|list|answer|respond|mention|helped)\b|(?:重复|复述|提供|分享|告诉|展示|写|创建|生成|推荐|建议|列出|回答|回复|提到|帮)/iu.test(
       value,
     );
-  const secondPersonPriorAction =
-    hasSecondPerson && hasPriorCue && hasOutputAction;
+  const secondPersonPriorAction = hasSecondPerson && hasPriorCue && hasOutputAction;
   const priorOutputReference =
     /\b(?:again|earlier|previous|previously|prior|last\s+time|before|originally)\b.{0,120}\b(?:response|answer|reply|message|option|idea|suggestion|recommendation|list|plan|draft|summary|name|wording|advice)\b|(?:再次|以前|之前|上次|此前|原来).{0,80}(?:回复|回答|消息|选项|想法|建议|推荐|列表|计划|草稿|摘要|名称|措辞)/iu.test(
       value,
@@ -586,9 +543,7 @@ export function needsMemoryEvidenceRoleResolutionV1(query: string): boolean {
  * participant. Prior-conversation references without a recall verb are the
  * same unresolved case.
  */
-export function needsCertifiedAssistantDialogueCandidateV1(
-  query: string,
-): boolean {
+export function needsCertifiedAssistantDialogueCandidateV1(query: string): boolean {
   const value = boundedQuery(query);
   // A polite request to recall an artifact from a prior exchange establishes
   // dialogue provenance but not authorship. Keep the user lane primary and
@@ -611,11 +566,7 @@ export function needsCertifiedAssistantDialogueCandidateV1(
     // A possessive object is not an author signal. Keep user authority as the
     // primary lane, but let the existing certificate gate test whether an
     // exact assistant turn supplied the recalled dialogue artifact.
-    return (
-      provenance === "user" &&
-      subject === undefined &&
-      isPriorDialogueReferenceV1(value)
-    );
+    return provenance === "user" && subject === undefined && isPriorDialogueReferenceV1(value);
   }
   return (
     isPriorDialogueReferenceV1(value) &&

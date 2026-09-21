@@ -69,10 +69,8 @@ beforeAll(async () => {
       keywords: ["vitest", "jest"],
     }),
     makeEpisodicCandidate({
-      whenToUse:
-        "When a test fails with ECONNREFUSED, check the mock server port first.",
-      perspective:
-        "Connection errors in tests usually mean the mock server is not listening.",
+      whenToUse: "When a test fails with ECONNREFUSED, check the mock server port first.",
+      perspective: "Connection errors in tests usually mean the mock server is not listening.",
       modification: ["Verify the mock server port", "Check the test config"],
       issueType: "ECONNREFUSED",
       failureFixPair: {
@@ -113,42 +111,22 @@ afterAll(async () => {
   try {
     const sql = getSql();
     for (const id of createdIds) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-        id,
-      ]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [id]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [id]);
       // Governor 裁决记录（candidate_id = 内容哈希 = 条目 id）；不清理会污染 governor 测试的 v2-m5 断言
-      await sql.unsafe(
-        "DELETE FROM governance_decisions WHERE candidate_id = $1",
-        [id],
-      );
+      await sql.unsafe("DELETE FROM governance_decisions WHERE candidate_id = $1", [id]);
     }
-    for (const tid of [taskId, taskIdNoTest, taskIdCancel, taskIdTrial].filter(
-      Boolean,
-    )) {
-      await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [
-        tid,
-      ]);
+    for (const tid of [taskId, taskIdNoTest, taskIdCancel, taskIdTrial].filter(Boolean)) {
+      await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [tid]);
       await sql.unsafe("DELETE FROM memory_op_log WHERE run_id = $1", [tid]);
-      await sql.unsafe(
-        "DELETE FROM memory_trial_lessons WHERE origin_task_id = $1",
-        [tid],
-      );
-      await sql.unsafe(
-        "DELETE FROM governance_decisions WHERE candidate_id = $1",
-        [tid],
-      );
+      await sql.unsafe("DELETE FROM memory_trial_lessons WHERE origin_task_id = $1", [tid]);
+      await sql.unsafe("DELETE FROM governance_decisions WHERE candidate_id = $1", [tid]);
     }
-    await sql.unsafe(
-      "DELETE FROM memory_items WHERE scope->>'repositoryId' = $1",
-      [REPO],
-    );
+    await sql.unsafe("DELETE FROM memory_items WHERE scope->>'repositoryId' = $1", [REPO]);
     await sql.unsafe(
       "DELETE FROM memory_embeddings WHERE memory_id NOT IN (SELECT id FROM memory_items)",
     );
-    await sql.unsafe("DELETE FROM memory_op_log WHERE run_id LIKE $1", [
-      `%${REPO}%`,
-    ]);
+    await sql.unsafe("DELETE FROM memory_op_log WHERE run_id LIKE $1", [`%${REPO}%`]);
     await runtime.shutdown();
     resetMemoryV2Core();
     await closeSql();
@@ -304,10 +282,9 @@ describe("MemoryRuntime v2 closed loop", () => {
 
     // 注入记账：freq +1
     const sql = getSql();
-    const [row] = (await sql.unsafe(
-      "SELECT freq FROM memory_items WHERE id = $1",
-      [section.items[0]!.id],
-    )) as unknown as { freq: number }[];
+    const [row] = (await sql.unsafe("SELECT freq FROM memory_items WHERE id = $1", [
+      section.items[0]!.id,
+    ])) as unknown as { freq: number }[];
     expect(row!.freq).toBeGreaterThan(0);
   });
 

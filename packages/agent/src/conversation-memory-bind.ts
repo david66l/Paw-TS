@@ -7,28 +7,21 @@ import { type MemoryListItem, createMemoryRuntime } from "@paw/memory";
 
 const conversationTaskMap = new Map<string, string>();
 
-export function bindConversationMemoryTask(
-  conversationId: string,
-  taskId: string,
-): void {
+export function bindConversationMemoryTask(conversationId: string, taskId: string): void {
   const id = conversationId.trim();
   const tid = taskId.trim();
   if (!id || !tid) return;
   conversationTaskMap.set(id, tid);
 }
 
-export function getConversationMemoryTask(
-  conversationId: string,
-): string | undefined {
+export function getConversationMemoryTask(conversationId: string): string | undefined {
   const id = conversationId.trim();
   if (!id) return undefined;
   return conversationTaskMap.get(id);
 }
 
 /** 取出并删除绑定（finalize 时用） */
-export function takeConversationMemoryTask(
-  conversationId: string,
-): string | undefined {
+export function takeConversationMemoryTask(conversationId: string): string | undefined {
   const id = conversationId.trim();
   if (!id) return undefined;
   const tid = conversationTaskMap.get(id);

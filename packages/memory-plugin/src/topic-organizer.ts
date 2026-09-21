@@ -12,10 +12,7 @@ import {
 } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 import type {
   MemoryTopicExtractionEntryV1,
   MemoryTopicExtractionExistingTopicV1,
@@ -55,13 +52,7 @@ export interface MemoryTopicOrganizerStoreV1 {
 
 export interface MemoryTopicOrganizerEventV1 {
   readonly schemaVersion: "paw.memory-topic-organizer-event.v1";
-  readonly type:
-    | "claim"
-    | "stage"
-    | "apply"
-    | "settle"
-    | "skip"
-    | "recovery_pending";
+  readonly type: "claim" | "stage" | "apply" | "settle" | "skip" | "recovery_pending";
   readonly organizationId?: string;
   readonly sourceWriteId?: string;
   readonly sourceRevision?: string;
@@ -96,12 +87,8 @@ export interface MemoryTopicOrganizerControllerOptionsV1 {
 export function createMemoryTopicOrganizerControllerV1(
   options: MemoryTopicOrganizerControllerOptionsV1,
 ): MemoryTopicOrganizerControllerV1 {
-  if (!options.runId.trim())
-    throw new Error("Memory topic organizer runId is invalid");
-  if (
-    !options.extractor?.extract ||
-    !options.extractor.extractorVersion.trim()
-  ) {
+  if (!options.runId.trim()) throw new Error("Memory topic organizer runId is invalid");
+  if (!options.extractor?.extract || !options.extractor.extractorVersion.trim()) {
     throw new Error("Memory topic organizer extractor is invalid");
   }
   if (!options.store?.prepare || !options.store.apply) {
@@ -220,9 +207,7 @@ export function createMemoryTopicOrganizerControllerV1(
           },
           options.signal,
         );
-        const proposalHash = hashCanonicalJsonV1(
-          proposals as unknown as JsonValue,
-        );
+        const proposalHash = hashCanonicalJsonV1(proposals as unknown as JsonValue);
         const staged: MemoryTopicCandidateStagedFactV1 = Object.freeze({
           type: "memory.topic_candidate_staged",
           organizationId,
@@ -447,9 +432,7 @@ async function commitUniqueTopicFactV1(
   let snapshot = input.initialSnapshot;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     if (hasEquivalentTopicFact(snapshot, input.fact)) return false;
-    if (
-      (await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed"
-    ) {
+    if ((await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed") {
       return true;
     }
     snapshot = await input.readSnapshot();
@@ -486,9 +469,8 @@ function hasEquivalentTopicFact(
 function stableReasonCode(error: unknown): string {
   const name = error instanceof Error ? error.name : "Unknown";
   return (
-    `MemoryTopicOrganizer_${name}`
-      .replace(/[^A-Za-z0-9_.:-]/g, "_")
-      .slice(0, 160) || "MemoryTopicOrganizer_Unknown"
+    `MemoryTopicOrganizer_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160) ||
+    "MemoryTopicOrganizer_Unknown"
   );
 }
 

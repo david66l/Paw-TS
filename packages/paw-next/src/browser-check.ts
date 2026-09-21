@@ -26,9 +26,7 @@ export function localBrowserUrl(value: string): URL {
     url.password ||
     value.length > 2048
   )
-    throw new Error(
-      "Browser checks require an explicit loopback HTTP port and no credentials",
-    );
+    throw new Error("Browser checks require an explicit loopback HTTP port and no credentials");
   return url;
 }
 export function parseBrowserScenario(value: unknown): BrowserScenario {
@@ -47,19 +45,13 @@ export function parseBrowserScenario(value: unknown): BrowserScenario {
     if (!value || typeof value !== "object" || Array.isArray(value))
       throw new Error("Invalid browser step");
     const step = value as Record<string, unknown>;
-    const withValue = ["fill", "assert_text", "assert_value"].includes(
-      String(step.action),
-    );
+    const withValue = ["fill", "assert_text", "assert_value"].includes(String(step.action));
     if (
       Object.keys(step).sort().join(",") !==
         (withValue ? "action,selector,value" : "action,selector") ||
-      ![
-        "click",
-        "fill",
-        "assert_text",
-        "assert_visible",
-        "assert_value",
-      ].includes(String(step.action)) ||
+      !["click", "fill", "assert_text", "assert_visible", "assert_value"].includes(
+        String(step.action),
+      ) ||
       typeof step.selector !== "string" ||
       !step.selector.trim() ||
       step.selector.includes(">>") ||
@@ -113,13 +105,7 @@ export function createBrowserCheckPlugin(): RuntimeToolPluginV1 {
                     properties: {
                       action: {
                         type: "string",
-                        enum: [
-                          "click",
-                          "fill",
-                          "assert_text",
-                          "assert_visible",
-                          "assert_value",
-                        ],
+                        enum: ["click", "fill", "assert_text", "assert_visible", "assert_value"],
                       },
                       selector: { type: "string", maxLength: 500 },
                       value: { type: "string", maxLength: 2000 },
@@ -210,11 +196,7 @@ export async function runBrowserCheck(
         if (code !== 0 || signal?.aborted || output.length > maxOutput)
           throw new Error("Browser did not finish");
         const result = JSON.parse(output);
-        if (
-          typeof result.ok !== "boolean" ||
-          typeof result.summary !== "string" ||
-          !result.payload
-        )
+        if (typeof result.ok !== "boolean" || typeof result.summary !== "string" || !result.payload)
           throw new Error("Invalid browser result");
         finish(result);
       } catch {

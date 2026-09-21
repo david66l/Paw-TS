@@ -1,8 +1,4 @@
-import {
-  type JsonValue,
-  hashCanonicalJsonV1,
-  hashTextV1,
-} from "./canonical.js";
+import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryEvidenceKindV2 } from "./evidence-first.js";
 import { evidenceSourceIdV1 as evidenceSourceId } from "./evidence-ref.js";
 import type {
@@ -22,9 +18,7 @@ export const PAW_MEMORY_PRODUCT_EVIDENCE_INDEX_VERSION_V1 =
   "paw.memory-product-evidence-index.v2:l1-navigation-l0-hydration" as const;
 
 /** Product adapter for the shared evidence resolver; runtime stays unaware. */
-export function createProductMemoryEvidenceIndexV1<
-  TArchive extends MemoryProductArchiveV1,
->(input: {
+export function createProductMemoryEvidenceIndexV1<TArchive extends MemoryProductArchiveV1>(input: {
   readonly profile: MemoryProductProfileV1;
   readonly provider: MemoryProductProviderV1;
   /** Extra host capabilities are accepted but never enter the read core. */
@@ -83,14 +77,10 @@ export function createProductMemoryEvidenceIndexV1<
         retrievalSettlement.status === "fulfilled"
           ? retrievalSettlement.value
           : { status: "degraded" as const, cards: Object.freeze([]) };
-      if (
-        retrievalSettlement.status === "rejected" ||
-        retrieval.status !== "completed"
-      ) {
+      if (retrievalSettlement.status === "rejected" || retrieval.status !== "completed") {
         degradedChannels.push("l1");
       }
-      const raw =
-        rawSettlement.status === "fulfilled" ? rawSettlement.value : [];
+      const raw = rawSettlement.status === "fulfilled" ? rawSettlement.value : [];
       if (rawSettlement.status === "rejected" || !input.archive.search) {
         degradedChannels.push("l0");
       }
@@ -113,9 +103,7 @@ export function createProductMemoryEvidenceIndexV1<
           evidenceRef,
           sourceKind: "derived_atom" as const,
           authority: "derived" as const,
-          ...(card.validFrom === undefined
-            ? {}
-            : { observedAt: card.validFrom }),
+          ...(card.validFrom === undefined ? {} : { observedAt: card.validFrom }),
         }));
       });
       const lists = [
@@ -175,10 +163,7 @@ function abortError(): Error {
   return error;
 }
 
-function assertArchiveScope(
-  actual: MemoryProductScopeV1,
-  expected: MemoryProductScopeV1,
-): void {
+function assertArchiveScope(actual: MemoryProductScopeV1, expected: MemoryProductScopeV1): void {
   if (
     actual.tenantId !== expected.tenantId ||
     actual.userId !== expected.userId ||

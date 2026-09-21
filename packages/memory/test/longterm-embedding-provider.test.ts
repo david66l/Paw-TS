@@ -1,15 +1,11 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
 import { closeSql, getSql, ping } from "../src/db/connection.js";
-import type {
-  MemoryEmbeddingService,
-  SemanticFact,
-} from "../src/longterm/store/engine.js";
+import type { MemoryEmbeddingService, SemanticFact } from "../src/longterm/store/engine.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 import { createMemoryScopeKey } from "../src/longterm/store/scope-key.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -134,15 +130,9 @@ describe("long-term embedding provider identity", () => {
       complete: true,
     });
 
-    expect(
-      (await engineA.searchVector("probe", 5)).map((hit) => hit.id),
-    ).toContain(id);
-    expect(
-      (await engineB.searchVector("probe", 5)).map((hit) => hit.id),
-    ).not.toContain(id);
-    expect(await engineA.retrievalRevisionToken()).not.toBe(
-      await engineB.retrievalRevisionToken(),
-    );
+    expect((await engineA.searchVector("probe", 5)).map((hit) => hit.id)).toContain(id);
+    expect((await engineB.searchVector("probe", 5)).map((hit) => hit.id)).not.toContain(id);
+    expect(await engineA.retrievalRevisionToken()).not.toBe(await engineB.retrievalRevisionToken());
 
     const report = await engineB.reindex();
     expect(report.indexed).toBeGreaterThanOrEqual(1);
@@ -156,9 +146,7 @@ describe("long-term embedding provider identity", () => {
       embeddingCount: 1,
       complete: true,
     });
-    expect(
-      (await engineB.searchVector("probe", 5)).map((hit) => hit.id),
-    ).toContain(id);
+    expect((await engineB.searchVector("probe", 5)).map((hit) => hit.id)).toContain(id);
     const rows = await getSql()`
       SELECT embedding_model, embedding_version
       FROM memory_embeddings

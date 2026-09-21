@@ -23,13 +23,8 @@ export function projectLatestAssistantTextV1(
     throw new Error("Latest assistant provider protocol is invalid");
   }
   assertSnapshotOrder(options.snapshot);
-  const segmentMarkerSeq =
-    projectLatestWorkSegmentBoundaryV1(options.snapshot)?.markerSeq ?? 0;
-  for (
-    let index = options.snapshot.entries.length - 1;
-    index >= 0;
-    index -= 1
-  ) {
+  const segmentMarkerSeq = projectLatestWorkSegmentBoundaryV1(options.snapshot)?.markerSeq ?? 0;
+  for (let index = options.snapshot.entries.length - 1; index >= 0; index -= 1) {
     const entry = options.snapshot.entries[index];
     if (!entry) continue;
     if (entry.seq <= segmentMarkerSeq) return undefined;
@@ -51,9 +46,7 @@ export function projectLatestAssistantTextV1(
             payload: fact.response,
           });
     if (!response) {
-      throw new Error(
-        "Latest assistant artifact requires exact canonical evidence",
-      );
+      throw new Error("Latest assistant artifact requires exact canonical evidence");
     }
     assertCanonicalModelResponseCarrierV1(fact, response);
     if (response.providerProtocol !== options.providerProtocol) {
@@ -64,9 +57,7 @@ export function projectLatestAssistantTextV1(
   return undefined;
 }
 
-function assertSnapshotOrder(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): void {
+function assertSnapshotOrder(snapshot: SessionInputSnapshot<InputFactV1>): void {
   let previousSeq = 0;
   for (const entry of snapshot.entries) {
     if (entry.seq <= previousSeq || entry.seq > snapshot.tailSeq) {
@@ -74,10 +65,7 @@ function assertSnapshotOrder(
     }
     previousSeq = entry.seq;
   }
-  if (
-    snapshot.latestInputSeq !== previousSeq ||
-    snapshot.tailSeq < snapshot.latestInputSeq
-  ) {
+  if (snapshot.latestInputSeq !== previousSeq || snapshot.tailSeq < snapshot.latestInputSeq) {
     throw new Error("Latest assistant snapshot metadata is invalid");
   }
 }

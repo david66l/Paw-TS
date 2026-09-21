@@ -93,16 +93,10 @@ export function createMemoryContextResolverV1(
 ): MemoryContextResolverV1 {
   const scopeFingerprint = memoryScopeFingerprintV1(input.profile.scope);
   assertScope(input.topicStore.scope, scopeFingerprint);
-  if (input.dossierStore)
-    assertScope(input.dossierStore.scope, scopeFingerprint);
+  if (input.dossierStore) assertScope(input.dossierStore.scope, scopeFingerprint);
   if (input.archive) assertScope(input.archive.scope, scopeFingerprint);
-  let catalogPromise:
-    | Promise<readonly MemoryTopicEvidenceCatalogItemV1[]>
-    | undefined;
-  const packetPromises = new Map<
-    string,
-    Promise<MemoryResolvedContextPacketV1>
-  >();
+  let catalogPromise: Promise<readonly MemoryTopicEvidenceCatalogItemV1[]> | undefined;
+  const packetPromises = new Map<string, Promise<MemoryResolvedContextPacketV1>>();
 
   async function resolveUncached(
     boundedQuery: string,
@@ -118,13 +112,10 @@ export function createMemoryContextResolverV1(
       query: boundedQuery,
       scopeFingerprint,
       catalog,
-      maxIndexTopics:
-        input.profile.writer?.evidencePlanner.maxIndexTopics ?? 96,
-      maxSelectedTopics:
-        input.profile.writer?.evidencePlanner.maxSelectedTopics ?? 3,
+      maxIndexTopics: input.profile.writer?.evidencePlanner.maxIndexTopics ?? 96,
+      maxSelectedTopics: input.profile.writer?.evidencePlanner.maxSelectedTopics ?? 3,
       maxStates: input.profile.writer?.evidencePlanner.maxStates ?? 16,
-      maxEvidenceChars:
-        input.profile.writer?.evidencePlanner.maxEvidenceChars ?? 8_000,
+      maxEvidenceChars: input.profile.writer?.evidencePlanner.maxEvidenceChars ?? 8_000,
     });
     let plan: MemoryEvidenceCoveragePlanV1 | undefined;
     let fallbackReason: string | undefined;
@@ -144,9 +135,7 @@ export function createMemoryContextResolverV1(
           archive: input.archive,
           planner: input.planner,
           maxRequirements:
-            input.maxRequirements ??
-            input.profile.writer?.coveragePlanner.maxRequirements ??
-            4,
+            input.maxRequirements ?? input.profile.writer?.coveragePlanner.maxRequirements ?? 4,
           maxExpansionTopics:
             input.maxExpansionTopics ??
             input.profile.writer?.coveragePlanner.maxExpansionTopics ??
@@ -159,14 +148,9 @@ export function createMemoryContextResolverV1(
             input.maxSupplementalChars ??
             input.profile.writer?.coveragePlanner.maxSupplementalChars ??
             4_096,
-          maxRawSpans:
-            input.maxRawSpans ??
-            input.profile.writer?.rawEvidenceResolver.maxSpans ??
-            6,
+          maxRawSpans: input.maxRawSpans ?? input.profile.writer?.rawEvidenceResolver.maxSpans ?? 6,
           maxRawChars:
-            input.maxRawChars ??
-            input.profile.writer?.rawEvidenceResolver.maxChars ??
-            6_000,
+            input.maxRawChars ?? input.profile.writer?.rawEvidenceResolver.maxChars ?? 6_000,
           signal,
         });
       } catch (error) {
@@ -185,14 +169,8 @@ export function createMemoryContextResolverV1(
       dossierStore: input.dossierStore,
       archive: input.archive,
       verifier: input.verifier,
-      maxRawSpans:
-        input.maxRawSpans ??
-        input.profile.writer?.rawEvidenceResolver.maxSpans ??
-        6,
-      maxRawChars:
-        input.maxRawChars ??
-        input.profile.writer?.rawEvidenceResolver.maxChars ??
-        6_000,
+      maxRawSpans: input.maxRawSpans ?? input.profile.writer?.rawEvidenceResolver.maxSpans ?? 6,
+      maxRawChars: input.maxRawChars ?? input.profile.writer?.rawEvidenceResolver.maxChars ?? 6_000,
       signal,
     });
     input.onEvent?.(
@@ -201,15 +179,9 @@ export function createMemoryContextResolverV1(
         mode: packet.mode,
         stop: packet.stop,
         requirementCount: packet.requirements.length,
-        coveredCount: packet.requirements.filter(
-          (item) => item.status === "covered",
-        ).length,
-        partialCount: packet.requirements.filter(
-          (item) => item.status === "partial",
-        ).length,
-        missingCount: packet.requirements.filter(
-          (item) => item.status === "missing",
-        ).length,
+        coveredCount: packet.requirements.filter((item) => item.status === "covered").length,
+        partialCount: packet.requirements.filter((item) => item.status === "partial").length,
+        missingCount: packet.requirements.filter((item) => item.status === "missing").length,
         evidenceCount: packet.evidence.length,
         topicCount: packet.topics.length,
         spanCount: packet.spans.length,
@@ -217,8 +189,7 @@ export function createMemoryContextResolverV1(
         supportingCount: packet.verification.supportingCount,
         contradictionCount: packet.verification.contradictionCount,
         unknownCount: packet.verification.unknownCount,
-        l0EvidenceCount: packet.evidence.filter((item) => item.layer === "L0")
-          .length,
+        l0EvidenceCount: packet.evidence.filter((item) => item.layer === "L0").length,
         ...(packet.verification.verificationRevision === undefined
           ? {}
           : {
@@ -244,11 +215,7 @@ export function createMemoryContextResolverV1(
   return Object.freeze({
     resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
     async resolve(query: string, signal: AbortSignal) {
-      const boundedQuery = boundedText(
-        query,
-        8_192,
-        "MemoryContextResolverQueryInvalid",
-      );
+      const boundedQuery = boundedText(query, 8_192, "MemoryContextResolverQueryInvalid");
       if (signal.aborted) throw abortError();
       const cacheKey = hashCanonicalJsonV1({
         schemaVersion: "paw.memory-resolved-query-cache.v1",
@@ -299,9 +266,7 @@ async function materializePacket(
         layer: "L1",
         statement: card.statement.slice(0, 2_048),
         ...(card.validFrom === undefined ? {} : { validFrom: card.validFrom }),
-        evidenceRefs: Object.freeze(
-          card.sources.map((source) => source.ref).slice(0, 8),
-        ),
+        evidenceRefs: Object.freeze(card.sources.map((source) => source.ref).slice(0, 8)),
       }),
     );
   }
@@ -334,10 +299,7 @@ async function materializePacket(
         ),
       })),
     );
-    const spanByRef = new Map<
-      string,
-      { span: MemoryRawEvidenceSpanV1; memoryIds: Set<string> }
-    >();
+    const spanByRef = new Map<string, { span: MemoryRawEvidenceSpanV1; memoryIds: Set<string> }>();
     for (const { requirement, results } of searchResults) {
       for (const result of results) {
         const memoryId = hashCanonicalJsonV1({
@@ -405,18 +367,12 @@ async function materializePacket(
   const topics: MemoryResolvedContextTopicV1[] = [];
   if (input.dossierStore) {
     for (const topicId of [...topicIds].slice(0, 3)) {
-      const catalogItem = input.catalog.find(
-        (item) => item.projection.topic.id === topicId,
-      );
+      const catalogItem = input.catalog.find((item) => item.projection.topic.id === topicId);
       if (!catalogItem) continue;
-      const dossier = await input.dossierStore.getCurrent(
-        topicId,
-        input.signal,
-      );
+      const dossier = await input.dossierStore.getCurrent(topicId, input.signal);
       if (
         !dossier ||
-        dossier.projectionHash !==
-          catalogItem.projection.topic.projectionHash ||
+        dossier.projectionHash !== catalogItem.projection.topic.projectionHash ||
         dossier.scopeFingerprint !== input.scopeFingerprint
       )
         continue;
@@ -426,9 +382,7 @@ async function materializePacket(
           name: catalogItem.projection.topic.canonicalName,
           family: catalogItem.projection.topic.family,
           dossierId: dossier.id,
-          currentConclusions: Object.freeze(
-            dossier.currentConclusions.slice(0, 12),
-          ),
+          currentConclusions: Object.freeze(dossier.currentConclusions.slice(0, 12)),
           evolutions: Object.freeze(dossier.evolutions.slice(0, 6)),
           conflicts: Object.freeze(dossier.conflicts.slice(0, 4)),
         }),
@@ -507,9 +461,7 @@ async function materializePacket(
             layer: item.layer,
             statement: item.statement,
             ...(item.state === undefined ? {} : { state: item.state }),
-            ...(item.validFrom === undefined
-              ? {}
-              : { validFrom: item.validFrom }),
+            ...(item.validFrom === undefined ? {} : { validFrom: item.validFrom }),
           })),
           spans,
         },
@@ -521,9 +473,7 @@ async function materializePacket(
     }
   }
   const assessmentByRequirement = new Map(
-    (verificationResult?.assessments ?? []).map(
-      (item) => [item.requirementId, item] as const,
-    ),
+    (verificationResult?.assessments ?? []).map((item) => [item.requirementId, item] as const),
   );
   const requirements = Object.freeze(
     plannedRequirements.map((requirement) => {
@@ -548,9 +498,7 @@ async function materializePacket(
           priority: requirement.priority,
           minimumEvidence: requirement.minimumEvidence,
           status:
-            requirement.selectedEvidenceCount > 0
-              ? ("partial" as const)
-              : ("missing" as const),
+            requirement.selectedEvidenceCount > 0 ? ("partial" as const) : ("missing" as const),
           selectedEvidenceCount: requirement.selectedEvidenceCount,
           supportingMemoryIds: Object.freeze([] as string[]),
           contradictingMemoryIds: Object.freeze([] as string[]),
@@ -560,12 +508,8 @@ async function materializePacket(
       return verifiedRequirement(requirement, assessment);
     }),
   );
-  const supportingIds = new Set(
-    requirements.flatMap((item) => item.supportingMemoryIds),
-  );
-  const contradictingIds = new Set(
-    requirements.flatMap((item) => item.contradictingMemoryIds),
-  );
+  const supportingIds = new Set(requirements.flatMap((item) => item.supportingMemoryIds));
+  const contradictingIds = new Set(requirements.flatMap((item) => item.contradictingMemoryIds));
   if (verificationResult) {
     evidence = Object.freeze(
       evidence
@@ -581,34 +525,22 @@ async function materializePacket(
         )
         .sort(
           (left, right) =>
-            supportRoleWeight(left.supportRole) -
-              supportRoleWeight(right.supportRole) ||
+            supportRoleWeight(left.supportRole) - supportRoleWeight(right.supportRole) ||
             left.memoryId.localeCompare(right.memoryId),
         ),
     );
     const supportingSpanHashes = new Set(
-      verificationResult.assessments.flatMap(
-        (item) => item.supportingSpanHashes,
-      ),
+      verificationResult.assessments.flatMap((item) => item.supportingSpanHashes),
     );
     const contradictingSpanHashes = new Set(
-      verificationResult.assessments.flatMap(
-        (item) => item.contradictingSpanHashes,
-      ),
+      verificationResult.assessments.flatMap((item) => item.contradictingSpanHashes),
     );
     spans = Object.freeze(
       [...spans].sort(
         (left, right) =>
-          spanSupportWeight(
-            left.contentHash,
-            supportingSpanHashes,
-            contradictingSpanHashes,
-          ) -
-            spanSupportWeight(
-              right.contentHash,
-              supportingSpanHashes,
-              contradictingSpanHashes,
-            ) || left.evidenceRef.localeCompare(right.evidenceRef),
+          spanSupportWeight(left.contentHash, supportingSpanHashes, contradictingSpanHashes) -
+            spanSupportWeight(right.contentHash, supportingSpanHashes, contradictingSpanHashes) ||
+          left.evidenceRef.localeCompare(right.evidenceRef),
       ),
     );
   }
@@ -626,19 +558,14 @@ async function materializePacket(
         }),
     supportingCount: supportingIds.size,
     contradictionCount: contradictingIds.size,
-    unknownCount: new Set(requirements.flatMap((item) => item.unknownMemoryIds))
-      .size,
-    ...(verificationError === undefined
-      ? {}
-      : { reasonCode: verificationError }),
+    unknownCount: new Set(requirements.flatMap((item) => item.unknownMemoryIds)).size,
+    ...(verificationError === undefined ? {} : { reasonCode: verificationError }),
   });
   const required = requirements.filter((item) => item.priority === "required");
   const stop =
     evidence.length === 0
       ? ("missing" as const)
-      : input.plan &&
-          required.every((item) => item.status === "covered") &&
-          spans.length > 0
+      : input.plan && required.every((item) => item.status === "covered") && spans.length > 0
         ? ("sufficient" as const)
         : input.plan && required.every((item) => item.status === "missing")
           ? ("missing" as const)
@@ -646,9 +573,7 @@ async function materializePacket(
   const body = {
     schemaVersion: "paw.memory-resolved-context.v1" as const,
     resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
-    mode: input.plan
-      ? ("planned" as const)
-      : ("deterministic_fallback" as const),
+    mode: input.plan ? ("planned" as const) : ("deterministic_fallback" as const),
     stop,
     requirements,
     verification,
@@ -686,8 +611,7 @@ function verifiedRequirement(
     assessment.supportingMemoryIds.length >= requirement.minimumEvidence &&
     assessment.contradictingMemoryIds.length === 0
       ? ("covered" as const)
-      : assessment.supportingMemoryIds.length > 0 ||
-          assessment.contradictingMemoryIds.length > 0
+      : assessment.supportingMemoryIds.length > 0 || assessment.contradictingMemoryIds.length > 0
         ? ("partial" as const)
         : ("missing" as const);
   return Object.freeze({
@@ -726,10 +650,7 @@ function boundCombinedSpans(
   maxSpans: number,
   maxChars: number,
 ): readonly MemoryRawEvidenceSpanV1[] {
-  const byEvidence = new Map<
-    string,
-    { span: MemoryRawEvidenceSpanV1; memoryIds: Set<string> }
-  >();
+  const byEvidence = new Map<string, { span: MemoryRawEvidenceSpanV1; memoryIds: Set<string> }>();
   for (const span of spans) {
     const key = `${span.evidenceRef}\0${span.contentHash}`;
     const existing = byEvidence.get(key);
@@ -802,9 +723,7 @@ function coverageSnapshot(
   });
 }
 
-function topicStateEvidence(
-  state: MemoryTopicEvidenceStateV1,
-): MemoryResolvedContextEvidenceV1 {
+function topicStateEvidence(state: MemoryTopicEvidenceStateV1): MemoryResolvedContextEvidenceV1 {
   return Object.freeze({
     memoryId: state.memoryId,
     layer: "L2",
@@ -814,10 +733,7 @@ function topicStateEvidence(
   });
 }
 
-function toolQuery(
-  text: string,
-  profile: PawNextMemoryPluginProfileV1,
-): MemoryProviderQueryV1 {
+function toolQuery(text: string, profile: PawNextMemoryPluginProfileV1): MemoryProviderQueryV1 {
   const inputContentHash = hashTextV1(text);
   const searchTexts = createMemorySearchTextsV1(undefined, text);
   const queryId = hashCanonicalJsonV1({
@@ -841,10 +757,7 @@ function toolQuery(
   });
 }
 
-function assertScope(
-  scope: PawNextMemoryPluginProfileV1["scope"],
-  expected: string,
-): void {
+function assertScope(scope: PawNextMemoryPluginProfileV1["scope"], expected: string): void {
   if (memoryScopeFingerprintV1(scope) !== expected)
     throw namedError("MemoryContextResolverScopeMismatch");
 }
@@ -860,12 +773,8 @@ function isAbort(error: unknown): boolean {
 }
 
 function stableErrorCode(error: unknown): string {
-  const value =
-    error instanceof Error ? error.name || error.message : String(error);
-  return (
-    value.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 120) ||
-    "MemoryContextResolverUnknown"
-  );
+  const value = error instanceof Error ? error.name || error.message : String(error);
+  return value.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 120) || "MemoryContextResolverUnknown";
 }
 
 function abortError(): Error {

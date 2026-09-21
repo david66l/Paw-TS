@@ -19,11 +19,7 @@
  * artifacts → facts → parentConclusions(保留 high 置信度) → constraints
  */
 
-import type {
-  AgentToolCallAction,
-  ChatMessage,
-  ContextManager,
-} from "@paw/core";
+import type { AgentToolCallAction, ChatMessage, ContextManager } from "@paw/core";
 import { CONTEXT_SUMMARY_PREFIX } from "@paw/core";
 import {
   type AgentType,
@@ -38,16 +34,9 @@ import type { ContextArtifact, SharedContext } from "./types.js";
 /** ContextSummarizer 接口：支持两种调用方式 */
 export interface ContextSummarizer {
   /** 按 task 文本 + agentType 生成摘要 */
-  summarize(
-    ctx: ContextManager,
-    task: string,
-    agentType?: AgentType,
-  ): SharedContext;
+  summarize(ctx: ContextManager, task: string, agentType?: AgentType): SharedContext;
   /** 从工具调用中提取参数再生成摘要 */
-  summarizeForCall(
-    ctx: ContextManager,
-    call: AgentToolCallAction,
-  ): SharedContext;
+  summarizeForCall(ctx: ContextManager, call: AgentToolCallAction): SharedContext;
 }
 
 /** 正则：匹配 <file path="...">...</file> 标签 */
@@ -76,8 +65,7 @@ function estimateSharedContextTokens(ctx: SharedContext): number {
   tokens += estimateTokens(JSON.stringify(ctx.state));
   tokens += estimateTokens(ctx.outputFormat);
   if (ctx.parentConclusions) {
-    for (const c of ctx.parentConclusions)
-      tokens += estimateTokens(c.conclusion);
+    for (const c of ctx.parentConclusions) tokens += estimateTokens(c.conclusion);
   }
   return tokens;
 }
@@ -90,8 +78,7 @@ function messageContent(m: ChatMessage): string {
 function isNoiseContent(content: string): boolean {
   if (content.trim().length === 0) return true;
   if (NOISE_PREFIXES.some((p) => content.startsWith(p))) return true;
-  if (content.startsWith("[Tool ") && content.includes(" completed]"))
-    return true;
+  if (content.startsWith("[Tool ") && content.includes(" completed]")) return true;
   return false;
 }
 
@@ -99,19 +86,14 @@ function isNoiseContent(content: string): boolean {
  * 从消息列表中提取父 Agent 的原始目标。
  * 跳过噪音消息和 <files> 块，返回第一条有意义的 user 消息的前 300 字符。
  */
-function extractParentGoal(
-  messages: readonly ChatMessage[],
-): string | undefined {
+function extractParentGoal(messages: readonly ChatMessage[]): string | undefined {
   for (const m of messages) {
     if (m.role !== "user") continue;
     const content = messageContent(m);
     if (isNoiseContent(content)) continue;
     if (content.startsWith("<files>")) continue;
     const cleaned = content
-      .replace(
-        /^\[Context from previous session\][\s\S]*?\[Current user request\]\n/s,
-        "",
-      )
+      .replace(/^\[Context from previous session\][\s\S]*?\[Current user request\]\n/s, "")
       .trim();
     if (cleaned.length > 0) return cleaned.slice(0, 300);
   }
@@ -135,9 +117,7 @@ function extractFacts(messages: readonly ChatMessage[]): string[] {
 
     // 已有的上下文摘要 → 作为事实保留
     if (content.startsWith(`${CONTEXT_SUMMARY_PREFIX}\n`)) {
-      facts.push(
-        `Session summary: ${content.slice(CONTEXT_SUMMARY_PREFIX.length + 1, 900)}`,
-      );
+      facts.push(`Session summary: ${content.slice(CONTEXT_SUMMARY_PREFIX.length + 1, 900)}`);
       continue;
     }
     if (isNoiseContent(content)) continue;
@@ -170,11 +150,7 @@ function extractUserConstraints(messages: readonly ChatMessage[]): string[] {
     for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.length < 8 || trimmed.length > 120) continue;
-      if (
-        !/(must|never|always|don't|do not|avoid|禁止|必须|不要|不能)/i.test(
-          trimmed,
-        )
-      ) {
+      if (!/(must|never|always|don't|do not|avoid|禁止|必须|不要|不能)/i.test(trimmed)) {
         continue;
       }
       const key = trimmed.toLowerCase();
@@ -243,9 +219,7 @@ function extractParentConclusions(
     const content = messageContent(m);
 
     // 匹配 ## Key Decisions 段落
-    const keyDecisions = content.match(
-      /## Key Decisions\s*\n([\s\S]*?)(?:\n##|$)/,
-    );
+    const keyDecisions = content.match(/## Key Decisions\s*\n([\s\S]*?)(?:\n##|$)/);
     if (keyDecisions?.[1]) {
       for (const line of keyDecisions[1].split("\n")) {
         const text = line.replace(/^-\s*/, "").trim();
@@ -274,9 +248,7 @@ function extractParentConclusions(
 /** 按相关性排序并截断制品：critical > relevant > reference */
 function truncateArtifacts(artifacts: ContextArtifact[]): ContextArtifact[] {
   const order = { critical: 0, relevant: 1, reference: 2 } as const;
-  const sorted = [...artifacts].sort(
-    (a, b) => order[a.relevance] - order[b.relevance],
-  );
+  const sorted = [...artifacts].sort((a, b) => order[a.relevance] - order[b.relevance]);
   return sorted.slice(0, SHARED_CONTEXT_BUDGET.maxArtifacts).map((a) => ({
     ...a,
     content: a.content.slice(0, SHARED_CONTEXT_BUDGET.maxArtifactBytes),
@@ -292,10 +264,7 @@ function truncateArtifacts(artifacts: ContextArtifact[]): ContextArtifact[] {
  * 3. parentConclusions（只保留 high 置信度的）
  * 4. constraints（先丢弃最后的）
  */
-function truncateToBudget(
-  ctx: SharedContext,
-  maxTokens: number,
-): SharedContext {
+function truncateToBudget(ctx: SharedContext, maxTokens: number): SharedContext {
   let tokens = estimateSharedContextTokens(ctx);
   let working: SharedContext = { ...ctx };
 
@@ -320,9 +289,7 @@ function truncateToBudget(
 
   // 只保留高置信度的父 Agent 结论
   if (tokens > maxTokens && working.parentConclusions) {
-    const high = working.parentConclusions.filter(
-      (c) => c.confidence === "high",
-    );
+    const high = working.parentConclusions.filter((c) => c.confidence === "high");
     const candidate = { ...working, parentConclusions: high };
     const newTokens = estimateSharedContextTokens(candidate);
     if (newTokens < tokens) {
@@ -360,20 +327,14 @@ export class DefaultContextSummarizer implements ContextSummarizer {
     ctx: ContextManager,
     task: string,
     agentType: AgentType = "simple",
-    overrides?: Partial<
-      Pick<SharedContext, "childPolicy" | "parentConclusions">
-    >,
+    overrides?: Partial<Pick<SharedContext, "childPolicy" | "parentConclusions">>,
   ): SharedContext {
     const messages = ctx.buildMessages();
 
-    const facts = extractFacts(messages).slice(
-      0,
-      SHARED_CONTEXT_BUDGET.maxFacts,
-    );
+    const facts = extractFacts(messages).slice(0, SHARED_CONTEXT_BUDGET.maxFacts);
     const constraints = extractUserConstraints(messages);
     const artifacts = truncateArtifacts(extractArtifacts(messages));
-    const parentConclusions =
-      overrides?.parentConclusions ?? extractParentConclusions(messages);
+    const parentConclusions = overrides?.parentConclusions ?? extractParentConclusions(messages);
 
     const state: SharedContext["state"] = {
       completed: [],
@@ -395,10 +356,7 @@ export class DefaultContextSummarizer implements ContextSummarizer {
     // 预算控制
     const tokens = estimateSharedContextTokens(sharedCtx);
     if (tokens > SHARED_CONTEXT_BUDGET.maxSharedContextTokens) {
-      sharedCtx = truncateToBudget(
-        sharedCtx,
-        SHARED_CONTEXT_BUDGET.maxSharedContextTokens,
-      );
+      sharedCtx = truncateToBudget(sharedCtx, SHARED_CONTEXT_BUDGET.maxSharedContextTokens);
     }
 
     return sharedCtx;
@@ -408,18 +366,12 @@ export class DefaultContextSummarizer implements ContextSummarizer {
    * 从 AgentToolCallAction 中提取参数后调用 summarize。
    * 这是 action-handlers 中 handleRunAgent 的主要调用方式。
    */
-  summarizeForCall(
-    ctx: ContextManager,
-    call: AgentToolCallAction,
-  ): SharedContext {
+  summarizeForCall(ctx: ContextManager, call: AgentToolCallAction): SharedContext {
     const args =
       call.args && typeof call.args === "object"
         ? (call.args as Record<string, unknown>)
         : undefined;
-    const goal =
-      typeof args?.goal === "string"
-        ? args.goal
-        : String(args?.goal ?? "").trim();
+    const goal = typeof args?.goal === "string" ? args.goal : String(args?.goal ?? "").trim();
     const agentType = parseAgentType(args);
     const childPolicy = parseChildPolicy(args);
     const shared = this.summarize(ctx, goal, agentType, {

@@ -55,12 +55,7 @@ export interface MeaManagerContextInput {
   readonly signal?: AbortSignal;
 }
 
-const ACTIONS: readonly MeaManagerActionV1[] = [
-  "execute",
-  "done",
-  "blocked",
-  "ask",
-];
+const ACTIONS: readonly MeaManagerActionV1[] = ["execute", "done", "blocked", "ask"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -70,10 +65,7 @@ export function renderMeaManagerPrompt(input: MeaManagerContextInput): string {
   const open =
     input.openRecords.length > 0
       ? input.openRecords
-          .map(
-            (record) =>
-              `- [${record.kind}/${record.status}] ${record.text.slice(0, 300)}`,
-          )
+          .map((record) => `- [${record.kind}/${record.status}] ${record.text.slice(0, 300)}`)
           .join("\n")
       : "（无未决记录）";
   return [
@@ -99,16 +91,11 @@ export function renderMeaManagerPrompt(input: MeaManagerContextInput): string {
   ].join("\n");
 }
 
-function parseDecision(
-  text: string,
-  input: MeaManagerContextInput,
-): MeaManagerDecisionV1 {
+function parseDecision(text: string, input: MeaManagerContextInput): MeaManagerDecisionV1 {
   const fenced = text.match(/```json\s*([\s\S]*?)```/i);
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  const jsonText =
-    fenced?.[1] ??
-    (start >= 0 && end > start ? text.slice(start, end + 1) : null);
+  const jsonText = fenced?.[1] ?? (start >= 0 && end > start ? text.slice(start, end + 1) : null);
   const fail = (question: string): MeaManagerDecisionV1 => ({
     action: "ask",
     question,
@@ -155,22 +142,13 @@ function parseDecision(
         acceptanceCriteria: stringList(contractRaw?.acceptanceCriteria),
         boundaryConstraints: stringList(contractRaw?.boundaryConstraints),
       },
-      reason:
-        typeof parsed.reason === "string"
-          ? parsed.reason.slice(0, 300)
-          : undefined,
+      reason: typeof parsed.reason === "string" ? parsed.reason.slice(0, 300) : undefined,
     };
   }
   return {
     action,
-    question:
-      typeof parsed.question === "string"
-        ? parsed.question.slice(0, 600)
-        : undefined,
-    reason:
-      typeof parsed.reason === "string"
-        ? parsed.reason.slice(0, 300)
-        : undefined,
+    question: typeof parsed.question === "string" ? parsed.question.slice(0, 600) : undefined,
+    reason: typeof parsed.reason === "string" ? parsed.reason.slice(0, 300) : undefined,
   };
 }
 
@@ -180,10 +158,7 @@ export async function runMeaManager(
   input: MeaManagerContextInput,
 ): Promise<MeaManagerDecisionV1> {
   try {
-    const result = await model.complete(
-      renderMeaManagerPrompt(input),
-      input.signal,
-    );
+    const result = await model.complete(renderMeaManagerPrompt(input), input.signal);
     if (result.status !== "completed") {
       return {
         action: "ask",

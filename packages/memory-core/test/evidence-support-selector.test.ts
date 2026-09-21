@@ -67,9 +67,7 @@ describe("requirement-bound evidence support selector v1", () => {
           content: [
             "A long numbered response follows.",
             ...Array.from({ length: 40 }, (_, index) =>
-              index === 26
-                ? "27. Sound effects"
-                : `${index + 1}. ${"filler ".repeat(20)}`,
+              index === 26 ? "27. Sound effects" : `${index + 1}. ${"filler ".repeat(20)}`,
             ),
           ].join("\n"),
         },
@@ -92,18 +90,12 @@ describe("requirement-bound evidence support selector v1", () => {
     expect(payload.candidates[0]?.evidenceRef).toBe("e1");
     expect(payload.candidates[0]?.sourceId).toBeUndefined();
     expect(payload.candidates[0]?.turnOrder).toBe(3);
-    expect(payload.candidates[0]).not.toHaveProperty(
-      "certifiedAssistantDialogue",
-    );
-    expect(payload.requirements[0]).not.toHaveProperty(
-      "certifiedAssistantDialogueCandidate",
-    );
+    expect(payload.candidates[0]).not.toHaveProperty("certifiedAssistantDialogue");
+    expect(payload.requirements[0]).not.toHaveProperty("certifiedAssistantDialogueCandidate");
     expect(request.system).not.toContain(
       "roleConstraint=user with certifiedAssistantDialogueCandidate=true",
     );
-    expect(request.system).toContain(
-      "later assistant response after user feedback",
-    );
+    expect(request.system).toContain("later assistant response after user feedback");
   });
 
   test("passes typed inference closure to the bounded selector", () => {
@@ -158,9 +150,7 @@ describe("requirement-bound evidence support selector v1", () => {
       }>;
       candidates: Array<{ certifiedAssistantDialogue: boolean }>;
     };
-    expect(payload.requirements[0]?.certifiedAssistantDialogueCandidate).toBe(
-      true,
-    );
+    expect(payload.requirements[0]?.certifiedAssistantDialogueCandidate).toBe(true);
     expect(payload.candidates[0]?.certifiedAssistantDialogue).toBe(true);
     expect(request.system).toContain(
       "roleConstraint=user with certifiedAssistantDialogueCandidate=true",
@@ -208,12 +198,8 @@ describe("requirement-bound evidence support selector v1", () => {
       };
 
       expect(payload.candidates[0]?.certifiedAssistantDialogue).toBe(true);
-      expect(payload.requirements[0]).not.toHaveProperty(
-        "certifiedAssistantDialogueCandidate",
-      );
-      expect(request.system).toContain(
-        "only deterministic dialogue provenance",
-      );
+      expect(payload.requirements[0]).not.toHaveProperty("certifiedAssistantDialogueCandidate");
+      expect(request.system).toContain("only deterministic dialogue provenance");
       expect(request.system).not.toContain(
         "roleConstraint=user with certifiedAssistantDialogueCandidate=true",
       );
@@ -331,20 +317,14 @@ describe("requirement-bound evidence support selector v1", () => {
         },
       ],
     } as const;
-    const payload = JSON.parse(
-      buildMemoryEvidenceSupportSelectionRequestV1(input).user,
-    ) as {
+    const payload = JSON.parse(buildMemoryEvidenceSupportSelectionRequestV1(input).user) as {
       candidates: Array<{
         evidenceRef: string;
         eligibleRequirementIds: string[];
       }>;
     };
-    expect(payload.candidates[0]?.eligibleRequirementIds).toEqual([
-      "requirement-1",
-    ]);
-    expect(payload.candidates[1]?.eligibleRequirementIds).toEqual([
-      "requirement-2",
-    ]);
+    expect(payload.candidates[0]?.eligibleRequirementIds).toEqual(["requirement-1"]);
+    expect(payload.candidates[1]?.eligibleRequirementIds).toEqual(["requirement-2"]);
     expect(payload.candidates[2]?.eligibleRequirementIds).toEqual([]);
 
     expect(() =>
@@ -473,10 +453,7 @@ describe("requirement-bound evidence support selector v1", () => {
     expect(() =>
       parseMemoryEvidenceSupportGroupedSelectionV1(
         JSON.stringify({
-          assessments: [
-            assessment("requirement-1"),
-            assessment("requirement-1"),
-          ],
+          assessments: [assessment("requirement-1"), assessment("requirement-1")],
         }),
         input,
         groups,
@@ -559,9 +536,7 @@ describe("requirement-bound evidence support selector v1", () => {
       { query: "Compare both trips", requirements, candidates },
       new AbortController().signal,
     );
-    expect(selected.assessments[0]?.supportingEvidenceRefs).toEqual([
-      "japan#turn-1",
-    ]);
+    expect(selected.assessments[0]?.supportingEvidenceRefs).toEqual(["japan#turn-1"]);
     expect(selected.selectionRevision).toHaveLength(64);
   });
 
@@ -583,9 +558,7 @@ describe("requirement-bound evidence support selector v1", () => {
               assessments: [
                 {
                   requirementId: firstRequirement.requirementId,
-                  supportingEvidenceRefs: wideCandidates.map(
-                    (_, index) => `e${index + 1}`,
-                  ),
+                  supportingEvidenceRefs: wideCandidates.map((_, index) => `e${index + 1}`),
                   contradictingEvidenceRefs: [],
                   unknownEvidenceRefs: [],
                 },
@@ -656,9 +629,7 @@ describe("requirement-bound evidence support selector v1", () => {
     expect(payload.candidates[0]?.content.length).toBeLessThanOrEqual(2_400);
     expect(payload.candidates[0]?.content).toContain("needle answer");
     expect(payload.candidates[0]?.evidenceRef).toBe("e1");
-    expect(selected.assessments[0]?.supportingEvidenceRefs).toEqual([
-      "japan#turn-1",
-    ]);
+    expect(selected.assessments[0]?.supportingEvidenceRefs).toEqual(["japan#turn-1"]);
   });
 
   test("keeps ordinary requests byte-stable and projection idempotent", () => {

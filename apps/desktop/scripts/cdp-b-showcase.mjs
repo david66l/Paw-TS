@@ -1,13 +1,7 @@
 /**
  * B 档真实场景：让桌面 Agent 在 /tmp/paw-showcase 做落地页+主题+假记忆面板
  */
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const CDP = process.env.CDP_URL || "http://127.0.0.1:9223";
@@ -57,9 +51,7 @@ async function connect() {
     });
   };
   ws.onmessage = (ev) => {
-    const msg = JSON.parse(
-      typeof ev.data === "string" ? ev.data : ev.data.toString(),
-    );
+    const msg = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject, t } = pending.get(msg.id);
       clearTimeout(t);
@@ -85,9 +77,7 @@ async function evalJs(send, expression, awaitPromise = false) {
   });
   if (r.exceptionDetails) {
     throw new Error(
-      r.exceptionDetails.exception?.description ||
-        r.exceptionDetails.text ||
-        "eval fail",
+      r.exceptionDetails.exception?.description || r.exceptionDetails.text || "eval fail",
     );
   }
   return r.result?.value;
@@ -173,10 +163,7 @@ async function clickTab(send, label) {
 }
 
 async function panel(send) {
-  return evalJs(
-    send,
-    `document.querySelector("[role=tabpanel]")?.innerText?.slice(0, 2500) || ""`,
-  );
+  return evalJs(send, `document.querySelector("[role=tabpanel]")?.innerText?.slice(0, 2500) || ""`);
 }
 
 function inspectFiles() {
@@ -184,13 +171,7 @@ function inspectFiles() {
     return { ok: false, reason: "dir missing", files: [] };
   }
   const files = readdirSync(OUT_DIR);
-  const need = [
-    "index.html",
-    "styles.css",
-    "theme.js",
-    "memory-demo.js",
-    "README.md",
-  ];
+  const need = ["index.html", "styles.css", "theme.js", "memory-demo.js", "README.md"];
   const missing = need.filter((f) => !files.includes(f));
   let html = "";
   let css = "";
@@ -208,9 +189,7 @@ function inspectFiles() {
     hasHero: /hero|Hero|主按钮|开始/i.test(html),
     hasCards: /长期记忆|多轮|Plan|Context|Memory/i.test(html),
     hasFaq: /FAQ|常见问题|问答/i.test(html),
-    hasThemeToggle: /theme|深色|浅色|data-theme|localStorage/i.test(
-      html + theme,
-    ),
+    hasThemeToggle: /theme|深色|浅色|data-theme|localStorage/i.test(html + theme),
     hasMemoryDemo: /preference|decision|筛选|filter/i.test(html + mem),
     hasDarkVars: /data-theme|prefers-color|--bg|#1a6bff|accent/i.test(css),
   };
@@ -241,12 +220,7 @@ async function main() {
   await sendGoal(send, GOAL1);
   const r1 = await waitDone(send, 480000);
   report.steps.push({ round: 1, done: r1.done?.result || r1.done });
-  console.log(
-    "Round1 done",
-    r1.done?.result?.status || "ok",
-    "plans",
-    r1.plans,
-  );
+  console.log("Round1 done", r1.done?.result?.status || "ok", "plans", r1.plans);
 
   await clickTab(send, "Plan");
   report.panels.plan1 = await panel(send);
@@ -324,10 +298,7 @@ async function main() {
     criteria: criteria.map(([n, o]) => ({ n, o })),
   };
 
-  writeFileSync(
-    join(ART, "b-showcase-report.json"),
-    JSON.stringify(report, null, 2),
-  );
+  writeFileSync(join(ART, "b-showcase-report.json"), JSON.stringify(report, null, 2));
   console.log("Report:", join(ART, "b-showcase-report.json"));
   console.log("Open:", join(OUT_DIR, "index.html"));
 

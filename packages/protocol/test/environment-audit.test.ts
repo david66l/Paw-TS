@@ -1,8 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  COMPLETION_REVIEW_POLICY_VERSION_V1,
-  parseRunJournalPrefixV1,
-} from "../src/index.js";
+import { COMPLETION_REVIEW_POLICY_VERSION_V1, parseRunJournalPrefixV1 } from "../src/index.js";
 
 const evidence = {
   policyVersion: "paw.environment-audit.v1",
@@ -14,10 +11,7 @@ const evidence = {
   inspected: [{ path: "src/app.ts", hash: "d".repeat(64) }],
   unmetCriteria: [],
 };
-function prefix(
-  audit: unknown = evidence,
-  reviewerId = "paw.environment-audit.v1",
-) {
+function prefix(audit: unknown = evidence, reviewerId = "paw.environment-audit.v1") {
   return [
     { type: "attempt.started", goalHash: "goal", configHash: "config" },
     {
@@ -51,29 +45,17 @@ function prefix(
 }
 test("environment audit evidence is candidate-bound and requires a clean grounded verdict", () => {
   expect(parseRunJournalPrefixV1(prefix())).toHaveLength(3);
+  expect(() => parseRunJournalPrefixV1(prefix({ ...evidence, integrity: "suspect" }))).toThrow();
+  expect(() => parseRunJournalPrefixV1(prefix({ ...evidence, inspected: [] }))).toThrow();
   expect(() =>
-    parseRunJournalPrefixV1(prefix({ ...evidence, integrity: "suspect" })),
+    parseRunJournalPrefixV1(prefix({ ...evidence, unmetCriteria: ["missing behavior"] })),
   ).toThrow();
   expect(() =>
-    parseRunJournalPrefixV1(prefix({ ...evidence, inspected: [] })),
+    parseRunJournalPrefixV1(prefix({ ...evidence, candidateHash: "e".repeat(64) })),
   ).toThrow();
-  expect(() =>
-    parseRunJournalPrefixV1(
-      prefix({ ...evidence, unmetCriteria: ["missing behavior"] }),
-    ),
-  ).toThrow();
-  expect(() =>
-    parseRunJournalPrefixV1(
-      prefix({ ...evidence, candidateHash: "e".repeat(64) }),
-    ),
-  ).toThrow();
-  expect(() =>
-    parseRunJournalPrefixV1(prefix(undefined, "legacy-reviewer")),
-  ).toThrow();
+  expect(() => parseRunJournalPrefixV1(prefix(undefined, "legacy-reviewer"))).toThrow();
   expect(() => parseRunJournalPrefixV1(prefix(null))).toThrow();
-  expect(parseRunJournalPrefixV1(prefix(null, "legacy-reviewer"))).toHaveLength(
-    3,
-  );
+  expect(parseRunJournalPrefixV1(prefix(null, "legacy-reviewer"))).toHaveLength(3);
 });
 
 test("browser audit evidence is optional, bounded, and rejects empty or duplicate proof", () => {
@@ -85,9 +67,7 @@ test("browser audit evidence is optional, bounded, and rejects empty or duplicat
     assertions: 1,
     checkedAt: 10,
   };
-  expect(
-    parseRunJournalPrefixV1(prefix({ ...evidence, browserChecks: [check] })),
-  ).toHaveLength(3);
+  expect(parseRunJournalPrefixV1(prefix({ ...evidence, browserChecks: [check] }))).toHaveLength(3);
   for (const invalid of [
     { ...check, assertions: 0 },
     { ...check, url: "https://external.invalid/" },
@@ -95,14 +75,10 @@ test("browser audit evidence is optional, bounded, and rejects empty or duplicat
     { ...check, passed: true },
   ]) {
     expect(() =>
-      parseRunJournalPrefixV1(
-        prefix({ ...evidence, browserChecks: [invalid] }),
-      ),
+      parseRunJournalPrefixV1(prefix({ ...evidence, browserChecks: [invalid] })),
     ).toThrow();
   }
   expect(() =>
-    parseRunJournalPrefixV1(
-      prefix({ ...evidence, browserChecks: [check, check] }),
-    ),
+    parseRunJournalPrefixV1(prefix({ ...evidence, browserChecks: [check, check] })),
   ).toThrow();
 });

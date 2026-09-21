@@ -26,8 +26,7 @@ function result(
         weight: 1,
         candidates: Object.freeze(
           rows.map((row, index) => {
-            const evidenceRef =
-              row.evidenceRef ?? `${row.sourceId}#turn-${index + 1}`;
+            const evidenceRef = row.evidenceRef ?? `${row.sourceId}#turn-${index + 1}`;
             return Object.freeze({
               candidateId: evidenceRef,
               sourceId: row.sourceId,
@@ -41,8 +40,7 @@ function result(
     ]),
     hits: Object.freeze(
       rows.map((row, index) => {
-        const evidenceRef =
-          row.evidenceRef ?? `${row.sourceId}#turn-${index + 1}`;
+        const evidenceRef = row.evidenceRef ?? `${row.sourceId}#turn-${index + 1}`;
         return Object.freeze({
           sourceId: row.sourceId,
           evidenceRef,
@@ -71,16 +69,11 @@ function acquire(input: {
     evidenceTimeUpperBoundRevision: hashTextV1("same cutoff"),
     originalRoleConstraint: "user",
     originalLaneMode: "role_filtered",
-    original: result([
-      { sourceId: "original-primary" },
-      { sourceId: "original-secondary" },
-    ]),
+    original: result([{ sourceId: "original-primary" }, { sourceId: "original-secondary" }]),
     requirements: input.requirements.map((requirement) => ({
       ...requirement,
       roleConstraint: "user" as const,
-      temporalBindingRevision: hashTextV1(
-        `temporal:${requirement.requirementId}`,
-      ),
+      temporalBindingRevision: hashTextV1(`temporal:${requirement.requirementId}`),
     })),
     maxSources: input.maxSources ?? 8,
     maxEvidencePerSource: input.maxEvidencePerSource ?? 2,
@@ -133,11 +126,12 @@ describe("requirement-fair pre-lock acquisition v1", () => {
       "source-c",
       "source-d",
     ]);
-    expect(
-      acquired.report.requirementContributions.map(
-        (lane) => lane.selectedSourceIds,
-      ),
-    ).toEqual([["source-a"], ["source-b"], ["source-c"], ["source-d"]]);
+    expect(acquired.report.requirementContributions.map((lane) => lane.selectedSourceIds)).toEqual([
+      ["source-a"],
+      ["source-b"],
+      ["source-c"],
+      ["source-d"],
+    ]);
     expect(acquired.report.telemetry.requirementLaneOpportunityCount).toBe(4);
   });
 
@@ -168,9 +162,7 @@ describe("requirement-fair pre-lock acquisition v1", () => {
       PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_REVISION_V1,
     );
     expect(left.fusion.sources.length).toBeLessThanOrEqual(3);
-    expect(
-      left.fusion.sources.every((source) => source.evidence.length <= 2),
-    ).toBe(true);
+    expect(left.fusion.sources.every((source) => source.evidence.length <= 2)).toBe(true);
   });
 
   test("keeps ordinary and explicit-user original acquisition role-filtered", async () => {
@@ -196,16 +188,9 @@ describe("requirement-fair pre-lock acquisition v1", () => {
         evidenceGroundedRoleBinding: true,
         maxSources: 1,
       });
-      const resolution = await resolver.resolve(
-        query,
-        new AbortController().signal,
-      );
-      expect(resolution.sourceAcquisition.originalLaneMode).toBe(
-        "role_filtered",
-      );
-      expect(resolution.sources.map((source) => source.sourceId)).toEqual([
-        "user-source",
-      ]);
+      const resolution = await resolver.resolve(query, new AbortController().signal);
+      expect(resolution.sourceAcquisition.originalLaneMode).toBe("role_filtered");
+      expect(resolution.sources.map((source) => source.sourceId)).toEqual(["user-source"]);
     }
   });
 
@@ -232,12 +217,8 @@ describe("requirement-fair pre-lock acquisition v1", () => {
       new AbortController().signal,
     );
 
-    expect(resolution.sourceAcquisition.originalLaneMode).toBe(
-      "origin_authorized_unfiltered",
-    );
-    expect(resolution.sources.map((source) => source.sourceId)).toEqual([
-      "assistant-source",
-    ]);
+    expect(resolution.sourceAcquisition.originalLaneMode).toBe("origin_authorized_unfiltered");
+    expect(resolution.sources.map((source) => source.sourceId)).toEqual(["assistant-source"]);
     expect(resolution.packetSources).toEqual([]);
     expect(resolution.notebook.selectedHitCount).toBe(0);
   });

@@ -27,12 +27,7 @@ describe("facet v2 ID-only reconciler", () => {
     const result = parseMemoryFacetReconciliationV2(
       JSON.stringify({
         decisions: [
-          existingDecision(
-            required(setup.observations[0]).id,
-            setup.facet.id,
-            "event",
-            "initial",
-          ),
+          existingDecision(required(setup.observations[0]).id, setup.facet.id, "event", "initial"),
           existingDecision(
             required(setup.observations[1]).id,
             setup.facet.id,
@@ -79,22 +74,16 @@ describe("facet v2 ID-only reconciler", () => {
     expect(projection.currentStates.map((item) => item.memoryId)).toEqual([
       "current-participation",
     ]);
-    expect(projection.historicalStates.map((item) => item.memoryId)).toEqual([
-      "old-avoidance",
-    ]);
+    expect(projection.historicalStates.map((item) => item.memoryId)).toEqual(["old-avoidance"]);
     expect(projection.events.map((item) => item.memoryId)).toEqual([
       "joined-community",
       "rejected-forum",
     ]);
-    expect(projection.conditions.map((item) => item.memoryId)).toEqual([
-      "supportive-condition",
-    ]);
+    expect(projection.conditions.map((item) => item.memoryId)).toEqual(["supportive-condition"]);
   });
 
   test("keeps the instruction prefix stable and materializes new facet IDs in code", () => {
-    const firstInput = newFacetInput(
-      "Prefers detailed architecture explanations",
-    );
+    const firstInput = newFacetInput("Prefers detailed architecture explanations");
     const secondInput = newFacetInput("Prefers concise status updates");
     const firstRequest = buildMemoryFacetReconciliationRequestV2(firstInput);
     const secondRequest = buildMemoryFacetReconciliationRequestV2(secondInput);
@@ -102,11 +91,7 @@ describe("facet v2 ID-only reconciler", () => {
 
     const response = JSON.stringify({
       decisions: [
-        newDecision(
-          "new-observation",
-          "response.detail_preference",
-          "Response detail preference",
-        ),
+        newDecision("new-observation", "response.detail_preference", "Response detail preference"),
       ],
       deferredMemoryIds: [],
     });
@@ -169,15 +154,9 @@ describe("facet v2 ID-only reconciler", () => {
     expect(result.facets).toHaveLength(1);
     expect(result.facets[0]).toMatchObject({
       displayName: "Investment community participation",
-      aliases: [
-        "community participation in investing",
-        "investment community",
-        "investment forum",
-      ],
+      aliases: ["community participation in investing", "investment community", "investment forum"],
     });
-    expect(new Set(result.memberships.map((item) => item.facetId)).size).toBe(
-      1,
-    );
+    expect(new Set(result.memberships.map((item) => item.facetId)).size).toBe(1);
   });
 
   test("repairs one invented facet ID without weakening target validation", async () => {
@@ -186,25 +165,11 @@ describe("facet v2 ID-only reconciler", () => {
     const events: MemoryFacetReconcilerEventV2[] = [];
     const responses = [
       JSON.stringify({
-        decisions: [
-          existingDecision(
-            "joined-community",
-            "invented-facet-id",
-            "event",
-            "initial",
-          ),
-        ],
+        decisions: [existingDecision("joined-community", "invented-facet-id", "event", "initial")],
         deferredMemoryIds: ["current-participation", "supportive-condition"],
       }),
       JSON.stringify({
-        decisions: [
-          existingDecision(
-            "joined-community",
-            setup.facet.id,
-            "event",
-            "initial",
-          ),
-        ],
+        decisions: [existingDecision("joined-community", setup.facet.id, "event", "initial")],
         deferredMemoryIds: ["current-participation", "supportive-condition"],
       }),
     ];
@@ -221,20 +186,12 @@ describe("facet v2 ID-only reconciler", () => {
       onEvent: (event) => events.push(event),
       now: () => 10,
     });
-    const result = await reconciler.reconcile(
-      setup.input,
-      new AbortController().signal,
-    );
+    const result = await reconciler.reconcile(setup.input, new AbortController().signal);
 
     expect(calls).toHaveLength(2);
     expect(calls[1]?.system).toContain("failed strict validation");
-    expect(result.memberships.map((item) => item.memoryId)).toEqual([
-      "joined-community",
-    ]);
-    expect(result.deferredMemoryIds).toEqual([
-      "current-participation",
-      "supportive-condition",
-    ]);
+    expect(result.memberships.map((item) => item.memoryId)).toEqual(["joined-community"]);
+    expect(result.deferredMemoryIds).toEqual(["current-participation", "supportive-condition"]);
     expect(events).toEqual([
       expect.objectContaining({
         type: "completed",
@@ -284,9 +241,7 @@ describe("facet v2 ID-only reconciler", () => {
     const result = parseMemoryFacetReconciliationV2(
       JSON.stringify({
         decisions: [
-          existingDecision("blog-profile", facet.id, "state", "same_state", [
-            "blog-event",
-          ]),
+          existingDecision("blog-profile", facet.id, "state", "same_state", ["blog-event"]),
         ],
         deferredMemoryIds: [],
       }),
@@ -324,17 +279,8 @@ describe("facet v2 ID-only reconciler", () => {
     };
     const invalidPacket = JSON.stringify({
       decisions: [
-        newDecision(
-          "valid-observation",
-          "response.conciseness",
-          "Response conciseness",
-        ),
-        existingDecision(
-          "invalid-observation",
-          "invented-facet-id",
-          "state",
-          "initial",
-        ),
+        newDecision("valid-observation", "response.conciseness", "Response conciseness"),
+        existingDecision("invalid-observation", "invented-facet-id", "state", "initial"),
       ],
       deferredMemoryIds: [],
     });
@@ -348,14 +294,9 @@ describe("facet v2 ID-only reconciler", () => {
       onEvent: (event) => events.push(event),
       now: () => 10,
     });
-    const result = await reconciler.reconcile(
-      input,
-      new AbortController().signal,
-    );
+    const result = await reconciler.reconcile(input, new AbortController().signal);
 
-    expect(result.memberships.map((item) => item.memoryId)).toEqual([
-      "valid-observation",
-    ]);
+    expect(result.memberships.map((item) => item.memoryId)).toEqual(["valid-observation"]);
     expect(result.deferredMemoryIds).toEqual(["invalid-observation"]);
     expect(result.salvagedDecisionCount).toBe(1);
     expect(events).toEqual([
@@ -391,14 +332,7 @@ describe("facet v2 ID-only reconciler", () => {
     expect(() =>
       parseMemoryFacetReconciliationV2(
         JSON.stringify({
-          decisions: [
-            existingDecision(
-              "joined-community",
-              setup.facet.id,
-              "event",
-              "initial",
-            ),
-          ],
+          decisions: [existingDecision("joined-community", setup.facet.id, "event", "initial")],
           deferredMemoryIds: ["supportive-condition"],
         }),
         setup.input,

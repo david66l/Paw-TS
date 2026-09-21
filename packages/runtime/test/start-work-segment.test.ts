@@ -60,9 +60,7 @@ afterEach(() => {
 
 describe("start work segment memory transaction", () => {
   test("uses the two-fact CAS path when the eligible decision is already the tail", async () => {
-    const session = new MemoryWorkSegmentSession(
-      prefixWithDecisionTail([accepted("queue-1")]),
-    );
+    const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
     const result = await start(session, "queue-1");
 
     expect(result).toEqual({
@@ -79,9 +77,7 @@ describe("start work segment memory transaction", () => {
   });
 
   test("atomically commits decision+marker+promotion when accepted is the tail", async () => {
-    const session = new MemoryWorkSegmentSession(
-      prefixWithAcceptedTail("queue-1"),
-    );
+    const session = new MemoryWorkSegmentSession(prefixWithAcceptedTail("queue-1"));
     await start(session, "queue-1");
 
     expect(session.inputCommits).toHaveLength(0);
@@ -94,9 +90,7 @@ describe("start work segment memory transaction", () => {
   });
 
   test("is idempotent for the same input and never opens a second segment", async () => {
-    const session = new MemoryWorkSegmentSession(
-      prefixWithDecisionTail([accepted("queue-1")]),
-    );
+    const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
     expect(await start(session, "queue-1")).toMatchObject({
       status: "started",
       segmentIndex: 1,
@@ -110,25 +104,15 @@ describe("start work segment memory transaction", () => {
   });
 
   test("lets two same-input starters linearize to started then already_started", async () => {
-    const session = new MemoryWorkSegmentSession(
-      prefixWithDecisionTail([accepted("queue-1")]),
-    );
-    const results = await Promise.all([
-      start(session, "queue-1"),
-      start(session, "queue-1"),
-    ]);
+    const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
+    const results = await Promise.all([start(session, "queue-1"), start(session, "queue-1")]);
 
-    expect(results.map((result) => result.status).sort()).toEqual([
-      "already_started",
-      "started",
-    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(["already_started", "started"]);
     expect(countFact(session.prefix, "work.segment_started")).toBe(1);
   });
 
   test("revalidates the current prefix before returning already_started", async () => {
-    const session = new MemoryWorkSegmentSession(
-      prefixWithDecisionTail([accepted("queue-1")]),
-    );
+    const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
     await start(session, "queue-1");
     const commitCount = session.inputCommits.length;
     const failure = new Error("current artifact evidence failed");
@@ -161,9 +145,7 @@ describe("start work segment memory transaction", () => {
   });
 
   test("rereads after a CAS conflict but remains bound to the requested inputId", async () => {
-    const session = new MemoryWorkSegmentSession(
-      prefixWithDecisionTail([accepted("queue-1")]),
-    );
+    const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
     let injected = false;
     session.beforeInputCommit = () => {
       if (injected) return;
@@ -174,9 +156,7 @@ describe("start work segment memory transaction", () => {
     expect(await start(session, "queue-1")).toMatchObject({
       status: "started",
     });
-    const markers = facts(session.prefix).filter(
-      (fact) => fact.type === "work.segment_started",
-    );
+    const markers = facts(session.prefix).filter((fact) => fact.type === "work.segment_started");
     expect(markers).toHaveLength(1);
     expect(markers[0]).toMatchObject({ inputId: "queue-1" });
     expect(session.inputCommits).toHaveLength(1);
@@ -184,14 +164,10 @@ describe("start work segment memory transaction", () => {
   });
 
   test("fails closed after a conflicting abort and writes no marker", async () => {
-    const session = new MemoryWorkSegmentSession(
-      prefixWithDecisionTail([accepted("queue-1")]),
-    );
+    const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
     session.beforeInputCommit = () => {
       session.beforeInputCommit = undefined;
-      session.appendExternalFacts([
-        { type: "abort.requested", source: "user", reason: "stop" },
-      ]);
+      session.appendExternalFacts([{ type: "abort.requested", source: "user", reason: "stop" }]);
     };
 
     await expect(start(session, "queue-1")).rejects.toThrow(
@@ -208,9 +184,7 @@ describe("start work segment memory transaction", () => {
       new Error("preflight abort"),
     ];
     for (const [index, failure] of cases.entries()) {
-      const session = new MemoryWorkSegmentSession(
-        prefixWithDecisionTail([accepted("queue-1")]),
-      );
+      const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
       const controller = new AbortController();
       let prospective: readonly RunJournalEnvelopeV1[] | undefined;
       const preflight = async (prefix: readonly RunJournalEnvelopeV1[]) => {
@@ -239,9 +213,7 @@ describe("start work segment memory transaction", () => {
   });
 
   test("checks abort again when prospective evidence returns normally", async () => {
-    const session = new MemoryWorkSegmentSession(
-      prefixWithDecisionTail([accepted("queue-1")]),
-    );
+    const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
     const controller = new AbortController();
     const abortReason = new Error("abort inside prospective evidence");
 
@@ -260,9 +232,7 @@ describe("start work segment memory transaction", () => {
 
   test("propagates commit failures unchanged and does not retry them", async () => {
     const failure = new Error("fenced commit lost");
-    const session = new MemoryWorkSegmentSession(
-      prefixWithDecisionTail([accepted("queue-1")]),
-    );
+    const session = new MemoryWorkSegmentSession(prefixWithDecisionTail([accepted("queue-1")]));
     session.inputFailure = failure;
 
     await expect(start(session, "queue-1")).rejects.toBe(failure);
@@ -289,20 +259,19 @@ describe("start work segment memory transaction", () => {
     ).rejects.toThrow(/exact first pending queue input/i);
     expect(preflightCalls).toBe(0);
 
-    const tamperedPrefix = prefixWithDecisionTail([accepted("queue-1")]).map(
-      (envelope) =>
-        envelope.record.kind === "derived_decision"
-          ? {
-              ...envelope,
-              record: {
-                kind: "derived_decision" as const,
-                decision: {
-                  ...envelope.record.decision,
-                  stateHash: "tampered",
-                },
+    const tamperedPrefix = prefixWithDecisionTail([accepted("queue-1")]).map((envelope) =>
+      envelope.record.kind === "derived_decision"
+        ? {
+            ...envelope,
+            record: {
+              kind: "derived_decision" as const,
+              decision: {
+                ...envelope.record.decision,
+                stateHash: "tampered",
               },
-            }
-          : envelope,
+            },
+          }
+        : envelope,
     );
     const tampered = new MemoryWorkSegmentSession(tamperedPrefix);
     await expect(
@@ -345,9 +314,7 @@ describe("start work segment memory transaction", () => {
   });
 
   test("reuses one real artifact attachment binding through a fenced LocationAware Session", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-segment-location-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-segment-location-"));
     roots.push(workspaceRoot);
     const leaseResult = acquireFileSessionExecutionLeaseV1({
       workspaceRoot,
@@ -378,8 +345,7 @@ describe("start work segment memory transaction", () => {
     });
     let prepareCalls = 0;
     const countingMaterializer: LocationAwarePayloadMaterializerV1 = {
-      readCanonicalPayloadIdentity:
-        writer.readCanonicalPayloadIdentity.bind(writer),
+      readCanonicalPayloadIdentity: writer.readCanonicalPayloadIdentity.bind(writer),
       resolve: writer.resolve.bind(writer),
       hash: writer.hash.bind(writer),
       async prepare(value, binding, prepareSignal) {
@@ -396,10 +362,7 @@ describe("start work segment memory transaction", () => {
     });
     const seededFacts = baseFacts();
     const modelSettled = seededFacts[3];
-    if (
-      modelSettled?.type !== "model.settled" ||
-      modelSettled.response?.kind !== "inline"
-    ) {
+    if (modelSettled?.type !== "model.settled" || modelSettled.response?.kind !== "inline") {
       throw new Error("expected model settlement fixture");
     }
     seededFacts[3] = {
@@ -433,12 +396,9 @@ describe("start work segment memory transaction", () => {
     if (terminal.kind !== "derived_decision") {
       throw new Error("expected derived terminal fixture");
     }
-    expect(
-      await session.commitDerivedDecision(
-        seededPrefix.length,
-        terminal.decision,
-      ),
-    ).toBe("committed");
+    expect(await session.commitDerivedDecision(seededPrefix.length, terminal.decision)).toBe(
+      "committed",
+    );
     const preparesAfterSeed = prepareCalls;
     let preflightPrefix: readonly RunJournalEnvelopeV1[] | undefined;
 
@@ -468,18 +428,12 @@ describe("start work segment memory transaction", () => {
     expect(prepareCalls).toBe(preparesAfterSeed);
 
     const finalPrefix = await session.readCanonicalPrefix();
-    const attachmentOccurrences = projectCanonicalDurableJsonPayloadBindingsV1(
-      finalPrefix,
-    ).filter(
+    const attachmentOccurrences = projectCanonicalDurableJsonPayloadBindingsV1(finalPrefix).filter(
       (occurrence) => occurrence.binding.field.kind === "input_attachment",
     );
     expect(attachmentOccurrences).toHaveLength(2);
-    expect(attachmentOccurrences[0]?.payload).toEqual(
-      attachmentOccurrences[1]?.payload,
-    );
-    expect(attachmentOccurrences[0]?.binding).toEqual(
-      attachmentOccurrences[1]?.binding,
-    );
+    expect(attachmentOccurrences[0]?.payload).toEqual(attachmentOccurrences[1]?.payload);
+    expect(attachmentOccurrences[0]?.binding).toEqual(attachmentOccurrences[1]?.binding);
     expect(finalPrefix.slice(-2).map(recordType)).toEqual([
       "work.segment_started",
       "input.promoted",
@@ -609,9 +563,7 @@ function prefixWithDecisionTail(
   ];
 }
 
-function prefixWithAcceptedTail(
-  inputId: string,
-): readonly RunJournalEnvelopeV1[] {
+function prefixWithAcceptedTail(inputId: string): readonly RunJournalEnvelopeV1[] {
   const inputFacts = baseFacts();
   return [
     ...inputFacts.map((fact, index) => factEnvelope(index + 1, fact)),
@@ -678,9 +630,7 @@ function accepted(
   };
 }
 
-function decisionEnvelope(
-  inputFacts: readonly InputFactV1[],
-): RunJournalEnvelopeV1 {
+function decisionEnvelope(inputFacts: readonly InputFactV1[]): RunJournalEnvelopeV1 {
   const reducer = createInteractiveControlReducerV2();
   const state = reducer.reduce(inputFacts, config);
   const stateHash = JSON.stringify(state);
@@ -703,9 +653,7 @@ function decisionEnvelope(
 }
 
 function derivedDecision(input: {
-  readonly state: ReturnType<
-    ReturnType<typeof createInteractiveControlReducerV2>["reduce"]
-  >;
+  readonly state: ReturnType<ReturnType<typeof createInteractiveControlReducerV2>["reduce"]>;
   readonly inputThroughSeq: number;
   readonly stateHash: string;
   readonly reducerVersion: string;
@@ -719,9 +667,7 @@ function derivedDecision(input: {
   };
 }
 
-function actionFromDecision(
-  decision: ControlDecision,
-): ControlDecisionActionV1 {
+function actionFromDecision(decision: ControlDecision): ControlDecisionActionV1 {
   switch (decision.kind) {
     case "continue":
       return { kind: "continue", reasonCode: "continue" };
@@ -755,18 +701,13 @@ function factEnvelope(seq: number, fact: InputFactV1): RunJournalEnvelopeV1 {
   };
 }
 
-function facts(
-  prefix: readonly RunJournalEnvelopeV1[],
-): readonly InputFactV1[] {
+function facts(prefix: readonly RunJournalEnvelopeV1[]): readonly InputFactV1[] {
   return prefix.flatMap((envelope) =>
     envelope.record.kind === "input_fact" ? [envelope.record.fact] : [],
   );
 }
 
-function countFact(
-  prefix: readonly RunJournalEnvelopeV1[],
-  type: InputFactV1["type"],
-): number {
+function countFact(prefix: readonly RunJournalEnvelopeV1[], type: InputFactV1["type"]): number {
   return facts(prefix).filter((fact) => fact.type === type).length;
 }
 
@@ -796,9 +737,7 @@ function evidenceThatAborts(
       controller.abort(reason);
     },
     requireModelResponse() {
-      throw new Error(
-        "inline model response must not require artifact evidence",
-      );
+      throw new Error("inline model response must not require artifact evidence");
     },
   };
 }

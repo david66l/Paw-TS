@@ -83,9 +83,9 @@ describe("work segment Runtime consumers", () => {
     ]);
     const inbox = new DurableInputInboxV1(session as never);
 
-    await expect(
-      inbox.reportSafeBoundary("before_first_model_request"),
-    ).rejects.toThrow(/current-segment model turn/i);
+    await expect(inbox.reportSafeBoundary("before_first_model_request")).rejects.toThrow(
+      /current-segment model turn/i,
+    );
     expect(session.committedBatches).toHaveLength(0);
 
     await inbox.reportSafeBoundary("after_model_turn_without_tool_calls");
@@ -291,18 +291,13 @@ function context(contextWindowTokens = 100_000) {
       estimator: {
         count: (text) => text.length,
         countMessages: (messages) =>
-          messages.reduce(
-            (total, message) => total + (message.content?.length ?? 0),
-            0,
-          ),
+          messages.reduce((total, message) => total + (message.content?.length ?? 0), 0),
       },
     },
   });
 }
 
-function snapshotOf(
-  facts: readonly InputFactV1[],
-): SessionInputSnapshot<InputFactV1> {
+function snapshotOf(facts: readonly InputFactV1[]): SessionInputSnapshot<InputFactV1> {
   return {
     entries: facts.map((fact, index) => ({ seq: index + 1, fact })),
     tailSeq: facts.length,

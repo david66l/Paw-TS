@@ -92,30 +92,22 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
   if (!input.model || typeof input.model.complete !== "function") {
     throw namedError("MemoryEvidenceSupportSelectorModelInvalid");
   }
-  const selectorVersion =
-    input.selectorVersion ?? PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1;
+  const selectorVersion = input.selectorVersion ?? PAW_MEMORY_EVIDENCE_SUPPORT_SELECTOR_VERSION_V1;
   if (!selectorVersion.trim()) {
     throw namedError("MemoryEvidenceSupportSelectorVersionInvalid");
   }
   return Object.freeze({
     selectorVersion,
-    async select(
-      selection: Readonly<MemoryEvidenceSupportSelectionInputV1>,
-      signal: AbortSignal,
-    ) {
+    async select(selection: Readonly<MemoryEvidenceSupportSelectionInputV1>, signal: AbortSignal) {
       const projected = projectMemoryEvidenceSupportSelectionInputV1(selection);
       if (signal.aborted) throw abortError();
-      const request =
-        buildProjectedMemoryEvidenceSupportSelectionRequestV1(projected);
+      const request = buildProjectedMemoryEvidenceSupportSelectionRequestV1(projected);
       const result = await input.model.complete(request, { signal });
       if (signal.aborted || result.status === "cancelled") throw abortError();
       if (result.status !== "completed") {
         throw namedError(stableName(result.errorCode));
       }
-      const assessments = parseProjectedMemoryEvidenceSupportSelectionV1(
-        result.text,
-        projected,
-      );
+      const assessments = parseProjectedMemoryEvidenceSupportSelectionV1(result.text, projected);
       return Object.freeze({
         selectorVersion,
         selectionRevision: hashCanonicalJsonV1({
@@ -146,23 +138,19 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
     ) {
       const projected = projectMemoryEvidenceSupportSelectionInputV1(selection);
       if (signal.aborted) throw abortError();
-      const request =
-        buildProjectedMemoryEvidenceSupportSelectionRequestV1(projected);
+      const request = buildProjectedMemoryEvidenceSupportSelectionRequestV1(projected);
       const result = await input.model.complete(request, { signal });
       if (signal.aborted || result.status === "cancelled") throw abortError();
       if (result.status !== "completed") {
         throw namedError(stableName(result.errorCode));
       }
-      const settledGroups =
-        parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
-          result.text,
-          projected,
-          groups,
-        );
-      const assessments = settledGroups.flatMap((group) => group.assessments);
-      const allCompleted = settledGroups.every(
-        (group) => group.status === "completed",
+      const settledGroups = parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
+        result.text,
+        projected,
+        groups,
       );
+      const assessments = settledGroups.flatMap((group) => group.assessments);
+      const allCompleted = settledGroups.every((group) => group.status === "completed");
       return Object.freeze({
         selectorVersion,
         selectionRevision: hashCanonicalJsonV1(
@@ -176,15 +164,12 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
                 ...(projected.certifiedAssistantDialogueEvidenceRefs?.length
                   ? {
                       certifiedAssistantDialogueEvidenceRefs: Object.freeze(
-                        [
-                          ...projected.certifiedAssistantDialogueEvidenceRefs,
-                        ].sort(),
+                        [...projected.certifiedAssistantDialogueEvidenceRefs].sort(),
                       ),
                     }
                   : {}),
                 candidateEvidenceRefs: projected.candidates.map(
-                  (candidate: MemoryEvidenceNotebookHitV1) =>
-                    candidate.evidenceRef,
+                  (candidate: MemoryEvidenceNotebookHitV1) => candidate.evidenceRef,
                 ),
                 assessments,
               } as never)
@@ -195,8 +180,7 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
                 requirements: projected.requirements,
                 candidateScopes: projected.candidateScopes,
                 candidateEvidenceRefs: projected.candidates.map(
-                  (candidate: MemoryEvidenceNotebookHitV1) =>
-                    candidate.evidenceRef,
+                  (candidate: MemoryEvidenceNotebookHitV1) => candidate.evidenceRef,
                 ),
                 groups: settledGroups,
               } as never),
@@ -273,27 +257,20 @@ function buildProjectedMemoryEvidenceSupportSelectionRequestV1(
         dependsOnRequirementIds: requirement.dependsOnRequirementIds ?? [],
         relation: requirement.relation ?? "direct",
         coverageMode:
-          requirement.coverageMode ??
-          (requirement.temporalMode === "latest" ? "latest" : "any"),
+          requirement.coverageMode ?? (requirement.temporalMode === "latest" ? "latest" : "any"),
         minimumEvidence: requirement.minimumEvidence ?? 1,
-        ...(certifiedUserLane
-          ? { certifiedAssistantDialogueCandidate: true }
-          : {}),
+        ...(certifiedUserLane ? { certifiedAssistantDialogueCandidate: true } : {}),
       })),
       candidates: input.candidates.map((candidate, index) => ({
         evidenceRef: compactEvidenceRef(index),
-        eligibleRequirementIds: eligibleRequirementIdsForCandidate(
-          input,
-          candidate.evidenceRef,
-        ),
+        eligibleRequirementIds: eligibleRequirementIdsForCandidate(input, candidate.evidenceRef),
         authority: candidate.authority,
         sourceKind: candidate.sourceKind,
         ...(certifiedAssistantDialogueEvidenceRefs.size > 0
           ? {
-              certifiedAssistantDialogue:
-                certifiedAssistantDialogueEvidenceRefs.has(
-                  candidate.evidenceRef,
-                ),
+              certifiedAssistantDialogue: certifiedAssistantDialogueEvidenceRefs.has(
+                candidate.evidenceRef,
+              ),
             }
           : {}),
         contextEvidenceRefs: candidate.contextEvidenceRefs,
@@ -329,9 +306,7 @@ function parseProjectedMemoryEvidenceSupportSelectionV1(
   ) {
     throw namedError("MemoryEvidenceSupportSelectionShapeInvalid");
   }
-  const requirements = new Set(
-    input.requirements.map((requirement) => requirement.requirementId),
-  );
+  const requirements = new Set(input.requirements.map((requirement) => requirement.requirementId));
   const evidenceRefs = new Map(
     input.candidates.flatMap((candidate, index) => [
       [candidate.evidenceRef, candidate.evidenceRef] as const,
@@ -362,22 +337,13 @@ function parseProjectedMemoryEvidenceSupportSelectionV1(
     seen.add(requirementId);
     const eligibleRefs = scopes.get(requirementId) ?? new Set<string>();
     const eligibleEvidenceRefs = new Map(
-      [...evidenceRefs].filter(([, evidenceRef]) =>
-        eligibleRefs.has(evidenceRef),
-      ),
+      [...evidenceRefs].filter(([, evidenceRef]) => eligibleRefs.has(evidenceRef)),
     );
-    const [
-      supportingEvidenceRefs,
-      contradictingEvidenceRefs,
-      unknownEvidenceRefs,
-    ] = boundedEvidencePartition(
-      [
-        item.supportingEvidenceRefs,
-        item.contradictingEvidenceRefs,
-        item.unknownEvidenceRefs,
-      ],
-      eligibleEvidenceRefs,
-    );
+    const [supportingEvidenceRefs, contradictingEvidenceRefs, unknownEvidenceRefs] =
+      boundedEvidencePartition(
+        [item.supportingEvidenceRefs, item.contradictingEvidenceRefs, item.unknownEvidenceRefs],
+        eligibleEvidenceRefs,
+      );
     return Object.freeze({
       requirementId,
       supportingEvidenceRefs: Object.freeze(supportingEvidenceRefs),
@@ -421,10 +387,7 @@ function parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
     }
     seenGroupIds.add(group.groupId);
     for (const requirementId of group.requirementIds) {
-      if (
-        !requirementIds.has(requirementId) ||
-        groupByRequirement.has(requirementId)
-      ) {
+      if (!requirementIds.has(requirementId) || groupByRequirement.has(requirementId)) {
         throw namedError("MemoryEvidenceSupportGroupContractInvalid");
       }
       groupByRequirement.set(requirementId, group.groupId);
@@ -450,10 +413,7 @@ function parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
   );
   const scopes = candidateScopeMap(input);
   const seenRequirements = new Set<string>();
-  const validAssessments = new Map<
-    string,
-    Readonly<MemoryEvidenceTriageAssessmentV1>
-  >();
+  const validAssessments = new Map<string, Readonly<MemoryEvidenceTriageAssessmentV1>>();
   const failureCodesByGroup = new Map<string, Set<string>>();
   for (const item of parsed.assessments) {
     if (!isRecord(item)) {
@@ -471,33 +431,20 @@ function parseProjectedMemoryEvidenceSupportGroupedSelectionV1(
       "MemoryEvidenceSupportRequirementInvalid",
     );
     const groupId = groupByRequirement.get(requirementId);
-    if (
-      !groupId ||
-      seenRequirements.has(requirementId) ||
-      !requirementIds.has(requirementId)
-    ) {
+    if (!groupId || seenRequirements.has(requirementId) || !requirementIds.has(requirementId)) {
       throw namedError("MemoryEvidenceSupportRequirementInvalid");
     }
     seenRequirements.add(requirementId);
     const eligibleRefs = scopes.get(requirementId) ?? new Set<string>();
     const eligibleEvidenceRefs = new Map(
-      [...evidenceRefs].filter(([, evidenceRef]) =>
-        eligibleRefs.has(evidenceRef),
-      ),
+      [...evidenceRefs].filter(([, evidenceRef]) => eligibleRefs.has(evidenceRef)),
     );
     try {
-      const [
-        supportingEvidenceRefs,
-        contradictingEvidenceRefs,
-        unknownEvidenceRefs,
-      ] = boundedEvidencePartition(
-        [
-          item.supportingEvidenceRefs,
-          item.contradictingEvidenceRefs,
-          item.unknownEvidenceRefs,
-        ],
-        eligibleEvidenceRefs,
-      );
+      const [supportingEvidenceRefs, contradictingEvidenceRefs, unknownEvidenceRefs] =
+        boundedEvidencePartition(
+          [item.supportingEvidenceRefs, item.contradictingEvidenceRefs, item.unknownEvidenceRefs],
+          eligibleEvidenceRefs,
+        );
       validAssessments.set(
         requirementId,
         Object.freeze({
@@ -651,11 +598,7 @@ function assertSelectionInput(
       512,
       "MemoryEvidenceSupportCandidateInvalid",
     );
-    boundedText(
-      candidate.sourceId,
-      512,
-      "MemoryEvidenceSupportCandidateInvalid",
-    );
+    boundedText(candidate.sourceId, 512, "MemoryEvidenceSupportCandidateInvalid");
     if (typeof candidate.content !== "string") {
       throw namedError("MemoryEvidenceSupportCandidateInvalid");
     }
@@ -677,11 +620,7 @@ function assertSelectionInput(
       throw namedError("MemoryEvidenceSupportCandidateDuplicate");
     }
     if (candidate.eventKey !== undefined) {
-      boundedText(
-        candidate.eventKey,
-        256,
-        "MemoryEvidenceSupportCandidateInvalid",
-      );
+      boundedText(candidate.eventKey, 256, "MemoryEvidenceSupportCandidateInvalid");
     }
     refs.add(evidenceRef);
   }
@@ -769,18 +708,13 @@ function projectedCandidateChars(candidateCount: number): number {
 function candidateScopeMap(
   input: Readonly<MemoryEvidenceSupportSelectionInputV1>,
 ): ReadonlyMap<string, ReadonlySet<string>> {
-  const everyRef = Object.freeze(
-    input.candidates.map((candidate) => candidate.evidenceRef),
-  );
+  const everyRef = Object.freeze(input.candidates.map((candidate) => candidate.evidenceRef));
   return new Map(
     input.requirements.map((requirement) => {
       const scope = input.candidateScopes?.find(
         (item) => item.requirementId === requirement.requirementId,
       );
-      return [
-        requirement.requirementId,
-        new Set(scope?.evidenceRefs ?? everyRef),
-      ] as const;
+      return [requirement.requirementId, new Set(scope?.evidenceRefs ?? everyRef)] as const;
     }),
   );
 }
@@ -792,9 +726,7 @@ function eligibleRequirementIdsForCandidate(
   const scopes = candidateScopeMap(input);
   return Object.freeze(
     input.requirements
-      .filter((requirement) =>
-        scopes.get(requirement.requirementId)?.has(evidenceRef),
-      )
+      .filter((requirement) => scopes.get(requirement.requirementId)?.has(evidenceRef))
       .map((requirement) => requirement.requirementId),
   );
 }
@@ -810,11 +742,7 @@ function extractJsonObject(text: string): Record<string, unknown> {
   return value;
 }
 
-function boundedText(
-  value: unknown,
-  maximum: number,
-  errorName: string,
-): string {
+function boundedText(value: unknown, maximum: number, errorName: string): string {
   if (typeof value !== "string") throw namedError(errorName);
   const normalized = value.trim().replace(/\s+/gu, " ");
   if (!normalized || normalized.length > maximum) throw namedError(errorName);

@@ -30,9 +30,7 @@ describe("deterministic support floor v1", () => {
     expect(floor.flooredRequirementIds).toEqual(["req-1"]);
     const refs = [...(floor.selectedRefsByRequirement.get("req-1") ?? [])];
     expect(refs).toEqual(["a#1", "a#2"]);
-    expect(floor.policyVersion).toBe(
-      PAW_MEMORY_DETERMINISTIC_SUPPORT_FLOOR_POLICY_V1,
-    );
+    expect(floor.policyVersion).toBe(PAW_MEMORY_DETERMINISTIC_SUPPORT_FLOOR_POLICY_V1);
   });
 
   test("never overrides a non-empty selector binding", () => {

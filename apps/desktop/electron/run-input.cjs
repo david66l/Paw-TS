@@ -24,9 +24,7 @@ function runInputFields(payload) {
       ? { maxSteps: payload.maxSteps }
       : {}),
     ...(history ? { history } : {}),
-    ...(Array.isArray(payload?.attachments)
-      ? { attachments: payload.attachments }
-      : {}),
+    ...(Array.isArray(payload?.attachments) ? { attachments: payload.attachments } : {}),
   };
 }
 module.exports = { runInputFields };

@@ -68,11 +68,7 @@ describe("agent-loop ports", () => {
         return newFacts;
       },
     };
-    const reducer: ControlReducer<
-      Fact,
-      { readonly mode: "interactive" },
-      Decision
-    > = {
+    const reducer: ControlReducer<Fact, { readonly mode: "interactive" }, Decision> = {
       reduce(facts) {
         return { inputCount: facts.length };
       },
@@ -80,9 +76,7 @@ describe("agent-loop ports", () => {
 
     const initial: Fact = { kind: "fact", value: "hello" };
     await session.appendInputFacts([initial]);
-    const facts = (await session.readInputSnapshot()).entries.map(
-      (entry) => entry.fact,
-    );
+    const facts = (await session.readInputSnapshot()).entries.map((entry) => entry.fact);
     const request = await context.build(facts, { signal });
     const modelResult = await model.execute(request, {
       signal,
@@ -182,9 +176,9 @@ describe("agent-loop ports", () => {
 
     await session.commitDerivedDecision(7, { inputCount: 1 });
 
-    expect(
-      (await session.readInputSnapshot()).entries.map((entry) => entry.fact),
-    ).toEqual([{ kind: "fact", value: "input" }]);
+    expect((await session.readInputSnapshot()).entries.map((entry) => entry.fact)).toEqual([
+      { kind: "fact", value: "input" },
+    ]);
     expect(decisions).toEqual([{ inputCount: 1 }]);
   });
 });

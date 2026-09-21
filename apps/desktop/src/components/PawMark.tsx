@@ -1,9 +1,6 @@
 import mark from "../assets/paw-icon.png";
 
-export function PawMark({
-  size = 32,
-  className,
-}: { size?: number; className?: string }) {
+export function PawMark({ size = 32, className }: { size?: number; className?: string }) {
   return (
     <img
       src={mark}

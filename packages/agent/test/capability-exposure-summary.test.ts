@@ -7,8 +7,7 @@ import {
 
 function trace(runId: string, outcome: "hit" | "fallback" | "no_tool") {
   const actualTools = outcome === "no_tool" ? [] : ["workspace.read_file"];
-  const outsideSuggestion =
-    outcome === "fallback" ? ["workspace.read_file"] : [];
+  const outsideSuggestion = outcome === "fallback" ? ["workspace.read_file"] : [];
   return JSON.stringify([
     {
       runId,
@@ -76,9 +75,7 @@ describe("capability exposure evidence summary", () => {
   test("fails closed on missing shadow events", () => {
     const run = parseCapabilityExposureTraceV1({
       tracePath: "old/trace.json",
-      traceRaw: JSON.stringify([
-        { runId: "old", seq: 1, ts: 1, event: { type: "run.started" } },
-      ]),
+      traceRaw: JSON.stringify([{ runId: "old", seq: 1, ts: 1, event: { type: "run.started" } }]),
     });
     const summary = summarizeCapabilityExposureV1([run], [], 1);
     expect(run.valid).toBe(false);
@@ -109,9 +106,7 @@ describe("capability exposure evidence summary", () => {
     const blocked = summarizeCapabilityExposureV1([...hits, fallback]);
     expect(blocked.shadowCoverageReady).toBe(false);
     expect(blocked.fallbackSelections).toBe(1);
-    expect(blocked.outsideSuggestion).toEqual([
-      { tool: "workspace.read_file", count: 1 },
-    ]);
+    expect(blocked.outsideSuggestion).toEqual([{ tool: "workspace.read_file", count: 1 }]);
   });
 
   test("never counts deterministic diagnostics as public evidence", () => {

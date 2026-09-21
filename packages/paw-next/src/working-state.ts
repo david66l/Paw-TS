@@ -1,11 +1,7 @@
 import type { SessionInputSnapshot } from "@paw/agent-loop";
 import { projectCompletionReviewToolEvidenceV1 } from "@paw/completion-review";
 import { projectWorkspaceEffect } from "@paw/core";
-import type {
-  InputFactV1,
-  JsonValue,
-  ToolCallObservedFactV1,
-} from "@paw/protocol";
+import type { InputFactV1, JsonValue, ToolCallObservedFactV1 } from "@paw/protocol";
 import {
   type JournalContextAnnotationV1,
   type VerifiedCanonicalPayloadEvidenceV1,
@@ -16,10 +12,7 @@ export const PAW_WORKING_STATE_POLICY_V1 =
   "paw.working-state.v1:journal:bounded:conservative-freshness" as const;
 export const PAW_WORKING_STATE_MAX_CHARS_V1 = 5_000;
 
-function field(
-  value: JsonValue | undefined,
-  key: string,
-): JsonValue | undefined {
+function field(value: JsonValue | undefined, key: string): JsonValue | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Readonly<Record<string, JsonValue>>)[key]
     : undefined;
@@ -42,10 +35,7 @@ export function projectPawWorkingStateV1(
 ): JournalContextAnnotationV1 | undefined {
   const boundary = projectLatestWorkSegmentBoundaryV1(snapshot);
   const markerSeq = boundary?.markerSeq ?? 0;
-  const observed = new Map<
-    string,
-    { seq: number; fact: ToolCallObservedFactV1 }
-  >();
+  const observed = new Map<string, { seq: number; fact: ToolCallObservedFactV1 }>();
   const jobStarts = new Map<string, number>();
   const jobArgs = new Map<string, JsonValue>();
   const calls = [];
@@ -88,8 +78,7 @@ export function projectPawWorkingStateV1(
                 callId: fact.callId,
               },
             });
-    const succeeded =
-      fact.status === "completed" && fact.observation?.isError === false;
+    const succeeded = fact.status === "completed" && fact.observation?.isError === false;
     const effect = projectWorkspaceEffect(call.fact.tool, payload, !succeeded);
     // Failed/unknown actions may have partial effects. Missing effect evidence
     // cannot establish a clean revision, even for a nominally successful write.
@@ -156,9 +145,7 @@ export function projectPawWorkingStateV1(
           : call.fact.args,
       status: fact.status,
       summary: fact.observation?.summary ?? fact.status,
-      ...(fact.observation?.isError === undefined
-        ? {}
-        : { isError: fact.observation.isError }),
+      ...(fact.observation?.isError === undefined ? {} : { isError: fact.observation.isError }),
       ...(payload === undefined ? {} : { payload }),
     });
   }
@@ -186,14 +173,10 @@ export function projectPawWorkingStateV1(
     // Identical runner names in different directories are different targets.
     // Keep command setup (e.g. `cd package-a &&`) and explicit cwd in the key.
     const command = field(call.verificationArgs, "command");
-    const normalized =
-      typeof command === "string" ? command.replace(/\s+/gu, " ").trim() : "";
+    const normalized = typeof command === "string" ? command.replace(/\s+/gu, " ").trim() : "";
     const invocation = target.slice(target.indexOf(":") + 1);
     const invocationStart = normalized.indexOf(invocation);
-    const setup =
-      invocationStart >= 0
-        ? normalized.slice(0, invocationStart).trim()
-        : normalized;
+    const setup = invocationStart >= 0 ? normalized.slice(0, invocationStart).trim() : normalized;
     const cwd = field(call.verificationArgs, "cwd");
     const scope = setup || cwd ? JSON.stringify({ setup, cwd }) : undefined;
     const key = JSON.stringify([scope, target]);

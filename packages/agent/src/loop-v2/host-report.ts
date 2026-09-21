@@ -1,7 +1,4 @@
-import type {
-  CandidateInputV2,
-  SemanticReviewV2,
-} from "./candidate-certification.js";
+import type { CandidateInputV2, SemanticReviewV2 } from "./candidate-certification.js";
 import { sha256Canonical } from "./canonical.js";
 import type { RunOutcomeV2 } from "./run-outcome.js";
 
@@ -43,10 +40,7 @@ export interface HostReportV2 {
  */
 export function renderHostReportV2(input: HostReportInputV2): HostReportV2 {
   const verificationById = new Map(
-    input.candidate.currentVerification.map((verification) => [
-      verification.id,
-      verification,
-    ]),
+    input.candidate.currentVerification.map((verification) => [verification.id, verification]),
   );
   const omittedClaims: OmittedCandidateClaimV2[] = [];
   const corroboratedClaims: CandidateVerificationClaimV2[] = [];
@@ -122,8 +116,7 @@ export function renderHostReportV2(input: HostReportInputV2): HostReportV2 {
   } else {
     lines.push(`- Verdict: ${input.review.verdict}`);
     for (const finding of input.review.findings) {
-      const binding =
-        finding.criterionId ?? finding.invariantId ?? "unbound-warning";
+      const binding = finding.criterionId ?? finding.invariantId ?? "unbound-warning";
       lines.push(
         `- ${finding.severity} (${escapeMarkdown(binding)}): ${escapeMarkdown(finding.risk)}`,
       );

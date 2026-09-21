@@ -191,10 +191,7 @@ export class SkillRegistry {
       const params = s.parameters
         ?.map((p) => {
           const req = p.required ? "required" : "optional";
-          const def =
-            p.default !== undefined
-              ? ` default=${JSON.stringify(p.default)}`
-              : "";
+          const def = p.default !== undefined ? ` default=${JSON.stringify(p.default)}` : "";
           return `${p.name}: ${p.type} (${req})${def} — ${p.description}`;
         })
         .join("; ");
@@ -269,9 +266,7 @@ function loadSkillsFromDirectoryBounded(
           }
         } else {
           // 不是技能目录，递归进入其子目录继续搜索
-          skills.push(
-            ...loadSkillsFromDirectoryBounded(full, depth + 1, visited),
-          );
+          skills.push(...loadSkillsFromDirectoryBounded(full, depth + 1, visited));
         }
       } else if (entry.endsWith(".json")) {
         const raw = readFileSync(full, "utf-8");
@@ -337,16 +332,12 @@ function findSkillMd(dir: string): string | null {
  * 技能名称使用文件名（去掉扩展名）。
  * 如果 prompt 中包含 `{{args}}` 占位符，自动注册 `args` 字符串参数。
  */
-function parseMarkdownSkill(
-  raw: string,
-  skillId: string,
-): SkillDefinition | null {
+function parseMarkdownSkill(raw: string, skillId: string): SkillDefinition | null {
   const fmMatch = splitFrontmatter(raw);
   if (!fmMatch) {
     // 无 frontmatter —— 将整个文件内容作为 prompt
     const rawPrompt = raw.trim();
-    const hasArgs =
-      rawPrompt.includes("{{args}}") || rawPrompt.includes("{{ args }}");
+    const hasArgs = rawPrompt.includes("{{args}}") || rawPrompt.includes("{{ args }}");
     return {
       id: skillId,
       name: skillId,
@@ -382,12 +373,10 @@ function parseMarkdownSkill(
         .map((s) => s.trim())
         .filter(Boolean)
     : undefined;
-  const context =
-    fm.context === "inline" || fm.context === "fork" ? fm.context : undefined;
+  const context = fm.context === "inline" || fm.context === "fork" ? fm.context : undefined;
 
   // 检测 prompt 中是否包含 {{args}} 占位符，自动注册参数
-  const hasArgsParam =
-    prompt.includes("{{args}}") || prompt.includes("{{ args }}");
+  const hasArgsParam = prompt.includes("{{args}}") || prompt.includes("{{ args }}");
   return {
     id: skillId,
     name: fm.name ?? skillId, // frontmatter 中的 name 优先，否则使用文件名
@@ -424,8 +413,7 @@ function parseSkillDefinition(raw: unknown): SkillDefinition | null {
   const obj = raw as Record<string, unknown>;
   const id = typeof obj.id === "string" ? obj.id : "";
   const name = typeof obj.name === "string" ? obj.name : id;
-  const description =
-    typeof obj.description === "string" ? obj.description : "";
+  const description = typeof obj.description === "string" ? obj.description : "";
   const version = typeof obj.version === "string" ? obj.version : "1.0.0";
   const prompt = typeof obj.prompt === "string" ? obj.prompt : "";
   if (!id || !prompt) {
@@ -436,14 +424,9 @@ function parseSkillDefinition(raw: unknown): SkillDefinition | null {
   const tools = parseStringArray(obj.tools);
   const allowedTools = parseStringArray(obj.allowedTools);
   const requiresApproval =
-    typeof obj.requiresApproval === "boolean"
-      ? obj.requiresApproval
-      : undefined;
+    typeof obj.requiresApproval === "boolean" ? obj.requiresApproval : undefined;
   const model = typeof obj.model === "string" ? obj.model : undefined;
-  const context =
-    obj.context === "inline" || obj.context === "fork"
-      ? obj.context
-      : undefined;
+  const context = obj.context === "inline" || obj.context === "fork" ? obj.context : undefined;
 
   // 使用展开运算符，只包含已定义的字段
   const skill: SkillDefinition = {
@@ -480,14 +463,12 @@ function parseSkillParameters(raw: unknown): SkillParameter[] {
     }
     const obj = item as Record<string, unknown>;
     const name = typeof obj.name === "string" ? obj.name : "";
-    const description =
-      typeof obj.description === "string" ? obj.description : "";
+    const description = typeof obj.description === "string" ? obj.description : "";
     const type =
       obj.type === "string" || obj.type === "number" || obj.type === "boolean"
         ? obj.type
         : "string"; // 非法类型默认为 string
-    const required =
-      typeof obj.required === "boolean" ? obj.required : undefined;
+    const required = typeof obj.required === "boolean" ? obj.required : undefined;
     const def = obj.default;
     if (!name) {
       continue; // 跳过缺少 name 的参数
@@ -539,8 +520,7 @@ export function skillsFromProjectMemory(
     skills.push({
       id: "_project_memory",
       name: "Project Memory",
-      description:
-        "Committed project rules and conventions from .paw/CLAUDE.md",
+      description: "Committed project rules and conventions from .paw/CLAUDE.md",
       version: "1.0.0",
       prompt: committedContent.trim(),
     });
@@ -571,10 +551,7 @@ export function skillsFromProjectMemory(
  * 如果技能设置了 `skillDir`，在渲染后的 prompt 前拼接目录路径提示，
  * 让模型在执行时知道资源文件的位置。
  */
-export function renderSkillPrompt(
-  skill: SkillDefinition,
-  args: Record<string, unknown>,
-): string {
+export function renderSkillPrompt(skill: SkillDefinition, args: Record<string, unknown>): string {
   let prompt = skill.prompt;
   for (const param of skill.parameters ?? []) {
     const value = args[param.name] ?? param.default;

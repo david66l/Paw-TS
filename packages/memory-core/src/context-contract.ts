@@ -94,8 +94,5 @@ export interface MemoryResolvedContextPacketV1 {
 
 export interface MemoryContextResolverV1 {
   readonly resolverVersion: typeof PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1;
-  resolve(
-    query: string,
-    signal: AbortSignal,
-  ): Promise<MemoryResolvedContextPacketV1>;
+  resolve(query: string, signal: AbortSignal): Promise<MemoryResolvedContextPacketV1>;
 }

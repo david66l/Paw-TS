@@ -83,22 +83,14 @@ async function handle(req: Request): Promise<Response> {
       const wm = await wmMgr.getByTaskId(id);
       return json({ task, workingMemory: wm });
     }
-    if (
-      path.startsWith("/tasks/") &&
-      path.endsWith("/start") &&
-      method === "POST"
-    ) {
+    if (path.startsWith("/tasks/") && path.endsWith("/start") && method === "POST") {
       const id = path.split("/")[2]!;
       const task = await taskMgr.getTask(id);
       if (!task) return json({ error: "not found" }, 404);
       const started = await taskMgr.startTask(id, task.revision);
       return json({ task: started });
     }
-    if (
-      path.startsWith("/tasks/") &&
-      path.endsWith("/complete") &&
-      method === "POST"
-    ) {
+    if (path.startsWith("/tasks/") && path.endsWith("/complete") && method === "POST") {
       const id = path.split("/")[2]!;
       const task = await taskMgr.getTask(id);
       if (!task) return json({ error: "not found" }, 404);
@@ -181,9 +173,7 @@ async function handle(req: Request): Promise<Response> {
     // Context
     if (path === "/context/build" && method === "POST") {
       const body = await readBody(req);
-      const wm = body.taskId
-        ? await wmMgr.getByTaskId(body.taskId as string)
-        : null;
+      const wm = body.taskId ? await wmMgr.getByTaskId(body.taskId as string) : null;
       if (!wm) return badRequest("taskId required for working memory context");
 
       const retrieval = body.query
@@ -214,20 +204,12 @@ async function handle(req: Request): Promise<Response> {
       );
       return json({ candidates: list, total: list.length });
     }
-    if (
-      path.startsWith("/candidates/") &&
-      path.endsWith("/approve") &&
-      method === "POST"
-    ) {
+    if (path.startsWith("/candidates/") && path.endsWith("/approve") && method === "POST") {
       const id = path.split("/")[2]!;
       const result = await admin.approveCandidate(id);
       return json(result);
     }
-    if (
-      path.startsWith("/candidates/") &&
-      path.endsWith("/reject") &&
-      method === "POST"
-    ) {
+    if (path.startsWith("/candidates/") && path.endsWith("/reject") && method === "POST") {
       const id = path.split("/")[2]!;
       const body = await readBody(req);
       const decision = await admin.rejectCandidate(
@@ -292,9 +274,7 @@ async function handle(req: Request): Promise<Response> {
         payload: body.payload as Record<string, unknown>,
       });
       obs.count("api.memory.update");
-      return updated
-        ? json({ memory: updated })
-        : json({ error: "version conflict" }, 409);
+      return updated ? json({ memory: updated }) : json({ error: "version conflict" }, 409);
     }
     if (path.match(/^\/memories\/([^/]+)$/) && method === "DELETE") {
       const id = path.split("/")[2]!;
@@ -311,9 +291,7 @@ async function handle(req: Request): Promise<Response> {
       const results = [];
       for (const id of ids) {
         const item = await memoryItemDao.findById(id);
-        results.push(
-          item ? { id, found: true, type: item.type } : { id, found: false },
-        );
+        results.push(item ? { id, found: true, type: item.type } : { id, found: false });
       }
       obs.count("api.memory.batch", ids.length);
       return json({ results });
@@ -329,8 +307,7 @@ async function handle(req: Request): Promise<Response> {
     if (path === "/admin/candidates/stats" && method === "GET") {
       const all = await admin.listPendingCandidates(1000);
       const byType: Record<string, number> = {};
-      for (const c of all)
-        byType[c.proposedType] = (byType[c.proposedType] ?? 0) + 1;
+      for (const c of all) byType[c.proposedType] = (byType[c.proposedType] ?? 0) + 1;
       return json({ totalPending: all.length, byType });
     }
 

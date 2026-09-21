@@ -3,11 +3,7 @@
  */
 
 import { createInputToMarkdown, parseAgentMarkdown } from "./parse.js";
-import {
-  knownBuiltinTools,
-  parseToolsField,
-  resolveAllowedTools,
-} from "./resolve-tools.js";
+import { knownBuiltinTools, parseToolsField, resolveAllowedTools } from "./resolve-tools.js";
 import type {
   AgentSpec,
   AgentValidationError,
@@ -71,12 +67,9 @@ export function validateAgentSpec(spec: AgentSpec): AgentValidationResult {
   }
   if (spec.canSpawn && spec.tools !== "inherit") {
     const hasRun =
-      spec.tools.includes("workspace.run_agent") ||
-      resolvedTools?.includes("workspace.run_agent");
+      spec.tools.includes("workspace.run_agent") || resolvedTools?.includes("workspace.run_agent");
     if (!hasRun) {
-      warnings.push(
-        "canSpawn=true 但 tools 未含 workspace.run_agent，将无法调度子 Agent",
-      );
+      warnings.push("canSpawn=true 但 tools 未含 workspace.run_agent，将无法调度子 Agent");
     }
   }
 
@@ -89,9 +82,7 @@ export function validateAgentSpec(spec: AgentSpec): AgentValidationResult {
 }
 
 /** 校验创建输入（会先合成临时 Spec） */
-export function validateCreateInput(
-  input: CreateAgentInput,
-): AgentValidationResult {
+export function validateCreateInput(input: CreateAgentInput): AgentValidationResult {
   const md = createInputToMarkdown(input);
   const spec = parseAgentMarkdown(md, input.id);
   if (!spec) {

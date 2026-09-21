@@ -2,13 +2,9 @@ import { createHash } from "node:crypto";
 
 import { getSql } from "@paw/memory/db";
 
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
-export const PAW_MEMORY_TEMPORAL_GRAPH_VERSION_V1 =
-  "paw.memory-temporal-graph.v1" as const;
+export const PAW_MEMORY_TEMPORAL_GRAPH_VERSION_V1 = "paw.memory-temporal-graph.v1" as const;
 
 export type MemoryTemporalRelationTypeV1 =
   | "supersedes"
@@ -42,10 +38,7 @@ export interface MemoryTemporalGraphEventV1 {
 
 export interface MemoryTemporalGraphStoreV1 {
   readonly scope: PawNextMemoryScopeV1;
-  put(
-    relations: readonly MemoryTemporalRelationV1[],
-    signal: AbortSignal,
-  ): Promise<void>;
+  put(relations: readonly MemoryTemporalRelationV1[], signal: AbortSignal): Promise<void>;
   list(
     options: Readonly<{ limit?: number }>,
     signal: AbortSignal,
@@ -130,10 +123,7 @@ export function createPostgresMemoryTemporalGraphStoreV1(
   const scopeFingerprint = memoryScopeFingerprintV1(scope);
   return Object.freeze({
     scope,
-    async put(
-      relations: readonly MemoryTemporalRelationV1[],
-      signal: AbortSignal,
-    ): Promise<void> {
+    async put(relations: readonly MemoryTemporalRelationV1[], signal: AbortSignal): Promise<void> {
       const startedAt = Date.now();
       if (signal.aborted) throw abortError();
       const sql = getSql();
@@ -248,18 +238,14 @@ export function createPostgresMemoryTemporalGraphStoreV1(
           AND target.scope->>'workspaceId' = ${scope.workspaceId}
           AND target.scope->>'repositoryId' = ${scope.repositoryId}
       `;
-      const row = rows[0] as
-        | { relation_count?: unknown; max_updated_at?: unknown }
-        | undefined;
+      const row = rows[0] as { relation_count?: unknown; max_updated_at?: unknown } | undefined;
       const token = [
         PAW_MEMORY_TEMPORAL_GRAPH_VERSION_V1,
         scopeFingerprint,
         String(row?.relation_count ?? "0"),
         row?.max_updated_at == null
           ? "none"
-          : new Date(
-              row.max_updated_at as string | number | Date,
-            ).toISOString(),
+          : new Date(row.max_updated_at as string | number | Date).toISOString(),
       ].join(":");
       emit(input.onEvent, {
         schemaVersion: "paw.memory-temporal-graph-event.v1",
@@ -334,17 +320,14 @@ function arrayValue(value: unknown): readonly string[] {
 }
 
 function stableRefs(values: readonly string[]): readonly string[] {
-  const result = [
-    ...new Set(values.map((value) => nonEmpty(value, "ref"))),
-  ].sort((left, right) => left.localeCompare(right));
-  if (result.length > 128)
-    throw namedError("MemoryTemporalRelationRefsInvalid");
+  const result = [...new Set(values.map((value) => nonEmpty(value, "ref")))].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  if (result.length > 128) throw namedError("MemoryTemporalRelationRefsInvalid");
   return Object.freeze(result);
 }
 
-function assertRelationType(
-  value: unknown,
-): asserts value is MemoryTemporalRelationTypeV1 {
+function assertRelationType(value: unknown): asserts value is MemoryTemporalRelationTypeV1 {
   if (
     value !== "supersedes" &&
     value !== "supports" &&
@@ -355,9 +338,7 @@ function assertRelationType(
   }
 }
 
-function assertRelationStatus(
-  value: unknown,
-): asserts value is MemoryTemporalRelationStatusV1 {
+function assertRelationStatus(value: unknown): asserts value is MemoryTemporalRelationStatusV1 {
   if (value !== "active" && value !== "retracted") {
     throw namedError("MemoryTemporalRelationStatusInvalid");
   }

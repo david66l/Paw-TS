@@ -52,9 +52,7 @@ export function parseAgentMarkdown(
   sourcePath?: string,
 ): AgentSpec | null {
   const split = splitFrontmatter(raw);
-  const fm = split
-    ? parseYamlFrontmatter(split.frontmatter)
-    : ({} as Record<string, string>);
+  const fm = split ? parseYamlFrontmatter(split.frontmatter) : ({} as Record<string, string>);
   const body = (split?.body ?? raw).trim();
   if (!body && !fm.id && !fm.name) return null;
 
@@ -79,16 +77,13 @@ export function parseAgentMarkdown(
     childPolicy: asChildPolicy(fm.childPolicy ?? fm.child_policy),
     model: asModel(fm.model),
     outputFormat:
-      (fm.outputFormat ?? fm.output_format)?.trim() ||
-      "Return a clear summary of what you did.",
+      (fm.outputFormat ?? fm.output_format)?.trim() || "Return a clear summary of what you did.",
     ...(capabilities.length > 0 ? { capabilities } : {}),
     canSpawn,
     maxSteps: asInt(fm.maxSteps ?? fm.max_steps, kind === "root" ? 24 : 12),
     kind,
     memoryExtraction: asMemory(
-      fm.memoryExtraction ??
-        fm.memory_extraction ??
-        (kind === "root" ? "background" : "off"),
+      fm.memoryExtraction ?? fm.memory_extraction ?? (kind === "root" ? "background" : "off"),
     ),
     ...(sourcePath ? { sourcePath } : {}),
   };
@@ -136,9 +131,7 @@ export function createInputToMarkdown(input: CreateAgentInput): string {
   return lines.join("\n");
 }
 
-function parseCapabilities(
-  value: string | readonly string[] | undefined,
-): string[] {
+function parseCapabilities(value: string | readonly string[] | undefined): string[] {
   if (value === undefined) return [];
   const items = Array.isArray(value) ? value : String(value).split(/[,|]/);
   return [...new Set(items.map((item) => String(item).trim()).filter(Boolean))];

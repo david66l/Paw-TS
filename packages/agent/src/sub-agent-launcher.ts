@@ -19,10 +19,7 @@ import type { LanguageModel } from "@paw/models";
 import type { FileLockLike } from "@paw/harness";
 import { materializeAgent } from "./agents/factory.js";
 import type { AgentRegistry } from "./agents/registry.js";
-import type {
-  ToolEffectPolicy,
-  ToolExecutionPolicy,
-} from "./execution-policy.js";
+import type { ToolEffectPolicy, ToolExecutionPolicy } from "./execution-policy.js";
 import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
 import { AgentOrchestrator, type ToolApprovalInput } from "./orchestrator.js";
 import { buildMinimalSharedContext } from "./orchestrator/agent-args.js";
@@ -75,9 +72,7 @@ function resolveSharedContext(
   return buildMinimalSharedContext(goal, args);
 }
 
-function parseAgentId(
-  args: Record<string, unknown> | undefined,
-): string | undefined {
+function parseAgentId(args: Record<string, unknown> | undefined): string | undefined {
   const raw = args?.agent_id ?? args?.agentId ?? args?.spec_id ?? args?.specId;
   if (typeof raw === "string" && raw.trim()) return raw.trim();
   return undefined;
@@ -156,11 +151,9 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
     maxSteps?: number,
     options?: SubAgentLaunchOptions,
   ): Promise<SubAgentResult> {
-    const parentRunId =
-      options?.parentRunId ?? `parent-${Date.now().toString(36)}`;
+    const parentRunId = options?.parentRunId ?? `parent-${Date.now().toString(36)}`;
     const agentId =
-      options?.agentId ??
-      `sub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      options?.agentId ?? `sub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     return this.launchStreaming({
       goal,
       maxSteps,
@@ -209,42 +202,25 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
         forceChild: true,
       });
       // 合并父级摘要 facts（若有）
-      const parentCtx = isSharedContext(options.sharedContext)
-        ? options.sharedContext
-        : undefined;
+      const parentCtx = isSharedContext(options.sharedContext) ? options.sharedContext : undefined;
       sharedContext = {
         ...mat.sharedContext,
-        facts: [
-          ...mat.sharedContext.facts,
-          ...(parentCtx?.facts ?? []).slice(0, 10),
-        ],
+        facts: [...mat.sharedContext.facts, ...(parentCtx?.facts ?? []).slice(0, 10)],
         // 合并父级约束（用户 must/never 指令），去重且 Spec 约束在前
         constraints: [
-          ...new Set([
-            ...mat.sharedContext.constraints,
-            ...(parentCtx?.constraints ?? []),
-          ]),
+          ...new Set([...mat.sharedContext.constraints, ...(parentCtx?.constraints ?? [])]),
         ],
-        artifacts: parentCtx?.artifacts?.length
-          ? parentCtx.artifacts
-          : mat.sharedContext.artifacts,
+        artifacts: parentCtx?.artifacts?.length ? parentCtx.artifacts : mat.sharedContext.artifacts,
         // 合并父级进度状态：父级已完成/待办在前，Spec 物化的在后
         state: {
-          completed: [
-            ...(parentCtx?.state?.completed ?? []),
-            ...mat.sharedContext.state.completed,
-          ],
-          pending: [
-            ...(parentCtx?.state?.pending ?? []),
-            ...mat.sharedContext.state.pending,
-          ],
+          completed: [...(parentCtx?.state?.completed ?? []), ...mat.sharedContext.state.completed],
+          pending: [...(parentCtx?.state?.pending ?? []), ...mat.sharedContext.state.pending],
           risks: mat.sharedContext.state.risks ?? parentCtx?.state?.risks,
         },
         parentConclusions: parentCtx?.parentConclusions,
       };
       // 调用方可覆盖 child_policy
-      const policyOverride =
-        options.args?.child_policy ?? options.args?.childPolicy;
+      const policyOverride = options.args?.child_policy ?? options.args?.childPolicy;
       if (policyOverride === "read_only" || policyOverride === "read_write") {
         sharedContext = {
           ...sharedContext,
@@ -258,11 +234,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
         maxSteps = mat.maxSteps;
       }
     } else {
-      sharedContext = resolveSharedContext(
-        options.goal,
-        options.sharedContext,
-        options.args,
-      );
+      sharedContext = resolveSharedContext(options.goal, options.sharedContext, options.args);
     }
 
     // 注入独立 ContextManager：run 结束后可读出完整对话填充 trace.messages
@@ -307,9 +279,7 @@ export class DefaultSubAgentLauncher implements SubAgentLauncher {
   }
 }
 
-function collectChangedFiles(
-  events: readonly RunEventEnvelope[],
-): readonly string[] {
+function collectChangedFiles(events: readonly RunEventEnvelope[]): readonly string[] {
   const changed = new Set<string>();
   for (const envelope of events) {
     const event = envelope.event;

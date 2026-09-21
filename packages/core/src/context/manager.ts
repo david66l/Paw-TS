@@ -18,21 +18,14 @@
  */
 
 import { sanitizeUserInput } from "../input-sanitizer.js";
-import {
-  ApproximateEstimator,
-  type TokenEstimator,
-} from "../token-estimator.js";
+import { ApproximateEstimator, type TokenEstimator } from "../token-estimator.js";
 import {
   type ObservationProvenanceV1,
   formatToolResult,
   formatToolResults,
 } from "../tool-result/format.js";
 import { truncateHistory } from "./policy.js";
-import {
-  type PruneConfig,
-  type PruneResult,
-  pruneToolResults,
-} from "./pruner.js";
+import { type PruneConfig, type PruneResult, pruneToolResults } from "./pruner.js";
 
 export interface Attachment {
   readonly type: "image" | "file";
@@ -75,12 +68,7 @@ export interface NativeToolTurnResultV1 {
  */
 export interface NativeToolTurnResultV2 {
   readonly callId: string;
-  readonly status:
-    | "completed"
-    | "failed"
-    | "rejected"
-    | "cancelled"
-    | "unknown";
+  readonly status: "completed" | "failed" | "rejected" | "cancelled" | "unknown";
   readonly isError: boolean;
   readonly content: string;
 }
@@ -144,8 +132,7 @@ export function isNativeToolTurnV1(value: unknown): value is NativeToolTurnV1 {
     turn.schemaVersion !== 1 ||
     turn.protocol !== "openai-compatible" ||
     typeof turn.assistantContent !== "string" ||
-    (turn.reasoningPassback !== undefined &&
-      typeof turn.reasoningPassback !== "string") ||
+    (turn.reasoningPassback !== undefined && typeof turn.reasoningPassback !== "string") ||
     !Array.isArray(calls) ||
     !Array.isArray(results) ||
     calls.length === 0 ||
@@ -200,8 +187,7 @@ export function isNativeToolTurnV2(value: unknown): value is NativeToolTurnV2 {
     turn.schemaVersion !== 2 ||
     turn.protocol !== "provider-neutral" ||
     typeof turn.assistantContent !== "string" ||
-    (turn.reasoningPassback !== undefined &&
-      typeof turn.reasoningPassback !== "string") ||
+    (turn.reasoningPassback !== undefined && typeof turn.reasoningPassback !== "string") ||
     !Array.isArray(calls) ||
     !Array.isArray(results) ||
     calls.length === 0 ||
@@ -210,13 +196,7 @@ export function isNativeToolTurnV2(value: unknown): value is NativeToolTurnV2 {
     return false;
   }
   const ids = new Set<string>();
-  const statuses = new Set([
-    "completed",
-    "failed",
-    "rejected",
-    "cancelled",
-    "unknown",
-  ]);
+  const statuses = new Set(["completed", "failed", "rejected", "cancelled", "unknown"]);
   for (let index = 0; index < calls.length; index += 1) {
     const call = calls[index];
     const result = results[index];
@@ -331,12 +311,8 @@ export class ContextManager {
   }
 
   upsertUserByPrefix(prefix: string, content: string): void {
-    const sanitized = isHostControlMessage(content)
-      ? content
-      : sanitizeUserInput(content).text;
-    const idx = this.history.findIndex(
-      (m) => m.role === "user" && m.content.startsWith(prefix),
-    );
+    const sanitized = isHostControlMessage(content) ? content : sanitizeUserInput(content).text;
+    const idx = this.history.findIndex((m) => m.role === "user" && m.content.startsWith(prefix));
     if (idx >= 0) {
       this.history[idx] = { role: "user", content: sanitized };
     } else {
@@ -350,12 +326,9 @@ export class ContextManager {
    * This preserves the cacheable prefix before rapidly changing telemetry.
    */
   upsertUserByPrefixBeforeLatest(prefix: string, content: string): void {
-    const sanitized = isHostControlMessage(content)
-      ? content
-      : sanitizeUserInput(content).text;
+    const sanitized = isHostControlMessage(content) ? content : sanitizeUserInput(content).text;
     this.history = this.history.filter(
-      (message) =>
-        message.role !== "user" || !message.content.startsWith(prefix),
+      (message) => message.role !== "user" || !message.content.startsWith(prefix),
     );
     const insertAt = Math.max(0, this.history.length - 1);
     this.history.splice(insertAt, 0, { role: "user", content: sanitized });
@@ -428,9 +401,7 @@ export class ContextManager {
     }
     for (let index = 0; index < calls.length; index += 1) {
       if (calls[index]?.callId !== results[index]?.callId) {
-        throw new Error(
-          `Native tool result ${index} does not match its call id`,
-        );
+        throw new Error(`Native tool result ${index} does not match its call id`);
       }
     }
     const nativeResults = results.map((result) => ({
@@ -480,9 +451,7 @@ export class ContextManager {
     if (sys) {
       this.systemMessage = stripAuditThinking(sys);
     }
-    this.history = messages
-      .filter((m) => m.role !== "system")
-      .map(stripAuditThinking);
+    this.history = messages.filter((m) => m.role !== "system").map(stripAuditThinking);
     this.maybeTruncate();
   }
 
@@ -493,9 +462,7 @@ export class ContextManager {
    * ponytail: 只在恢复路径用，避免硬截断在压缩前就丢掉工具输出。
    */
   setHistoryRaw(messages: readonly ChatMessage[]): void {
-    this.history = messages
-      .filter((m) => m.role !== "system")
-      .map(stripAuditThinking);
+    this.history = messages.filter((m) => m.role !== "system").map(stripAuditThinking);
   }
 
   /** 公开 maybeTruncate，供外部在手动压缩后调用。 */
@@ -593,9 +560,7 @@ export class ContextManager {
   private maybeTruncate(): void {
     const useHistoryBudget = this._historyMaxTokens !== null;
     const useTokens = useHistoryBudget || this.maxTokens !== null;
-    const budget = useHistoryBudget
-      ? this._historyMaxTokens!
-      : (this.maxTokens ?? this.maxChars);
+    const budget = useHistoryBudget ? this._historyMaxTokens! : (this.maxTokens ?? this.maxChars);
 
     this.history = truncateHistory(this.history, {
       maxMessages: this.maxMessages,

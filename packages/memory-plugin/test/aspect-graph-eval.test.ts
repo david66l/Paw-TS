@@ -53,10 +53,7 @@ describe("aspect graph structural evaluation", () => {
       snapshot: createEmptyMemoryAspectGraphSnapshotV1(scope),
       claims: [old, current, extra],
       aspects: [goldAspect],
-      memberships: [
-        member(old.id, goldAspect.id),
-        member(current.id, goldAspect.id),
-      ],
+      memberships: [member(old.id, goldAspect.id), member(current.id, goldAspect.id)],
       edges: [supersedes(current.id, old.id, goldAspect.id)],
     });
     const predicted = applyMemoryAspectGraphMutationV1({

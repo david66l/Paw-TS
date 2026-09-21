@@ -2,8 +2,7 @@ import { createHash } from "node:crypto";
 import { createInterface } from "node:readline";
 const BROWSER_AUDIT_POLICY = "paw.browser-audit.v1";
 const BROWSER_PROOF_PREFIX = "Browser observation: ";
-const hash = (value) =>
-  createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 /** One call owns one fresh browser; interrupted interactions are never auto-replayed. */
 async function runBrowserCheck(scenario, signal) {
   const { chromium } = await import("playwright");
@@ -44,9 +43,7 @@ async function runBrowserCheck(scenario, signal) {
           timeout: 10_000,
         });
         if (response.status() >= 300 && response.status() < 400) {
-          recordError(
-            "HTTP redirects are not supported; use the final local URL",
-          );
+          recordError("HTTP redirects are not supported; use the final local URL");
           await route.abort();
         } else await route.fulfill({ response });
       } catch {
@@ -56,8 +53,7 @@ async function runBrowserCheck(scenario, signal) {
     });
     await context.routeWebSocket(/.*/, (socket) => {
       const url = new URL(socket.url());
-      if (url.protocol === "ws:" && `http://${url.host}` === origin)
-        socket.connectToServer();
+      if (url.protocol === "ws:" && `http://${url.host}` === origin) socket.connectToServer();
       else {
         recordError("Blocked cross-origin WebSocket");
         socket.close();
@@ -84,8 +80,7 @@ async function runBrowserCheck(scenario, signal) {
       waitUntil: "domcontentloaded",
       timeout: 10_000,
     });
-    if (!response?.ok())
-      throw new Error(`HTTP ${response?.status() ?? "unavailable"}`);
+    if (!response?.ok()) throw new Error(`HTTP ${response?.status() ?? "unavailable"}`);
     for (const step of scenario.steps) {
       signal?.throwIfAborted();
       // CSS-only selectors, never Playwright's other selector engines or page code.
@@ -120,13 +115,10 @@ async function runBrowserCheck(scenario, signal) {
           actual: actual.slice(0, 2000),
           passed,
         });
-        if (!passed)
-          throw new Error(`Assertion failed: ${step.action} ${step.selector}`);
+        if (!passed) throw new Error(`Assertion failed: ${step.action} ${step.selector}`);
       }
     }
-    snapshot = (
-      await page.locator("body").ariaSnapshot({ timeout: 3000 })
-    ).slice(0, 12_000);
+    snapshot = (await page.locator("body").ariaSnapshot({ timeout: 3000 })).slice(0, 12_000);
     if (scenario.capture) {
       const png = await page.screenshot({
         type: "png",
@@ -136,8 +128,7 @@ async function runBrowserCheck(scenario, signal) {
         scale: "css",
         timeout: 5000,
       });
-      if (png.length > 2 * 1024 * 1024)
-        throw new Error("Screenshot exceeds 2 MiB");
+      if (png.length > 2 * 1024 * 1024) throw new Error("Screenshot exceeds 2 MiB");
       screenshot = {
         mimeType: "image/png",
         width: 1280,

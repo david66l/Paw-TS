@@ -87,16 +87,12 @@ function buildCore(opts: {
   const { llm, emit } = opts;
   // llm === null（off 模式）：禁用全部 LLM（含 settings 解析）
   const governLlm: ((prompt: string) => Promise<string>) | undefined =
-    llm == null
-      ? undefined
-      : (llm.govern ?? resolveGovernModel(opts.scope.workspaceRoot));
+    llm == null ? undefined : (llm.govern ?? resolveGovernModel(opts.scope.workspaceRoot));
 
   const pipeline = new MemoryWritePipeline({
     engine,
     scope: opts.scope,
-    distiller: llm?.distill
-      ? new MemoryDistiller({ complete: llm.distill })
-      : undefined,
+    distiller: llm?.distill ? new MemoryDistiller({ complete: llm.distill }) : undefined,
     ...(governLlm ? { governorLlm: { complete: governLlm } } : {}),
     ...(llm?.confirm ? { correctionConfirmer: { confirm: llm.confirm } } : {}),
     dailyBudget: opts.dailyBudget ?? 50,
@@ -189,10 +185,7 @@ function commandFromArgs(args: unknown): string {
 }
 
 /** 轨迹摘要（蒸馏输入，≤4000 字符）：工具调用行 + 最终消息 */
-function buildTrajectoryDigest(
-  trace: TaskTrace,
-  finalMessage?: string,
-): string {
+function buildTrajectoryDigest(trace: TaskTrace, finalMessage?: string): string {
   const lines = trace.tools.map(
     (t) =>
       `- ${t.toolName}: ${(t.summary || (t.ok ? "ok" : "failed")).slice(0, 120)}${t.exitCode != null ? ` (exit ${t.exitCode})` : ""}`,
@@ -313,9 +306,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
     return { taskId, resumed: input.resumeTaskId != null };
   }
 
-  async buildContextSection(
-    input: BuildContextInput,
-  ): Promise<BuildContextResult> {
+  async buildContextSection(input: BuildContextInput): Promise<BuildContextResult> {
     const trace = this.traces.get(input.taskId);
     try {
       const pkg = await this.core.retriever.retrieve({
@@ -352,9 +343,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
     }
   }
 
-  async onToolResult(
-    input: OnToolResultInput,
-  ): Promise<{ injected?: string } | undefined> {
+  async onToolResult(input: OnToolResultInput): Promise<{ injected?: string } | undefined> {
     const trace = this.traces.get(input.taskId);
     if (trace) {
       trace.tools.push({
@@ -419,9 +408,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
         type: "post_compact",
         summaryHead: input.summaryHead,
         goal: input.goal,
-        existingContextHints: input.existingContextHints
-          ? [...input.existingContextHints]
-          : [],
+        existingContextHints: input.existingContextHints ? [...input.existingContextHints] : [],
         repo: this.scope.repositoryId,
         runId: input.taskId,
       });
@@ -469,10 +456,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
         goal: trace.goal,
         trajectory: digest,
       };
-    } else if (
-      disposition === "verified_success" ||
-      (!input.outcome && trace.tests.ran)
-    ) {
+    } else if (disposition === "verified_success" || (!input.outcome && trace.tests.ran)) {
       // 新路径只接受 CompletionPolicy 的当前版本权威绿测；旧调用方
       // 保留最后一次测试结果兼容语义，不再让早期失败永久污染成功。
       event = {
@@ -484,9 +468,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
         trajectory: digest,
         verdict: {
           kind: "test",
-          passed:
-            disposition === "verified_success" ||
-            trace.tests.lastPassed === true,
+          passed: disposition === "verified_success" || trace.tests.lastPassed === true,
         },
       };
     } else {
@@ -518,9 +500,7 @@ export class MemoryRuntimeV2 implements MemoryRuntime {
     };
   }
 
-  async listMemories(query?: { limit?: number; type?: string }): Promise<
-    MemoryListItem[]
-  > {
+  async listMemories(query?: { limit?: number; type?: string }): Promise<MemoryListItem[]> {
     try {
       const rows = await this.core.engine.query({
         includeDegraded: true,

@@ -46,9 +46,7 @@ export type ProjectMemory = LegacyProjectMemoryV1;
  * @param workspaceRoot - 工作区根目录的绝对路径
  * @returns 包含共享规则和本地规则内容的 ProjectMemory 对象
  */
-export function loadProjectMemory(
-  workspaceRoot: string,
-): LegacyProjectMemoryV1 {
+export function loadProjectMemory(workspaceRoot: string): LegacyProjectMemoryV1 {
   const committedPath = path.join(workspaceRoot, ".paw", "CLAUDE.md");
   const localPath = path.join(workspaceRoot, ".paw", "CLAUDE.local.md");
 

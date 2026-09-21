@@ -10,8 +10,7 @@ import path from "node:path";
  * physical no-overwrite checkpoint layout. Existing runs must compare this
  * value before restoring a checkpoint sequence.
  */
-export const PAW_TOOL_EFFECT_CHECKPOINT_POLICY_VERSION_V1 =
-  "paw.tool-effect-checkpoint.v1";
+export const PAW_TOOL_EFFECT_CHECKPOINT_POLICY_VERSION_V1 = "paw.tool-effect-checkpoint.v1";
 
 /**
  * Derive the physical checkpoint namespace from the canonical product owner.

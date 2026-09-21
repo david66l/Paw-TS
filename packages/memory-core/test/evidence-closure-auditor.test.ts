@@ -16,9 +16,7 @@ describe("independent evidence closure auditor v1", () => {
     expect(body.selectedEvidence[0].evidenceRef).toBe("e1");
     expect(body.maxDeficiencies).toBe(4);
     expect(body).not.toHaveProperty("maxDescriptionChars");
-    expect(request.system).toContain(
-      "filled planner checklist is not sufficient",
-    );
+    expect(request.system).toContain("filled planner checklist is not sufficient");
     expect(request.system).toContain("author retrieval requirements");
   });
 
@@ -83,9 +81,7 @@ describe("independent evidence closure auditor v1", () => {
       auditInput(),
     );
     expect(parsed.deficiencies).toHaveLength(2);
-    expect(
-      parsed.deficiencies.every((item) => item.targetRequirementId === null),
-    ).toBe(true);
+    expect(parsed.deficiencies.every((item) => item.targetRequirementId === null)).toBe(true);
   });
 
   test("keeps the model behind the parsed closure boundary", async () => {
@@ -99,10 +95,7 @@ describe("independent evidence closure auditor v1", () => {
         },
       },
     });
-    const result = await auditor.audit(
-      auditInput(),
-      new AbortController().signal,
-    );
+    const result = await auditor.audit(auditInput(), new AbortController().signal);
     expect(result.decision).toBe("pass");
     expect(result.auditRevision).toHaveLength(64);
   });

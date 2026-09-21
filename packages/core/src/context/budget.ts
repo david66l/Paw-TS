@@ -83,8 +83,7 @@ export function estimateContextCost(opts: {
   const hit = Math.max(0, Math.min(opts.cachedPromptTokens, opts.promptTokens));
   const miss = Math.max(0, opts.promptTokens - hit);
   const inputCost =
-    hit * COST_PRICING.readonlyInputCacheHit +
-    miss * COST_PRICING.readonlyInputCacheMiss;
+    hit * COST_PRICING.readonlyInputCacheHit + miss * COST_PRICING.readonlyInputCacheMiss;
   const outputCost = (opts.completionTokens ?? 0) * COST_PRICING.readonlyOutput;
   return { inputCost, outputCost, totalCost: inputCost + outputCost };
 }
@@ -128,9 +127,7 @@ export interface ContextBudgetSnapshot {
 }
 
 /** 根据上下文窗口大小选择预算比例 */
-export function resolveBudgetRatios(
-  contextWindow: number,
-): ContextBudgetRatios {
+export function resolveBudgetRatios(contextWindow: number): ContextBudgetRatios {
   if (contextWindow >= 500_000) return LARGE_WINDOW_BUDGET_RATIOS;
   return DEFAULT_BUDGET_RATIOS;
 }
@@ -212,10 +209,7 @@ export function shouldCompactHistory(snapshot: ContextBudgetSnapshot): boolean {
 export const MEMORY_INJECTION_DETAIL_TOKENS = 300;
 
 /** 使用 chars/4 启发式算法将文本截断到约 maxTokens。 */
-export function truncateTextToTokenBudget(
-  text: string,
-  maxTokens: number,
-): string {
+export function truncateTextToTokenBudget(text: string, maxTokens: number): string {
   const maxChars = maxTokens * 4;
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars - 20)}\n...(truncated)`;

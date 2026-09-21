@@ -21,15 +21,11 @@ import {
 } from "../src/longterm/eval/replay.js";
 import { queryOpLog } from "../src/longterm/observability/op-log.js";
 import { TriggeredRetriever } from "../src/longterm/retrieval/triggered.js";
-import type {
-  EpisodicExperience,
-  SemanticFact,
-} from "../src/longterm/store/engine.js";
+import type { EpisodicExperience, SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -43,18 +39,17 @@ describe("parseReplayJsonl / parseJudgeOutput", () => {
     const good =
       '{"taskId":"t1","description":"d"}\n\n{"taskId":"t2","description":"e","events":[]}';
     expect(parseReplayJsonl(good)).toHaveLength(2);
-    expect(() =>
-      parseReplayJsonl('{"taskId":"t1","description":"d"}\nnot-json'),
-    ).toThrow("第 2 行");
-    expect(() => parseReplayJsonl('{"description":"缺 taskId"}')).toThrow(
-      "第 1 行",
+    expect(() => parseReplayJsonl('{"taskId":"t1","description":"d"}\nnot-json')).toThrow(
+      "第 2 行",
     );
+    expect(() => parseReplayJsonl('{"description":"缺 taskId"}')).toThrow("第 1 行");
   });
 
   test("judge 输出校验", () => {
-    expect(
-      parseJudgeOutput('{"verdict":"helpful","reason":"直击根因"}'),
-    ).toEqual({ verdict: "helpful", reason: "直击根因" });
+    expect(parseJudgeOutput('{"verdict":"helpful","reason":"直击根因"}')).toEqual({
+      verdict: "helpful",
+      reason: "直击根因",
+    });
     expect(parseJudgeOutput('{"verdict":"maybe"}')).toBeNull();
     expect(parseJudgeOutput("不是 JSON")).toBeNull();
   });
@@ -83,14 +78,9 @@ describe("parseReplayJsonl / parseJudgeOutput", () => {
 const RUN = `run_m8_${Date.now().toString(36)}`;
 const REPO = `m8-shadow-${Date.now().toString(36)}`;
 const createdIds: string[] = [];
-const FIXTURE = fileURLToPath(
-  new URL("./fixtures/replay-sample.jsonl", import.meta.url),
-);
+const FIXTURE = fileURLToPath(new URL("./fixtures/replay-sample.jsonl", import.meta.url));
 
-function makeEpisodic(
-  whenToUse: string,
-  perspective: string,
-): EpisodicExperience {
+function makeEpisodic(whenToUse: string, perspective: string): EpisodicExperience {
   const now = new Date().toISOString();
   return {
     id: "",
@@ -202,9 +192,7 @@ describe("shadow 模式 + 轨迹回放 db 集成", () => {
     });
     expect(pkg2.items).toHaveLength(1);
     expect((await engine.ledger(id))!.freq).toBe(1);
-    expect(
-      await queryOpLog({ runId: `${RUN}_real`, op: "read.inject" }),
-    ).toHaveLength(1);
+    expect(await queryOpLog({ runId: `${RUN}_real`, op: "read.inject" })).toHaveLength(1);
   });
 
   it("轨迹回放：3 条样例轨迹 + mock judge → Δ 报告（helpful/neutral/harmful 各一）", async () => {
@@ -215,9 +203,7 @@ describe("shadow 模式 + 轨迹回放 db 集成", () => {
     );
     await engine.put(helpfulEntry);
     createdIds.push(deriveEntryId(helpfulEntry));
-    const harmfulEntry = makeSemantic(
-      "Always rotate zephyr tokens during deployment windows",
-    );
+    const harmfulEntry = makeSemantic("Always rotate zephyr tokens during deployment windows");
     await engine.put(harmfulEntry);
     createdIds.push(deriveEntryId(harmfulEntry));
 
@@ -271,13 +257,7 @@ describe("shadow 模式 + 轨迹回放 db 集成", () => {
     expect(r.text).toContain("轨迹回放 Δ 代理报告");
     expect(r.text).toContain("unjudged");
 
-    const rj = await runMemoryCommand([
-      "replay",
-      FIXTURE,
-      "--repo",
-      REPO,
-      "--json",
-    ]);
+    const rj = await runMemoryCommand(["replay", FIXTURE, "--repo", REPO, "--json"]);
     expect(rj.ok).toBe(true);
     const parsed = JSON.parse(rj.text) as { trajectories: number };
     expect(parsed.trajectories).toBe(3);

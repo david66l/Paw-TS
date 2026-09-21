@@ -3,8 +3,7 @@ import { createRequire } from "node:module";
 const { findBun } = createRequire(import.meta.url)("../electron/bun-path.cjs");
 
 test("Windows finds native npm Bun without trying to spawn the PowerShell shim", () => {
-  const binary =
-    "C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\bun\\bin\\bun.exe";
+  const binary = "C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\bun\\bin\\bun.exe";
   expect(
     findBun({
       platform: "win32",
@@ -38,7 +37,5 @@ test("explicit Bun override, standalone installation and POSIX fallbacks retain 
       exists: (value: string) => value === "/opt/homebrew/bin/bun",
     }),
   ).toBe("/opt/homebrew/bin/bun");
-  expect(findBun({ platform: "win32", env: {}, exists: () => false })).toBe(
-    "bun",
-  );
+  expect(findBun({ platform: "win32", env: {}, exists: () => false })).toBe("bun");
 });

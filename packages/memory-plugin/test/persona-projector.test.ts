@@ -67,10 +67,7 @@ const snapshot = createMemorySceneSnapshotV1({
 describe("source-grounded persona projector", () => {
   test("keeps active high-confidence profile claims and source diversity", () => {
     const persona = projectSourceGroundedPersonaV1({ snapshot });
-    expect(persona.claims.map((claim) => claim.atomId)).toEqual([
-      "book-profile",
-      "music-profile",
-    ]);
+    expect(persona.claims.map((claim) => claim.atomId)).toEqual(["book-profile", "music-profile"]);
     expect(persona.text).not.toContain("last Tuesday");
     expect(persona.text).not.toContain("rigid reading schedules");
     expect(persona.text).not.toContain("opera");
@@ -94,9 +91,7 @@ describe("source-grounded persona projector", () => {
 
   test("pins L3 before the L2 index without changing Runtime", async () => {
     const persona = projectSourceGroundedPersonaV1({ snapshot });
-    expect(createMemoryPersonaSectionV1(persona)?.content).toContain(
-      "relaxed reading",
-    );
+    expect(createMemoryPersonaSectionV1(persona)?.content).toContain("relaxed reading");
     const base = {
       async plan() {
         throw new Error("unused");

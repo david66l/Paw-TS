@@ -12,9 +12,7 @@ const MAX_TOTAL = 6000;
 const MAX_SUMMARY = 200;
 
 function truncate(s: string, max: number): string {
-  return s.length > max
-    ? `${s.slice(0, max)}…（截断，共 ${s.length} 字符）`
-    : s;
+  return s.length > max ? `${s.slice(0, max)}…（截断，共 ${s.length} 字符）` : s;
 }
 
 /** 递归清洗：截断长字符串、限制嵌套深度，保证可安全序列化传输 */
@@ -44,8 +42,7 @@ export function summarizeToolArgs(_tool: string, args: unknown): string {
   const o = args as Record<string, unknown>;
   for (const key of ["path", "file", "command", "query", "goal", "url"]) {
     const v = o[key];
-    if (typeof v === "string" && v.trim())
-      return truncate(v.trim(), MAX_SUMMARY);
+    if (typeof v === "string" && v.trim()) return truncate(v.trim(), MAX_SUMMARY);
   }
   return "";
 }

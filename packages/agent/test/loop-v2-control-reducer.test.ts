@@ -14,10 +14,7 @@ import {
 
 const RUN_ID = "control-reducer-v1";
 
-function input(
-  seq: number,
-  fact: ControlReducerInputV1["fact"],
-): ControlReducerInputV1 {
+function input(seq: number, fact: ControlReducerInputV1["fact"]): ControlReducerInputV1 {
   return { runId: RUN_ID, seq, fact };
 }
 
@@ -107,9 +104,7 @@ describe("Loop v2 pure control reducer", () => {
       consecutiveNoActionStops: 1,
     });
     expect(reduced.state.candidate).toBeUndefined();
-    expect(reduced.effects).toEqual([
-      { type: "call_model", reason: "turn_boundary" },
-    ]);
+    expect(reduced.effects).toEqual([{ type: "call_model", reason: "turn_boundary" }]);
   });
 
   test("only explicit candidate intent requests readiness", () => {
@@ -127,9 +122,7 @@ describe("Loop v2 pure control reducer", () => {
     );
 
     expect(reduced.state.status).toBe("candidate");
-    expect(reduced.effects).toEqual([
-      { type: "request_readiness", candidateId: "candidate-0" },
-    ]);
+    expect(reduced.effects).toEqual([{ type: "request_readiness", candidateId: "candidate-0" }]);
   });
 
   test("semantic pass requests a probe and only a clear probe finishes", () => {
@@ -150,9 +143,7 @@ describe("Loop v2 pure control reducer", () => {
     expect(ready.state.status).toBe("candidate");
     expect(ready.effects).toEqual([]);
     expect(completed.state.status).toBe("candidate");
-    expect(completed.effects).toEqual([
-      { type: "request_probe", candidateId: "candidate-1" },
-    ]);
+    expect(completed.effects).toEqual([{ type: "request_probe", candidateId: "candidate-1" }]);
 
     const probed = reduceControlStateV1(
       completed.state,
@@ -190,9 +181,7 @@ describe("Loop v2 pure control reducer", () => {
       }),
     );
     expect(reviewed.state.status).toBe("candidate");
-    expect(reviewed.effects).toEqual([
-      { type: "request_probe", candidateId: "candidate-1" },
-    ]);
+    expect(reviewed.effects).toEqual([{ type: "request_probe", candidateId: "candidate-1" }]);
 
     const reduced = reduceControlStateV1(
       reviewed.state,
@@ -416,9 +405,7 @@ describe("Loop v2 pure control reducer", () => {
         },
       }),
     );
-    expect(ready.effects).toEqual([
-      { type: "request_probe", candidateId: "candidate-1" },
-    ]);
+    expect(ready.effects).toEqual([{ type: "request_probe", candidateId: "candidate-1" }]);
     const completed = reduceControlStateV1(
       ready.state,
       input(5, {
@@ -463,9 +450,7 @@ describe("Loop v2 pure control reducer", () => {
       }),
     );
     expect(legacyReview.state.status).toBe("candidate");
-    expect(legacyReview.effects).toEqual([
-      { type: "request_probe", candidateId: "candidate-1" },
-    ]);
+    expect(legacyReview.effects).toEqual([{ type: "request_probe", candidateId: "candidate-1" }]);
     expect(() =>
       restoreControlStateV1(RUN_ID, {
         ...legacyReview.state,
@@ -512,9 +497,7 @@ describe("Loop v2 pure control reducer", () => {
       afterRevision: 1,
     });
     expect(repeatedCandidate.state.status).toBe("repair_required");
-    expect(repeatedCandidate.effects).toEqual([
-      { type: "call_model", reason: "repair_required" },
-    ]);
+    expect(repeatedCandidate.effects).toEqual([{ type: "call_model", reason: "repair_required" }]);
     expect(changed.state.status).toBe("running");
     expect(changed.state.openRepairObligation).toBeUndefined();
     expect(changed.state.semanticReview).toBeUndefined();
@@ -541,9 +524,7 @@ describe("Loop v2 pure control reducer", () => {
     );
 
     expect(read.state.openRepairObligation).toEqual(obligation);
-    expect(unrelatedVerification.state.openRepairObligation).toEqual(
-      obligation,
-    );
+    expect(unrelatedVerification.state.openRepairObligation).toEqual(obligation);
     expect(unrelatedVerification.state.status).toBe("repair_required");
   });
 
@@ -611,9 +592,7 @@ describe("Loop v2 pure control reducer", () => {
     );
 
     expect(verified.state.openRepairObligation).toBeUndefined();
-    expect(verified.effects).toEqual([
-      { type: "request_readiness", candidateId: "candidate-1" },
-    ]);
+    expect(verified.effects).toEqual([{ type: "request_readiness", candidateId: "candidate-1" }]);
   });
 
   test("R24 split replay preserves durable obligation identity", () => {
@@ -655,16 +634,10 @@ describe("Loop v2 pure control reducer", () => {
 
     const uninterrupted = replayControlFactsV1(RUN_ID, facts);
     const beforeResume = replayControlFactsV1(RUN_ID, facts.slice(0, 4));
-    const resumed = replayControlFactsV1(
-      RUN_ID,
-      facts.slice(4),
-      beforeResume.state,
-    );
+    const resumed = replayControlFactsV1(RUN_ID, facts.slice(4), beforeResume.state);
 
     expect(resumed.stateHash).toBe(uninterrupted.stateHash);
-    expect(resumed.state.openRepairObligation).toEqual(
-      uninterrupted.state.openRepairObligation,
-    );
+    expect(resumed.state.openRepairObligation).toEqual(uninterrupted.state.openRepairObligation);
   });
 
   test("R25 an immediate duplicate is idempotent and a conflict is corruption", () => {
@@ -678,9 +651,7 @@ describe("Loop v2 pure control reducer", () => {
 
     expect(duplicate.state).toBe(first.state);
     expect(duplicate.effects).toEqual([]);
-    expect(controlStateHashV1(duplicate.state)).toBe(
-      controlStateHashV1(first.state),
-    );
+    expect(controlStateHashV1(duplicate.state)).toBe(controlStateHashV1(first.state));
     expect(() =>
       reduceControlStateV1(
         first.state,
@@ -761,9 +732,7 @@ describe("Loop v2 pure control reducer", () => {
       },
     });
 
-    expect(adapted).toEqual(
-      input(1, { type: "run.started", goalHash: "goal-hash" }),
-    );
+    expect(adapted).toEqual(input(1, { type: "run.started", goalHash: "goal-hash" }));
     expect(advisorOnly).toBeUndefined();
     expect(readiness).toEqual(
       input(4, {

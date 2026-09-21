@@ -13,16 +13,9 @@
 import { createHash } from "node:crypto";
 import { getSql, parseJson, textArrayLiteral } from "../../db/connection.js";
 import { appendOpLog } from "../observability/op-log.js";
-import type {
-  EpisodicExperience,
-  MemoryStoreEngine,
-  TrialLesson,
-} from "../store/engine.js";
+import type { EpisodicExperience, MemoryStoreEngine, TrialLesson } from "../store/engine.js";
 import { deriveEntryId } from "../store/id.js";
-import {
-  type MemoryScopeKey,
-  memoryScopeFingerprint,
-} from "../store/scope-key.js";
+import { type MemoryScopeKey, memoryScopeFingerprint } from "../store/scope-key.js";
 import type { DistillInput, DistillerLlm } from "./distiller.js";
 
 export interface TrialLessonRow extends TrialLesson {
@@ -33,15 +26,9 @@ export interface TrialLessonRow extends TrialLesson {
   distilled: boolean;
 }
 
-function trialId(
-  lesson: string,
-  originTaskId: string,
-  scope?: MemoryScopeKey,
-): string {
+function trialId(lesson: string, originTaskId: string, scope?: MemoryScopeKey): string {
   const hex = createHash("sha256")
-    .update(
-      `${originTaskId}\n${lesson}${scope ? `\n${memoryScopeFingerprint(scope)}` : ""}`,
-    )
+    .update(`${originTaskId}\n${lesson}${scope ? `\n${memoryScopeFingerprint(scope)}` : ""}`)
     .digest("hex")
     .slice(0, 16);
   return `trial-${hex}`;
@@ -52,8 +39,7 @@ function rowToLesson(r: Record<string, unknown>): TrialLessonRow {
     id: r.id as string,
     lesson: r.lesson as string,
     originTaskId: r.origin_task_id as string,
-    created:
-      r.created instanceof Date ? r.created.toISOString() : String(r.created),
+    created: r.created instanceof Date ? r.created.toISOString() : String(r.created),
     attemptsLeft: r.attempts_left as number,
     whenToUse: (r.when_to_use as string | null) ?? undefined,
     keywords: (r.keywords as string[] | null) ?? undefined,
@@ -133,10 +119,7 @@ export async function getTrialLesson(
 }
 
 /** 随行注入一次 → attemptsLeft-1（#8；耗尽由 janitor 物理丢弃）。返回剩余次数。 */
-export async function decrementTrialAttempts(
-  id: string,
-  scope?: MemoryScopeKey,
-): Promise<number> {
+export async function decrementTrialAttempts(id: string, scope?: MemoryScopeKey): Promise<number> {
   const sql = getSql();
   const [row] = await sql`
     UPDATE memory_trial_lessons SET attempts_left = GREATEST(attempts_left - 1, 0)
@@ -155,10 +138,7 @@ export async function decrementTrialAttempts(
 }
 
 /** 从 trial 池物理删除（转正成功后或调用方显式丢弃）。 */
-export async function removeTrialLesson(
-  id: string,
-  scope?: MemoryScopeKey,
-): Promise<boolean> {
+export async function removeTrialLesson(id: string, scope?: MemoryScopeKey): Promise<boolean> {
   const sql = getSql();
   const rows = await sql`
     DELETE FROM memory_trial_lessons WHERE id = ${id}
@@ -205,8 +185,7 @@ export async function graduateTrialLesson(
 
   const nowIso = (opts.now?.() ?? new Date()).toISOString();
   const whenToUse =
-    lesson.whenToUse?.trim() ||
-    "When retrying a task that previously failed with a similar error";
+    lesson.whenToUse?.trim() || "When retrying a task that previously failed with a similar error";
   const perspective = lesson.lesson.trim();
   // 操作建议：试用教训本身即 Reflexion 式行动指引（≤1 条，避免空 modification）
   const modification = perspective ? [perspective.slice(0, 300)] : [];
@@ -220,11 +199,7 @@ export async function graduateTrialLesson(
     tInvalid: null,
     source: "trial_graduated",
     confidence: 0.75,
-    evidence: [
-      `runs/${lesson.originTaskId}`,
-      `runs/${opts.graduatingRunId}`,
-      `trial/${lesson.id}`,
-    ],
+    evidence: [`runs/${lesson.originTaskId}`, `runs/${opts.graduatingRunId}`, `trial/${lesson.id}`],
     freq: 0,
     utility: 1, // 转正当场即一次验证成功归因
     whenToUse,
@@ -287,17 +262,10 @@ export function parseTrialLessonOutput(raw: string): TrialLessonDraft | null {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
     if (start === -1 || end <= start) return null;
-    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<
-      string,
-      unknown
-    >;
-    if (typeof parsed.lesson !== "string" || parsed.lesson.trim().length === 0)
-      return null;
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+    if (typeof parsed.lesson !== "string" || parsed.lesson.trim().length === 0) return null;
     if (countSentences(parsed.lesson) > 3) return null;
-    if (
-      typeof parsed.whenToUse !== "string" ||
-      !/^(?:当|When[\s,])/.test(parsed.whenToUse.trim())
-    )
+    if (typeof parsed.whenToUse !== "string" || !/^(?:当|When[\s,])/.test(parsed.whenToUse.trim()))
       return null;
     const keywords = Array.isArray(parsed.keywords)
       ? parsed.keywords.filter((k): k is string => typeof k === "string")

@@ -10,9 +10,7 @@ import { createServer } from "vite";
 const require = createRequire(import.meta.url);
 const desktop = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "paw-native-qa-"));
-const output = path.resolve(
-  process.env.PAW_NATIVE_QA_OUTPUT || path.join(profile, "evidence"),
-);
+const output = path.resolve(process.env.PAW_NATIVE_QA_OUTPUT || path.join(profile, "evidence"));
 fs.mkdirSync(output, { recursive: true });
 const vite = await createServer({
   root: desktop,
@@ -25,11 +23,7 @@ try {
   await vite.listen();
   const address = vite.httpServer.address();
   assert(address && typeof address === "object");
-  const {
-    BUN_PATH: _bun,
-    ELECTRON_RUN_AS_NODE: _node,
-    ...environment
-  } = process.env;
+  const { BUN_PATH: _bun, ELECTRON_RUN_AS_NODE: _node, ...environment } = process.env;
   void _bun;
   void _node;
   app = await electron.launch({
@@ -50,13 +44,8 @@ try {
     undefined,
     { timeout: 20_000 },
   );
-  assert.equal(
-    await app.evaluate(({ app }) => app.getPath("userData")),
-    profile,
-  );
-  checks.push(
-    "Real Electron preload and Bun host ready without BUN_PATH; isolated user data",
-  );
+  assert.equal(await app.evaluate(({ app }) => app.getPath("userData")), profile);
+  checks.push("Real Electron preload and Bun host ready without BUN_PATH; isolated user data");
   const capture = async (name) => {
     await page.evaluate(async () => {
       await document.fonts.ready;
@@ -65,38 +54,26 @@ try {
           .getAnimations()
           .filter(
             (animation) =>
-              animation.effect?.getComputedTiming().iterations !==
-              Number.POSITIVE_INFINITY,
+              animation.effect?.getComputedTiming().iterations !== Number.POSITIVE_INFINITY,
           )
           .map((animation) => animation.finished.catch(() => {})),
       );
-      await new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      );
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     const png = await app.evaluate(async ({ BrowserWindow }) => {
       const windows = BrowserWindow.getAllWindows();
-      if (
-        windows.length !== 1 ||
-        windows[0].isVisible() ||
-        windows[0].isFocused()
-      )
+      if (windows.length !== 1 || windows[0].isVisible() || windows[0].isFocused())
         throw new Error("Expected one hidden QA window");
       const image = await windows[0].webContents.capturePage(undefined, {
         stayHidden: true,
       });
       return image.toPNG().toString("base64");
     });
-    fs.writeFileSync(
-      path.join(output, `${name}.png`),
-      Buffer.from(png, "base64"),
-    );
+    fs.writeFileSync(path.join(output, `${name}.png`), Buffer.from(png, "base64"));
   };
   const assertLayout = async () => {
     assert.equal(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       true,
       "Page must not overflow horizontally",
     );
@@ -125,9 +102,7 @@ try {
   const dialog = page.getByRole("dialog", { name: "设置" });
   await dialog.waitFor();
   if (process.env.PAW_NATIVE_QA_MODEL) {
-    await page
-      .getByText(process.env.PAW_NATIVE_QA_MODEL, { exact: true })
-      .waitFor();
+    await page.getByText(process.env.PAW_NATIVE_QA_MODEL, { exact: true }).waitFor();
     const preset = process.env.PAW_NATIVE_QA_PRESET;
     if (preset) {
       assert.equal(
@@ -137,87 +112,54 @@ try {
         "true",
       );
     }
-    checks.push(
-      `Desktop host and selected preset: ${process.env.PAW_NATIVE_QA_MODEL}`,
-    );
+    checks.push(`Desktop host and selected preset: ${process.env.PAW_NATIVE_QA_MODEL}`);
   }
   await dialog.getByRole("button", { name: /纸间 · Louis/ }).click();
-  assert.equal(
-    await page.locator("html").getAttribute("data-color-theme"),
-    "paper",
-  );
+  assert.equal(await page.locator("html").getAttribute("data-color-theme"), "paper");
   await capture("native-paper-settings");
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "detached" });
-  assert.equal(
-    await page.getByRole("checkbox", { name: "视觉验收" }).count(),
-    0,
-  );
-  assert.equal(
-    await page.getByRole("combobox", { name: "任务模式" }).count(),
-    0,
-  );
+  assert.equal(await page.getByRole("checkbox", { name: "视觉验收" }).count(), 0);
+  assert.equal(await page.getByRole("combobox", { name: "任务模式" }).count(), 0);
   await page.getByRole("button", { name: "上下文占用详情" }).click();
   await page.getByRole("region", { name: "上下文详情" }).waitFor();
   assert.equal(
-    await page
-      .getByRole("button", { name: "压缩上下文", exact: true })
-      .isDisabled(),
+    await page.getByRole("button", { name: "压缩上下文", exact: true }).isDisabled(),
     true,
   );
   await capture("native-context-empty");
   await page.keyboard.press("Escape");
   await page.reload();
-  await page.waitForFunction(
-    async () => (await window.pawDesktop?.getMeta())?.agentReady,
-  );
-  assert.equal(
-    await page.locator("html").getAttribute("data-color-theme"),
-    "paper",
-  );
-  checks.push(
-    "Unified task input, context ring popup and saved paper appearance",
-  );
+  await page.waitForFunction(async () => (await window.pawDesktop?.getMeta())?.agentReady);
+  assert.equal(await page.locator("html").getAttribute("data-color-theme"), "paper");
+  checks.push("Unified task input, context ring popup and saved paper appearance");
   for (const [width, height] of [
     [960, 640],
     [1100, 800],
     [1440, 960],
   ]) {
     await app.evaluate(
-      ({ BrowserWindow }, size) =>
-        BrowserWindow.getAllWindows()[0].setSize(...size),
+      ({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(...size),
       [width, height],
     );
     await page.waitForFunction(
       () =>
         new Promise((resolve) =>
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => resolve(true)),
-          ),
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))),
         ),
     );
     await assertLayout();
     if (width === 960) {
-      const fits = await page
-        .getByRole("button", { name: /解决一个问题/ })
-        .evaluate((element) => {
-          let parent = element.parentElement;
-          while (parent && getComputedStyle(parent).overflowY !== "auto")
-            parent = parent.parentElement;
-          const bounds = element.getBoundingClientRect();
-          const panel = parent?.getBoundingClientRect();
-          if (
-            !(
-              !!panel &&
-              bounds.top >= panel.top &&
-              bounds.bottom <= panel.bottom
-            )
-          )
-            console.log("welcome-bounds", JSON.stringify({ bounds, panel }));
-          return (
-            !!panel && bounds.top >= panel.top && bounds.bottom <= panel.bottom
-          );
-        });
+      const fits = await page.getByRole("button", { name: /解决一个问题/ }).evaluate((element) => {
+        let parent = element.parentElement;
+        while (parent && getComputedStyle(parent).overflowY !== "auto")
+          parent = parent.parentElement;
+        const bounds = element.getBoundingClientRect();
+        const panel = parent?.getBoundingClientRect();
+        if (!(!!panel && bounds.top >= panel.top && bounds.bottom <= panel.bottom))
+          console.log("welcome-bounds", JSON.stringify({ bounds, panel }));
+        return !!panel && bounds.top >= panel.top && bounds.bottom <= panel.bottom;
+      });
       assert.equal(
         fits,
         true,
@@ -225,9 +167,7 @@ try {
       );
     }
     await capture(`native-paper-${width}`);
-    checks.push(
-      `Native BrowserWindow resize ${width}x${height}: composer visible, no overflow`,
-    );
+    checks.push(`Native BrowserWindow resize ${width}x${height}: composer visible, no overflow`);
   }
   await page.getByRole("button", { name: "任务详情", exact: true }).click();
   for (const name of ["计划", "文件", "运行"]) {
@@ -237,19 +177,17 @@ try {
   }
   await capture("native-run-panel");
   assert.equal(
-    await page
-      .getByRole("tab", { name: "运行", exact: true })
-      .evaluate((tab) => {
-        const panel = tab.closest("aside");
-        return (
-          !!panel &&
-          [...panel.querySelectorAll("*")].every(
-            (element) =>
-              getComputedStyle(element).overflowX !== "auto" ||
-              element.scrollWidth <= element.clientWidth,
-          )
-        );
-      }),
+    await page.getByRole("tab", { name: "运行", exact: true }).evaluate((tab) => {
+      const panel = tab.closest("aside");
+      return (
+        !!panel &&
+        [...panel.querySelectorAll("*")].every(
+          (element) =>
+            getComputedStyle(element).overflowX !== "auto" ||
+            element.scrollWidth <= element.clientWidth,
+        )
+      );
+    }),
     true,
     "Inspector scroll regions must not overflow horizontally",
   );
@@ -262,12 +200,8 @@ try {
   // Exercise the real component with a deterministic UI fixture. Backend
   // compaction and continuation are separately covered by pawNext.test.ts.
   await page.evaluate(async () => {
-    const { default: React } = await import(
-      "/node_modules/.vite/deps/react.js"
-    );
-    const { default: ReactDOM } = await import(
-      "/node_modules/.vite/deps/react-dom_client.js"
-    );
+    const { default: React } = await import("/node_modules/.vite/deps/react.js");
+    const { default: ReactDOM } = await import("/node_modules/.vite/deps/react-dom_client.js");
     const { ContextMeter } = await import("/src/components/ContextMeter.tsx");
     const original = document.querySelector('[aria-label="上下文占用详情"]');
     const bounds = original.getBoundingClientRect();
@@ -308,8 +242,7 @@ try {
         busy: false,
         onCompress: () =>
           new Promise((resolve) => {
-            window.finishContextQa = () =>
-              resolve({ ok: true, message: "上下文已压缩。" });
+            window.finishContextQa = () => resolve({ ok: true, message: "上下文已压缩。" });
           }),
       }),
     );
@@ -318,30 +251,17 @@ try {
   await fixture.getByRole("button", { name: "上下文占用详情" }).click();
   const populated = fixture.getByRole("region", { name: "上下文详情" });
   await populated.getByText("37.9%", { exact: true }).waitFor();
-  assert.equal(
-    await populated.getByText("48,500 tokens", { exact: true }).count(),
-    1,
-  );
+  assert.equal(await populated.getByText("48,500 tokens", { exact: true }).count(), 1);
   const bounds = await populated.boundingBox();
-  assert(
-    bounds && bounds.x >= 0 && bounds.y >= 0,
-    "Populated context popup must fit",
-  );
+  assert(bounds && bounds.x >= 0 && bounds.y >= 0, "Populated context popup must fit");
   await capture("native-context-fixture");
-  await fixture
-    .getByRole("button", { name: "压缩上下文", exact: true })
-    .click();
+  await fixture.getByRole("button", { name: "压缩上下文", exact: true }).click();
   assert.equal(
-    await fixture
-      .getByRole("button", { name: "正在压缩…", exact: true })
-      .isDisabled(),
+    await fixture.getByRole("button", { name: "正在压缩…", exact: true }).isDisabled(),
     true,
   );
   await page.evaluate(() => window.finishContextQa());
-  await fixture
-    .getByRole("status")
-    .getByText("上下文已压缩。", { exact: true })
-    .waitFor();
+  await fixture.getByRole("status").getByText("上下文已压缩。", { exact: true }).waitFor();
   await page.keyboard.press("Escape");
   await populated.waitFor({ state: "detached" });
   checks.push(
@@ -361,6 +281,5 @@ try {
   if (app) await app.close();
   await vite.close();
   // Keep screenshots if the default output is inside the disposable profile.
-  if (!output.startsWith(profile + path.sep))
-    fs.rmSync(profile, { recursive: true, force: true });
+  if (!output.startsWith(profile + path.sep)) fs.rmSync(profile, { recursive: true, force: true });
 }

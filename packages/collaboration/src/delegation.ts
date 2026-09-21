@@ -55,25 +55,13 @@ export function normalizeCollaborationDelegationV1(input: {
   readonly roster?: CollaborationRosterV1;
   readonly policy?: CollaborationPolicyV1;
 }): CollaborationDelegationPlanV1 {
-  const policy = freezeCollaborationPolicyV1(
-    input.policy ?? DEFAULT_COLLABORATION_POLICY_V1,
-  );
+  const policy = freezeCollaborationPolicyV1(input.policy ?? DEFAULT_COLLABORATION_POLICY_V1);
   const roster = input.roster ?? DEFAULT_COLLABORATION_ROSTER_V1;
   const record = asRecord(input.args, "arguments");
-  assertOnlyKeys(record, [
-    "goal",
-    "kind",
-    "scope",
-    "acceptance",
-    "max_steps",
-    "agent_id",
-    "tasks",
-  ]);
+  assertOnlyKeys(record, ["goal", "kind", "scope", "acceptance", "max_steps", "agent_id", "tasks"]);
   const goal = boundedText(record.goal, "goal", policy.maxGoalChars);
   if (!isCollaborationCapabilityV1(record.kind)) {
-    throw new Error(
-      `kind must be one of ${COLLABORATION_CAPABILITIES_V1.join(", ")}`,
-    );
+    throw new Error(`kind must be one of ${COLLABORATION_CAPABILITIES_V1.join(", ")}`);
   }
   const acceptance = stringList(record.acceptance, "acceptance", 12, 500);
   const rawTasks = record.tasks;
@@ -106,23 +94,13 @@ export function normalizeCollaborationDelegationV1(input: {
   });
 }
 
-export function parseCollaborationDelegationPlanV1(
-  input: unknown,
-): CollaborationDelegationPlanV1 {
+export function parseCollaborationDelegationPlanV1(input: unknown): CollaborationDelegationPlanV1 {
   const record = asRecord(input, "delegation plan");
-  assertOnlyKeys(record, [
-    "schemaVersion",
-    "mode",
-    "goal",
-    "acceptance",
-    "tasks",
-  ]);
+  assertOnlyKeys(record, ["schemaVersion", "mode", "goal", "acceptance", "tasks"]);
   if (
     (record.schemaVersion !== COLLABORATION_DELEGATION_SCHEMA_VERSION_V1 &&
-      record.schemaVersion !==
-        PREVIOUS_COLLABORATION_DELEGATION_SCHEMA_VERSION_V1 &&
-      record.schemaVersion !==
-        LEGACY_COLLABORATION_DELEGATION_SCHEMA_VERSION_V1) ||
+      record.schemaVersion !== PREVIOUS_COLLABORATION_DELEGATION_SCHEMA_VERSION_V1 &&
+      record.schemaVersion !== LEGACY_COLLABORATION_DELEGATION_SCHEMA_VERSION_V1) ||
     (record.mode !== "single" && record.mode !== "mission") ||
     typeof record.goal !== "string" ||
     !Array.isArray(record.acceptance) ||
@@ -132,10 +110,7 @@ export function parseCollaborationDelegationPlanV1(
     throw new Error("Collaboration delegation plan is invalid");
   }
   const tasks = record.tasks.map(parseResolvedTask);
-  if (
-    tasks.length === 0 ||
-    (record.mode === "single") !== (tasks.length === 1)
-  ) {
+  if (tasks.length === 0 || (record.mode === "single") !== (tasks.length === 1)) {
     throw new Error("Collaboration delegation mode is invalid");
   }
   validateTaskGraph(tasks);
@@ -159,9 +134,7 @@ export function createAdaptiveCollaborationLauncherV1(input: {
     throw new TypeError("Adaptive collaboration delegate is invalid");
   }
   const roster = input.roster ?? DEFAULT_COLLABORATION_ROSTER_V1;
-  const policy = freezeCollaborationPolicyV1(
-    input.policy ?? DEFAULT_COLLABORATION_POLICY_V1,
-  );
+  const policy = freezeCollaborationPolicyV1(input.policy ?? DEFAULT_COLLABORATION_POLICY_V1);
 
   const launch = async (
     _goal: string,
@@ -173,9 +146,7 @@ export function createAdaptiveCollaborationLauncherV1(input: {
     if (!parentCallId) {
       throw new Error("Adaptive collaboration requires a stable tool call id");
     }
-    const plan = parseCollaborationDelegationPlanV1(
-      launchOptions.args?.delegation_plan,
-    );
+    const plan = parseCollaborationDelegationPlanV1(launchOptions.args?.delegation_plan);
     assertCollaborationDelegationAgentsV1(plan, roster, policy);
     validateMissionBudget(plan.tasks, policy);
     if (plan.mode === "single") {
@@ -203,9 +174,7 @@ export function createAdaptiveCollaborationLauncherV1(input: {
 
   return Object.freeze({
     launch,
-    async launchStreaming(
-      options: Parameters<SubAgentLauncher["launchStreaming"]>[0],
-    ) {
+    async launchStreaming(options: Parameters<SubAgentLauncher["launchStreaming"]>[0]) {
       return launch(options.goal, options.maxSteps, options);
     },
   });
@@ -225,11 +194,7 @@ export function collaborationDelegationRequiresMutationV1(
   return plan.tasks.some(
     (task) =>
       collaborationAgentEffectV1(
-        resolveCollaborationAgentForCapabilityV1(
-          roster,
-          task.capability,
-          task.agentId,
-        ),
+        resolveCollaborationAgentForCapabilityV1(roster, task.capability, task.agentId),
       ) === "mutate",
   );
 }
@@ -240,11 +205,7 @@ function assertCollaborationDelegationAgentsV1(
   policy: CollaborationPolicyV1,
 ): void {
   for (const task of plan.tasks) {
-    const agent = resolveCollaborationAgentForCapabilityV1(
-      roster,
-      task.capability,
-      task.agentId,
-    );
+    const agent = resolveCollaborationAgentForCapabilityV1(roster, task.capability, task.agentId);
     if (task.maxSteps > Math.min(agent.maxSteps, policy.maxChildSteps)) {
       throw new Error(`max_steps exceeds the limit for ${agent.id}`);
     }
@@ -256,18 +217,10 @@ function normalizeTasks(
   roster: CollaborationRosterV1,
   policy: CollaborationPolicyV1,
 ): CollaborationDelegationTaskV1[] {
-  if (
-    !Array.isArray(input) ||
-    input.length === 0 ||
-    input.length > policy.maxMissionTasks
-  ) {
-    throw new Error(
-      `tasks must contain between 1 and ${policy.maxMissionTasks} items`,
-    );
+  if (!Array.isArray(input) || input.length === 0 || input.length > policy.maxMissionTasks) {
+    throw new Error(`tasks must contain between 1 and ${policy.maxMissionTasks} items`);
   }
-  return input.map((item) =>
-    normalizeTask(asRecord(item, "task"), roster, policy),
-  );
+  return input.map((item) => normalizeTask(asRecord(item, "task"), roster, policy));
 }
 
 function normalizeTask(
@@ -290,18 +243,11 @@ function normalizeTask(
     throw new Error(`Invalid collaboration task id: ${id}`);
   }
   if (!isCollaborationCapabilityV1(input.kind)) {
-    throw new Error(
-      `kind must be one of ${COLLABORATION_CAPABILITIES_V1.join(", ")}`,
-    );
+    throw new Error(`kind must be one of ${COLLABORATION_CAPABILITIES_V1.join(", ")}`);
   }
   const goal = boundedText(input.goal, `task ${id} goal`, policy.maxGoalChars);
   const scope = stringList(input.scope, `task ${id} scope`, 12, 300);
-  const acceptance = stringList(
-    input.acceptance,
-    `task ${id} acceptance`,
-    12,
-    500,
-  );
+  const acceptance = stringList(input.acceptance, `task ${id} acceptance`, 12, 500);
   const dependsOn = stringList(
     input.depends_on,
     `task ${id} depends_on`,
@@ -313,11 +259,7 @@ function normalizeTask(
       `agent_id is required for task ${id}; choose an explicit agent from the Current Team Brief`,
     );
   }
-  const agent = resolveCollaborationAgentForCapabilityV1(
-    roster,
-    input.kind,
-    input.agent_id,
-  );
+  const agent = resolveCollaborationAgentForCapabilityV1(roster, input.kind, input.agent_id);
   const maxForAgent = Math.min(agent.maxSteps, policy.maxChildSteps);
   const explicitlyBounded = input.max_steps !== undefined;
   const initialSteps = explicitlyBounded
@@ -329,9 +271,7 @@ function normalizeTask(
     (maxSteps as number) < 1 ||
     (maxSteps as number) > maxForAgent
   ) {
-    throw new Error(
-      `max_steps must be between 1 and ${maxForAgent} for ${agent.id}`,
-    );
+    throw new Error(`max_steps must be between 1 and ${maxForAgent} for ${agent.id}`);
   }
   const task = Object.freeze({
     id,
@@ -347,12 +287,8 @@ function normalizeTask(
   const contextLength = formatDelegatedGoal(task).length;
   if (contextLength > policy.maxGoalChars) {
     const scopeLength = scope.reduce((sum, item) => sum + item.length, 0);
-    const acceptanceLength = acceptance.reduce(
-      (sum, item) => sum + item.length,
-      0,
-    );
-    const formattingLength =
-      contextLength - goal.length - scopeLength - acceptanceLength;
+    const acceptanceLength = acceptance.reduce((sum, item) => sum + item.length, 0);
+    const formattingLength = contextLength - goal.length - scopeLength - acceptanceLength;
     throw new Error(
       `Task ${id} context exceeds the child goal limit: ${contextLength}/${policy.maxGoalChars} characters ` +
         `(goal=${goal.length}, scope=${scopeLength}, acceptance=${acceptanceLength}, formatting=${formattingLength}). ` +
@@ -386,8 +322,7 @@ function parseResolvedTask(input: unknown): CollaborationDelegationTaskV1 {
     !Array.isArray(record.dependsOn) ||
     !record.dependsOn.every((item) => typeof item === "string") ||
     !Number.isSafeInteger(record.maxSteps) ||
-    (record.initialSteps !== undefined &&
-      !Number.isSafeInteger(record.initialSteps)) ||
+    (record.initialSteps !== undefined && !Number.isSafeInteger(record.initialSteps)) ||
     typeof record.agentId !== "string"
   ) {
     throw new Error("Resolved collaboration task is invalid");
@@ -416,9 +351,7 @@ function parseResolvedTask(input: unknown): CollaborationDelegationTaskV1 {
   });
 }
 
-function validateTaskGraph(
-  tasks: readonly CollaborationDelegationTaskV1[],
-): void {
+function validateTaskGraph(tasks: readonly CollaborationDelegationTaskV1[]): void {
   const byId = new Map<string, CollaborationDelegationTaskV1>();
   for (const task of tasks) {
     if (byId.has(task.id)) {
@@ -440,8 +373,7 @@ function validateTaskGraph(
   const visited = new Set<string>();
   const visit = (id: string): void => {
     if (visited.has(id)) return;
-    if (visiting.has(id))
-      throw new Error("Collaboration task graph has a cycle");
+    if (visiting.has(id)) throw new Error("Collaboration task graph has a cycle");
     visiting.add(id);
     for (const dependency of byId.get(id)?.dependsOn ?? []) visit(dependency);
     visiting.delete(id);
@@ -479,8 +411,7 @@ async function runMission(
       for (const task of pending.values())
         results.set(task.id, {
           status: "failed",
-          summary:
-            "Stage not started: new user input requires Manager replanning.",
+          summary: "Stage not started: new user input requires Manager replanning.",
         });
       break;
     }
@@ -495,9 +426,7 @@ async function runMission(
           });
       }
     for (const task of [...pending.values()]) {
-      const failedDependency = task.dependsOn.find(
-        (id) => results.get(id)?.status === "failed",
-      );
+      const failedDependency = task.dependsOn.find((id) => results.get(id)?.status === "failed");
       if (!failedDependency) continue;
       results.set(task.id, {
         status: "failed",
@@ -512,11 +441,7 @@ async function runMission(
     if (ready.length === 0) continue;
     const effectFor = (task: CollaborationDelegationTaskV1) =>
       collaborationAgentEffectV1(
-        resolveCollaborationAgentForCapabilityV1(
-          roster,
-          task.capability,
-          task.agentId,
-        ),
+        resolveCollaborationAgentForCapabilityV1(roster, task.capability, task.agentId),
       );
     const inspectTasks = ready.filter((task) => effectFor(task) === "inspect");
     const executeTasks = ready.filter((task) => effectFor(task) === "execute");
@@ -583,22 +508,16 @@ function formatDelegatedGoal(
 ): string {
   const sections = [task.goal];
   if (task.scope.length > 0) {
-    sections.push(
-      `Scope:\n${task.scope.map((item) => `- ${item}`).join("\n")}`,
-    );
+    sections.push(`Scope:\n${task.scope.map((item) => `- ${item}`).join("\n")}`);
   }
   if (task.acceptance.length > 0) {
-    sections.push(
-      `Acceptance:\n${task.acceptance.map((item) => `- ${item}`).join("\n")}`,
-    );
+    sections.push(`Acceptance:\n${task.acceptance.map((item) => `- ${item}`).join("\n")}`);
   }
   const base = sections.join("\n\n");
   const dependencyEvidence = task.dependsOn
     .map((id) => {
       const result = dependencyResults.get(id);
-      return result
-        ? `- ${id} (${result.status}): ${singleLine(result.summary, 800)}`
-        : undefined;
+      return result ? `- ${id} (${result.status}): ${singleLine(result.summary, 800)}` : undefined;
     })
     .filter((item): item is string => item !== undefined);
   if (dependencyEvidence.length === 0) return base;
@@ -622,14 +541,10 @@ function aggregateMissionResult(
     ({ task, result }) =>
       `[${task.id}/${task.agentId}/${result.status}] ${singleLine(result.summary, 1_000)}`,
   );
-  const changedFiles = unique(
-    ordered.flatMap((item) => item.result.changedFiles ?? []),
-  );
+  const changedFiles = unique(ordered.flatMap((item) => item.result.changedFiles ?? []));
   const testsRun = ordered.flatMap((item) => item.result.testsRun ?? []);
   const outcome = aggregateMissionOutcomeV1(
-    ordered.flatMap((item) =>
-      item.result.outcome ? [item.result.outcome] : [],
-    ),
+    ordered.flatMap((item) => (item.result.outcome ? [item.result.outcome] : [])),
   );
   const errors = ordered.flatMap((item) => item.result.errors ?? []);
   return Object.freeze({
@@ -639,9 +554,7 @@ function aggregateMissionResult(
       summaryLimit,
     ),
     findings: Object.freeze(findings),
-    ...(changedFiles.length > 0
-      ? { changedFiles: Object.freeze(changedFiles) }
-      : {}),
+    ...(changedFiles.length > 0 ? { changedFiles: Object.freeze(changedFiles) } : {}),
     ...(testsRun.length > 0 ? { testsRun: Object.freeze(testsRun) } : {}),
     ...(outcome ? { outcome } : {}),
     ...(errors.length > 0 ? { errors: Object.freeze(errors) } : {}),
@@ -660,22 +573,16 @@ function aggregateMissionOutcomeV1(
         ? ("pass" as const)
         : ("not_applicable" as const);
   const revisions = unique(
-    outcomes.flatMap((item) =>
-      item.sourceRevision ? [item.sourceRevision] : [],
-    ),
+    outcomes.flatMap((item) => (item.sourceRevision ? [item.sourceRevision] : [])),
   );
   return Object.freeze({
     schemaVersion: "paw.sub-agent-outcome.v1" as const,
     effectProfile: "mixed" as const,
     verdict,
     commands: Object.freeze(
-      outcomes.flatMap((item) =>
-        item.commands.map((command) => Object.freeze({ ...command })),
-      ),
+      outcomes.flatMap((item) => item.commands.map((command) => Object.freeze({ ...command }))),
     ),
-    artifactRefs: Object.freeze(
-      unique(outcomes.flatMap((item) => item.artifactRefs)),
-    ),
+    artifactRefs: Object.freeze(unique(outcomes.flatMap((item) => item.artifactRefs))),
     ...(revisions.length === 1 ? { sourceRevision: revisions[0] } : {}),
   });
 }
@@ -687,22 +594,16 @@ function asRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function assertOnlyKeys(
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-): void {
+function assertOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): void {
   const allow = new Set(allowed);
   const unexpected = Object.keys(value).find((key) => !allow.has(key));
-  if (unexpected)
-    throw new Error(`Unexpected collaboration field: ${unexpected}`);
+  if (unexpected) throw new Error(`Unexpected collaboration field: ${unexpected}`);
 }
 
 function boundedText(value: unknown, label: string, limit: number): string {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text || text.length > limit) {
-    throw new Error(
-      `${label} must be between 1 and ${limit} characters (received ${text.length})`,
-    );
+    throw new Error(`${label} must be between 1 and ${limit} characters (received ${text.length})`);
   }
   return text;
 }
@@ -723,8 +624,7 @@ function stringList(
       `${label} has ${value.length} items; maximum is ${maxItems}. Remove or combine ${value.length - maxItems} items.`,
     );
   for (const [index, item] of value.entries()) {
-    if (typeof item !== "string")
-      throw new Error(`${label}[${index}] must be a string`);
+    if (typeof item !== "string") throw new Error(`${label}[${index}] must be a string`);
     const length = item.trim().length;
     if (length === 0 || length > maxChars) {
       const advice =
@@ -745,7 +645,5 @@ function unique(values: readonly string[]): string[] {
 
 function singleLine(value: string, limit: number): string {
   const text = value.replace(/[\r\n\t]+/g, " ").trim();
-  return text.length <= limit
-    ? text
-    : `${text.slice(0, limit - 14)} [truncated]`;
+  return text.length <= limit ? text : `${text.slice(0, limit - 14)} [truncated]`;
 }

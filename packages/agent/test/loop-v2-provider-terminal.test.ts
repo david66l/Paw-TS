@@ -7,10 +7,7 @@ import {
 
 const RUN_ID = "provider-terminal-replay";
 
-function response(
-  turn: number,
-  overrides: Partial<ProviderResponseV2> = {},
-): ProviderResponseV2 {
+function response(turn: number, overrides: Partial<ProviderResponseV2> = {}): ProviderResponseV2 {
   return {
     runId: RUN_ID,
     turn,
@@ -54,10 +51,7 @@ describe("Loop Kernel v2 provider terminal normalization", () => {
   });
 
   test("explicit control actions advance the provider turn and reset recovery", () => {
-    const empty = normalizeProviderResponseV2(
-      createProviderTerminalStateV2(RUN_ID),
-      response(1),
-    );
+    const empty = normalizeProviderResponseV2(createProviderTerminalStateV2(RUN_ID), response(1));
     const control = normalizeProviderResponseV2(
       empty.state,
       response(2, { controlAction: "ask_user" }),
@@ -76,18 +70,12 @@ describe("Loop Kernel v2 provider terminal normalization", () => {
   });
 
   test("parse correction does not reopen an exhausted protocol budget", () => {
-    const empty = normalizeProviderResponseV2(
-      createProviderTerminalStateV2(RUN_ID),
-      response(1),
-    );
+    const empty = normalizeProviderResponseV2(createProviderTerminalStateV2(RUN_ID), response(1));
     const malformed = normalizeProviderResponseV2(
       empty.state,
       response(2, { controlAction: "parse_recovery" }),
     );
-    const laterEmpty = normalizeProviderResponseV2(
-      malformed.state,
-      response(3),
-    );
+    const laterEmpty = normalizeProviderResponseV2(malformed.state, response(3));
 
     expect(malformed.decision).toEqual({
       kind: "dispatch_control",
@@ -118,10 +106,7 @@ describe("Loop Kernel v2 provider terminal normalization", () => {
   });
 
   test("R12 two consecutive empty stops recover once then end incomplete", () => {
-    const first = normalizeProviderResponseV2(
-      createProviderTerminalStateV2(RUN_ID),
-      response(1),
-    );
+    const first = normalizeProviderResponseV2(createProviderTerminalStateV2(RUN_ID), response(1));
     const second = normalizeProviderResponseV2(first.state, response(2));
 
     expect(first.decision).toEqual({
@@ -136,10 +121,7 @@ describe("Loop Kernel v2 provider terminal normalization", () => {
   });
 
   test("a valid intervening response resets consecutive protocol recovery", () => {
-    const first = normalizeProviderResponseV2(
-      createProviderTerminalStateV2(RUN_ID),
-      response(1),
-    );
+    const first = normalizeProviderResponseV2(createProviderTerminalStateV2(RUN_ID), response(1));
     const tools = normalizeProviderResponseV2(
       first.state,
       response(2, {
@@ -173,10 +155,7 @@ describe("Loop Kernel v2 provider terminal normalization", () => {
         },
       ],
     });
-    const first = normalizeProviderResponseV2(
-      createProviderTerminalStateV2(RUN_ID),
-      truncated,
-    );
+    const first = normalizeProviderResponseV2(createProviderTerminalStateV2(RUN_ID), truncated);
     const second = normalizeProviderResponseV2(first.state, {
       ...truncated,
       turn: 2,
@@ -195,10 +174,7 @@ describe("Loop Kernel v2 provider terminal normalization", () => {
   });
 
   test("alternating protocol faults cannot reopen the one-shot recovery budget", () => {
-    const empty = normalizeProviderResponseV2(
-      createProviderTerminalStateV2(RUN_ID),
-      response(1),
-    );
+    const empty = normalizeProviderResponseV2(createProviderTerminalStateV2(RUN_ID), response(1));
     const length = normalizeProviderResponseV2(
       empty.state,
       response(2, { finishReason: "length" }),

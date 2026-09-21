@@ -70,12 +70,8 @@ export const taskSessionDao = {
 
   async findById(id: string): Promise<TaskSession | null> {
     const sql = getSql();
-    const rows = await sql.unsafe("SELECT * FROM task_sessions WHERE id = $1", [
-      id,
-    ]);
-    return rows.length > 0
-      ? rowToTask(rows[0] as Record<string, unknown>)
-      : null;
+    const rows = await sql.unsafe("SELECT * FROM task_sessions WHERE id = $1", [id]);
+    return rows.length > 0 ? rowToTask(rows[0] as Record<string, unknown>) : null;
   },
 
   async updateStatus(
@@ -110,15 +106,10 @@ export const taskSessionDao = {
         expectedRevision,
       ],
     );
-    return rows.length > 0
-      ? rowToTask(rows[0] as Record<string, unknown>)
-      : null;
+    return rows.length > 0 ? rowToTask(rows[0] as Record<string, unknown>) : null;
   },
 
-  async listByStatus(
-    status: TaskSession["status"],
-    limit = 20,
-  ): Promise<TaskSession[]> {
+  async listByStatus(status: TaskSession["status"], limit = 20): Promise<TaskSession[]> {
     const sql = getSql();
     const rows = await sql.unsafe(
       "SELECT * FROM task_sessions WHERE status = $1 ORDER BY created_at DESC LIMIT $2",

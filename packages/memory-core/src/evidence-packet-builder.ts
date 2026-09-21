@@ -23,9 +23,7 @@ export function selectedNotebookEvidence(
   requirementHits: readonly (readonly MemoryEvidenceNotebookHitV1[])[],
   notebook: MemoryEvidenceNotebookV1,
 ): readonly MemoryEvidenceNotebookHitV1[] {
-  const selectedRefs = new Set(
-    notebook.coverage.flatMap((item) => item.selectedEvidenceRefs),
-  );
+  const selectedRefs = new Set(notebook.coverage.flatMap((item) => item.selectedEvidenceRefs));
   return mergeEvidenceHits(requirementHits.flat(), []).filter((hit) =>
     selectedRefs.has(hit.evidenceRef),
   );
@@ -54,12 +52,7 @@ export function createRootEvidenceRequirement(
         : intent.answerShape === "compare" || intent.answerShape === "aggregate"
           ? "comparative"
           : "direct",
-    coverageMode:
-      intent.temporalMode === "latest"
-        ? "latest"
-        : collectiveFallback
-          ? "all"
-          : "any",
+    coverageMode: intent.temporalMode === "latest" ? "latest" : collectiveFallback ? "all" : "any",
     minimumEvidence: collectiveFallback
       ? Math.min(3, obligationShape?.minimumEvidenceCount ?? 2)
       : 1,
@@ -75,9 +68,7 @@ export function selectSupportCandidates(
   const allowed = new Set(selectedSourceIds);
   const rows = requirementHits.map((hits) =>
     hits.filter(
-      (hit) =>
-        allowed.has(hit.sourceId) &&
-        (hit.authority !== "context_only" || allowContextOnly),
+      (hit) => allowed.has(hit.sourceId) && (hit.authority !== "context_only" || allowContextOnly),
     ),
   );
   const output: MemoryEvidenceNotebookHitV1[] = [];
@@ -144,12 +135,8 @@ export function applyMemoryDeterministicSupportFloorV1(input: {
   ) {
     throw namedError("MemoryDeterministicSupportFloorBudgetInvalid");
   }
-  const locked = new Set(
-    input.lockedSourceIds.map((sourceId) => sourceId.trim()).filter(Boolean),
-  );
-  const excluded = new Set(
-    (input.excludedEvidenceRefs ?? []).flatMap((refs) => [...refs]),
-  );
+  const locked = new Set(input.lockedSourceIds.map((sourceId) => sourceId.trim()).filter(Boolean));
+  const excluded = new Set((input.excludedEvidenceRefs ?? []).flatMap((refs) => [...refs]));
   const output = new Map(input.selectedRefsByRequirement);
   const floored: string[] = [];
   input.requirementIds.forEach((requirementId, index) => {
@@ -237,10 +224,7 @@ export function buildPrimaryEvidencePacketSources(
         (item): item is typeof item & { evidenceUse: MemoryEvidenceUseV1 } =>
           item.evidenceUse !== undefined,
       )
-      .sort(
-        (left, right) =>
-          right.ordinalScore - left.ordinalScore || left.rank - right.rank,
-      )
+      .sort((left, right) => right.ordinalScore - left.ordinalScore || left.rank - right.rank)
       .slice(0, maxHitsPerSource);
     if (selected.length === 0) continue;
     const text = [
@@ -306,9 +290,7 @@ export function buildPlannedEvidencePacketSources(input: {
       parts: string[];
       evidenceRefs: string[];
       evidenceBindings: Map<string, MemoryEvidenceUseV1>;
-      answerRoles: Set<
-        "current" | "ambiguous" | "supporting" | "candidate" | "mixed"
-      >;
+      answerRoles: Set<"current" | "ambiguous" | "supporting" | "candidate" | "mixed">;
     }
   >();
   for (const source of [...input.notebook.sources, ...fallback]) {
@@ -338,12 +320,11 @@ export function buildPlannedEvidencePacketSources(input: {
     [...new Set(orderedIds)].flatMap((sourceId) => {
       const value = bySource.get(sourceId);
       if (!value) return [];
-      const evidenceBindings: readonly MemoryEvidenceBindingV1[] =
-        Object.freeze(
-          [...value.evidenceBindings].map(([evidenceRef, evidenceUse]) =>
-            Object.freeze({ evidenceRef, evidenceUse }),
-          ),
-        );
+      const evidenceBindings: readonly MemoryEvidenceBindingV1[] = Object.freeze(
+        [...value.evidenceBindings].map(([evidenceRef, evidenceUse]) =>
+          Object.freeze({ evidenceRef, evidenceUse }),
+        ),
+      );
       return [
         Object.freeze({
           sourceId,
@@ -360,9 +341,7 @@ export function buildPlannedEvidencePacketSources(input: {
   );
 }
 
-function singleAnswerRole<T extends string>(
-  roles: ReadonlySet<T>,
-): T | "mixed" {
+function singleAnswerRole<T extends string>(roles: ReadonlySet<T>): T | "mixed" {
   return roles.size === 1 ? (roles.values().next().value ?? "mixed") : "mixed";
 }
 

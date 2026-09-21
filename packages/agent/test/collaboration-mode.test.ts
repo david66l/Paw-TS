@@ -81,16 +81,10 @@ describe("coding factory defaults", () => {
           ts: 1,
           event: { type: "run.started", goal: "test" },
         });
-        expect(
-          existsSync(
-            path.join(runtime, ".paw", "sessions", "external-state.jsonl"),
-          ),
-        ).toBe(true);
-        expect(
-          existsSync(
-            path.join(dir, ".paw", "sessions", "external-state.jsonl"),
-          ),
-        ).toBe(false);
+        expect(existsSync(path.join(runtime, ".paw", "sessions", "external-state.jsonl"))).toBe(
+          true,
+        );
+        expect(existsSync(path.join(dir, ".paw", "sessions", "external-state.jsonl"))).toBe(false);
       } finally {
         run.watcher.stop();
       }
@@ -107,14 +101,9 @@ describe("coding factory defaults", () => {
     let systemPrompt = "";
     const model = {
       label: "coding-capability-probe",
-      async complete(
-        messages: readonly ChatMessage[],
-        options?: ModelCompleteOptions,
-      ) {
-        systemPrompt =
-          messages.find((message) => message.role === "system")?.content ?? "";
-        providerToolNames =
-          options?.tools?.map((tool) => tool.function.name) ?? [];
+      async complete(messages: readonly ChatMessage[], options?: ModelCompleteOptions) {
+        systemPrompt = messages.find((message) => message.role === "system")?.content ?? "";
+        providerToolNames = options?.tools?.map((tool) => tool.function.name) ?? [];
         return { text: '{"action":"final_answer","summary":"Done."}' };
       },
     };
@@ -136,9 +125,7 @@ describe("coding factory defaults", () => {
           workspaceRoot: dir,
           maxSteps: 2,
         });
-        const inventory = events.find(
-          (event) => event.event.type === "capability.inventory",
-        );
+        const inventory = events.find((event) => event.event.type === "capability.inventory");
         expect(inventory?.event.type).toBe("capability.inventory");
         if (inventory?.event.type !== "capability.inventory") {
           throw new Error("capability inventory missing");
@@ -152,15 +139,12 @@ describe("coding factory defaults", () => {
             "workspace.undo_last_edit",
           ]),
         );
-        expect(inventory.event.executableTools).not.toContain(
-          "workspace.run_agent",
-        );
+        expect(inventory.event.executableTools).not.toContain("workspace.run_agent");
         expect(providerToolNames).toHaveLength(4);
         expect(providerToolNames).toEqual(
           expect.arrayContaining(
-            inventory.event.executableTools?.map((name) =>
-              name.replace(/[^a-zA-Z0-9_-]/g, "_"),
-            ) ?? [],
+            inventory.event.executableTools?.map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_")) ??
+              [],
           ),
         );
         for (const hidden of [

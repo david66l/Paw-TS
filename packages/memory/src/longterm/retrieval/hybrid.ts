@@ -15,12 +15,7 @@
  * 降级（spec §6.7）：任一路失败 → 另一路单独工作，degraded=true。
  */
 
-import type {
-  MemoryEntry,
-  MemoryKind,
-  MemoryStoreEngine,
-  ScoredId,
-} from "../store/engine.js";
+import type { MemoryEntry, MemoryKind, MemoryStoreEngine, ScoredId } from "../store/engine.js";
 
 /** 各触发点的 α 取值（spec §6.3） */
 export const RECALL_ALPHA = {
@@ -96,9 +91,7 @@ export function fuseRecall(
   const vectorScoreById = new Map(vectorHits.map((h) => [h.id, h.score]));
   const maxText = Math.max(0, ...textHits.map((h) => h.score));
 
-  const ids = [
-    ...new Set([...textScoreById.keys(), ...vectorScoreById.keys()]),
-  ];
+  const ids = [...new Set([...textScoreById.keys(), ...vectorScoreById.keys()])];
   const out: ScoredEntry[] = [];
 
   for (const id of ids) {
@@ -113,11 +106,7 @@ export function fuseRecall(
 
     const bonuses: string[] = [];
     let bonus = 0;
-    if (
-      opts.context?.branch &&
-      entry.kind === "episodic" &&
-      entry.branch === opts.context.branch
-    ) {
+    if (opts.context?.branch && entry.kind === "episodic" && entry.branch === opts.context.branch) {
       bonus += BONUS_SAME_BRANCH;
       bonuses.push("same_branch");
     }
@@ -126,10 +115,7 @@ export function fuseRecall(
       bonuses.push("user_statement");
     }
     const createdMs = Date.parse(entry.created);
-    if (
-      !Number.isNaN(createdMs) &&
-      now.getTime() - createdMs <= RECENT_WINDOW_MS
-    ) {
+    if (!Number.isNaN(createdMs) && now.getTime() - createdMs <= RECENT_WINDOW_MS) {
       bonus += BONUS_RECENT;
       bonuses.push("recent");
     }

@@ -73,9 +73,9 @@ describe("Session lease heartbeat supervisor", () => {
         return "released";
       },
     });
-    await expect(
-      releaseFileSessionExecutionLeaseV1(lease, root, "session", "run"),
-    ).resolves.toBe("released");
+    await expect(releaseFileSessionExecutionLeaseV1(lease, root, "session", "run")).resolves.toBe(
+      "released",
+    );
     expect(shadowReleaseCalls).toBe(0);
     scheduler.advanceTo(2_000);
     scheduler.fireAllForCancellationRace();
@@ -284,9 +284,7 @@ describe("Session lease heartbeat supervisor", () => {
   test("released and expired leases fail before scheduling or work", async () => {
     for (const state of ["released", "expired"] as const) {
       const root = workspace();
-      const clock = new ManualLeaseScheduler(
-        state === "released" ? 7_000 : 8_000,
-      );
+      const clock = new ManualLeaseScheduler(state === "released" ? 7_000 : 8_000);
       const lease = acquire(root, clock);
       if (state === "released") {
         await releaseFileSessionExecutionLeaseV1(lease, root, "session", "run");
@@ -407,10 +405,7 @@ class ManualLeaseScheduler implements SessionLeaseSchedulerV1 {
     return this.nowMs;
   }
 
-  scheduleAt(
-    deadlineMs: number,
-    task: () => void,
-  ): SessionLeaseScheduledTaskV1 {
+  scheduleAt(deadlineMs: number, task: () => void): SessionLeaseScheduledTaskV1 {
     const entry = { deadlineMs, task, cancelled: false };
     this.tasks.push(entry);
     return Object.freeze({
@@ -421,8 +416,7 @@ class ManualLeaseScheduler implements SessionLeaseSchedulerV1 {
   }
 
   advanceTo(nowMs: number): void {
-    if (nowMs < this.nowMs)
-      throw new Error("manual clock cannot move backward");
+    if (nowMs < this.nowMs) throw new Error("manual clock cannot move backward");
     this.nowMs = nowMs;
     for (;;) {
       const next = this.tasks
@@ -452,10 +446,7 @@ class ManualLeaseScheduler implements SessionLeaseSchedulerV1 {
   }
 }
 
-function acquire(
-  root: string,
-  scheduler: ManualLeaseScheduler,
-): FileSessionExecutionLeaseV1 {
+function acquire(root: string, scheduler: ManualLeaseScheduler): FileSessionExecutionLeaseV1 {
   const acquired = acquireFileSessionExecutionLeaseV1({
     workspaceRoot: root,
     sessionId: "session",

@@ -63,16 +63,11 @@ describe("model output recovery plugin", () => {
 
     const result = await createModelOutputRecoveryPluginV1(model, {
       nativeMaxOutputTokens: 200_000,
-    }).execute(
-      { messages: [{ role: "user", content: "work" }] },
-      callOptions(),
-    );
+    }).execute({ messages: [{ role: "user", content: "work" }] }, callOptions());
 
     expect(result.status).toBe("success");
     if (result.status !== "success") throw new Error("expected success");
-    expect(requests.map((request) => request.options?.maxOutputTokens)).toEqual(
-      [200_000, 200_000],
-    );
+    expect(requests.map((request) => request.options?.maxOutputTokens)).toEqual([200_000, 200_000]);
     expect(requests[1]?.messages.at(-2)).toEqual({
       role: "assistant",
       content: "first ",
@@ -113,10 +108,7 @@ describe("model output recovery plugin", () => {
       await createModelOutputRecoveryPluginV1(model, {
         nativeMaxOutputTokens: native,
         reservedOutputTokens: reserve,
-      }).execute(
-        { messages: [], options: { maxOutputTokens: 1024 } },
-        callOptions(),
-      );
+      }).execute({ messages: [], options: { maxOutputTokens: 1024 } }, callOptions());
       expect(limits).toEqual([1024, expected]);
     }
     expect(() => resolveModelOutputRecoveryBudgetV1(0)).toThrow();
@@ -177,9 +169,7 @@ describe("model output recovery plugin", () => {
     expect(result.status).toBe("success");
     if (result.status !== "success") throw new Error("expected success");
     expect(result.toolCalls.map((call) => call.id)).toEqual(["complete"]);
-    expect(result.message.toolCalls?.map((call) => call.id)).toEqual([
-      "complete",
-    ]);
+    expect(result.message.toolCalls?.map((call) => call.id)).toEqual(["complete"]);
   });
 
   test("stops after three continuations and returns no executable calls", async () => {

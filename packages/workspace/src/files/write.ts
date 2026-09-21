@@ -110,8 +110,7 @@ function validateLiteralReplacement(
     return `edit invariant failed: expected ${expectedReplacements} replacements but produced ${result.replacements}`;
   }
   const expectedLength =
-    original.length +
-    expectedReplacements * (replacement.length - search.length);
+    original.length + expectedReplacements * (replacement.length - search.length);
   if (result.content.length !== expectedLength) {
     return `edit invariant failed: expected ${expectedLength} LF characters but produced ${result.content.length}`;
   }
@@ -124,11 +123,7 @@ interface DiffStats {
   diffText: string;
 }
 
-function computeDiffStats(
-  filePath: string,
-  oldContent: string,
-  newContent: string,
-): DiffStats {
+function computeDiffStats(filePath: string, oldContent: string, newContent: string): DiffStats {
   let linesAdded = 0;
   let linesRemoved = 0;
   try {
@@ -216,11 +211,7 @@ export function editWorkspaceFile(
     const hasTrailingNewline = /\r?\n$/.test(content);
     const lines = content.split(/\r?\n/);
     // Remove trailing empty element created by trailing newline
-    if (
-      hasTrailingNewline &&
-      lines.length > 0 &&
-      lines[lines.length - 1] === ""
-    ) {
+    if (hasTrailingNewline && lines.length > 0 && lines[lines.length - 1] === "") {
       lines.pop();
     }
     const totalLines = lines.length;
@@ -247,11 +238,7 @@ export function editWorkspaceFile(
       const msg = err instanceof Error ? err.message : String(err);
       return { error: msg };
     }
-    const { linesAdded, linesRemoved, diffText } = computeDiffStats(
-      filepath,
-      content,
-      newContent,
-    );
+    const { linesAdded, linesRemoved, diffText } = computeDiffStats(filepath, content, newContent);
     return {
       path: filepath,
       changed: newContent !== content,
@@ -275,12 +262,7 @@ export function editWorkspaceFile(
   const occurrences = contentLf.split(searchLf).length - 1;
 
   if (occurrences === 1 || (replaceAll && occurrences > 1)) {
-    const replacementResult = replaceLiteral(
-      contentLf,
-      searchLf,
-      newLf,
-      replaceAll,
-    );
+    const replacementResult = replaceLiteral(contentLf, searchLf, newLf, replaceAll);
     const invariantError = validateLiteralReplacement(
       contentLf,
       searchLf,
@@ -299,11 +281,7 @@ export function editWorkspaceFile(
       const msg = err instanceof Error ? err.message : String(err);
       return { error: msg };
     }
-    const { linesAdded, linesRemoved, diffText } = computeDiffStats(
-      filepath,
-      content,
-      replaced,
-    );
+    const { linesAdded, linesRemoved, diffText } = computeDiffStats(filepath, content, replaced);
     return {
       path: filepath,
       changed: replaced !== content,
@@ -333,11 +311,7 @@ export function editWorkspaceFile(
         const msg = err instanceof Error ? err.message : String(err);
         return { error: msg };
       }
-      const { linesAdded, linesRemoved, diffText } = computeDiffStats(
-        filepath,
-        content,
-        replaced,
-      );
+      const { linesAdded, linesRemoved, diffText } = computeDiffStats(filepath, content, replaced);
       return {
         path: filepath,
         changed: replaced !== content,
@@ -420,12 +394,7 @@ export function writeWorkspaceFile(
       diff: diffText,
     };
   } catch (e) {
-    if (
-      options.createOnly &&
-      e instanceof Error &&
-      "code" in e &&
-      e.code === "EEXIST"
-    ) {
+    if (options.createOnly && e instanceof Error && "code" in e && e.code === "EEXIST") {
       return { error: `file already exists: ${relPath}` };
     }
     return { error: e instanceof Error ? e.message : String(e) };

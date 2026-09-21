@@ -30,13 +30,7 @@
  *    解析时通过 `startsWith("- ")` 识别，简洁且不易与正文混淆
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import {
   atomicWrite,
@@ -206,27 +200,20 @@ export class SessionMemoryStore {
       sections.push(`## Current State\n${memory.currentState}`);
     }
     if (memory.filesAndFunctions?.length) {
-      sections.push(
-        `## Files & Functions\n${memory.filesAndFunctions.join("\n")}`,
-      );
+      sections.push(`## Files & Functions\n${memory.filesAndFunctions.join("\n")}`);
     }
     if (memory.keyDecisions?.length) {
-      sections.push(
-        `## Key Decisions\n${memory.keyDecisions.map((d) => `- ${d}`).join("\n")}`,
-      );
+      sections.push(`## Key Decisions\n${memory.keyDecisions.map((d) => `- ${d}`).join("\n")}`);
     }
     if (memory.errorsAndFixes?.length) {
-      sections.push(
-        `## Errors & Fixes\n${memory.errorsAndFixes.map((e) => `- ${e}`).join("\n")}`,
-      );
+      sections.push(`## Errors & Fixes\n${memory.errorsAndFixes.map((e) => `- ${e}`).join("\n")}`);
     }
     if (memory.relevantContext) {
       sections.push(`## Relevant Context\n${memory.relevantContext}`);
     }
 
     // body 部分：一级标题 + 各 section
-    const body =
-      sections.length > 0 ? `# Session Memory\n\n${sections.join("\n\n")}` : "";
+    const body = sections.length > 0 ? `# Session Memory\n\n${sections.join("\n\n")}` : "";
     return `${stringifyYamlFrontmatter(fm)}\n\n${body}\n`;
   }
 
@@ -264,9 +251,7 @@ export class SessionMemoryStore {
       task: sections.task,
       currentState: sections["current state"],
       // Files & Functions：按行分割，过滤空行
-      filesAndFunctions: sections["files & functions"]
-        ?.split("\n")
-        .filter(Boolean),
+      filesAndFunctions: sections["files & functions"]?.split("\n").filter(Boolean),
       // Key Decisions：只提取以 "- " 开头的行，去掉前缀
       keyDecisions: sections["key decisions"]
         ?.split("\n")

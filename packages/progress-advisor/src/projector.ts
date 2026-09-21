@@ -3,11 +3,7 @@ import { createHash } from "node:crypto";
 import type { SessionInputSnapshot } from "@paw/agent-loop";
 import { projectCompletionReviewToolEvidenceV1 } from "@paw/completion-review";
 import { projectWorkspaceEffect } from "@paw/core";
-import type {
-  DurableJsonPayloadV1,
-  InputFactV1,
-  JsonValue,
-} from "@paw/protocol";
+import type { DurableJsonPayloadV1, InputFactV1, JsonValue } from "@paw/protocol";
 
 export const PROGRESS_ADVISOR_POLICY_VERSION_V1 =
   "paw.progress-advisor.v8:r3-5-8:n4-8-16:v4-8-16:repair2:closeout2:g16-18:e8:independent-closeout:journal-anchor" as const;
@@ -77,15 +73,11 @@ export function projectProgressAdviceV1(
 
   const settled = new Map(
     entries.flatMap((entry) =>
-      entry.fact.type === "tool.settled"
-        ? [[entry.fact.callId, entry.fact] as const]
-        : [],
+      entry.fact.type === "tool.settled" ? [[entry.fact.callId, entry.fact] as const] : [],
     ),
   );
   const calls = entries.flatMap((entry) =>
-    entry.fact.type === "tool.call_observed"
-      ? [{ seq: entry.seq, fact: entry.fact }]
-      : [],
+    entry.fact.type === "tool.call_observed" ? [{ seq: entry.seq, fact: entry.fact }] : [],
   );
   const mutation = (call: (typeof calls)[number]["fact"]) => {
     const result = settled.get(call.callId);
@@ -135,10 +127,7 @@ export function projectProgressAdviceV1(
     if (MUTATION_TOOLS.has(fact.tool) && result.observation?.isError !== true) {
       return [fact.turn];
     }
-    if (
-      DELEGATION_TOOLS.has(fact.tool) &&
-      result.observation?.isError !== true
-    ) {
+    if (DELEGATION_TOOLS.has(fact.tool) && result.observation?.isError !== true) {
       return [fact.turn];
     }
     return passingVerificationCalls.has(fact.callId) ? [fact.turn] : [];
@@ -154,13 +143,9 @@ export function projectProgressAdviceV1(
     0,
     ...calls.filter(({ fact }) => mutation(fact)).map(({ seq }) => seq),
   );
-  const checks = verificationEvidence.filter(
-    (item) => item.verificationKind !== "none",
-  );
+  const checks = verificationEvidence.filter((item) => item.verificationKind !== "none");
   const latestCheck = checks.at(-1);
-  const checkCall = calls.find(
-    ({ fact }) => fact.callId === latestCheck?.callId,
-  );
+  const checkCall = calls.find(({ fact }) => fact.callId === latestCheck?.callId);
   // Migrate the legacy convergence guidance for untrusted verification status.
   // A different output filter is not new evidence; remind once per source/check baseline.
   if (
@@ -185,12 +170,7 @@ export function projectProgressAdviceV1(
       evidenceKey: `repair:${latestMutationSeq}:${directBaseline?.callId ?? "none"}:${latestCheck.verificationKind}`,
     });
   }
-  if (
-    lane !== "ordinary" &&
-    budget &&
-    latestMutationSeq > 0 &&
-    budget.maxModelTurns >= 8
-  ) {
+  if (lane !== "ordinary" && budget && latestMutationSeq > 0 && budget.maxModelTurns >= 8) {
     const totalTurns = snapshot.entries.filter(
       (entry) => entry.fact.type === "model.settled",
     ).length;
@@ -198,17 +178,12 @@ export function projectProgressAdviceV1(
       budget.maxModelTurns - modelTurns.length,
       budget.maxTotalModelTurns - totalTurns,
     );
-    const window = Math.min(
-      12,
-      Math.max(4, Math.ceil(budget.maxModelTurns * 0.2)),
-    );
+    const window = Math.min(12, Math.max(4, Math.ceil(budget.maxModelTurns * 0.2)));
     if (remaining > 0 && remaining <= window) {
       // Same evidence-sensitive closeout intent as legacy convergenceGuidance,
       // expressed against Journal facts without depending on the old TaskState.
       const fresh =
-        checkCall &&
-        checkCall.seq > latestMutationSeq &&
-        !checkCall.fact.tool.includes("job_wait");
+        checkCall && checkCall.seq > latestMutationSeq && !checkCall.fact.tool.includes("job_wait");
       const next =
         !fresh || !latestCheck || latestCheck.outcome === "indeterminate"
           ? "Run a direct, high-signal check of the current revision, preferably the project's declared test command; filtered output or an earlier revision is insufficient."
@@ -258,11 +233,7 @@ export function projectProgressAdviceV1(
   // finishing after an edit does not validate that edit.
   const jobStarts = new Map<string, number>();
   for (const { seq, fact } of calls) {
-    if (
-      fact.tool !== "workspace_job_start" &&
-      fact.tool !== "workspace.job_start"
-    )
-      continue;
+    if (fact.tool !== "workspace_job_start" && fact.tool !== "workspace.job_start") continue;
     const jobId = stringField(
       inlinePayload(settled.get(fact.callId)?.observation?.payload),
       "jobId",
@@ -282,13 +253,8 @@ export function projectProgressAdviceV1(
   const mutationsSinceCheck = calls.filter(({ seq, fact }) => {
     return seq > lastCheckSeq && mutation(fact);
   });
-  const mutationTurns = new Set(
-    mutationsSinceCheck.map(({ fact }) => fact.turn),
-  );
-  if (
-    mutationTurns.size >= 4 &&
-    mutationsSinceCheck.at(-1)?.fact.turn === latestTurn
-  ) {
+  const mutationTurns = new Set(mutationsSinceCheck.map(({ fact }) => fact.turn));
+  if (mutationTurns.size >= 4 && mutationsSinceCheck.at(-1)?.fact.turn === latestTurn) {
     return Object.freeze({
       ...advice(
         snapshot,
@@ -310,11 +276,7 @@ export function projectProgressAdviceV1(
     segmentStart,
     kind,
     gap,
-    noProgressMessage(
-      kind,
-      gap,
-      recentToolClasses(calls.map(({ fact }) => fact)),
-    ),
+    noProgressMessage(kind, gap, recentToolClasses(calls.map(({ fact }) => fact))),
     undefined,
     delegationAttempts,
   );
@@ -363,13 +325,10 @@ export function projectProgressAdviceTimelineV1(
   const events: ProgressAdviceV1[] = [];
   const seen = new Set<string>();
   const boundaries = [...modelTurns.values()].sort(
-    (left, right) =>
-      left.turn - right.turn || left.throughSeq - right.throughSeq,
+    (left, right) => left.turn - right.turn || left.throughSeq - right.throughSeq,
   );
   for (const boundary of boundaries) {
-    const prefixEntries = snapshot.entries.filter(
-      (entry) => entry.seq <= boundary.throughSeq,
-    );
+    const prefixEntries = snapshot.entries.filter((entry) => entry.seq <= boundary.throughSeq);
     for (const lane of ["ordinary", "closeout"] as const) {
       const projected = projectProgressAdviceV1(
         {
@@ -381,19 +340,15 @@ export function projectProgressAdviceTimelineV1(
         lane,
       );
       if (!projected || !isTimelineThreshold(projected)) continue;
-      const key =
-        projected.evidenceKey ??
-        `${projected.kind}:${projected.sourceThroughSeq}`;
+      const key = projected.evidenceKey ?? `${projected.kind}:${projected.sourceThroughSeq}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const special =
-        projected.kind === "verification_repair" ||
-        projected.kind === "convergence_checkpoint";
+        projected.kind === "verification_repair" || projected.kind === "convergence_checkpoint";
       const count = events.filter((item) =>
         special
           ? item.kind === projected.kind
-          : item.kind !== "verification_repair" &&
-            item.kind !== "convergence_checkpoint",
+          : item.kind !== "verification_repair" && item.kind !== "convergence_checkpoint",
       ).length;
       if (count < (special ? 2 : MAX_TIMELINE_EVENTS)) events.push(projected);
     }
@@ -402,10 +357,7 @@ export function projectProgressAdviceTimelineV1(
 }
 
 function isTimelineThreshold(advice: ProgressAdviceV1): boolean {
-  if (
-    advice.kind === "verification_repair" ||
-    advice.kind === "convergence_checkpoint"
-  )
+  if (advice.kind === "verification_repair" || advice.kind === "convergence_checkpoint")
     return true;
   if (advice.kind === "verification_due") {
     return [4, 8, 16].includes(advice.unverifiedMutationTurns ?? 0);
@@ -418,9 +370,7 @@ function isTimelineThreshold(advice: ProgressAdviceV1): boolean {
   );
 }
 
-function latestSegmentStart(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): number {
+function latestSegmentStart(snapshot: SessionInputSnapshot<InputFactV1>): number {
   let value = 0;
   for (const entry of snapshot.entries) {
     if (entry.fact.type === "work.segment_started") value = entry.seq;
@@ -453,10 +403,7 @@ function noProgressKind(
 ):
   | Exclude<
       ProgressAdviceKindV1,
-      | "exact_repeat"
-      | "verification_due"
-      | "verification_repair"
-      | "convergence_checkpoint"
+      "exact_repeat" | "verification_due" | "verification_repair" | "convergence_checkpoint"
     >
   | undefined {
   if (gap >= 16) return "no_progress_checkpoint";
@@ -468,10 +415,7 @@ function noProgressKind(
 function noProgressMessage(
   kind: Exclude<
     ProgressAdviceKindV1,
-    | "exact_repeat"
-    | "verification_due"
-    | "verification_repair"
-    | "convergence_checkpoint"
+    "exact_repeat" | "verification_due" | "verification_repair" | "convergence_checkpoint"
   >,
   gap: number,
   recentTools: string,
@@ -496,9 +440,7 @@ function recentToolClasses(
   }
   return (
     [...counts.entries()]
-      .sort(
-        (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
-      )
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
       .slice(0, 3)
       .map(([tool, count]) => `${tool}=${count}`)
       .join(", ") || "none"
@@ -532,27 +474,18 @@ function canonicalJson(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`)
     .join(",")}}`;
 }
 
-function stringField(
-  value: JsonValue | undefined,
-  key: string,
-): string | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return undefined;
+function stringField(value: JsonValue | undefined, key: string): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const field = (value as Readonly<Record<string, JsonValue>>)[key];
   return typeof field === "string" ? field : undefined;
 }
 
 // The projector is synchronous and read-only. Unresolved artifact references
 // are not evidence of job completion and cannot discharge validation cadence.
-function inlinePayload(
-  payload: DurableJsonPayloadV1 | undefined,
-): JsonValue | undefined {
+function inlinePayload(payload: DurableJsonPayloadV1 | undefined): JsonValue | undefined {
   return payload?.kind === "inline" ? payload.value : undefined;
 }

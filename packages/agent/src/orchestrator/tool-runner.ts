@@ -39,11 +39,7 @@ import {
   isMutatingTool,
   saveCheckpoint,
 } from "@paw/core";
-import type {
-  HarnessContext,
-  ShellSandboxConfig,
-  ToolRunResult,
-} from "@paw/harness";
+import type { HarnessContext, ShellSandboxConfig, ToolRunResult } from "@paw/harness";
 import {
   JOB_KILL,
   JOB_LIST,
@@ -56,10 +52,7 @@ import {
 } from "@paw/harness";
 import type { FileLockLike } from "@paw/harness";
 import type { ExecutionEnvironmentRegistryV1 } from "../execution-environment.js";
-import type {
-  ToolEffectPolicy,
-  ToolExecutionPolicy,
-} from "../execution-policy.js";
+import type { ToolEffectPolicy, ToolExecutionPolicy } from "../execution-policy.js";
 import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
 import {
   decomposeVerificationFailuresV2,
@@ -75,11 +68,7 @@ import {
   observationProvenanceForToolV1,
   wrapCapabilityContentV1,
 } from "../observation-provenance.js";
-import type {
-  TaskState,
-  TaskStateManager,
-  TestResultSummary,
-} from "../task-state.js";
+import type { TaskState, TaskStateManager, TestResultSummary } from "../task-state.js";
 import { formatToolResultEventDetail } from "../tool-result-detail.js";
 import { analyzeVerificationInvocation } from "../verification-command.js";
 import { parseChildPolicy } from "./agent-args.js";
@@ -137,9 +126,7 @@ export function fileChangesFromPayload(
 
 function workspaceEffectFromPayload(
   payload: unknown,
-):
-  | { readonly changed: boolean; readonly paths: readonly string[] }
-  | undefined {
+): { readonly changed: boolean; readonly paths: readonly string[] } | undefined {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return undefined;
   }
@@ -157,10 +144,7 @@ function workspaceEffectFromPayload(
   };
 }
 
-function toFileChange(
-  value: unknown,
-  workspaceRoot: string,
-): ToolFileChange | undefined {
+function toFileChange(value: unknown, workspaceRoot: string): ToolFileChange | undefined {
   if (value === null || typeof value !== "object") return undefined;
   const o = value as Record<string, unknown>;
   if (o.ok === false) return undefined;
@@ -189,10 +173,7 @@ function toFileChange(
  * 按 `--- ` 行切段（每段 = 一个文件），用 `+++ ` 行匹配目标路径。
  * 供 apply_patch 的结果补齐 per-file diff（其 payload 只有 +/− 无文本）。
  */
-export function extractFilePatch(
-  patchText: string,
-  filePath: string,
-): string | undefined {
+export function extractFilePatch(patchText: string, filePath: string): string | undefined {
   if (!patchText || !filePath) return undefined;
   const sections: string[][] = [];
   let cur: string[] | null = null;
@@ -217,11 +198,7 @@ export function extractFilePatch(
     const plusLine = sec.find((l) => l.startsWith("+++ "));
     if (!plusLine) continue;
     const target = norm(plusLine.slice(4).replace(/^"|"$/g, ""));
-    if (
-      target === want ||
-      target.endsWith(`/${want}`) ||
-      want.endsWith(`/${target}`)
-    ) {
+    if (target === want || target.endsWith(`/${want}`) || want.endsWith(`/${target}`)) {
       return sec.join("\n").slice(0, 2048);
     }
   }
@@ -278,10 +255,7 @@ export interface ToolExecutionContext {
 
 export interface ToolExecutionBatchResult {
   readonly results: readonly ToolRunResult[];
-  readonly mutationCaptures: readonly (
-    | LoopV2ShadowMutationCapture
-    | undefined
-  )[];
+  readonly mutationCaptures: readonly (LoopV2ShadowMutationCapture | undefined)[];
 }
 
 export interface ToolResultCommitContext {
@@ -295,8 +269,7 @@ export interface ToolResultCommitContext {
   readonly captureLoopV2Facts?: boolean;
 }
 
-export interface ToolExecutionFinalizationContext
-  extends ToolResultCommitContext {
+export interface ToolExecutionFinalizationContext extends ToolResultCommitContext {
   readonly ctxMgr: ContextManager;
   readonly maxSteps: number;
   readonly specGoal: string;
@@ -307,10 +280,7 @@ export interface ToolExecutionFinalizationContext
     readonly reasoningPassback?: string;
     readonly calls: readonly NativeToolTurnCallV1[];
   };
-  readonly mutationCaptures?: readonly (
-    | LoopV2ShadowMutationCapture
-    | undefined
-  )[];
+  readonly mutationCaptures?: readonly (LoopV2ShadowMutationCapture | undefined)[];
   /** 会话级工具输出去重器（P1 入口闸） */
   readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
   /** P3 冷库：截断的全文按内容哈希归档，注入 [archived id] 引用桩 */
@@ -423,10 +393,7 @@ export async function executeToolCalls(
         (call.args as Record<string, unknown>).action === "call"
       ) {
         const target = (call.args as Record<string, unknown>).tool;
-        if (
-          typeof target !== "string" ||
-          !toolCtx.mcpAllowedTools?.includes(target)
-        ) {
+        if (typeof target !== "string" || !toolCtx.mcpAllowedTools?.includes(target)) {
           return {
             reason: "mcp_tool_not_in_allowlist",
             message: `MCP target ${typeof target === "string" ? target : "<missing>"} is not authorized for this run.`,
@@ -569,24 +536,20 @@ export async function executeToolCalls(
   const serializeToolCalls =
     effectPolicyApplies.some(Boolean) ||
     calls.some(
-      (call) =>
-        call.tool === "workspace.acceptance_update" ||
-        call.tool === UNDO_LAST_EDIT,
+      (call) => call.tool === "workspace.acceptance_update" || call.tool === UNDO_LAST_EDIT,
     );
   const mutationCallCount = serializeToolCalls
     ? 1
     : calls.filter((call) => isMutatingTool(call.tool)).length;
-  const mutationCaptures: Array<LoopV2ShadowMutationCapture | undefined> =
-    calls.map(() => undefined);
+  const mutationCaptures: Array<LoopV2ShadowMutationCapture | undefined> = calls.map(
+    () => undefined,
+  );
 
   // 步骤 4：执行工具。注入 effect policy 时必须串行，确保每个 before/after
   // 快照只归因于一个工具；没有 effect policy 时保留原有并行语义。
   // 使用动态 import 避免循环依赖
   const { executeTool } = await import("@paw/harness");
-  const executeOne = async (
-    call: AgentToolCallAction,
-    i: number,
-  ): Promise<ToolRunResult> => {
+  const executeOne = async (call: AgentToolCallAction, i: number): Promise<ToolRunResult> => {
     // 被策略阻止 → 返回 block 结果
     if (blockedByPolicy[i]) {
       if (toolCtx.captureLoopV2Facts) {
@@ -629,12 +592,7 @@ export async function executeToolCalls(
     }
 
     const beforeCapture = toolCtx.captureLoopV2Facts
-      ? captureMutationBefore(
-          toolCtx.workspaceRoot,
-          toolCtx.runId,
-          call,
-          mutationCallCount,
-        )
+      ? captureMutationBefore(toolCtx.workspaceRoot, toolCtx.runId, call, mutationCallCount)
       : undefined;
 
     // Capture the product state before checkpoint infrastructure writes under
@@ -642,13 +600,7 @@ export async function executeToolCalls(
     const cpNum = checkpointNums[i];
     if (cpNum !== undefined) {
       try {
-        saveCheckpoint(
-          toolCtx.workspaceRoot,
-          toolCtx.runId,
-          cpNum,
-          call.tool,
-          call.args,
-        );
+        saveCheckpoint(toolCtx.workspaceRoot, toolCtx.runId, cpNum, call.tool, call.args);
       } catch (error) {
         if (toolCtx.captureLoopV2Facts) {
           mutationCaptures[i] = createLoopV2NoMutationCapture();
@@ -712,14 +664,11 @@ export async function executeToolCalls(
         buildSubAgentSharedContext: toolCtx.parentContextManager
           ? ({ goal, args }) => {
               const summarizer = new DefaultContextSummarizer();
-              return summarizer.summarizeForCall(
-                toolCtx.parentContextManager!,
-                {
-                  type: "tool_call",
-                  tool: SUB_AGENT_TOOL_NAME,
-                  args: { goal, ...args },
-                },
-              );
+              return summarizer.summarizeForCall(toolCtx.parentContextManager!, {
+                type: "tool_call",
+                tool: SUB_AGENT_TOOL_NAME,
+                args: { goal, ...args },
+              });
             }
           : undefined,
         // Shell 工具实时输出回调（流式推送到 TUI）
@@ -736,14 +685,10 @@ export async function executeToolCalls(
         ...(approvals[i] && call.tool === "workspace.run_shell"
           ? { shellCommandPreApproved: true }
           : {}),
-        ...(toolCtx.memoryRuntime
-          ? { memoryRuntime: toolCtx.memoryRuntime }
-          : {}),
+        ...(toolCtx.memoryRuntime ? { memoryRuntime: toolCtx.memoryRuntime } : {}),
         ...(toolCtx.memoryTaskId ? { memoryTaskId: toolCtx.memoryTaskId } : {}),
         ...(toolCtx.createAgent ? { createAgent: toolCtx.createAgent } : {}),
-        ...(toolCtx.artifactRegistry
-          ? { artifactRegistry: toolCtx.artifactRegistry }
-          : {}),
+        ...(toolCtx.artifactRegistry ? { artifactRegistry: toolCtx.artifactRegistry } : {}),
         ...(toolCtx.managedJobs ? { managedJobs: toolCtx.managedJobs } : {}),
       },
       call.tool,
@@ -775,9 +720,7 @@ export async function executeToolCalls(
                 executed: true,
                 recovered: decision.recovered,
                 originalOk: rawResult.ok,
-                ...(decision.recovered
-                  ? { workspaceEffect: { changed: false, paths: [] } }
-                  : {}),
+                ...(decision.recovered ? { workspaceEffect: { changed: false, paths: [] } } : {}),
               },
             };
       } catch (error) {
@@ -872,9 +815,7 @@ const V2_PARALLEL_TOOLS = new Set([
  * control-plane mutations, MCP tools, and unknown tools fail closed to an
  * exclusive barrier.
  */
-export function classifyToolExecutionV2(
-  call: AgentToolCallAction,
-): ToolExecutionModeV2 {
+export function classifyToolExecutionV2(call: AgentToolCallAction): ToolExecutionModeV2 {
   if (call.tool === SUB_AGENT_TOOL_NAME) {
     const args =
       call.args && typeof call.args === "object" && !Array.isArray(call.args)
@@ -884,9 +825,7 @@ export function classifyToolExecutionV2(
       ? { kind: "parallel" }
       : { kind: "exclusive" };
   }
-  return V2_PARALLEL_TOOLS.has(call.tool)
-    ? { kind: "parallel" }
-    : { kind: "exclusive" };
+  return V2_PARALLEL_TOOLS.has(call.tool) ? { kind: "parallel" } : { kind: "exclusive" };
 }
 
 export interface ToolExecutionV2Options {
@@ -942,11 +881,7 @@ export async function executeToolCallsV2(
   const sourceIndexByCallId = new Map(
     scheduled.map((call, sourceIndex) => [call.callId, sourceIndex] as const),
   );
-  const outcome = await executeToolBatchV2<
-    number,
-    SettledToolCallV2,
-    SettledToolCallV2
-  >(
+  const outcome = await executeToolBatchV2<number, SettledToolCallV2, SettledToolCallV2>(
     scheduled,
     {
       classify(scheduledCall) {
@@ -955,9 +890,7 @@ export async function executeToolCallsV2(
         const sourceCall = calls[index];
         if (!sourceCall) return { kind: "exclusive" };
         const args =
-          sourceCall.args &&
-          typeof sourceCall.args === "object" &&
-          !Array.isArray(sourceCall.args)
+          sourceCall.args && typeof sourceCall.args === "object" && !Array.isArray(sourceCall.args)
             ? (sourceCall.args as Record<string, unknown>)
             : undefined;
         if (
@@ -1000,10 +933,7 @@ export async function executeToolCallsV2(
         if (!sourceCall) {
           throw new Error(`Tool scheduler missing source call ${sourceIndex}`);
         }
-        const overridden = await options.dispatchOverride?.(
-          sourceCall,
-          sourceIndex,
-        );
+        const overridden = await options.dispatchOverride?.(sourceCall, sourceIndex);
         if (overridden) return overridden;
         const batch = await executeToolCalls(
           [sourceCall],
@@ -1016,9 +946,7 @@ export async function executeToolCallsV2(
         }
         return {
           result,
-          ...(batch.mutationCaptures[0]
-            ? { mutationCapture: batch.mutationCaptures[0] }
-            : {}),
+          ...(batch.mutationCaptures[0] ? { mutationCapture: batch.mutationCaptures[0] } : {}),
         };
       },
       async commit(_scheduled, settled, index, mode) {
@@ -1026,13 +954,7 @@ export async function executeToolCallsV2(
         if (!sourceCall) {
           throw new Error(`Tool scheduler missing commit call ${index}`);
         }
-        await options.commit(
-          sourceCall,
-          settled.result,
-          settled.mutationCapture,
-          index,
-          mode,
-        );
+        await options.commit(sourceCall, settled.result, settled.mutationCapture, index, mode);
         return settled;
       },
       async skip(_scheduled, index) {
@@ -1051,9 +973,7 @@ export async function executeToolCallsV2(
       },
     },
     {
-      ...(options.maxParallel === undefined
-        ? {}
-        : { maxParallel: options.maxParallel }),
+      ...(options.maxParallel === undefined ? {} : { maxParallel: options.maxParallel }),
       ...(toolCtx.abortSignal ? { signal: toolCtx.abortSignal } : {}),
     },
   );
@@ -1215,10 +1135,7 @@ export function commitToolExecutionResult(
     observed.payload && typeof observed.payload === "object"
       ? (observed.payload as Record<string, unknown>)
       : null;
-  if (
-    conflictPayload?.conflict === true &&
-    typeof conflictPayload.path === "string"
-  ) {
+  if (conflictPayload?.conflict === true && typeof conflictPayload.path === "string") {
     ctx.taskState?.recordFileLockConflict(conflictPayload.path);
   }
   let fileChanges = observed.ok
@@ -1234,23 +1151,20 @@ export function commitToolExecutionResult(
     });
   }
   const workspaceEffect = workspaceEffectFromPayload(result.payload);
-  const decisionCommit: ToolDecisionCommitV1 | undefined =
-    ctx.captureLoopV2Facts
-      ? {
-          schemaVersion: "paw.tool-decision-commit.v1",
-          callId: `legacy:${ctx.runId}:turn:${ctx.turn}:call:${sourceIndex}`,
-          tool: call.tool,
-          args: call.args,
-          result: observed,
-          repositoryRevision,
-          concurrentMutation: options.concurrentMutation,
-          ...(sourceContentHash ? { sourceContentHash } : {}),
-          ...(options.mutationCapture
-            ? { mutationCapture: options.mutationCapture }
-            : {}),
-          ...(verificationCapture ? { verificationCapture } : {}),
-        }
-      : undefined;
+  const decisionCommit: ToolDecisionCommitV1 | undefined = ctx.captureLoopV2Facts
+    ? {
+        schemaVersion: "paw.tool-decision-commit.v1",
+        callId: `legacy:${ctx.runId}:turn:${ctx.turn}:call:${sourceIndex}`,
+        tool: call.tool,
+        args: call.args,
+        result: observed,
+        repositoryRevision,
+        concurrentMutation: options.concurrentMutation,
+        ...(sourceContentHash ? { sourceContentHash } : {}),
+        ...(options.mutationCapture ? { mutationCapture: options.mutationCapture } : {}),
+        ...(verificationCapture ? { verificationCapture } : {}),
+      }
+    : undefined;
   ctx.emit({
     type: "tool.result",
     tool: call.tool,
@@ -1352,21 +1266,14 @@ export function finalizeToolExecutionContext(
     if (tr.newMessages) {
       for (const msg of tr.newMessages) {
         if (msg.role === "user") {
-          ctx.ctxMgr.addHostMessage(
-            wrapCapabilityContentV1(sourceTool, msg.content),
-          );
-        } else if (msg.role === "assistant")
-          ctx.ctxMgr.addAssistant(msg.content);
+          ctx.ctxMgr.addHostMessage(wrapCapabilityContentV1(sourceTool, msg.content));
+        } else if (msg.role === "assistant") ctx.ctxMgr.addAssistant(msg.content);
       }
     }
   }
 
   // 步骤 4.5：ToolFailureRecovery + idle fuse（结构化恢复，而非只靠模型自由发挥）
-  const recovery = collectToolRecoveryMessage(
-    calls,
-    results,
-    ctx.failureSignatures,
-  );
+  const recovery = collectToolRecoveryMessage(calls, results, ctx.failureSignatures);
 
   // 步骤 5：Max steps 检查 → incomplete（禁止假 completed）
   if (ctx.turn + 1 >= ctx.maxSteps) {
@@ -1419,15 +1326,11 @@ function readSourceContentHash(
     const bytes = fs.readFileSync(resolved);
     const lines = bytes.toString("utf8").split(/\r?\n/);
     const offset = typeof argRecord.offset === "number" ? argRecord.offset : 0;
-    const limit =
-      typeof argRecord.limit === "number" ? argRecord.limit : undefined;
+    const limit = typeof argRecord.limit === "number" ? argRecord.limit : undefined;
     const observed = lines
       .slice(offset, limit === undefined ? undefined : offset + limit)
       .join("\n");
-    if (
-      typeof payloadRecord.content !== "string" ||
-      observed !== payloadRecord.content
-    ) {
+    if (typeof payloadRecord.content !== "string" || observed !== payloadRecord.content) {
       return undefined;
     }
     return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
@@ -1452,14 +1355,9 @@ function captureMutationBefore(
   const targets =
     call.tool === UNDO_LAST_EDIT
       ? (() => {
-          const inspection = inspectLastSafeFileMutationCheckpoint(
-            workspaceRoot,
-            runId,
-          );
+          const inspection = inspectLastSafeFileMutationCheckpoint(workspaceRoot, runId);
           return inspection.status === "ready"
-            ? inspection.entry.targets.filter(
-                (target) => target !== "__shell_cmd__",
-              )
+            ? inspection.entry.targets.filter((target) => target !== "__shell_cmd__")
             : [];
         })()
       : extractCheckpointTargets(call.tool, call.args);
@@ -1526,10 +1424,7 @@ function buildShadowVerificationCapture(
     return undefined;
   }
   const testResult = after.testResults.at(-1);
-  if (
-    !testResult ||
-    testResult.shellCommandRevision !== after.shellCommandRevision
-  ) {
+  if (!testResult || testResult.shellCommandRevision !== after.shellCommandRevision) {
     return undefined;
   }
   const invocation = analyzeVerificationInvocation(testResult.command);
@@ -1541,9 +1436,7 @@ function buildShadowVerificationCapture(
   const requestedCwd = typeof args.cwd === "string" ? args.cwd : ".";
   const cwd = path.resolve(workspaceRoot, requestedCwd);
   const payload =
-    result.payload &&
-    typeof result.payload === "object" &&
-    !Array.isArray(result.payload)
+    result.payload && typeof result.payload === "object" && !Array.isArray(result.payload)
       ? (result.payload as Readonly<Record<string, unknown>>)
       : {};
   const exitCode = payload.exit_code;
@@ -1553,17 +1446,12 @@ function buildShadowVerificationCapture(
     cwd,
     scope: verificationScope(invocation.argv),
     mutationRevision: testResult.mutationRevision ?? 0,
-    outcome:
-      testResult.outcome ?? (testResult.passed ? "passed" : "code_failed"),
-    ...(typeof exitCode === "number" &&
-    Number.isSafeInteger(exitCode) &&
-    exitCode >= 0
+    outcome: testResult.outcome ?? (testResult.passed ? "passed" : "code_failed"),
+    ...(typeof exitCode === "number" && Number.isSafeInteger(exitCode) && exitCode >= 0
       ? { exitCode }
       : {}),
     ...(testResult.failureKind ? { failureClass: testResult.failureKind } : {}),
-    ...(testResult.failureRecords
-      ? { failureRecords: testResult.failureRecords }
-      : {}),
+    ...(testResult.failureRecords ? { failureRecords: testResult.failureRecords } : {}),
     output: [payload.stdout, payload.stderr, result.summary]
       .filter((value): value is string => typeof value === "string" && !!value)
       .join("\n"),
@@ -1579,9 +1467,7 @@ function verificationRunner(
   if (result.family === "unittest") return "unittest";
   if (result.family === "javascript") {
     const executable = argv[0]?.replaceAll("\\", "/").split("/").at(-1);
-    return executable?.toLowerCase().startsWith("bun")
-      ? "bun_test"
-      : "npm_test";
+    return executable?.toLowerCase().startsWith("bun") ? "bun_test" : "npm_test";
   }
   return "custom";
 }
@@ -1594,9 +1480,7 @@ function verificationScope(argv: readonly string[]): readonly string[] {
         .filter(
           (token) =>
             !token.startsWith("-") &&
-            (/[\\/]/.test(token) ||
-              /::/.test(token) ||
-              /\.(?:py|ts|tsx|js|jsx)$/i.test(token)),
+            (/[\\/]/.test(token) || /::/.test(token) || /\.(?:py|ts|tsx|js|jsx)$/i.test(token)),
         )
         .map((token) => token.replaceAll("\\", "/")),
     ),

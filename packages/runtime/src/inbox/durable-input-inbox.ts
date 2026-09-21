@@ -81,9 +81,7 @@ interface CoordinatorIdentitySessionV1 {
 export class DurableInputInboxV1 implements LoopInputPort {
   private readonly coordinatorIdentity: object | string;
 
-  constructor(
-    private readonly session: Session<InputFactV1, DerivedDecisionV1>,
-  ) {
+  constructor(private readonly session: Session<InputFactV1, DerivedDecisionV1>) {
     this.coordinatorIdentity = hasCoordinatorIdentity(session)
       ? session.readCoordinatorOwnershipIdentity()
       : session;
@@ -98,15 +96,11 @@ export class DurableInputInboxV1 implements LoopInputPort {
       const snapshot = await this.session.readInputSnapshot();
       const existing = snapshot.entries.find(
         (entry) =>
-          (entry.fact.type === "input.accepted" ||
-            entry.fact.type === "input.promoted") &&
+          (entry.fact.type === "input.accepted" || entry.fact.type === "input.promoted") &&
           entry.fact.inputId === fact.inputId,
       )?.fact;
       if (existing) {
-        if (
-          existing.type !== "input.accepted" ||
-          !sameAcceptedInput(existing, fact)
-        ) {
+        if (existing.type !== "input.accepted" || !sameAcceptedInput(existing, fact)) {
           throw new Error(`Input idempotency conflict: ${fact.inputId}`);
         }
         return { status: "already_accepted", inputId: fact.inputId };
@@ -114,9 +108,7 @@ export class DurableInputInboxV1 implements LoopInputPort {
       // Recheck admission on every CAS retry; duplicate acknowledgements above
       // remain valid even after the admission window closes.
       assertAdmission?.(snapshot);
-      const committed = await this.session.commitInputFacts(snapshot.tailSeq, [
-        fact,
-      ]);
+      const committed = await this.session.commitInputFacts(snapshot.tailSeq, [fact]);
       if (committed === "committed") {
         return { status: "accepted", inputId: fact.inputId };
       }
@@ -124,9 +116,7 @@ export class DurableInputInboxV1 implements LoopInputPort {
   }
 
   async inspect(): Promise<DurableInputInboxStateV1> {
-    return projectDurableInputInboxStateV1(
-      await this.session.readInputSnapshot(),
-    );
+    return projectDurableInputInboxStateV1(await this.session.readInputSnapshot());
   }
 
   async reportSafeBoundary(boundary: LoopSafeBoundary): Promise<void> {
@@ -134,20 +124,13 @@ export class DurableInputInboxV1 implements LoopInputPort {
       const snapshot = await this.session.readInputSnapshot();
       assertJournalSafeBoundary(snapshot, boundary);
       const projection = projectInbox(snapshot.entries);
-      const steers = projection.pending.filter(
-        (entry) => entry.fact.delivery === "steer",
-      );
+      const steers = projection.pending.filter((entry) => entry.fact.delivery === "steer");
       const selected = steers;
       if (selected.length === 0) {
         return;
       }
-      const promotions = selected.map(({ fact }) =>
-        createInputPromotionFactV1(fact),
-      );
-      const committed = await this.session.commitInputFacts(
-        snapshot.tailSeq,
-        promotions,
-      );
+      const promotions = selected.map(({ fact }) => createInputPromotionFactV1(fact));
+      const committed = await this.session.commitInputFacts(snapshot.tailSeq, promotions);
       if (committed === "committed") {
         return;
       }
@@ -161,8 +144,7 @@ export class DurableInputInboxV1 implements LoopInputPort {
       const segment = projectLatestWorkSegmentBoundaryV1(snapshot);
       const currentSegmentHasDispatch = snapshot.entries.some(
         (entry) =>
-          entry.seq > (segment?.markerSeq ?? 0) &&
-          entry.fact.type === "model.dispatch_recorded",
+          entry.seq > (segment?.markerSeq ?? 0) && entry.fact.type === "model.dispatch_recorded",
       );
       if (segment !== undefined && currentSegmentHasDispatch) {
         assertJournalSafeBoundary(
@@ -175,20 +157,14 @@ export class DurableInputInboxV1 implements LoopInputPort {
       assertJournalSafeBoundary(snapshot, "before_first_model_request");
       const projection = projectInbox(snapshot.entries);
       if (segment !== undefined) return [];
-      const unconsumed = promotedSinceLatestModelDispatch(
-        snapshot.entries,
-      ).filter(
+      const unconsumed = promotedSinceLatestModelDispatch(snapshot.entries).filter(
         (inputId) => projection.acceptedById.get(inputId)?.delivery === "queue",
       );
       if (unconsumed.length > 0) return unconsumed;
-      const next = projection.pending.find(
-        (entry) => entry.fact.delivery === "queue",
-      );
+      const next = projection.pending.find((entry) => entry.fact.delivery === "queue");
       if (!next) return [];
       const promotion = createInputPromotionFactV1(next.fact);
-      const committed = await this.session.commitInputFacts(snapshot.tailSeq, [
-        promotion,
-      ]);
+      const committed = await this.session.commitInputFacts(snapshot.tailSeq, [promotion]);
       if (committed === "committed") {
         return [promotion.inputId];
       }
@@ -196,9 +172,7 @@ export class DurableInputInboxV1 implements LoopInputPort {
   }
 
   async consumePromotedInputIds(): Promise<readonly string[]> {
-    return promotedSinceLatestModelDispatch(
-      (await this.session.readInputSnapshot()).entries,
-    );
+    return promotedSinceLatestModelDispatch((await this.session.readInputSnapshot()).entries);
   }
 
   /** @internal Binds coordinator ownership to the actual Session object. */
@@ -223,9 +197,7 @@ function currentSettledBoundary(
 ): Exclude<LoopSafeBoundary, "before_first_model_request"> {
   const latestModel = [...snapshot.entries]
     .reverse()
-    .find(
-      (entry) => entry.seq > markerSeq && entry.fact.type === "model.settled",
-    );
+    .find((entry) => entry.seq > markerSeq && entry.fact.type === "model.settled");
   if (!latestModel || latestModel.fact.type !== "model.settled") {
     return "after_model_turn_without_tool_calls";
   }
@@ -243,8 +215,7 @@ function currentSettledBoundary(
 
 function hasCoordinatorIdentity(
   session: Session<InputFactV1, DerivedDecisionV1>,
-): session is Session<InputFactV1, DerivedDecisionV1> &
-  CoordinatorIdentitySessionV1 {
+): session is Session<InputFactV1, DerivedDecisionV1> & CoordinatorIdentitySessionV1 {
   return (
     "readCoordinatorOwnershipIdentity" in session &&
     typeof session.readCoordinatorOwnershipIdentity === "function"
@@ -252,16 +223,13 @@ function hasCoordinatorIdentity(
 }
 
 /** Pure, detached request-to-fact mapping shared by Inbox transactions. */
-export function createInputAcceptedFactV1(
-  request: AcceptInputRequestV1,
-): InputAcceptedFactV1 {
+export function createInputAcceptedFactV1(request: AcceptInputRequestV1): InputAcceptedFactV1 {
   assertId(request.inputId, "inputId");
   assertId(request.callerId, "callerId");
   if (request.delivery !== "steer" && request.delivery !== "queue") {
     throw new Error("Input delivery must be steer or queue");
   }
-  if (!request.content.trim())
-    throw new Error("Input content must be non-empty");
+  if (!request.content.trim()) throw new Error("Input content must be non-empty");
   const attachments = cloneAttachments(request.attachments);
   return deepFreeze({
     type: "input.accepted",
@@ -275,9 +243,7 @@ export function createInputAcceptedFactV1(
 }
 
 /** Pure accepted-to-promoted mapping shared by Inbox and work-segment CAS. */
-export function createInputPromotionFactV1(
-  accepted: InputAcceptedFactV1,
-): InputPromotedFactV1 {
+export function createInputPromotionFactV1(accepted: InputAcceptedFactV1): InputPromotedFactV1 {
   const promotion: InputPromotedFactV1 = {
     type: "input.promoted",
     inputId: accepted.inputId,
@@ -327,19 +293,14 @@ function projectInbox(
   const callSettlements = new Map<string, number>();
   for (const entry of entries) {
     if (entry.fact.type === "input.accepted") {
-      if (
-        acceptedIds.has(entry.fact.inputId) ||
-        promotedIds.has(entry.fact.inputId)
-      ) {
+      if (acceptedIds.has(entry.fact.inputId) || promotedIds.has(entry.fact.inputId)) {
         throw new Error(`Duplicate inbox input: ${entry.fact.inputId}`);
       }
       acceptedIds.add(entry.fact.inputId);
       accepted.push({ seq: entry.seq, fact: entry.fact });
     } else if (entry.fact.type === "input.promoted") {
       if (activeModelId) {
-        throw new Error(
-          "Inbox history promotes input inside an active model call",
-        );
+        throw new Error("Inbox history promotes input inside an active model call");
       }
       if (promotedIds.has(entry.fact.inputId)) {
         throw new Error(`Duplicate promoted input: ${entry.fact.inputId}`);
@@ -347,17 +308,14 @@ function projectInbox(
       if (entry.fact.delivery === "queue") {
         const expected = accepted.find(
           (candidate) =>
-            candidate.fact.delivery === "queue" &&
-            !promotedIds.has(candidate.fact.inputId),
+            candidate.fact.delivery === "queue" && !promotedIds.has(candidate.fact.inputId),
         );
         if (expected?.fact.inputId !== entry.fact.inputId) {
           throw new Error("Inbox queue promotion is not FIFO");
         }
         queuePromotionsSinceDispatch += 1;
         if (queuePromotionsSinceDispatch > 1) {
-          throw new Error(
-            "Inbox history promotes more than one queue item per model request",
-          );
+          throw new Error("Inbox history promotes more than one queue item per model request");
         }
       }
       promotedIds.add(entry.fact.inputId);
@@ -369,8 +327,7 @@ function projectInbox(
       activeModelId = undefined;
       modelBatches.set(entry.fact.modelCallId, {
         settledSeq: entry.seq,
-        expectsTools:
-          entry.fact.status === "completed" && entry.fact.hasToolCalls,
+        expectsTools: entry.fact.status === "completed" && entry.fact.hasToolCalls,
         callIds: [],
       });
     } else if (entry.fact.type === "tool.call_observed") {
@@ -383,26 +340,17 @@ function projectInbox(
   for (const [modelCallId, batch] of modelBatches) {
     if (!batch.expectsTools) continue;
     const incomplete =
-      batch.callIds.length === 0 ||
-      batch.callIds.some((callId) => !callSettlements.has(callId));
+      batch.callIds.length === 0 || batch.callIds.some((callId) => !callSettlements.has(callId));
     const throughSeq = incomplete
       ? Number.POSITIVE_INFINITY
-      : Math.max(
-          ...batch.callIds.map((callId) => callSettlements.get(callId) ?? 0),
-        );
-    if (
-      promotionSeqs.some((seq) => seq > batch.settledSeq && seq <= throughSeq)
-    ) {
-      throw new Error(
-        `Inbox history promotes input inside tool batch ${modelCallId}`,
-      );
+      : Math.max(...batch.callIds.map((callId) => callSettlements.get(callId) ?? 0));
+    if (promotionSeqs.some((seq) => seq > batch.settledSeq && seq <= throughSeq)) {
+      throw new Error(`Inbox history promotes input inside tool batch ${modelCallId}`);
     }
   }
   return {
     accepted,
-    acceptedById: new Map(
-      accepted.map((entry) => [entry.fact.inputId, entry.fact]),
-    ),
+    acceptedById: new Map(accepted.map((entry) => [entry.fact.inputId, entry.fact])),
     promotedIds,
     pending: accepted.filter((entry) => !promotedIds.has(entry.fact.inputId)),
   };
@@ -431,9 +379,7 @@ function assertJournalSafeBoundary(
   const entries = snapshot.entries;
   const segment = projectLatestWorkSegmentBoundaryV1(snapshot);
   const segmentMarkerSeq = segment?.markerSeq ?? 0;
-  let activeModel:
-    | { readonly modelCallId: string; readonly turn: number }
-    | undefined;
+  let activeModel: { readonly modelCallId: string; readonly turn: number } | undefined;
   let latestModel: Extract<InputFactV1, { type: "model.settled" }> | undefined;
   let latestModelSettlementSeq = 0;
   let segmentDispatches = 0;
@@ -474,9 +420,7 @@ function assertJournalSafeBoundary(
   }
   if (boundary === "before_first_model_request") {
     if (segment !== undefined && segmentDispatches !== 0) {
-      throw new Error(
-        "Inbox before-first boundary has a current-segment model turn",
-      );
+      throw new Error("Inbox before-first boundary has a current-segment model turn");
     }
     return;
   }
@@ -490,18 +434,12 @@ function assertJournalSafeBoundary(
   ) {
     throw new Error("Inbox safe boundary does not match the model turn");
   }
-  if (
-    boundary === "after_tool_batch_settled" &&
-    (!latestModel.hasToolCalls || !hasObservedTools)
-  ) {
+  if (boundary === "after_tool_batch_settled" && (!latestModel.hasToolCalls || !hasObservedTools)) {
     throw new Error("Inbox safe boundary does not match the tool batch");
   }
 }
 
-function sameAcceptedInput(
-  left: InputAcceptedFactV1,
-  right: InputAcceptedFactV1,
-): boolean {
+function sameAcceptedInput(left: InputAcceptedFactV1, right: InputAcceptedFactV1): boolean {
   const { attachments: leftAttachments = [], ...leftBody } = left;
   const { attachments: rightAttachments = [], ...rightBody } = right;
   if (
@@ -526,8 +464,7 @@ function sameAcceptedInput(
     return (
       inline.kind === "inline" &&
       typeof inline.value === "string" &&
-      createHash("sha256").update(canonicalJson(inline.value)).digest("hex") ===
-        content.hash
+      createHash("sha256").update(canonicalJson(inline.value)).digest("hex") === content.hash
     );
   });
 }
@@ -552,8 +489,7 @@ function assertId(value: string, label: string): void {
 function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
     const encoded = JSON.stringify(value);
-    if (encoded === undefined)
-      throw new Error("Inbox identity must be JSON-safe");
+    if (encoded === undefined) throw new Error("Inbox identity must be JSON-safe");
     return encoded;
   }
   if (Array.isArray(value)) {

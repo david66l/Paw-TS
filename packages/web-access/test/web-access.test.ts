@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  WEBFETCH,
-  WEBSEARCH,
-  type WebAccessServiceV1,
-  executeTool,
-} from "@paw/harness";
+import { WEBFETCH, WEBSEARCH, type WebAccessServiceV1, executeTool } from "@paw/harness";
 import { createFrozenToolRegistryV1 } from "@paw/runtime";
 
 import {
@@ -50,11 +45,7 @@ describe("public web transport", () => {
   });
 
   test("accepts global addresses and rejects local, private, reserved, and documentation ranges", () => {
-    for (const address of [
-      "93.184.216.34",
-      "8.8.8.8",
-      "2606:4700:4700::1111",
-    ]) {
+    for (const address of ["93.184.216.34", "8.8.8.8", "2606:4700:4700::1111"]) {
       expect(isPublicInternetAddressV1(address)).toBeTrue();
     }
     for (const address of [
@@ -95,9 +86,9 @@ describe("public web transport", () => {
     ]) {
       expect(() => parsePublicWebUrlV1(url)).toThrow();
     }
-    expect(
-      parsePublicWebUrlV1("https://example.com/docs#part").toString(),
-    ).toBe("https://example.com/docs");
+    expect(parsePublicWebUrlV1("https://example.com/docs#part").toString()).toBe(
+      "https://example.com/docs",
+    );
   });
 
   test("rejects private DNS answers before opening a socket", async () => {
@@ -112,9 +103,7 @@ describe("public web transport", () => {
       },
     });
 
-    await expect(
-      transport.getText("https://example.com", signal),
-    ).rejects.toThrow("non-public");
+    await expect(transport.getText("https://example.com", signal)).rejects.toThrow("non-public");
     expect(requestCalls).toBe(0);
   });
 
@@ -135,9 +124,9 @@ describe("public web transport", () => {
       },
     });
 
-    await expect(
-      transport.getText("http://example.com/start", signal),
-    ).rejects.toThrow("not public");
+    await expect(transport.getText("http://example.com/start", signal)).rejects.toThrow(
+      "not public",
+    );
     expect(hops).toEqual(["http://example.com/start@93.184.216.34"]);
   });
 
@@ -172,9 +161,9 @@ describe("public web transport", () => {
         }),
       },
     });
-    await expect(
-      transport.getText("https://example.com/secure", signal),
-    ).rejects.toThrow("downgrade");
+    await expect(transport.getText("https://example.com/secure", signal)).rejects.toThrow(
+      "downgrade",
+    );
   });
 });
 
@@ -193,10 +182,7 @@ describe("web access service and plugin", () => {
       },
     };
     const service = createWebAccessServiceV1({ transport });
-    const result = await service.fetch(
-      { url: "https://example.com/start", maxLength: 20 },
-      signal,
-    );
+    const result = await service.fetch({ url: "https://example.com/start", maxLength: 20 }, signal);
 
     expect(result).toMatchObject({
       ok: true,
@@ -266,8 +252,7 @@ describe("web access service and plugin", () => {
     expect(registry.plugins).toEqual([
       {
         pluginId: "paw.web-access",
-        pluginVersion:
-          "paw.web-access.v1:bing-html-v1:d50000:c100000:b2097152:t15000:r5:s10:q500",
+        pluginVersion: "paw.web-access.v1:bing-html-v1:d50000:c100000:b2097152:t15000:r5:s10:q500",
       },
     ]);
     const fetch = registry.validateAndClassify(
@@ -341,11 +326,9 @@ describe("web access service and plugin", () => {
         throw new Error("unexpected search");
       },
     };
-    const result = await executeTool(
-      { workspaceRoot: process.cwd(), webAccess },
-      WEBFETCH,
-      { url: "https://example.com" },
-    );
+    const result = await executeTool({ workspaceRoot: process.cwd(), webAccess }, WEBFETCH, {
+      url: "https://example.com",
+    });
     expect(calls).toBe(1);
     expect(result).toMatchObject({
       ok: true,

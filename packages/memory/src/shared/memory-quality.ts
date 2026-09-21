@@ -77,11 +77,7 @@ export function isLowValueChitchat(text: string): boolean {
   if (clean.length <= 2) return true;
   if (CHITCHAT_EXACT.test(clean)) return true;
   // 极短且无文件/无 durable 信号
-  if (
-    clean.length < 8 &&
-    !hasDurableMemorySignal(clean) &&
-    extractFilePaths(clean).length === 0
-  ) {
+  if (clean.length < 8 && !hasDurableMemorySignal(clean) && extractFilePaths(clean).length === 0) {
     return true;
   }
   return false;
@@ -122,9 +118,7 @@ export function extractExplicitRememberText(goal: string): string | null {
   }
 
   // 英文：remember that / remember to / please remember
-  const en = clean.match(
-    /(?:please\s+)?remember(?:\s+that|\s+to)?[:\s]+(.+)$/i,
-  );
+  const en = clean.match(/(?:please\s+)?remember(?:\s+that|\s+to)?[:\s]+(.+)$/i);
   if (en?.[1]) {
     const body = en[1].trim().replace(/[.!?]+$/, "");
     if (body.length < 4 || EPHEMERAL_REMEMBER.test(body)) return null;
@@ -135,9 +129,7 @@ export function extractExplicitRememberText(goal: string): string | null {
   }
 
   // 「以后都用 / 以后请用」无「记住」前缀
-  const later = clean.match(
-    /(?:以后|下次)(?:都|请|务必)?(?:用|使用|prefer)\s*.{2,80}/i,
-  );
+  const later = clean.match(/(?:以后|下次)(?:都|请|务必)?(?:用|使用|prefer)\s*.{2,80}/i);
   if (later?.[0] && hasDurableMemorySignal(later[0])) {
     return later[0].trim().slice(0, 400);
   }
@@ -253,9 +245,7 @@ export function buildConversationAwareQuery(goal: string): string {
 }
 
 function isMemoryMetaLike(text: string): boolean {
-  return /(?:还记得|记不记得|之前的记忆|什么记忆|do\s+you\s+remember|what\s+memories)/i.test(
-    text,
-  );
+  return /(?:还记得|记不记得|之前的记忆|什么记忆|do\s+you\s+remember|what\s+memories)/i.test(text);
 }
 
 /** 步骤摘要是否像「决策」 */
@@ -277,24 +267,14 @@ export function shouldWriteTaskSummary(wm: MemoryWriteSignalInput): boolean {
     return true;
   }
   if (
-    tools.some(
-      (t) =>
-        (t.status === "success" || t.status === "ok") &&
-        !isReadOnlyTool(t.toolName),
-    )
+    tools.some((t) => (t.status === "success" || t.status === "ok") && !isReadOnlyTool(t.toolName))
   ) {
     return true;
   }
 
-  const steps = (wm.completedSteps ?? []).filter(
-    (s) => !isSystemFinalizeMessage(s.summary),
-  );
+  const steps = (wm.completedSteps ?? []).filter((s) => !isSystemFinalizeMessage(s.summary));
   if (steps.some((s) => isDecisionStep(s.summary))) return true;
-  if (
-    steps.some(
-      (s) => s.summary.trim().length >= 40 && hasDurableMemorySignal(s.summary),
-    )
-  ) {
+  if (steps.some((s) => s.summary.trim().length >= 40 && hasDurableMemorySignal(s.summary))) {
     return true;
   }
 
@@ -307,9 +287,7 @@ export function shouldWriteTaskSummary(wm: MemoryWriteSignalInput): boolean {
  * - 纯闲聊、仅系统 finalize 文案、无工具无成果 → 不写
  * - 纯 read 会话无 durable → 不写
  */
-export function isWorthWritingLongTermMemory(
-  wm: MemoryWriteSignalInput,
-): boolean {
+export function isWorthWritingLongTermMemory(wm: MemoryWriteSignalInput): boolean {
   if (shouldWriteTaskSummary(wm)) return true;
 
   const prefs = (wm.constraints ?? []).filter(

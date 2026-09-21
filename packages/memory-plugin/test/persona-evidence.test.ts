@@ -24,12 +24,7 @@ describe("memory persona evidence projection", () => {
     const entries = [
       profileEntry("profile-a", "Prefers concise answers.", 0.98, "doc-a#1"),
       profileEntry("profile-b", "Prefers bullet lists.", 0.97, "doc-a#2"),
-      profileEntry(
-        "profile-c",
-        "Primarily works in TypeScript.",
-        0.9,
-        "doc-b#1",
-      ),
+      profileEntry("profile-c", "Primarily works in TypeScript.", 0.9, "doc-b#1"),
     ];
     const first = projectMemoryPersonaEvidenceV1({
       entries,
@@ -45,10 +40,7 @@ describe("memory persona evidence projection", () => {
     });
 
     expect(first).toEqual(second);
-    expect(first.claims.map((claim) => claim.memoryId)).toEqual([
-      "profile-a",
-      "profile-c",
-    ]);
+    expect(first.claims.map((claim) => claim.memoryId)).toEqual(["profile-a", "profile-c"]);
     expect(first.sourceCount).toBe(2);
   });
 
@@ -78,9 +70,7 @@ describe("memory persona evidence projection", () => {
 
   test("renders a stable prefix that excludes query identity", () => {
     const projection = projectMemoryPersonaEvidenceV1({
-      entries: [
-        profileEntry("profile-a", "Prefers concise answers.", 0.98, "doc-a#1"),
-      ],
+      entries: [profileEntry("profile-a", "Prefers concise answers.", 0.98, "doc-a#1")],
       minimumConfidence: 0.7,
       maxClaims: 8,
       maxChars: 1_000,
@@ -95,10 +85,7 @@ describe("memory persona evidence projection", () => {
       settledAt: 1_750_000_000_000,
     };
     const first = createMemoryPersonaEvidenceSectionV1(fact, 10);
-    const second = createMemoryPersonaEvidenceSectionV1(
-      { ...fact, queryId: "query-2" },
-      99,
-    );
+    const second = createMemoryPersonaEvidenceSectionV1({ ...fact, queryId: "query-2" }, 99);
 
     expect(first?.id).toBe(second?.id);
     expect(first?.contentHash).toBe(second?.contentHash);
@@ -138,14 +125,7 @@ describe("memory persona evidence projection", () => {
         scope,
         async load() {
           loads += 1;
-          return [
-            profileEntry(
-              "profile-a",
-              "Prefers concise answers.",
-              0.98,
-              "doc-a#1",
-            ),
-          ];
+          return [profileEntry("profile-a", "Prefers concise answers.", 0.98, "doc-a#1")];
         },
       },
       signal: new AbortController().signal,

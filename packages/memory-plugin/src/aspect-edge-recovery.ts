@@ -40,9 +40,7 @@ export function buildMemoryAspectEdgeRecoveryCandidatesV1(
     throw namedError("MemoryAspectEdgeRecoveryLimitInvalid");
   }
   const graphRevision = input.packets[0]?.snapshot.revision as string;
-  if (
-    input.packets.some((packet) => packet.snapshot.revision !== graphRevision)
-  ) {
+  if (input.packets.some((packet) => packet.snapshot.revision !== graphRevision)) {
     throw namedError("MemoryAspectEdgeRecoveryRevisionConflict");
   }
   const linkingByInputRevision = new Map(
@@ -63,14 +61,9 @@ export function buildMemoryAspectEdgeRecoveryCandidatesV1(
     needsTypeAdjudication: boolean;
   }> = [];
   for (const packet of input.packets) {
-    const linking = linkingByInputRevision.get(
-      deriveMemoryAspectEdgeInputRevisionV1(packet),
-    );
+    const linking = linkingByInputRevision.get(deriveMemoryAspectEdgeInputRevisionV1(packet));
     const decisions = new Map(
-      (linking?.decisions ?? []).map((decision) => [
-        decision.targetClaimId,
-        decision,
-      ]),
+      (linking?.decisions ?? []).map((decision) => [decision.targetClaimId, decision]),
     );
     for (const [targetIndex, target] of packet.targets.entries()) {
       const decision = decisions.get(target.claimId);
@@ -84,9 +77,7 @@ export function buildMemoryAspectEdgeRecoveryCandidatesV1(
           : undefined;
       const needsTypeAdjudication =
         decidedEdge?.edgeType === "supports" &&
-        target.allowedProposals.some(
-          (proposal) => proposal.edgeType !== "supports",
-        );
+        target.allowedProposals.some((proposal) => proposal.edgeType !== "supports");
       if (decision?.disposition === "edge" && !needsTypeAdjudication) continue;
       const score =
         recoveryScore(
@@ -110,18 +101,16 @@ export function buildMemoryAspectEdgeRecoveryCandidatesV1(
           right.packet.targets[right.targetIndex]?.claimId ?? "",
         ),
     );
-  const selected = highSignal
-    .slice(0, maxPackets)
-    .map(({ packet, targetIndex }) => {
-      const target = packet.targets[targetIndex];
-      if (target === undefined) {
-        throw namedError("MemoryAspectEdgeRecoveryTargetMissing");
-      }
-      return Object.freeze({
-        ...packet,
-        targets: Object.freeze([target]),
-      });
+  const selected = highSignal.slice(0, maxPackets).map(({ packet, targetIndex }) => {
+    const target = packet.targets[targetIndex];
+    if (target === undefined) {
+      throw namedError("MemoryAspectEdgeRecoveryTargetMissing");
+    }
+    return Object.freeze({
+      ...packet,
+      targets: Object.freeze([target]),
     });
+  });
   const metrics = Object.freeze({
     sourcePacketCount: input.packets.length,
     unresolvedPairCount: unresolved.length,
@@ -211,9 +200,7 @@ function namedError(name: string): Error {
 }
 
 function unorderedPairKey(left: string, right: string): string {
-  return left.localeCompare(right) <= 0
-    ? `${left}\u0000${right}`
-    : `${right}\u0000${left}`;
+  return left.localeCompare(right) <= 0 ? `${left}\u0000${right}` : `${right}\u0000${left}`;
 }
 
 const CHANGE_CUE =

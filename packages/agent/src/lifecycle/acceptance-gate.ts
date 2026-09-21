@@ -1,8 +1,5 @@
 import type { TaskState } from "../task-state.js";
-import {
-  type AcceptanceReadinessItem,
-  acceptanceReadiness,
-} from "../task-state.js";
+import { type AcceptanceReadinessItem, acceptanceReadiness } from "../task-state.js";
 
 export type AcceptanceGateDecision =
   | { readonly ok: true; readonly items: readonly AcceptanceReadinessItem[] }
@@ -14,9 +11,7 @@ export type AcceptanceGateDecision =
     };
 
 /** Final-answer gate for the durable, revision-scoped acceptance ledger. */
-export function checkAcceptanceCriteria(
-  state: TaskState,
-): AcceptanceGateDecision {
+export function checkAcceptanceCriteria(state: TaskState): AcceptanceGateDecision {
   const items = acceptanceReadiness(state);
   const blocked = items.filter((item) => item.readiness === "blocked");
   if (blocked.length > 0) {
@@ -46,10 +41,7 @@ export function checkAcceptanceCriteria(
 function formatItems(items: readonly AcceptanceReadinessItem[]): string {
   const visible = items
     .slice(0, 5)
-    .map(
-      (item) =>
-        `${item.criterion.id} [${item.readiness}] ${item.criterion.text}`,
-    );
+    .map((item) => `${item.criterion.id} [${item.readiness}] ${item.criterion.text}`);
   const remainder = items.length - visible.length;
   return `${visible.join("; ")}${remainder > 0 ? `; +${remainder} more` : ""}`;
 }

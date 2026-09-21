@@ -1,9 +1,5 @@
 import { sha256Canonical } from "./canonical.js";
-import {
-  evidenceFingerprint,
-  extendReadCoverage,
-  readCoverageKey,
-} from "./evidence.js";
+import { evidenceFingerprint, extendReadCoverage, readCoverageKey } from "./evidence.js";
 import {
   LOOP_V2_SCHEMA_VERSION,
   type LoopV2Envelope,
@@ -23,9 +19,7 @@ const EMPTY_DELTA: ProgressDeltaV2 = {
   meaningful: false,
 };
 
-export function createWorkingDecisionStateV2(
-  runId: string,
-): WorkingDecisionStateV2 {
+export function createWorkingDecisionStateV2(runId: string): WorkingDecisionStateV2 {
   if (!runId.trim()) throw new Error("Loop v2 runId must not be empty");
   return {
     schemaVersion: LOOP_V2_SCHEMA_VERSION,
@@ -58,8 +52,7 @@ export function projectLoopV2Event(
 
   switch (event.type) {
     case "task.started": {
-      if (prior.goal)
-        throw new Error("Loop v2 task.started may only occur once");
+      if (prior.goal) throw new Error("Loop v2 task.started may only occur once");
       return {
         state: {
           ...base,
@@ -82,10 +75,7 @@ export function projectLoopV2Event(
       let readCoverage = prior.readCoverage;
       if (event.observation.kind === "read") {
         const key = readCoverageKey(event.observation);
-        const extended = extendReadCoverage(
-          prior.readCoverage[key],
-          event.observation,
-        );
+        const extended = extendReadCoverage(prior.readCoverage[key], event.observation);
         meaningful = extended.meaningful;
         readCoverage = { ...prior.readCoverage, [key]: extended.coverage };
       }
@@ -120,8 +110,7 @@ export function projectLoopV2Event(
     }
     case "criterion.upserted": {
       const changed =
-        sha256Canonical(prior.criteria[event.criterion.id]) !==
-        sha256Canonical(event.criterion);
+        sha256Canonical(prior.criteria[event.criterion.id]) !== sha256Canonical(event.criterion);
       return {
         state: {
           ...base,
@@ -176,9 +165,7 @@ export function projectLoopV2Event(
       };
     }
     case "risk.upserted": {
-      const changed =
-        sha256Canonical(prior.risks[event.risk.id]) !==
-        sha256Canonical(event.risk);
+      const changed = sha256Canonical(prior.risks[event.risk.id]) !== sha256Canonical(event.risk);
       return {
         state: {
           ...base,
@@ -195,8 +182,7 @@ export function projectLoopV2Event(
     }
     case "invariant.upserted": {
       const changed =
-        sha256Canonical(prior.invariants[event.invariant.id]) !==
-        sha256Canonical(event.invariant);
+        sha256Canonical(prior.invariants[event.invariant.id]) !== sha256Canonical(event.invariant);
       return {
         state: {
           ...base,
@@ -224,8 +210,7 @@ export function projectLoopV2Event(
       };
     }
     case "next_action.updated": {
-      const changed =
-        sha256Canonical(prior.nextAction) !== sha256Canonical(event.nextAction);
+      const changed = sha256Canonical(prior.nextAction) !== sha256Canonical(event.nextAction);
       return {
         state: { ...base, nextAction: event.nextAction },
         delta: changed ? { ...EMPTY_DELTA, meaningful: true } : EMPTY_DELTA,
@@ -235,22 +220,14 @@ export function projectLoopV2Event(
       if (event.mutation.seq !== envelope.seq) {
         throw new Error("Mutation journal seq must match its event envelope");
       }
-      if (
-        event.mutation.mutationRevision !==
-        prior.currentMutationRevision + 1
-      ) {
+      if (event.mutation.mutationRevision !== prior.currentMutationRevision + 1) {
         throw new Error(
           `Mutation revision must be ${prior.currentMutationRevision + 1}: ${event.mutation.mutationRevision}`,
         );
       }
       const existing = prior.mutations[event.mutation.callId];
-      if (
-        existing &&
-        sha256Canonical(existing) !== sha256Canonical(event.mutation)
-      ) {
-        throw new Error(
-          `Conflicting mutation callId: ${event.mutation.callId}`,
-        );
+      if (existing && sha256Canonical(existing) !== sha256Canonical(event.mutation)) {
+        throw new Error(`Conflicting mutation callId: ${event.mutation.callId}`);
       }
       const meaningful = existing === undefined;
       return {
@@ -303,18 +280,14 @@ export function projectLoopV2Event(
     }
     case "candidate.proposed": {
       if (event.candidate.proposedAtSeq !== envelope.seq) {
-        throw new Error(
-          "Candidate proposedAtSeq must match its event envelope",
-        );
+        throw new Error("Candidate proposedAtSeq must match its event envelope");
       }
       if (event.candidate.mutationRevision !== prior.currentMutationRevision) {
         throw new Error(
           `Candidate revision ${event.candidate.mutationRevision} does not match current revision ${prior.currentMutationRevision}`,
         );
       }
-      const changed =
-        sha256Canonical(prior.currentCandidate) !==
-        sha256Canonical(event.candidate);
+      const changed = sha256Canonical(prior.currentCandidate) !== sha256Canonical(event.candidate);
       return {
         state: {
           ...base,
@@ -332,10 +305,7 @@ export function projectLoopV2Event(
         state: {
           ...base,
           contextCompactions: prior.contextCompactions + 1,
-          contextArtifactRefs: unique([
-            ...prior.contextArtifactRefs,
-            ...event.artifactRefs,
-          ]),
+          contextArtifactRefs: unique([...prior.contextArtifactRefs, ...event.artifactRefs]),
         },
         delta: EMPTY_DELTA,
       };
@@ -368,19 +338,12 @@ export function projectionHash(state: WorkingDecisionStateV2): string {
   return sha256Canonical(state);
 }
 
-function assertEnvelopeCanFollow(
-  prior: WorkingDecisionStateV2,
-  envelope: LoopV2Envelope,
-): void {
+function assertEnvelopeCanFollow(prior: WorkingDecisionStateV2, envelope: LoopV2Envelope): void {
   if (envelope.schemaVersion !== LOOP_V2_SCHEMA_VERSION) {
-    throw new Error(
-      `Unsupported loop v2 event schema: ${envelope.schemaVersion}`,
-    );
+    throw new Error(`Unsupported loop v2 event schema: ${envelope.schemaVersion}`);
   }
   if (envelope.runId !== prior.runId) {
-    throw new Error(
-      `Loop v2 run mismatch: expected ${prior.runId}, received ${envelope.runId}`,
-    );
+    throw new Error(`Loop v2 run mismatch: expected ${prior.runId}, received ${envelope.runId}`);
   }
   const expectedSeq = prior.lastSeq + 1;
   if (!Number.isSafeInteger(envelope.seq) || envelope.seq !== expectedSeq) {

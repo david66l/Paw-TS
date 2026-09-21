@@ -59,9 +59,7 @@ export function normalizeToolName(raw: string): string {
  * - inherit / * / 空 → null（不裁剪）
  * - 逗号分隔或数组 → 归一化完整名列表
  */
-export function parseToolsField(
-  raw: string | readonly string[] | undefined,
-): "inherit" | string[] {
+export function parseToolsField(raw: string | readonly string[] | undefined): "inherit" | string[] {
   if (raw === undefined || raw === null) return "inherit";
   if (Array.isArray(raw)) {
     if (raw.length === 0) return "inherit";
@@ -99,9 +97,7 @@ export function resolveAllowedTools(opts: {
   readonly canSpawn: boolean;
 }): readonly string[] | null {
   const stripSpawn = (list: readonly string[]) =>
-    list.filter(
-      (t) => t !== "workspace.run_agent" && t !== "workspace.create_agent",
-    );
+    list.filter((t) => t !== "workspace.run_agent" && t !== "workspace.create_agent");
 
   if (opts.tools === "inherit") {
     if (opts.canSpawn) return null;

@@ -18,9 +18,7 @@ export const DEFAULT_WEB_ACCESS_POLICY_V1: WebAccessPolicyV1 = Object.freeze({
   maxQueryChars: 500,
 });
 
-export function freezeWebAccessPolicyV1(
-  input: WebAccessPolicyV1,
-): WebAccessPolicyV1 {
+export function freezeWebAccessPolicyV1(input: WebAccessPolicyV1): WebAccessPolicyV1 {
   if (
     !input ||
     typeof input !== "object" ||

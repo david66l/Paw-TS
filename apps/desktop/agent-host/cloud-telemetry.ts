@@ -24,26 +24,18 @@ import {
 import type { RunJournalEnvelopeV1 } from "@paw/protocol";
 
 const LIMIT = 128;
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex").slice(0, 24);
+const hash = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 24);
 // Names are metadata. Never accept arbitrary provider errors, prompts or paths.
-const identifier = (value: string) =>
-  /^[a-zA-Z0-9_.:/-]{1,100}$/.test(value) ? value : "custom";
+const identifier = (value: string) => (/^[a-zA-Z0-9_.:/-]{1,100}$/.test(value) ? value : "custom");
 export interface CloudTelemetryConfig {
   baseUrl: string;
   publicKey: string;
   secretKey: string;
   sampleRate: number;
 }
-export function cloudTelemetryConfig(
-  env: NodeJS.ProcessEnv,
-): CloudTelemetryConfig | undefined {
+export function cloudTelemetryConfig(env: NodeJS.ProcessEnv): CloudTelemetryConfig | undefined {
   if (env.PAW_TELEMETRY_ENABLED !== "1") return undefined;
-  if (
-    !env.LANGFUSE_BASE_URL ||
-    !env.LANGFUSE_PUBLIC_KEY ||
-    !env.LANGFUSE_SECRET_KEY
-  )
+  if (!env.LANGFUSE_BASE_URL || !env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY)
     throw new Error(
       "Cloud monitoring requires LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY.",
     );
@@ -111,10 +103,7 @@ let client: ReturnType<typeof createCloudTelemetry> | undefined;
 let configured = false;
 export function loadCloudTelemetryConfig(
   env: NodeJS.ProcessEnv,
-  file: string | URL = new URL(
-    "../../../.paw/telemetry.local.json",
-    import.meta.url,
-  ),
+  file: string | URL = new URL("../../../.paw/telemetry.local.json", import.meta.url),
 ) {
   const merged: NodeJS.ProcessEnv = {};
   if (existsSync(file)) {
@@ -127,8 +116,7 @@ export function loadCloudTelemetryConfig(
       ["publicKey", "LANGFUSE_PUBLIC_KEY"],
       ["secretKey", "LANGFUSE_SECRET_KEY"],
     ])
-      if (key && target && typeof local[key] === "string")
-        merged[target] = local[key];
+      if (key && target && typeof local[key] === "string") merged[target] = local[key];
     if (typeof local.sampleRate === "number")
       merged.PAW_TELEMETRY_SAMPLE_RATE = String(local.sampleRate);
   }
@@ -162,10 +150,7 @@ export class CloudRunTelemetry implements ModelObserver {
   private readonly root: Span;
   private readonly runs = new Map<string, Span>();
   private readonly seq = new Map<string, number>();
-  private readonly models = new Map<
-    string,
-    { id: string; span: Span; ended: boolean }
-  >();
+  private readonly models = new Map<string, { id: string; span: Span; ended: boolean }>();
   private readonly pending = new Map<string, Span>();
   private readonly active = new Set<{ heartbeat(): void; stop(): void }>();
   private readonly timer: ReturnType<typeof setInterval>;
@@ -197,12 +182,7 @@ export class CloudRunTelemetry implements ModelObserver {
       }
     }
   }
-  private span(
-    name: string,
-    parent: Span,
-    attributes: Attributes = {},
-    type = "span",
-  ): Span {
+  private span(name: string, parent: Span, attributes: Attributes = {}, type = "span"): Span {
     return this.tracer.startSpan(
       name,
       {
@@ -222,12 +202,7 @@ export class CloudRunTelemetry implements ModelObserver {
       this.dropped++;
       return this.root;
     }
-    const span = this.span(
-      "runtime.run",
-      this.root,
-      { "paw.run.id": hash(runId) },
-      "agent",
-    );
+    const span = this.span("runtime.run", this.root, { "paw.run.id": hash(runId) }, "agent");
     this.runs.set(runId, span);
     return span;
   }
@@ -271,8 +246,7 @@ export class CloudRunTelemetry implements ModelObserver {
         switch (f.type) {
           case "model.dispatch_recorded": {
             const previous = this.models.get(event.runId);
-            if (previous && !previous.ended)
-              this.endSpan(previous.span, "interrupted");
+            if (previous && !previous.ended) this.endSpan(previous.span, "interrupted");
             const span = this.span("model.turn", parent, {
               "paw.model_call.id": hash(f.modelCallId),
               "paw.turn": f.turn,
@@ -325,9 +299,7 @@ export class CloudRunTelemetry implements ModelObserver {
             start(f.reviewId, "completion.review", {}, "evaluator");
             break;
           case "completion.review_settled":
-            this.pending
-              .get(key(f.reviewId))
-              ?.setAttribute("paw.verdict", f.verdict);
+            this.pending.get(key(f.reviewId))?.setAttribute("paw.verdict", f.verdict);
             finish(f.reviewId, f.status);
             break;
           case "context.checkpoint_distillation_claimed":
@@ -354,27 +326,21 @@ export class CloudRunTelemetry implements ModelObserver {
       span.setStatus({ code: SpanStatusCode.ERROR });
     span.end();
   }
-  start(
-    input: Parameters<ModelObserver["start"]>[0],
-  ): ModelObservation | undefined {
+  start(input: Parameters<ModelObserver["start"]>[0]): ModelObservation | undefined {
     if (this.closed || !this.root.isRecording()) return undefined;
     if (this.active.size >= LIMIT) {
       this.dropped++;
       return undefined;
     }
     const parent =
-      input.runId && input.phase === "agent_loop"
-        ? this.models.get(input.runId)?.span
-        : undefined;
+      input.runId && input.phase === "agent_loop" ? this.models.get(input.runId)?.span : undefined;
     const generation = this.span(
       "model.generation",
       parent ?? this.runSpan(input.runId),
       {
         "gen_ai.request.model": identifier(input.model),
         "paw.phase": identifier(input.phase ?? "auxiliary"),
-        ...(input.protocol
-          ? { "paw.protocol": identifier(input.protocol) }
-          : {}),
+        ...(input.protocol ? { "paw.protocol": identifier(input.protocol) } : {}),
       },
       "generation",
     );
@@ -417,8 +383,7 @@ export class CloudRunTelemetry implements ModelObserver {
       }
     };
     const live = {
-      heartbeat: () =>
-        this.instant("model.progress", attempt ?? generation, counters()),
+      heartbeat: () => this.instant("model.progress", attempt ?? generation, counters()),
       stop: () => finish("interrupted"),
     };
     const finish = (status: Parameters<ModelObservation["end"]>[0]) => {
@@ -433,9 +398,7 @@ export class CloudRunTelemetry implements ModelObserver {
         if (this.closed || !this.active.has(live)) return;
         switch (event.type) {
           case "request":
-            finishAttempt(
-              statusCode && statusCode >= 400 ? "failed" : "interrupted",
-            );
+            finishAttempt(statusCode && statusCode >= 400 ? "failed" : "interrupted");
             statusCode = undefined;
             lastDataAt = undefined;
             first.clear();
@@ -486,20 +449,11 @@ export class CloudRunTelemetry implements ModelObserver {
           case "result":
             if (event.toolCalls !== undefined) tools = event.toolCalls;
             if (event.finishReason)
-              generation.setAttribute(
-                "paw.finish_reason",
-                identifier(event.finishReason),
-              );
+              generation.setAttribute("paw.finish_reason", identifier(event.finishReason));
             if (event.usage?.promptTokens !== undefined)
-              generation.setAttribute(
-                "gen_ai.usage.input_tokens",
-                event.usage.promptTokens,
-              );
+              generation.setAttribute("gen_ai.usage.input_tokens", event.usage.promptTokens);
             if (event.usage?.completionTokens !== undefined)
-              generation.setAttribute(
-                "gen_ai.usage.output_tokens",
-                event.usage.completionTokens,
-              );
+              generation.setAttribute("gen_ai.usage.output_tokens", event.usage.completionTokens);
             state = "settled";
             break;
           case "failure":

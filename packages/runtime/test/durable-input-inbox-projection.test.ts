@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { SessionInputSnapshot } from "@paw/agent-loop";
 import type { InputFactV1 } from "@paw/protocol";
 
-import {
-  DurableInputInboxV1,
-  projectDurableInputInboxStateV1,
-} from "../src/index.js";
+import { DurableInputInboxV1, projectDurableInputInboxStateV1 } from "../src/index.js";
 
 describe("pure durable Inbox projection", () => {
   test("projects interleaved initial, steer, and FIFO queue history without I/O", async () => {
@@ -35,9 +32,7 @@ describe("pure durable Inbox projection", () => {
     expect(Object.isFrozen(state)).toBe(true);
     expect(Object.isFrozen(state.pendingSteerIds)).toBe(true);
     expect(Object.isFrozen(state.pendingQueueIds)).toBe(true);
-    expect(() =>
-      (state.pendingQueueIds as string[]).push("hostile-mutation"),
-    ).toThrow();
+    expect(() => (state.pendingQueueIds as string[]).push("hostile-mutation")).toThrow();
     expect(JSON.stringify(snapshot)).toBe(before);
 
     let reads = 0;
@@ -83,11 +78,7 @@ describe("pure durable Inbox projection", () => {
       },
       {
         name: "promotion inside active model",
-        facts: [
-          accepted("steer-1", "steer"),
-          modelDispatch(),
-          promoted("steer-1", "steer"),
-        ],
+        facts: [accepted("steer-1", "steer"), modelDispatch(), promoted("steer-1", "steer")],
         expected: /active model call/i,
       },
       {
@@ -105,17 +96,14 @@ describe("pure durable Inbox projection", () => {
     ];
 
     for (const item of cases) {
-      expect(
-        () => projectDurableInputInboxStateV1(toSnapshot(item.facts)),
-        item.name,
-      ).toThrow(item.expected);
+      expect(() => projectDurableInputInboxStateV1(toSnapshot(item.facts)), item.name).toThrow(
+        item.expected,
+      );
     }
   });
 });
 
-function toSnapshot(
-  facts: readonly InputFactV1[],
-): SessionInputSnapshot<InputFactV1> {
+function toSnapshot(facts: readonly InputFactV1[]): SessionInputSnapshot<InputFactV1> {
   return {
     entries: facts.map((fact, index) => ({ seq: index + 1, fact })),
     tailSeq: facts.length,
@@ -134,10 +122,7 @@ function accepted(inputId: string, delivery: "steer" | "queue"): InputFactV1 {
   };
 }
 
-function promoted(
-  inputId: string,
-  delivery: "initial" | "steer" | "queue",
-): InputFactV1 {
+function promoted(inputId: string, delivery: "initial" | "steer" | "queue"): InputFactV1 {
   return {
     type: "input.promoted",
     inputId,

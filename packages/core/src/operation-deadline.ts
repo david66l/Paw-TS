@@ -2,15 +2,8 @@
  * Call run at each asynchronous boundary so late results cannot start another stage.
  * This bounds host waiting; it cannot guarantee cancellation of remote billing.
  */
-export function createOperationDeadline(
-  parent: AbortSignal | undefined,
-  timeoutMs: number,
-) {
-  if (
-    !Number.isSafeInteger(timeoutMs) ||
-    timeoutMs <= 0 ||
-    timeoutMs > 2_147_483_647
-  )
+export function createOperationDeadline(parent: AbortSignal | undefined, timeoutMs: number) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647)
     throw new Error("Invalid operation deadline");
   const controller = new AbortController();
   const expires = performance.now() + timeoutMs;
@@ -19,9 +12,7 @@ export function createOperationDeadline(
   const expire = () => {
     if (controller.signal.aborted || disposed) return;
     timedOut = true;
-    controller.abort(
-      new DOMException("Operation deadline exceeded", "TimeoutError"),
-    );
+    controller.abort(new DOMException("Operation deadline exceeded", "TimeoutError"));
   };
   const cancel = () => controller.abort(parent?.reason);
   parent?.addEventListener("abort", cancel, { once: true });
@@ -37,16 +28,13 @@ export function createOperationDeadline(
     get timedOut() {
       return timedOut;
     },
-    async run<T>(
-      execute: (signal: AbortSignal) => T | PromiseLike<T>,
-    ): Promise<T> {
+    async run<T>(execute: (signal: AbortSignal) => T | PromiseLike<T>): Promise<T> {
       check();
       let removeListener = () => {};
       const interrupted = new Promise<never>((_, reject) => {
         const abort = () => reject(controller.signal.reason);
         controller.signal.addEventListener("abort", abort, { once: true });
-        removeListener = () =>
-          controller.signal.removeEventListener("abort", abort);
+        removeListener = () => controller.signal.removeEventListener("abort", abort);
       });
       try {
         const result = await Promise.race([

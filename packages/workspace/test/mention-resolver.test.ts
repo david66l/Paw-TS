@@ -3,11 +3,7 @@ import fs, { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  extractAtMentions,
-  resolveMentions,
-  stripAtMentions,
-} from "../src/mention-resolver.js";
+import { extractAtMentions, resolveMentions, stripAtMentions } from "../src/mention-resolver.js";
 
 describe("extractAtMentions", () => {
   test("finds unquoted @path", () => {

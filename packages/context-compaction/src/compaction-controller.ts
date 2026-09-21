@@ -39,9 +39,7 @@ export interface ContextCompactionControllerOptionsV1 {
   readonly signal: AbortSignal;
   readonly loadPayloadEvidence?: RunTaskCheckpointDistillationOptionsV1["loadPayloadEvidence"];
   readonly lifecyclePolicy?: ContextCompactionLifecyclePolicyV1;
-  readonly onResult?: (
-    result: ContextCompactionControllerResultV1,
-  ) => void | Promise<void>;
+  readonly onResult?: (result: ContextCompactionControllerResultV1) => void | Promise<void>;
 }
 
 export interface ContextCompactionControllerV1 {
@@ -156,8 +154,7 @@ function projectDurableAttempts(
   );
   const recorded = new Set(
     entries.flatMap((entry) =>
-      entry.fact.type === "context.checkpoint_recorded" &&
-      entry.fact.distillationClaimId
+      entry.fact.type === "context.checkpoint_recorded" && entry.fact.distillationClaimId
         ? [entry.fact.distillationClaimId]
         : [],
     ),
@@ -167,8 +164,7 @@ function projectDurableAttempts(
       const fact = entry.fact;
       if (
         fact.type !== "context.checkpoint_distillation_claimed" ||
-        fact.policyVersion !==
-          CONTEXT_COMPACTION_ORCHESTRATION_POLICY_VERSION_V1
+        fact.policyVersion !== CONTEXT_COMPACTION_ORCHESTRATION_POLICY_VERSION_V1
       ) {
         return [];
       }
@@ -218,8 +214,7 @@ function findRecoverableClaim(
   );
   const recorded = new Set(
     entries.flatMap((entry) =>
-      entry.fact.type === "context.checkpoint_recorded" &&
-      entry.fact.distillationClaimId
+      entry.fact.type === "context.checkpoint_recorded" && entry.fact.distillationClaimId
         ? [entry.fact.distillationClaimId]
         : [],
     ),
@@ -228,8 +223,7 @@ function findRecoverableClaim(
     const fact = entries[index]?.fact;
     if (
       fact?.type !== "context.checkpoint_distillation_claimed" ||
-      fact.policyVersion !==
-        CONTEXT_COMPACTION_ORCHESTRATION_POLICY_VERSION_V1 ||
+      fact.policyVersion !== CONTEXT_COMPACTION_ORCHESTRATION_POLICY_VERSION_V1 ||
       fact.sourceFromSeq !== sourceFromSeq ||
       fact.sourceThroughSeq !== sourceThroughSeq ||
       recorded.has(fact.claimId)
@@ -246,9 +240,7 @@ function findRecoverableClaim(
 
 function parseCheckpointId(
   value: string,
-):
-  | { readonly modelTurn: number; readonly fullInputTokens: number }
-  | undefined {
+): { readonly modelTurn: number; readonly fullInputTokens: number } | undefined {
   const match = /^ctxcp-v1-f\d+-u\d+-t(\d+)-n(\d+)-a\d+$/.exec(value);
   if (!match?.[1] || !match[2]) return undefined;
   const modelTurn = Number(match[1]);
@@ -261,21 +253,15 @@ function parseCheckpointId(
     : undefined;
 }
 
-function latestModelTurn(
-  entries: readonly { readonly fact: InputFactV1 }[],
-): number {
+function latestModelTurn(entries: readonly { readonly fact: InputFactV1 }[]): number {
   return entries.reduce(
     (latest, entry) =>
-      entry.fact.type === "model.settled"
-        ? Math.max(latest, entry.fact.turn)
-        : latest,
+      entry.fact.type === "model.settled" ? Math.max(latest, entry.fact.turn) : latest,
     0,
   );
 }
 
-function captureSession(
-  session: Session<InputFactV1, unknown>,
-): Session<InputFactV1, unknown> {
+function captureSession(session: Session<InputFactV1, unknown>): Session<InputFactV1, unknown> {
   if (
     !session ||
     typeof session.readInputSnapshot !== "function" ||
@@ -287,18 +273,14 @@ function captureSession(
   return session;
 }
 
-function captureDistiller(
-  distiller: TaskCheckpointDistillerV1,
-): TaskCheckpointDistillerV1 {
+function captureDistiller(distiller: TaskCheckpointDistillerV1): TaskCheckpointDistillerV1 {
   if (!distiller || typeof distiller.distill !== "function") {
     throw new Error("Context compaction controller distiller is invalid");
   }
   return Object.freeze({ distill: distiller.distill.bind(distiller) });
 }
 
-function captureCodec(
-  codec: TaskCheckpointDistillationCodecV1,
-): TaskCheckpointDistillationCodecV1 {
+function captureCodec(codec: TaskCheckpointDistillationCodecV1): TaskCheckpointDistillationCodecV1 {
   if (
     !codec ||
     typeof codec.encode !== "function" ||

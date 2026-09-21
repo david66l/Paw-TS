@@ -36,13 +36,9 @@ describe("StatusSnapshotV1", () => {
       environment: ENVIRONMENT,
     });
 
-    const text = formatStatusSnapshotV1(
-      telemetry.snapshot(1, 10, taskState.snapshot(), 1_250),
-    );
+    const text = formatStatusSnapshotV1(telemetry.snapshot(1, 10, taskState.snapshot(), 1_250));
 
-    expect(text).toContain(
-      "schema=paw.status-snapshot.v1 authority=advisory_only",
-    );
+    expect(text).toContain("schema=paw.status-snapshot.v1 authority=advisory_only");
     expect(text).toContain("completion_authority=CompletionPolicy");
     expect(text).toContain("run=status-1 turn=2/10 elapsed_ms=250");
     expect(text).toContain("pace=investigate");
@@ -79,9 +75,7 @@ describe("StatusSnapshotV1", () => {
       executionEnvironment,
     });
 
-    const text = formatStatusSnapshotV1(
-      telemetry.snapshot(0, 20, taskState.snapshot()),
-    );
+    const text = formatStatusSnapshotV1(telemetry.snapshot(0, 20, taskState.snapshot()));
 
     expect(text).toContain("scope=container cwd=/testbed");
     expect(text).toContain("host_workspace=C:\\workspace");
@@ -105,11 +99,7 @@ describe("StatusSnapshotV1", () => {
       },
     ] as const;
     for (let index = 0; index < 3; index += 1) {
-      telemetry.observeToolBatch(
-        calls,
-        [{ ok: true, summary: "same file", payload: {} }],
-        30,
-      );
+      telemetry.observeToolBatch(calls, [{ ok: true, summary: "same file", payload: {} }], 30);
     }
 
     const snapshot = telemetry.snapshot(3, 12, taskState.snapshot());
@@ -331,9 +321,7 @@ describe("StatusSnapshotV1", () => {
                 message.content.includes(STATUS_SNAPSHOT_PREFIX),
             );
           if (snapshot) snapshots.push(snapshot.content);
-          hostWasTailAdjacent.push(
-            messages.at(-2)?.content.startsWith("[Host State v1]") ?? false,
-          );
+          hostWasTailAdjacent.push(messages.at(-2)?.content.startsWith("[Host State v1]") ?? false);
           if (modelCalls === 1) {
             return {
               text: '{"tool":"workspace.read_file","args":{"path":"source.txt"}}',
@@ -372,9 +360,7 @@ describe("StatusSnapshotV1", () => {
     expect(durableProjectionCounts).toEqual([0, 0]);
     expect(snapshots[0]).toContain("tools calls=0 failures=0");
     expect(snapshots[1]).toContain("tools calls=1 failures=0");
-    expect(snapshots[1]).toContain(
-      "last_tool=workspace.read_file ok=true duration_ms=",
-    );
+    expect(snapshots[1]).toContain("last_tool=workspace.read_file ok=true duration_ms=");
     expect(snapshots[1]).toContain("shell_persistence=fresh_process_per_call");
     expect(snapshots[1]).toContain("recovery_compatible=true");
     expect(snapshots[1]).toContain(

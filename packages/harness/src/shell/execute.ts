@@ -3,10 +3,7 @@ import path from "node:path";
 
 import { checkWorkspacePath } from "@paw/workspace";
 
-import type {
-  ManagedJobHooksV1,
-  ManagedJobOutcomeV1,
-} from "../jobs/managed-job-registry.js";
+import type { ManagedJobHooksV1, ManagedJobOutcomeV1 } from "../jobs/managed-job-registry.js";
 import {
   type ShellSandboxConfig,
   buildDockerShellExecSpec,
@@ -98,8 +95,7 @@ function resolveShellSpawnTarget(
         containerName: spec.containerName,
         pullPolicy: spec.pullPolicy,
       },
-      cleanupSandbox: () =>
-        forceRemoveContainer(spec.runtime, spec.containerName),
+      cleanupSandbox: () => forceRemoveContainer(spec.runtime, spec.containerName),
     };
   }
 
@@ -176,11 +172,7 @@ export function runShellInWorkspace(
     };
   }
 
-  const cwdResult = resolveShellCwd(
-    workspaceRoot,
-    options.cwd,
-    options.shellSandbox,
-  );
+  const cwdResult = resolveShellCwd(workspaceRoot, options.cwd, options.shellSandbox);
   if (cwdResult.error) {
     return { error: cwdResult.error };
   }
@@ -234,10 +226,8 @@ export function runShellInWorkspace(
     };
   }
 
-  const stdout =
-    typeof proc.stdout === "string" ? proc.stdout : String(proc.stdout ?? "");
-  const stderr =
-    typeof proc.stderr === "string" ? proc.stderr : String(proc.stderr ?? "");
+  const stdout = typeof proc.stdout === "string" ? proc.stdout : String(proc.stdout ?? "");
+  const stderr = typeof proc.stderr === "string" ? proc.stderr : String(proc.stderr ?? "");
   const code = proc.status;
 
   return {
@@ -277,11 +267,7 @@ export function runShellInWorkspaceStreaming(
       return;
     }
 
-    const cwdResult = resolveShellCwd(
-      workspaceRoot,
-      options.cwd,
-      options.shellSandbox,
-    );
+    const cwdResult = resolveShellCwd(workspaceRoot, options.cwd, options.shellSandbox);
     if (cwdResult.error) {
       resolve({ error: cwdResult.error });
       return;
@@ -320,9 +306,7 @@ export function runShellInWorkspaceStreaming(
     const proc = spawn(spawnTarget.command, [...spawnTarget.args], {
       cwd: isShellSandboxEnabled(options.shellSandbox) ? undefined : cwdPath,
       ...(!win && !spawnTarget.sandbox ? { detached: true } : {}),
-      ...(win && !spawnTarget.sandbox
-        ? { windowsHide: true, windowsVerbatimArguments: true }
-        : {}),
+      ...(win && !spawnTarget.sandbox ? { windowsHide: true, windowsVerbatimArguments: true } : {}),
     });
 
     const finishResolve = (result: RunShellResult): void => {
@@ -344,10 +328,7 @@ export function runShellInWorkspaceStreaming(
       killedByAbort = true;
       cleanupSandbox();
       terminateProcessTreeV1(proc.pid ?? 0, "TERM");
-      abortForceTimer = setTimeout(
-        () => terminateProcessTreeV1(proc.pid ?? 0, "KILL"),
-        1_000,
-      );
+      abortForceTimer = setTimeout(() => terminateProcessTreeV1(proc.pid ?? 0, "KILL"), 1_000);
       abortForceTimer.unref?.();
     };
     options.signal?.addEventListener("abort", abortListener, { once: true });
@@ -412,9 +393,7 @@ export function runShellInWorkspaceStreaming(
         stderr: errChunks.join(""),
         timed_out: killedByTimeout,
         cwd: cwdPath,
-        error: killedByOutputLimit
-          ? `output exceeded ${MAX_OUTPUT_BYTES} bytes limit`
-          : undefined,
+        error: killedByOutputLimit ? `output exceeded ${MAX_OUTPUT_BYTES} bytes limit` : undefined,
         ...(spawnTarget.sandbox ? { sandbox: spawnTarget.sandbox } : {}),
       };
       finishResolve(result);
@@ -441,9 +420,7 @@ class BoundedOutputCursorV1 {
   constructor(private readonly limitBytes: number) {}
 
   append(data: Buffer, isStderr: boolean): void {
-    const tagged = isStderr
-      ? Buffer.concat([Buffer.from("[stderr] "), data])
-      : data;
+    const tagged = isStderr ? Buffer.concat([Buffer.from("[stderr] "), data]) : data;
     this.unread = Buffer.concat([this.unread, tagged]);
     if (this.unread.length > this.limitBytes) {
       const drop = this.unread.length - this.limitBytes;
@@ -470,11 +447,11 @@ function terminateProcessTreeV1(pid: number, signal: "TERM" | "KILL"): void {
     // Windows has no reliable process-group TERM equivalent. A non-forced
     // taskkill can let cmd.exe exit before descendants, losing the only tree
     // handle. Always force the complete tree while the root pid is live.
-    spawnSync(
-      process.env.ComSpec ?? "cmd.exe",
-      ["/d", "/s", "/c", `taskkill /PID ${pid} /T /F`],
-      { windowsHide: true, stdio: "ignore", timeout: 3_000 },
-    );
+    spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `taskkill /PID ${pid} /T /F`], {
+      windowsHide: true,
+      stdio: "ignore",
+      timeout: 3_000,
+    });
     return;
   }
   try {
@@ -505,11 +482,7 @@ export function startManagedShellInWorkspaceV1(
   if (guard.requiresApproval && !options.skipApprovalGate) {
     throw new Error(guard.reason ?? "command requires approval");
   }
-  const cwdResult = resolveShellCwd(
-    workspaceRoot,
-    options.cwd,
-    options.shellSandbox,
-  );
+  const cwdResult = resolveShellCwd(workspaceRoot, options.cwd, options.shellSandbox);
   if (cwdResult.error) throw new Error(cwdResult.error);
   const cwdPath = cwdResult.cwdPath;
   const win = process.platform === "win32";
@@ -534,9 +507,7 @@ export function startManagedShellInWorkspaceV1(
   const proc = spawn(spawnTarget.command, [...spawnTarget.args], {
     cwd: isShellSandboxEnabled(options.shellSandbox) ? undefined : cwdPath,
     detached: !win && !spawnTarget.sandbox,
-    ...(win && !spawnTarget.sandbox
-      ? { windowsHide: true, windowsVerbatimArguments: true }
-      : {}),
+    ...(win && !spawnTarget.sandbox ? { windowsHide: true, windowsVerbatimArguments: true } : {}),
   });
   if (!proc.pid) {
     spawnTarget.cleanupSandbox?.();
@@ -589,10 +560,7 @@ export function startManagedShellInWorkspaceV1(
       terminateProcessTreeV1(pid, "KILL");
       return;
     }
-    forceTimer = setTimeout(
-      () => terminateProcessTreeV1(pid, "KILL"),
-      terminationGraceMs,
-    );
+    forceTimer = setTimeout(() => terminateProcessTreeV1(pid, "KILL"), terminationGraceMs);
   };
 
   return {

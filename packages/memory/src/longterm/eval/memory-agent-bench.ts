@@ -219,29 +219,19 @@ export function subsampleChunks(
     const mid = Math.max(0, maxChunks - head - tail);
     const out: string[] = [];
     for (let i = 0; i < head; i++) {
-      out.push(
-        chunks[
-          Math.round(
-            (i * Math.floor(chunks.length / 3)) / Math.max(1, head - 1),
-          )
-        ]!,
-      );
+      out.push(chunks[Math.round((i * Math.floor(chunks.length / 3)) / Math.max(1, head - 1))]!);
     }
     if (mid > 0) {
       const midStart = Math.floor(chunks.length / 3);
       const midEnd = Math.floor((2 * chunks.length) / 3);
       for (let i = 0; i < mid; i++) {
-        const idx =
-          midStart +
-          Math.round((i * (midEnd - midStart)) / Math.max(1, mid - 1));
+        const idx = midStart + Math.round((i * (midEnd - midStart)) / Math.max(1, mid - 1));
         out.push(chunks[Math.min(chunks.length - 1, idx)]!);
       }
     }
     for (let i = 0; i < tail; i++) {
       const base = Math.floor((2 * chunks.length) / 3);
-      const idx =
-        base +
-        Math.round((i * (chunks.length - 1 - base)) / Math.max(1, tail - 1));
+      const idx = base + Math.round((i * (chunks.length - 1 - base)) / Math.max(1, tail - 1));
       out.push(chunks[Math.min(chunks.length - 1, idx)]!);
     }
     // 去重保序
@@ -266,9 +256,7 @@ export function subsampleChunks(
 /** 从查询抽取词项（比 extractKeywords 更宽，用于选片打分） */
 export function queryTerms(text: string): string[] {
   const bag = new Set<string>();
-  for (const m of text
-    .toLowerCase()
-    .match(/[a-z][a-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? []) {
+  for (const m of text.toLowerCase().match(/[a-z][a-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? []) {
     bag.add(m);
   }
   return [...bag];
@@ -325,9 +313,7 @@ export function subsampleChunksForQuery(
 export function extractKeywords(...parts: string[]): string[] {
   const bag = new Set<string>();
   for (const p of parts) {
-    for (const m of p
-      .toLowerCase()
-      .match(/[a-z][a-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? []) {
+    for (const m of p.toLowerCase().match(/[a-z][a-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? []) {
       bag.add(m);
       if (bag.size >= 16) return [...bag];
     }
@@ -354,11 +340,7 @@ function padNoise(seed: string, minLen: number): string {
 }
 
 /** 在段落之间插入噪声，确保旧/新事实落入不同 chunk（SF 必需） */
-function padBetween(
-  sections: readonly string[],
-  minTotal: number,
-  gapSize = 600,
-): string {
+function padBetween(sections: readonly string[], minTotal: number, gapSize = 600): string {
   const gaps: string[] = [];
   const filler =
     "背景说明：本仓库使用 bun 作为包管理与测试运行器。模块边界清晰，工具调用需带超时。" +
@@ -552,11 +534,7 @@ function asStringList(v: unknown): string[] {
   if (typeof v === "string") return [v];
   if (Array.isArray(v)) {
     return v.flatMap((x) =>
-      typeof x === "string"
-        ? [x]
-        : Array.isArray(x)
-          ? asStringList(x)
-          : [String(x)],
+      typeof x === "string" ? [x] : Array.isArray(x) ? asStringList(x) : [String(x)],
     );
   }
   return [String(v)];
@@ -569,9 +547,10 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
   const context = typeof o.context === "string" ? o.context : "";
   if (context.length < 20) return null;
 
-  const meta = (
-    o.metadata && typeof o.metadata === "object" ? o.metadata : {}
-  ) as Record<string, unknown>;
+  const meta = (o.metadata && typeof o.metadata === "object" ? o.metadata : {}) as Record<
+    string,
+    unknown
+  >;
   const source =
     (typeof o.source === "string" && o.source) ||
     (typeof meta.source === "string" && meta.source) ||
@@ -582,17 +561,14 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
     (typeof o.split === "string" && o.split) ||
     (typeof o.dataset === "string" && o.dataset) ||
     "";
-  const dimension =
-    DIM_FROM_SPLIT[dimRaw] ?? (source.startsWith("coding_sf") ? "SF" : null);
+  const dimension = DIM_FROM_SPLIT[dimRaw] ?? (source.startsWith("coding_sf") ? "SF" : null);
   if (!dimension) {
     // HF 官方按 split 加载时常不带 dimension 字段——允许调用方注入
     return null;
   }
 
   const metric: MabMetric =
-    o.metric === "exact_match" ||
-    o.metric === "substring_exact_match" ||
-    o.metric === "token_f1"
+    o.metric === "exact_match" || o.metric === "substring_exact_match" || o.metric === "token_f1"
       ? o.metric
       : dimension === "LRU" && /infbench|sum/i.test(source)
         ? "token_f1"
@@ -613,21 +589,14 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
           id: typeof q.id === "string" ? q.id : `q${i}`,
           question,
           answers,
-          sfMode:
-            q.sfMode === "current" || q.sfMode === "historical"
-              ? q.sfMode
-              : undefined,
-          oldFactNeedle:
-            typeof q.oldFactNeedle === "string" ? q.oldFactNeedle : undefined,
+          sfMode: q.sfMode === "current" || q.sfMode === "historical" ? q.sfMode : undefined,
+          oldFactNeedle: typeof q.oldFactNeedle === "string" ? q.oldFactNeedle : undefined,
         } satisfies MabQaPair;
       })
       .filter((x): x is MabQaPair => x != null);
     if (qa.length === 0) return null;
     return {
-      id:
-        typeof o.id === "string"
-          ? o.id
-          : `${dimension.toLowerCase()}-${source}-${index}`,
+      id: typeof o.id === "string" ? o.id : `${dimension.toLowerCase()}-${source}-${index}`,
       dimension,
       source,
       context,
@@ -649,12 +618,8 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
     if (!q) continue;
     const answers = answerLists[i] ?? answerLists[0] ?? [];
     if (answers.length === 0) continue;
-    const sfMode =
-      o.sfMode === "current" || o.sfMode === "historical"
-        ? o.sfMode
-        : undefined;
-    const oldFactNeedle =
-      typeof o.oldFactNeedle === "string" ? o.oldFactNeedle : undefined;
+    const sfMode = o.sfMode === "current" || o.sfMode === "historical" ? o.sfMode : undefined;
+    const oldFactNeedle = typeof o.oldFactNeedle === "string" ? o.oldFactNeedle : undefined;
     qa.push({
       id: qaIds[i] || `q${i}`,
       question: q,
@@ -666,10 +631,7 @@ export function normalizeMabRecord(raw: unknown, index = 0): MabSample | null {
   if (qa.length === 0) return null;
 
   return {
-    id:
-      typeof o.id === "string"
-        ? o.id
-        : `${dimension.toLowerCase()}-${source}-${index}`,
+    id: typeof o.id === "string" ? o.id : `${dimension.toLowerCase()}-${source}-${index}`,
     dimension,
     source,
     context,
@@ -722,10 +684,7 @@ export function loadMabSamplesFromFile(
     const raw = records[i];
     let sample = normalizeMabRecord(raw, i);
     if (!sample && opts?.defaultDimension && raw && typeof raw === "object") {
-      sample = normalizeMabRecord(
-        { ...(raw as object), dimension: opts.defaultDimension },
-        i,
-      );
+      sample = normalizeMabRecord({ ...(raw as object), dimension: opts.defaultDimension }, i);
     }
     if (sample) out.push(sample);
   }
@@ -756,10 +715,7 @@ export function filterMabSamples(
 
 /** 把 Node Buffer 转成 hyparquet 可用的 ArrayBuffer */
 function toArrayBuffer(buf: Buffer): ArrayBuffer {
-  return buf.buffer.slice(
-    buf.byteOffset,
-    buf.byteOffset + buf.byteLength,
-  ) as ArrayBuffer;
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 }
 
 /**
@@ -773,10 +729,7 @@ export async function loadMabSamplesFromParquetDir(
   const { parquetReadObjects } = await import("hyparquet");
   const { readdirSync } = await import("node:fs");
   const want = new Set(
-    (opts?.splits?.length
-      ? opts.splits
-      : MAB_HF_SPLITS.map((s) => s.split)
-    ).map(String),
+    (opts?.splits?.length ? opts.splits : MAB_HF_SPLITS.map((s) => s.split)).map(String),
   );
   const files = readdirSync(dataDir).filter((f) => f.endsWith(".parquet"));
   const out: MabSample[] = [];
@@ -784,10 +737,7 @@ export async function loadMabSamplesFromParquetDir(
   for (const { split, dimension } of MAB_HF_SPLITS) {
     if (!want.has(split)) continue;
     const match = files.find(
-      (f) =>
-        f === `${split}.parquet` ||
-        f.startsWith(`${split}-`) ||
-        f.includes(`${split}-`),
+      (f) => f === `${split}.parquet` || f.startsWith(`${split}-`) || f.includes(`${split}-`),
     );
     if (!match) continue;
     const buf = readFileSync(join(dataDir, match));
@@ -805,10 +755,7 @@ export function loadMabSamplesFromHfCache(
   opts?: { splits?: readonly string[] },
 ): MabSample[] {
   const want = new Set(
-    (opts?.splits?.length
-      ? opts.splits
-      : MAB_HF_SPLITS.map((s) => s.split)
-    ).map(String),
+    (opts?.splits?.length ? opts.splits : MAB_HF_SPLITS.map((s) => s.split)).map(String),
   );
   const out: MabSample[] = [];
   for (const { split, dimension } of MAB_HF_SPLITS) {
@@ -821,18 +768,12 @@ export function loadMabSamplesFromHfCache(
   return out;
 }
 
-function recordsToSamples(
-  records: unknown[],
-  dimension: MabDimension,
-  split: string,
-): MabSample[] {
+function recordsToSamples(records: unknown[], dimension: MabDimension, split: string): MabSample[] {
   const out: MabSample[] = [];
   for (let i = 0; i < records.length; i++) {
     const raw = records[i];
     let sample = normalizeMabRecord(
-      raw && typeof raw === "object"
-        ? { ...(raw as object), dimension, split }
-        : raw,
+      raw && typeof raw === "object" ? { ...(raw as object), dimension, split } : raw,
       i,
     );
     if (!sample && raw && typeof raw === "object") {
@@ -887,9 +828,7 @@ export async function fetchMabHfSplit(
       headers: { Accept: "application/json" },
     });
     if (!res.ok) {
-      throw new Error(
-        `HF rows ${split} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`,
-      );
+      throw new Error(`HF rows ${split} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     }
     const body = (await res.json()) as {
       num_rows_total?: number;
@@ -907,11 +846,7 @@ export async function fetchMabHfSplit(
 
   if (opts?.cacheDir) {
     mkdirSync(opts.cacheDir, { recursive: true });
-    writeFileSync(
-      join(opts.cacheDir, `${split}.json`),
-      JSON.stringify(records, null, 2),
-      "utf8",
-    );
+    writeFileSync(join(opts.cacheDir, `${split}.json`), JSON.stringify(records, null, 2), "utf8");
   }
   return recordsToSamples(records, dimension, split);
 }
@@ -936,9 +871,7 @@ export async function loadOrFetchMabHf(opts: {
   fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
   baseUrl?: string;
 }): Promise<MabHfLoadResult> {
-  const splits = opts.splits?.length
-    ? [...opts.splits]
-    : MAB_HF_SPLITS.map((s) => s.split);
+  const splits = opts.splits?.length ? [...opts.splits] : MAB_HF_SPLITS.map((s) => s.split);
   const warnings: string[] = [];
   const bySplit: Record<string, number> = {};
   const all: MabSample[] = [];
@@ -997,9 +930,7 @@ export async function loadOrFetchMabHf(opts: {
             `${split}: 拉取失败，回退缓存（${e instanceof Error ? e.message : String(e)}）`,
           );
         } else {
-          warnings.push(
-            `${split}: ${e instanceof Error ? e.message : String(e)}`,
-          );
+          warnings.push(`${split}: ${e instanceof Error ? e.message : String(e)}`);
           bySplit[split] = 0;
           continue;
         }
@@ -1010,17 +941,9 @@ export async function loadOrFetchMabHf(opts: {
     all.push(...samples);
   }
 
-  const kinds = [cached > 0, fromParquet > 0, fetched > 0].filter(
-    Boolean,
-  ).length;
+  const kinds = [cached > 0, fromParquet > 0, fetched > 0].filter(Boolean).length;
   const source: MabHfLoadResult["source"] =
-    kinds > 1
-      ? "mixed"
-      : fromParquet > 0
-        ? "parquet"
-        : fetched > 0
-          ? "fetch"
-          : "cache";
+    kinds > 1 ? "mixed" : fromParquet > 0 ? "parquet" : fetched > 0 ? "fetch" : "cache";
   if (all.length === 0) {
     warnings.push(
       `HF 无样本可用（cacheDir=${opts.cacheDir}` +
@@ -1041,19 +964,14 @@ export function accuracyOf(
   dim?: MabDimension,
 ): number | null {
   const xs = items.filter(
-    (i) =>
-      i.memoryOn === memoryOn && (dim === undefined || i.dimension === dim),
+    (i) => i.memoryOn === memoryOn && (dim === undefined || i.dimension === dim),
   );
   if (xs.length === 0) return null;
   return xs.filter((i) => i.correct).length / xs.length;
 }
 
-export function sfSuppressionRate(
-  items: readonly MabQaResult[],
-): number | null {
-  const ys = items.filter(
-    (i) => i.memoryOn && i.oldFactSuppressed !== undefined,
-  );
+export function sfSuppressionRate(items: readonly MabQaResult[]): number | null {
+  const ys = items.filter((i) => i.memoryOn && i.oldFactSuppressed !== undefined);
   if (ys.length === 0) return null;
   return ys.filter((i) => i.oldFactSuppressed).length / ys.length;
 }
@@ -1066,7 +984,7 @@ export function binomialSignTestP(wins: number, losses: number): number | null {
   for (let k = wins; k <= n; k++) {
     let c = 1;
     for (let i = 0; i < k; i++) c = (c * (n - i)) / (i + 1);
-    p += c * Math.pow(0.5, n);
+    p += c * 0.5 ** n;
   }
   return Math.min(1, Math.max(0, p));
 }
@@ -1075,9 +993,7 @@ export function binomialSignTestP(wins: number, losses: number): number | null {
  * 按 (sampleId, qaId, dimension) 配对 on/off。
  * win = on 对且 off 错；loss = on 错且 off 对。
  */
-export function computePairedStats(
-  items: readonly MabQaResult[],
-): MabPairedStats {
+export function computePairedStats(items: readonly MabQaResult[]): MabPairedStats {
   type Key = string;
   const on = new Map<Key, MabQaResult>();
   const off = new Map<Key, MabQaResult>();
@@ -1152,16 +1068,11 @@ export function summarizeMab(items: readonly MabQaResult[]): {
     if (delta !== null) deltas.push(delta);
   }
   const sfSuppression = (() => {
-    const ys = items.filter(
-      (i) => i.memoryOn && i.oldFactSuppressed !== undefined,
-    );
+    const ys = items.filter((i) => i.memoryOn && i.oldFactSuppressed !== undefined);
     if (ys.length === 0) return null;
     return ys.filter((i) => i.oldFactSuppressed).length / ys.length;
   })();
-  const meanDelta =
-    deltas.length > 0
-      ? deltas.reduce((a, b) => a + b, 0) / deltas.length
-      : null;
+  const meanDelta = deltas.length > 0 ? deltas.reduce((a, b) => a + b, 0) / deltas.length : null;
   const paired = computePairedStats(items);
   let passed: boolean | null = null;
   if (meanDelta !== null && paired.nPairs > 0) {
@@ -1186,9 +1097,7 @@ export function renderMabReport(r: MabReport): string {
   if (Object.keys(r.deltas).length > 0) {
     lines.push("分项 Δ (on−off):");
     for (const [k, v] of Object.entries(r.deltas)) {
-      lines.push(
-        `  ${k}: ${v === null || v === undefined ? "n/a" : (v as number).toFixed(3)}`,
-      );
+      lines.push(`  ${k}: ${v === null || v === undefined ? "n/a" : (v as number).toFixed(3)}`);
     }
   }
   const p = r.paired;
@@ -1264,11 +1173,7 @@ function isLongFormSample(sample: {
 }
 
 function isExtractiveSample(sample: { dimension: MabDimension }): boolean {
-  return (
-    sample.dimension === "AR" ||
-    sample.dimension === "TTL" ||
-    sample.dimension === "CR"
-  );
+  return sample.dimension === "AR" || sample.dimension === "TTL" || sample.dimension === "CR";
 }
 
 async function putChunk(
@@ -1368,9 +1273,7 @@ async function cleanupRepo(repo: string): Promise<void> {
  * 跑 MemoryAgentBench 适配评测。
  * 每个 sample：先 off（空注入答题）再 on（chunk 写入 → 检索 → 答题），保证同题配对。
  */
-export async function runMemoryAgentBench(
-  opts: MabRunOptions,
-): Promise<MabReport> {
+export async function runMemoryAgentBench(opts: MabRunOptions): Promise<MabReport> {
   const now = (opts.now ?? (() => new Date()))();
   const engine = opts.engine ?? new PostgresMemoryStoreEngine();
   const budget = new LlmBudget(opts.llmBudget ?? 400);
@@ -1396,13 +1299,9 @@ export async function runMemoryAgentBench(
     console.log(
       `[mab] ${si + 1}/${samples.length} start ${sample.dimension}/${sample.id} qa=${sample.qa.length} ctxChars=${sample.context.length}`,
     );
-    const repo = `mab-${ts}-${sample.id}`
-      .replace(/[^a-zA-Z0-9_-]/g, "_")
-      .slice(0, 80);
+    const repo = `mab-${ts}-${sample.id}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
     const arLike =
-      sample.dimension === "AR" ||
-      sample.dimension === "TTL" ||
-      sample.dimension === "CR";
+      sample.dimension === "AR" || sample.dimension === "TTL" || sample.dimension === "CR";
     const retriever = new TriggeredRetriever({
       engine,
       shadow: true,
@@ -1426,9 +1325,7 @@ export async function runMemoryAgentBench(
             buildAnswerPrompt(qa.question, "", { longForm, extractive }),
           );
         } catch (e) {
-          warnings.push(
-            `${sample.id}/${qa.id} off: ${e instanceof Error ? e.message : String(e)}`,
-          );
+          warnings.push(`${sample.id}/${qa.id} off: ${e instanceof Error ? e.message : String(e)}`);
         }
         items.push({
           sampleId: sample.id,
@@ -1444,17 +1341,11 @@ export async function runMemoryAgentBench(
 
       // ── memory ON：chunk → session 写入 ──
       // SF 夹具依赖窄 chunk + 禁止抽稀，避免旧/新事实粘在同一块导致无法软失效
-      const effectiveChunkSize =
-        sample.dimension === "SF" ? Math.min(chunkSize, 512) : chunkSize;
+      const effectiveChunkSize = sample.dimension === "SF" ? Math.min(chunkSize, 512) : chunkSize;
       const rawChunks = chunkText(sample.context, effectiveChunkSize);
       let chunks = rawChunks;
       const allowSubsample = sample.dimension !== "SF";
-      if (
-        allowSubsample &&
-        maxChunks !== undefined &&
-        maxChunks > 0 &&
-        chunks.length > maxChunks
-      ) {
+      if (allowSubsample && maxChunks !== undefined && maxChunks > 0 && chunks.length > maxChunks) {
         if (sample.dimension === "LRU") {
           chunks = subsampleChunks(chunks, maxChunks, "head_tail");
           warnings.push(
@@ -1483,16 +1374,9 @@ export async function runMemoryAgentBench(
       }
       // SF：纯旧事实 chunk 软失效（现行检索不可见；T4 历史问仍可见）
       if (sample.dimension === "SF") {
-        const inv = await invalidateSupersededForSf(
-          engine,
-          repo,
-          sample,
-          writtenIds,
-        );
+        const inv = await invalidateSupersededForSf(engine, repo, sample, writtenIds);
         if (inv.length === 0) {
-          warnings.push(
-            `${sample.id}: SF 未失效任何旧 chunk（检查 oldFactNeedle 与分块）`,
-          );
+          warnings.push(`${sample.id}: SF 未失效任何旧 chunk（检查 oldFactNeedle 与分块）`);
         }
       }
 
@@ -1532,9 +1416,7 @@ export async function runMemoryAgentBench(
           if (qa.sfMode === "historical") {
             injected = items
               .map((i) =>
-                i.tInvalid
-                  ? `历史参考（已失效 ${i.tInvalid}）：${i.text}`
-                  : `建议策略：${i.text}`,
+                i.tInvalid ? `历史参考（已失效 ${i.tInvalid}）：${i.text}` : `建议策略：${i.text}`,
               )
               .join("\n");
             activeTexts = items.map((i) => i.text);
@@ -1552,9 +1434,7 @@ export async function runMemoryAgentBench(
             if (!goldInInject) qaWarnings.push("inject_miss_gold");
           }
         } catch (e) {
-          qaWarnings.push(
-            `retrieve: ${e instanceof Error ? e.message : String(e)}`,
-          );
+          qaWarnings.push(`retrieve: ${e instanceof Error ? e.message : String(e)}`);
         }
 
         let oldFactSuppressed: boolean | undefined;
@@ -1574,9 +1454,7 @@ export async function runMemoryAgentBench(
             buildAnswerPrompt(qa.question, injected, { longForm, extractive }),
           );
         } catch (e) {
-          qaWarnings.push(
-            `answer: ${e instanceof Error ? e.message : String(e)}`,
-          );
+          qaWarnings.push(`answer: ${e instanceof Error ? e.message : String(e)}`);
         }
 
         // historical SF：允许用 oldFactNeedle 作为答案兜底之一
@@ -1599,26 +1477,18 @@ export async function runMemoryAgentBench(
         warnings.push(...qaWarnings.map((w) => `${sample.id}/${qa.id}: ${w}`));
       }
     } catch (e) {
-      warnings.push(
-        `${sample.id}: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      warnings.push(`${sample.id}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       if (!opts.keep) {
         try {
           await cleanupRepo(repo);
         } catch (e) {
-          warnings.push(
-            `${sample.id} cleanup: ${e instanceof Error ? e.message : String(e)}`,
-          );
+          warnings.push(`${sample.id} cleanup: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
     }
-    const onN = items.filter(
-      (i) => i.sampleId === sample.id && i.memoryOn && i.correct,
-    ).length;
-    const offN = items.filter(
-      (i) => i.sampleId === sample.id && !i.memoryOn && i.correct,
-    ).length;
+    const onN = items.filter((i) => i.sampleId === sample.id && i.memoryOn && i.correct).length;
+    const offN = items.filter((i) => i.sampleId === sample.id && !i.memoryOn && i.correct).length;
     const qaN = sample.qa.length;
     console.log(
       `[mab] ${si + 1}/${samples.length} done ${sample.id} on=${onN}/${qaN} off=${offN}/${qaN} ${Date.now() - sampleT0}ms`,

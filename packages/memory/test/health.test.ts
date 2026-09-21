@@ -4,10 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  checkMemoryHealth,
-  resolveMemoryBackendFromSettings,
-} from "../src/runtime/health.js";
+import { checkMemoryHealth, resolveMemoryBackendFromSettings } from "../src/runtime/health.js";
 
 describe("resolveMemoryBackendFromSettings", () => {
   test("defaults to db", () => {
@@ -15,9 +12,7 @@ describe("resolveMemoryBackendFromSettings", () => {
     delete process.env.PAW_MEMORY_BACKEND;
     expect(resolveMemoryBackendFromSettings(undefined)).toBe("db");
     expect(resolveMemoryBackendFromSettings({})).toBe("db");
-    expect(resolveMemoryBackendFromSettings({ memory_backend: "db" })).toBe(
-      "db",
-    );
+    expect(resolveMemoryBackendFromSettings({ memory_backend: "db" })).toBe("db");
     if (prev !== undefined) process.env.PAW_MEMORY_BACKEND = prev;
   });
 
@@ -42,8 +37,7 @@ describe("checkMemoryHealth", () => {
   });
 
   test("db backend reports ping and migrations when DATABASE_URL works", async () => {
-    process.env.DATABASE_URL =
-      process.env.DATABASE_URL ?? "postgresql:///paw_memory_test";
+    process.env.DATABASE_URL = process.env.DATABASE_URL ?? "postgresql:///paw_memory_test";
     const report = await checkMemoryHealth({
       backend: "db",
       closeConnection: true,

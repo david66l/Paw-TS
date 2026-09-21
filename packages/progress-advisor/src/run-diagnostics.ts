@@ -3,10 +3,7 @@ import { projectCompletionReviewToolEvidenceV1 } from "@paw/completion-review";
 import { projectWorkspaceEffect } from "@paw/core";
 import type { InputFactV1 } from "@paw/protocol";
 
-import {
-  type ProgressAdviceBudgetV1,
-  projectProgressAdviceTimelineV1,
-} from "./projector.js";
+import { type ProgressAdviceBudgetV1, projectProgressAdviceTimelineV1 } from "./projector.js";
 
 /**
  * Run-level diagnostics for benchmark accounting (mechanism-matrix).
@@ -18,8 +15,7 @@ import {
  * (paper basis: The Danger of Overthinking, arXiv 2502.08235 — higher
  * overthinking correlates with lower resolution; measure before governing).
  */
-export const RUN_DIAGNOSTICS_POLICY_VERSION_V1 =
-  "paw.run-diagnostics.v1" as const;
+export const RUN_DIAGNOSTICS_POLICY_VERSION_V1 = "paw.run-diagnostics.v1" as const;
 
 export interface RunDiagnosticsV1 {
   readonly policyVersion: typeof RUN_DIAGNOSTICS_POLICY_VERSION_V1;
@@ -62,19 +58,14 @@ export function projectRunDiagnosticsV1(
   budget?: ProgressAdviceBudgetV1,
 ): RunDiagnosticsV1 {
   const entries = snapshot.entries;
-  const settled = new Map<
-    string,
-    Extract<InputFactV1, { type: "tool.settled" }>
-  >();
+  const settled = new Map<string, Extract<InputFactV1, { type: "tool.settled" }>>();
   for (const entry of entries) {
     if (entry.fact.type === "tool.settled") {
       settled.set(entry.fact.callId, entry.fact);
     }
   }
   const calls = entries.flatMap((entry) =>
-    entry.fact.type === "tool.call_observed"
-      ? [{ seq: entry.seq, fact: entry.fact }]
-      : [],
+    entry.fact.type === "tool.call_observed" ? [{ seq: entry.seq, fact: entry.fact }] : [],
   );
 
   const verificationEvidence = projectCompletionReviewToolEvidenceV1({
@@ -101,9 +92,7 @@ export function projectRunDiagnosticsV1(
     latestMutationSeq: 0,
   });
   const verificationByCall = new Map(
-    verificationEvidence.flatMap((evidence) => [
-      [evidence.callId, evidence] as const,
-    ]),
+    verificationEvidence.flatMap((evidence) => [[evidence.callId, evidence] as const]),
   );
 
   let toolCallsSettled = 0;
@@ -137,17 +126,12 @@ export function projectRunDiagnosticsV1(
     ) {
       mutationCalls += MUTATION_TOOLS.has(fact.tool) ? 1 : 0;
       progressingTurns.add(fact.turn);
-    } else if (
-      evidence &&
-      evidence.verificationKind !== "none" &&
-      evidence.outcome === "passed"
-    ) {
+    } else if (evidence && evidence.verificationKind !== "none" && evidence.outcome === "passed") {
       progressingTurns.add(fact.turn);
     } else if (
       result.status === "completed" &&
       result.observation?.isError !== true &&
-      projectWorkspaceEffect(fact.tool, result.observation?.payload, false)
-        .changed !== false
+      projectWorkspaceEffect(fact.tool, result.observation?.payload, false).changed !== false
     ) {
       progressingTurns.add(fact.turn);
     }
@@ -156,19 +140,14 @@ export function projectRunDiagnosticsV1(
   const modelTurnSettledTurns = entries.flatMap((entry) =>
     entry.fact.type === "model.settled" ? [entry.fact.turn] : [],
   );
-  const orderedTurns = [...new Set(modelTurnSettledTurns)].sort(
-    (left, right) => left - right,
-  );
+  const orderedTurns = [...new Set(modelTurnSettledTurns)].sort((left, right) => left - right);
   let maxConsecutiveStallTurns = 0;
   let currentStall = 0;
   for (const turn of orderedTurns) {
     const stalled = turnsWithTools.has(turn) && !progressingTurns.has(turn);
     if (stalled) {
       currentStall += 1;
-      maxConsecutiveStallTurns = Math.max(
-        maxConsecutiveStallTurns,
-        currentStall,
-      );
+      maxConsecutiveStallTurns = Math.max(maxConsecutiveStallTurns, currentStall);
     } else {
       currentStall = 0;
     }
@@ -184,22 +163,16 @@ export function projectRunDiagnosticsV1(
   let checkpointsRecorded = 0;
   for (const entry of entries) {
     const fact = entry.fact;
-    if (fact.type === "completion.review_claimed")
-      completionReviewsClaimed += 1;
-    else if (
-      fact.type === "completion.review_settled" &&
-      fact.verdict !== "allow"
-    )
+    if (fact.type === "completion.review_claimed") completionReviewsClaimed += 1;
+    else if (fact.type === "completion.review_settled" && fact.verdict !== "allow")
       completionReviewBlocked += 1;
-    else if (fact.type === "context.checkpoint_recorded")
-      checkpointsRecorded += 1;
+    else if (fact.type === "context.checkpoint_recorded") checkpointsRecorded += 1;
   }
 
   return Object.freeze({
     policyVersion: RUN_DIAGNOSTICS_POLICY_VERSION_V1,
     modelTurns: orderedTurns.length,
-    textOnlyTurns: orderedTurns.filter((turn) => !turnsWithTools.has(turn))
-      .length,
+    textOnlyTurns: orderedTurns.filter((turn) => !turnsWithTools.has(turn)).length,
     toolCallsSettled,
     failedToolCalls,
     mutationCalls,

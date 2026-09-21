@@ -210,12 +210,8 @@ export type PawDesktopApi = {
       result: { runId: string; status: string; message: string };
     }) => void,
   ) => () => void;
-  onError: (
-    cb: (payload: { requestId: string; message: string }) => void,
-  ) => () => void;
-  onApprovalClosed: (
-    cb: (event: { requestId: string; approvalId: string }) => void,
-  ) => () => void;
+  onError: (cb: (payload: { requestId: string; message: string }) => void) => () => void;
+  onApprovalClosed: (cb: (event: { requestId: string; approvalId: string }) => void) => () => void;
   onApprovalRequest: (
     cb: (payload: {
       requestId: string;

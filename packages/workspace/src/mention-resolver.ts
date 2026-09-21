@@ -89,10 +89,7 @@ export function stripAtMentions(text: string): string {
  * Resolve @-mentioned paths to file attachments.
  * Paths are resolved relative to workspaceRoot.
  */
-export function resolveMentions(
-  workspaceRoot: string,
-  text: string,
-): MentionResult {
+export function resolveMentions(workspaceRoot: string, text: string): MentionResult {
   const mentions = extractAtMentions(text);
   const attachments: MentionAttachment[] = [];
   const notFound: string[] = [];

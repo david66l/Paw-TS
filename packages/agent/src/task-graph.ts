@@ -67,22 +67,16 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-export function parseTaskGraphEventsV1(
-  value: unknown,
-): readonly TaskGraphEventV1[] {
+export function parseTaskGraphEventsV1(value: unknown): readonly TaskGraphEventV1[] {
   if (value === undefined) return Object.freeze([]);
   if (!Array.isArray(value)) throw new Error("Invalid TaskGraph event ledger");
   const events: TaskGraphEventV1[] = value.map((raw, index) => {
     const event = recordOf(raw);
-    if (
-      event?.schemaVersion !== TASK_GRAPH_SCHEMA_V1 ||
-      event.seq !== index + 1
-    ) {
+    if (event?.schemaVersion !== TASK_GRAPH_SCHEMA_V1 || event.seq !== index + 1) {
       throw new Error(`Invalid TaskGraph event sequence at ${index + 1}`);
     }
     if (event.type === "plan.proposed") {
-      if (!Array.isArray(event.nodes))
-        throw new Error("Invalid TaskGraph plan");
+      if (!Array.isArray(event.nodes)) throw new Error("Invalid TaskGraph plan");
       const nodes = event.nodes.map((rawNode) => {
         const node = recordOf(rawNode);
         if (
@@ -117,9 +111,7 @@ export function parseTaskGraphEventsV1(
       typeof facts?.filesRead !== "number" ||
       typeof facts.shellRevision !== "number" ||
       typeof facts.mutationRevision !== "number" ||
-      !["none", "passed", "code_failed", "harness_failed"].includes(
-        String(verification),
-      ) ||
+      !["none", "passed", "code_failed", "harness_failed"].includes(String(verification)) ||
       typeof facts.verificationMutationRevision !== "number" ||
       typeof facts.diffInspectedRevision !== "number" ||
       typeof facts.lastTool !== "string" ||
@@ -158,9 +150,7 @@ function normalizePlan(items: readonly unknown[]): TaskGraphPlanProposalV1[] {
     seen.add(id);
     const taskValue = value?.task_id ?? value?.text ?? value?.note;
     const task =
-      typeof taskValue === "string" && taskValue.trim()
-        ? taskValue.trim().slice(0, 500)
-        : id;
+      typeof taskValue === "string" && taskValue.trim() ? taskValue.trim().slice(0, 500) : id;
     const dependsOn = Array.isArray(value?.depends_on)
       ? value.depends_on
           .filter(
@@ -174,8 +164,7 @@ function normalizePlan(items: readonly unknown[]): TaskGraphPlanProposalV1[] {
         id,
         task,
         dependsOn: Object.freeze([...new Set(dependsOn)]),
-        modelStatus:
-          typeof value?.status === "string" ? value.status : "pending",
+        modelStatus: typeof value?.status === "string" ? value.status : "pending",
       }),
     );
   }
@@ -184,12 +173,7 @@ function normalizePlan(items: readonly unknown[]): TaskGraphPlanProposalV1[] {
 
 function structuralPlanKey(nodes: readonly TaskGraphPlanProposalV1[]): string {
   return JSON.stringify(
-    nodes.map((node) => [
-      node.id,
-      node.task,
-      [...node.dependsOn],
-      node.modelStatus,
-    ]),
+    nodes.map((node) => [node.id, node.task, [...node.dependsOn], node.modelStatus]),
   );
 }
 
@@ -203,13 +187,8 @@ export function appendTaskGraphPlanV1(
 ): readonly TaskGraphEventV1[] {
   const current = events ?? [];
   const nodes = normalizePlan(items);
-  const previous = [...current]
-    .reverse()
-    .find((event) => event.type === "plan.proposed");
-  if (
-    previous &&
-    structuralPlanKey(previous.nodes) === structuralPlanKey(nodes)
-  ) {
+  const previous = [...current].reverse().find((event) => event.type === "plan.proposed");
+  if (previous && structuralPlanKey(previous.nodes) === structuralPlanKey(nodes)) {
     return current;
   }
   return Object.freeze([
@@ -234,8 +213,7 @@ export function hostFactsFromTaskStateV1(
     .reverse()
     .find(
       (test) =>
-        (test.mutationRevision ?? 0) === mutationRevision &&
-        test.outcome !== "harness_failed",
+        (test.mutationRevision ?? 0) === mutationRevision && test.outcome !== "harness_failed",
     );
   const authoritativeTest = latestCurrentSubstantive ?? latestTest;
   return Object.freeze({
@@ -306,10 +284,7 @@ export function replayTaskGraphV1(
   let facts: TaskGraphHostFactsV1 | undefined;
   let expectedSeq = 1;
   for (const event of source) {
-    if (
-      event.schemaVersion !== TASK_GRAPH_SCHEMA_V1 ||
-      event.seq !== expectedSeq
-    ) {
+    if (event.schemaVersion !== TASK_GRAPH_SCHEMA_V1 || event.seq !== expectedSeq) {
       throw new Error(`Invalid TaskGraph event sequence at ${expectedSeq}`);
     }
     expectedSeq += 1;
@@ -329,9 +304,7 @@ export function replayTaskGraphV1(
   const cyclic = cycleMembers(plan);
   const byId = new Map(plan.map((node) => [node.id, node]));
   const proposalNodes: TaskGraphNodeV1[] = plan.map((node) => {
-    const missing = node.dependsOn.filter(
-      (dependency) => !byId.has(dependency),
-    );
+    const missing = node.dependsOn.filter((dependency) => !byId.has(dependency));
     if (missing.length > 0) {
       return {
         ...node,
@@ -395,17 +368,13 @@ export function replayTaskGraphV1(
     });
   }
   if (facts && facts.verification !== "none") {
-    const current =
-      facts.verificationMutationRevision === facts.mutationRevision;
+    const current = facts.verificationMutationRevision === facts.mutationRevision;
     milestones.push({
       id: "host:verification",
       kind: "host_milestone",
       task: `Verification ${facts.verification} at revision ${facts.verificationMutationRevision}`,
       dependsOn: facts.mutationRevision > 0 ? ["host:mutation"] : [],
-      status:
-        facts.verification === "passed" && current
-          ? "host_observed"
-          : "blocked",
+      status: facts.verification === "passed" && current ? "host_observed" : "blocked",
       provenance: "host_fact",
       ...(!(facts.verification === "passed" && current)
         ? { reason: current ? facts.verification : "stale_verification" }
@@ -426,14 +395,8 @@ export function replayTaskGraphV1(
       provenance: "host_fact",
     });
   }
-  const nodes = Object.freeze([
-    ...proposalNodes,
-    ...supersededNodes,
-    ...milestones,
-  ]);
-  const currentNode = proposalNodes.find(
-    (node) => node.status === "proposal_ready",
-  );
+  const nodes = Object.freeze([...proposalNodes, ...supersededNodes, ...milestones]);
+  const currentNode = proposalNodes.find((node) => node.status === "proposal_ready");
   return Object.freeze({
     schemaVersion: TASK_GRAPH_SCHEMA_V1,
     authority: "advisory_projection" as const,

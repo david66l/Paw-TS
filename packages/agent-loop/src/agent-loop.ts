@@ -66,17 +66,12 @@ export async function runAgentLoop<
     }
     const snapshot = await dependencies.session.readInputSnapshot();
     const inputFacts = snapshot.entries.map((entry) => entry.fact);
-    const state = dependencies.reducer.reduce(
-      inputFacts,
-      dependencies.runConfig,
-    );
+    const state = dependencies.reducer.reduce(inputFacts, dependencies.runConfig);
     const stateHash = hashControlState(state, dependencies.stateHasher);
     return { snapshot, state, stateHash };
   };
 
-  const materializeDecision = (
-    reduction: Awaited<ReturnType<typeof readReduction>>,
-  ) => {
+  const materializeDecision = (reduction: Awaited<ReturnType<typeof readReduction>>) => {
     const decision = dependencies.facts.derivedDecision({
       state: reduction.state,
       inputThroughSeq: reduction.snapshot.latestInputSeq,
@@ -132,15 +127,9 @@ export async function runAgentLoop<
         continue;
       }
       let modelResponses: VerifiedModelResponseEvidenceV1 | undefined;
-      if (
-        reduction.state.decision.kind === "continue" &&
-        loadStartupModelResponseEvidence
-      ) {
+      if (reduction.state.decision.kind === "continue" && loadStartupModelResponseEvidence) {
         try {
-          modelResponses = await loadStartupModelResponseEvidence(
-            reduction.snapshot,
-            signal,
-          );
+          modelResponses = await loadStartupModelResponseEvidence(reduction.snapshot, signal);
         } catch (error) {
           if (signal.aborted) {
             await commitAbortObserved(reduction);
@@ -170,9 +159,7 @@ export async function runAgentLoop<
     }
   };
 
-  const abort = async (
-    extraFacts: readonly InputFactV1[] = [],
-  ): Promise<TControlState> => {
+  const abort = async (extraFacts: readonly InputFactV1[] = []): Promise<TControlState> => {
     await dependencies.session.appendInputFacts([
       ...extraFacts,
       dependencies.facts.runAbortObserved({ reason: abortReason(signal) }),
@@ -214,8 +201,7 @@ export async function runAgentLoop<
       await dependencies.input.reportSafeBoundary(nextBoundary);
       if (signal.aborted) return abort();
 
-      const promotedInputIds =
-        await dependencies.input.consumePromotedInputIds();
+      const promotedInputIds = await dependencies.input.consumePromotedInputIds();
       if (signal.aborted) return abort();
 
       const snapshot = await dependencies.session.readInputSnapshot();
@@ -247,29 +233,17 @@ export async function runAgentLoop<
         turn,
         settlement: cancelled,
       });
-      assertModelFactsMatch(
-        cancelled,
-        modelDispatchFact,
-        cancelledFact,
-        [],
-        [],
-      );
+      assertModelFactsMatch(cancelled, modelDispatchFact, cancelledFact, [], []);
       return abort([cancelledFact]);
     }
 
-    const modelSettlement = await settleModelCall(
-      dependencies,
-      request,
-      signal,
-    );
+    const modelSettlement = await settleModelCall(dependencies, request, signal);
     const invalidCalls =
       modelSettlement.status === "success"
         ? invalidToolCalls(modelSettlement.toolCalls)
         : undefined;
     const observedCalls =
-      modelSettlement.status === "success" && !invalidCalls
-        ? modelSettlement.toolCalls
-        : [];
+      modelSettlement.status === "success" && !invalidCalls ? modelSettlement.toolCalls : [];
 
     // 完整响应和全部合法原生工具调用必须作为一个原子事实批出现。
     const modelSettledFact = dependencies.facts.modelSettled({
@@ -286,10 +260,7 @@ export async function runAgentLoop<
       observedCalls,
       observedFacts,
     );
-    await dependencies.session.appendInputFacts([
-      modelSettledFact,
-      ...observedFacts,
-    ]);
+    await dependencies.session.appendInputFacts([modelSettledFact, ...observedFacts]);
 
     if (invalidCalls) {
       const state = await failRuntime("runtime", invalidCalls);
@@ -335,12 +306,7 @@ export async function runAgentLoop<
       return abort(cancelObservedCalls(dependencies, turn, observedCalls));
     }
 
-    const settlements = await settleToolBatch(
-      dependencies,
-      turn,
-      observedCalls,
-      signal,
-    );
+    const settlements = await settleToolBatch(dependencies, turn, observedCalls, signal);
     await dependencies.session.appendInputFacts(
       settlements.map((settlement, sourceIndex) => {
         const call = observedCalls[sourceIndex];
@@ -394,9 +360,7 @@ async function authorizeObservedCalls<
   while (true) {
     const reduction = await reduceSnapshot();
     if (reduction.state.decision.kind !== "continue") {
-      await dependencies.session.appendInputFacts(
-        cancelObservedCalls(dependencies, turn, calls),
-      );
+      await dependencies.session.appendInputFacts(cancelObservedCalls(dependencies, turn, calls));
       return { dispatch: false, state: await reconcile() };
     }
     const dispatchFacts = calls.map((call, sourceIndex) =>
@@ -530,9 +494,7 @@ async function settleToolBatch<
   }
 
   const sourceIds = new Set(calls.map((call) => call.id));
-  const unexpected = returned.find(
-    (settlement) => !sourceIds.has(settlement.callId),
-  );
+  const unexpected = returned.find((settlement) => !sourceIds.has(settlement.callId));
   if (unexpected) {
     const error = {
       name: "UnexpectedToolSettlement",
@@ -555,11 +517,7 @@ async function settleToolBatch<
   return calls.map((call) => {
     const matches = byCallId.get(call.id) ?? [];
     const onlyMatch = matches[0];
-    if (
-      sourceIdCounts.get(call.id) === 1 &&
-      matches.length === 1 &&
-      onlyMatch
-    ) {
+    if (sourceIdCounts.get(call.id) === 1 && matches.length === 1 && onlyMatch) {
       return onlyMatch;
     }
     return unknownToolSettlement(call, {
@@ -587,9 +545,7 @@ function assertPromotedInputsPersisted(
   );
   for (const inputId of inputIds) {
     if (!persisted.has(inputId)) {
-      throw new Error(
-        `Promoted input ${inputId} is not present in the canonical session`,
-      );
+      throw new Error(`Promoted input ${inputId} is not present in the canonical session`);
     }
   }
 }
@@ -619,13 +575,8 @@ export function inspectAgentLoopContinueCursorV1(
   const modelCallIds = new Set<string>();
   dispatches.forEach((dispatch, index) => {
     const expectedTurn = index + 1;
-    if (
-      dispatch.turn !== expectedTurn ||
-      modelCallIds.has(dispatch.modelCallId)
-    ) {
-      throw new Error(
-        "Canonical model dispatch turns must be unique and contiguous from turn 1",
-      );
+    if (dispatch.turn !== expectedTurn || modelCallIds.has(dispatch.modelCallId)) {
+      throw new Error("Canonical model dispatch turns must be unique and contiguous from turn 1");
     }
     modelCallIds.add(dispatch.modelCallId);
   });
@@ -636,8 +587,7 @@ export function inspectAgentLoopContinueCursorV1(
     };
   }
   const latestSegmentMarkerSeq = snapshot.entries.reduce(
-    (latest, entry) =>
-      entry.fact.type === "work.segment_started" ? entry.seq : latest,
+    (latest, entry) => (entry.fact.type === "work.segment_started" ? entry.seq : latest),
     0,
   );
   const settledCallIds = new Set(
@@ -662,42 +612,30 @@ export function inspectAgentLoopContinueCursorV1(
   }
   for (const dispatch of dispatches) {
     const settlements = snapshot.entries.flatMap((entry) =>
-      entry.fact.type === "model.settled" &&
-      entry.fact.modelCallId === dispatch.modelCallId
+      entry.fact.type === "model.settled" && entry.fact.modelCallId === dispatch.modelCallId
         ? [entry.fact]
         : [],
     );
     if (settlements.length !== 1) {
-      throw new Error(
-        `Canonical model turn ${dispatch.turn} is not settled exactly once`,
-      );
+      throw new Error(`Canonical model turn ${dispatch.turn} is not settled exactly once`);
     }
     const settlement = settlements[0] as ModelSettledFactV1;
     const observed = observedByModel.get(dispatch.modelCallId) ?? [];
     if (
       settlement.turn !== dispatch.turn ||
-      observed.some(
-        (call, index) => call.turn !== dispatch.turn || call.order !== index,
-      )
+      observed.some((call, index) => call.turn !== dispatch.turn || call.order !== index)
     ) {
-      throw new Error(
-        `Canonical model turn ${dispatch.turn} has inconsistent lifecycle identity`,
-      );
+      throw new Error(`Canonical model turn ${dispatch.turn} has inconsistent lifecycle identity`);
     }
     if (observed.length > 0 && settlement.status !== "completed") {
-      throw new Error(
-        `Canonical model turn ${dispatch.turn} has non-production tool observations`,
-      );
+      throw new Error(`Canonical model turn ${dispatch.turn} has non-production tool observations`);
     }
     if (observed.some((call) => !settledCallIds.has(call.callId))) {
-      throw new Error(
-        `Canonical model turn ${dispatch.turn} has an unsettled tool batch`,
-      );
+      throw new Error(`Canonical model turn ${dispatch.turn} has an unsettled tool batch`);
     }
   }
   const segmentDispatches = snapshot.entries.flatMap((entry) =>
-    entry.seq > latestSegmentMarkerSeq &&
-    entry.fact.type === "model.dispatch_recorded"
+    entry.seq > latestSegmentMarkerSeq && entry.fact.type === "model.dispatch_recorded"
       ? [entry.fact]
       : [],
   );
@@ -708,19 +646,13 @@ export function inspectAgentLoopContinueCursorV1(
       nextBoundary: "before_first_model_request",
     };
   }
-  const latestDispatch = segmentDispatches.at(
-    -1,
-  ) as ModelDispatchRecordedFactV1;
+  const latestDispatch = segmentDispatches.at(-1) as ModelDispatchRecordedFactV1;
   const observed = observedByModel.get(latestDispatch.modelCallId) ?? [];
   const latestSettlementEntry = snapshot.entries.find(
     (entry) =>
-      entry.fact.type === "model.settled" &&
-      entry.fact.modelCallId === latestDispatch.modelCallId,
+      entry.fact.type === "model.settled" && entry.fact.modelCallId === latestDispatch.modelCallId,
   );
-  if (
-    !latestSettlementEntry ||
-    latestSettlementEntry.fact.type !== "model.settled"
-  ) {
+  if (!latestSettlementEntry || latestSettlementEntry.fact.type !== "model.settled") {
     throw new Error("Canonical latest model turn has no settlement");
   }
   assertLatestModelObservations(
@@ -733,9 +665,7 @@ export function inspectAgentLoopContinueCursorV1(
   return {
     lastModelTurn: latestDispatch.turn,
     nextBoundary:
-      observed.length > 0
-        ? "after_tool_batch_settled"
-        : "after_model_turn_without_tool_calls",
+      observed.length > 0 ? "after_tool_batch_settled" : "after_model_turn_without_tool_calls",
   };
 }
 
@@ -775,35 +705,27 @@ function assertLatestModelObservations(
       ? parseModelResponseV1(settlement.response.value)
       : undefined;
   if (!response) {
-    throw new Error(
-      "Canonical artifact-backed model response requires exact verified evidence",
-    );
+    throw new Error("Canonical artifact-backed model response requires exact verified evidence");
   }
   if (settlement.hasToolCalls !== response.toolCalls.length > 0) {
     throw new Error("Canonical model response has a tool-call flag drift");
   }
   if (settlement.status !== "completed") {
     if (observed.length > 0) {
-      throw new Error(
-        "Canonical non-completed inline model response has tool observations",
-      );
+      throw new Error("Canonical non-completed inline model response has tool observations");
     }
     return;
   }
   if (response.toolCalls.some((call) => !call.argumentsValid)) {
     if (observed.length > 0) {
-      throw new Error(
-        "Canonical invalid native tool batch has executable observations",
-      );
+      throw new Error("Canonical invalid native tool batch has executable observations");
     }
     throw new Error(
       "Canonical invalid native tool batch has no resumable safe boundary, regardless of runtime.failed evidence",
     );
   }
   if (response.toolCalls.length !== observed.length) {
-    throw new Error(
-      "Canonical inline model response has an incomplete tool observation batch",
-    );
+    throw new Error("Canonical inline model response has an incomplete tool observation batch");
   }
   response.toolCalls.forEach((call, index) => {
     const fact = observed[index];
@@ -814,21 +736,14 @@ function assertLatestModelObservations(
       call.sourceIndex !== fact.order ||
       !sameJsonValue(call.args, fact.args)
     ) {
-      throw new Error(
-        `Canonical inline model tool observation ${index} has identity drift`,
-      );
+      throw new Error(`Canonical inline model tool observation ${index} has identity drift`);
     }
   });
 }
 
 function sameJsonValue(left: unknown, right: unknown): boolean {
   if (left === right) return true;
-  if (
-    left === null ||
-    right === null ||
-    typeof left !== "object" ||
-    typeof right !== "object"
-  ) {
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
     return false;
   }
   if (Array.isArray(left) || Array.isArray(right)) {
@@ -846,16 +761,12 @@ function sameJsonValue(left: unknown, right: unknown): boolean {
   return (
     leftKeys.length === rightKeys.length &&
     leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] &&
-        sameJsonValue(leftRecord[key], rightRecord[key]),
+      (key, index) => key === rightKeys[index] && sameJsonValue(leftRecord[key], rightRecord[key]),
     )
   );
 }
 
-function invalidToolCalls(
-  calls: readonly LoopToolCall[],
-): LoopError | undefined {
+function invalidToolCalls(calls: readonly LoopToolCall[]): LoopError | undefined {
   const ids = new Set<string>();
   for (const call of calls) {
     if (!call.id.trim() || !call.name.trim()) {
@@ -881,26 +792,17 @@ function invalidToolCalls(
   return undefined;
 }
 
-function assertModelFactsMatch<
-  TAssistantMessage,
-  TToolCall extends LoopToolCall,
->(
+function assertModelFactsMatch<TAssistantMessage, TToolCall extends LoopToolCall>(
   settlement: ModelSettlement<TAssistantMessage, TToolCall>,
   dispatchFact: ModelDispatchRecordedFactV1,
   modelFact: ModelSettledFactV1,
   observedCalls: readonly TToolCall[],
   observedFacts: readonly ToolCallObservedFactV1[],
 ): void {
-  if (
-    modelFact.modelCallId !== dispatchFact.modelCallId ||
-    modelFact.turn !== dispatchFact.turn
-  ) {
-    throw new Error(
-      "Model settlement identity does not match its dispatch intent",
-    );
+  if (modelFact.modelCallId !== dispatchFact.modelCallId || modelFact.turn !== dispatchFact.turn) {
+    throw new Error("Model settlement identity does not match its dispatch intent");
   }
-  const expectedStatus =
-    settlement.status === "success" ? undefined : settlement.status;
+  const expectedStatus = settlement.status === "success" ? undefined : settlement.status;
   if (
     settlement.status === "success" &&
     modelFact.status !== "completed" &&
@@ -909,37 +811,24 @@ function assertModelFactsMatch<
     throw new Error("Successful model settlement mapped to a non-success fact");
   }
   if (expectedStatus && modelFact.status !== expectedStatus) {
-    throw new Error(
-      "Model settlement status does not match its canonical fact",
-    );
+    throw new Error("Model settlement status does not match its canonical fact");
   }
   if (settlement.status === "success" || settlement.status === "truncated") {
     if (!modelFact.response) {
-      throw new Error(
-        "Completed or truncated model settlement requires a response payload",
-      );
+      throw new Error("Completed or truncated model settlement requires a response payload");
     }
     if (modelFact.hasToolCalls !== settlement.toolCalls.length > 0) {
-      throw new Error(
-        "Model settlement tool-call flag does not match the response",
-      );
+      throw new Error("Model settlement tool-call flag does not match the response");
     }
   }
-  if (
-    settlement.status === "truncated" &&
-    modelFact.finishReason !== settlement.finishReason
-  ) {
-    throw new Error(
-      "Truncated model settlement finishReason does not match its canonical fact",
-    );
+  if (settlement.status === "truncated" && modelFact.finishReason !== settlement.finishReason) {
+    throw new Error("Truncated model settlement finishReason does not match its canonical fact");
   }
   if (settlement.status === "truncated" && observedFacts.length > 0) {
     throw new Error("Truncated model tool calls cannot be authorized");
   }
   if (observedCalls.length !== observedFacts.length) {
-    throw new Error(
-      "Every valid model tool call must have one observation fact",
-    );
+    throw new Error("Every valid model tool call must have one observation fact");
   }
   observedCalls.forEach((call, index) => {
     const fact = observedFacts[index];
@@ -951,17 +840,12 @@ function assertModelFactsMatch<
       fact.turn !== modelFact.turn ||
       fact.modelCallId !== modelFact.modelCallId
     ) {
-      throw new Error(
-        "Tool observation fact does not preserve native call identity",
-      );
+      throw new Error("Tool observation fact does not preserve native call identity");
     }
   });
 }
 
-function assertModelDispatchFact(
-  turn: number,
-  fact: ModelDispatchRecordedFactV1,
-): void {
+function assertModelDispatchFact(turn: number, fact: ModelDispatchRecordedFactV1): void {
   if (fact.turn !== turn || !fact.modelCallId.trim()) {
     throw new Error("Model dispatch fact does not preserve loop turn identity");
   }
@@ -989,9 +873,7 @@ function assertToolDispatchFacts<TToolCall extends LoopToolCall>(
       dispatchFacts[index]?.callId !== call.id ||
       dispatchFacts[index]?.sourceIndex !== index
     ) {
-      throw new Error(
-        "Tool dispatch identity does not match the observed call",
-      );
+      throw new Error("Tool dispatch identity does not match the observed call");
     }
   });
 }
@@ -1023,19 +905,13 @@ function assertDerivedDecisionMatches(
   decision: DerivedDecisionV1,
 ): void {
   if (decision.inputThroughSeq !== snapshot.latestInputSeq) {
-    throw new Error(
-      "Derived decision inputThroughSeq does not match the latest input fact",
-    );
+    throw new Error("Derived decision inputThroughSeq does not match the latest input fact");
   }
   if (decision.stateHash !== stateHash) {
-    throw new Error(
-      "Derived decision stateHash does not match the canonical reducer state",
-    );
+    throw new Error("Derived decision stateHash does not match the canonical reducer state");
   }
   if (decision.reducerVersion !== reducerVersion) {
-    throw new Error(
-      "Derived decision reducerVersion does not match the frozen reducer version",
-    );
+    throw new Error("Derived decision reducerVersion does not match the frozen reducer version");
   }
   const matches =
     (state.kind === "continue" && decision.action.kind === "continue") ||
@@ -1052,10 +928,7 @@ function assertDerivedDecisionMatches(
   if (!matches) {
     throw new Error("Derived decision action does not match reducer state");
   }
-  if (
-    state.kind !== "continue" &&
-    decision.action.reasonCode !== state.reason
-  ) {
+  if (state.kind !== "continue" && decision.action.reasonCode !== state.reason) {
     throw new Error("Derived decision reason does not match reducer state");
   }
 }
@@ -1083,8 +956,7 @@ function unknownToolSettlement<TToolResult>(
 }
 
 function describeError(error: unknown): LoopError {
-  if (error instanceof Error)
-    return { name: error.name, message: error.message };
+  if (error instanceof Error) return { name: error.name, message: error.message };
   if (
     typeof error === "object" &&
     error !== null &&

@@ -79,18 +79,12 @@ export class SessionCoordinatorV1<TResult> {
         continue;
       }
       const after = await this.options.inbox.inspect();
-      if (
-        pendingCount(after) > 0 &&
-        pendingFingerprint(after) !== pendingFingerprint(before)
-      ) {
+      if (pendingCount(after) > 0 && pendingFingerprint(after) !== pendingFingerprint(before)) {
         continue;
       }
       if (this.wakeRequested) {
         const latest = await this.options.inbox.inspect();
-        if (
-          pendingCount(latest) > 0 &&
-          pendingFingerprint(latest) !== pendingFingerprint(after)
-        ) {
+        if (pendingCount(latest) > 0 && pendingFingerprint(latest) !== pendingFingerprint(after)) {
           continue;
         }
       }

@@ -4,9 +4,7 @@
  * 指标：流式窗口内 localStorage.setItem 调用次数应远小于 chunk 数。
  */
 const CDP = process.env.CDP_URL || "http://127.0.0.1:9223";
-const PROMPT =
-  process.env.PROMPT ||
-  "用 markdown 无序列表分 4 点简介你自己，每点一句话，中文。";
+const PROMPT = process.env.PROMPT || "用 markdown 无序列表分 4 点简介你自己，每点一句话，中文。";
 
 async function connect() {
   const list = await (await fetch(`${CDP}/json/list`)).json();
@@ -26,9 +24,7 @@ async function connect() {
     });
   };
   ws.onmessage = (ev) => {
-    const msg = JSON.parse(
-      typeof ev.data === "string" ? ev.data : ev.data.toString(),
-    );
+    const msg = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject, t } = pending.get(msg.id);
       clearTimeout(t);
@@ -53,8 +49,7 @@ async function evalJs(send, expression) {
   });
   if (r.exceptionDetails) {
     throw new Error(
-      r.exceptionDetails.exception?.description ||
-        JSON.stringify(r.exceptionDetails),
+      r.exceptionDetails.exception?.description || JSON.stringify(r.exceptionDetails),
     );
   }
   return r.result.value;
@@ -218,9 +213,7 @@ async function main() {
   if (perf.chunkRenders < 10)
     problems.push(`流式渲染次数过少(${perf.chunkRenders})，样本不足以验证`);
   if (perf.setItemWhileStreaming > 0)
-    problems.push(
-      `流式进行中仍落盘 ${perf.setItemWhileStreaming} 次（fix #1 失效）`,
-    );
+    problems.push(`流式进行中仍落盘 ${perf.setItemWhileStreaming} 次（fix #1 失效）`);
 
   if (problems.length) {
     console.log("\n❌ FAIL:\n  - " + problems.join("\n  - "));

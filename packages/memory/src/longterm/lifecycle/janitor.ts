@@ -102,10 +102,7 @@ interface ActiveRow {
   tValid: string;
 }
 
-async function loadActiveRows(
-  repo?: string,
-  scope?: MemoryScopeKey,
-): Promise<ActiveRow[]> {
+async function loadActiveRows(repo?: string, scope?: MemoryScopeKey): Promise<ActiveRow[]> {
   const sql = getSql();
   const rows = scope
     ? await sql`
@@ -140,8 +137,7 @@ async function loadActiveRows(
     utility: (r.utility as number) ?? 0,
     source: (r.source as string) ?? "",
     supportCount: (r.support_count as number | null) ?? null,
-    tValid:
-      r.t_valid instanceof Date ? r.t_valid.toISOString() : String(r.t_valid),
+    tValid: r.t_valid instanceof Date ? r.t_valid.toISOString() : String(r.t_valid),
   }));
 }
 
@@ -199,8 +195,7 @@ export async function scanDeletionCandidates(
     if (adoption.globalAdopted === 0) continue;
     const a = adoption.rates.get(r.id);
     const adoptionRate = a && a.injected > 0 ? a.adopted / a.injected : null;
-    if (adoptionRate === null || adoptionRate >= cfg.deleteMaxAdoptionRate)
-      continue;
+    if (adoptionRate === null || adoptionRate >= cfg.deleteMaxAdoptionRate) continue;
     // 辅助判据：utility/freq ≤ 阈值，或无足够 outcome 信号（utility=0 无法区分全败/无信号）
     const utilityRatio = r.freq > 0 ? r.utility / r.freq : 0;
     const noOutcomeSignal = r.utility === 0;
@@ -220,9 +215,7 @@ export async function scanDeletionCandidates(
 
 // ── review 队列 ──
 
-async function reviewStats(
-  scope?: MemoryScopeKey,
-): Promise<{
+async function reviewStats(scope?: MemoryScopeKey): Promise<{
   total: number;
   resolved: number;
   rejected: number;
@@ -310,8 +303,7 @@ async function trimKind(
   const ofKind = rows.filter((r) => r.type === kind);
   if (ofKind.length <= cap) return [];
   const sorted = [...ofKind].sort(
-    (a, b) =>
-      utilityRatio(a) - utilityRatio(b) || a.tValid.localeCompare(b.tValid),
+    (a, b) => utilityRatio(a) - utilityRatio(b) || a.tValid.localeCompare(b.tValid),
   );
   const victims = sorted.slice(0, ofKind.length - trimTo);
   for (const v of victims) await engine.invalidate(v.id, nowIso);
@@ -327,9 +319,7 @@ export interface JanitorOptions {
   now?: () => Date;
 }
 
-export async function runLifecycleOnce(
-  opts: JanitorOptions = {},
-): Promise<LifecycleReport> {
+export async function runLifecycleOnce(opts: JanitorOptions = {}): Promise<LifecycleReport> {
   const configuredScope = opts.config?.scope ?? opts.engine?.scope;
   const engine = opts.engine ?? new PostgresMemoryStoreEngine(configuredScope);
   const cfg = {
@@ -466,8 +456,7 @@ export async function runLifecycleOnce(
       }`;
     report.capacity.trialDropped.push(...excess);
   }
-  const exhausted =
-    await sql`DELETE FROM memory_trial_lessons WHERE attempts_left <= 0
+  const exhausted = await sql`DELETE FROM memory_trial_lessons WHERE attempts_left <= 0
     ${
       cfg.scope
         ? sql`AND scope->>'tenantId' = ${cfg.scope.tenantId}
@@ -477,9 +466,7 @@ export async function runLifecycleOnce(
         : sql``
     }
     RETURNING id`;
-  report.capacity.trialDropped.push(
-    ...(exhausted as unknown as { id: string }[]).map((r) => r.id),
-  );
+  report.capacity.trialDropped.push(...(exhausted as unknown as { id: string }[]).map((r) => r.id));
 
   // profile 超限：按效用腾位软失效（user_statement 豁免；写入侧 ADD/EDIT 见 admitProfile）
   const profileCount = rows.filter((r) => r.type === "profile").length;
@@ -537,10 +524,7 @@ export async function listReviewQueue(
     reason: r.reason as string,
     snapshot: (parseJson(r.snapshot) ?? {}) as Record<string, unknown>,
     status: r.status as string,
-    createdAt:
-      r.created_at instanceof Date
-        ? r.created_at.toISOString()
-        : String(r.created_at),
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   }));
 }
 
@@ -580,10 +564,7 @@ export async function approveReview(
 }
 
 /** 拒绝：不删且不再进队列（§7.2 人工复核结论） */
-export async function rejectReview(
-  entryId: string,
-  scope?: MemoryScopeKey,
-): Promise<boolean> {
+export async function rejectReview(entryId: string, scope?: MemoryScopeKey): Promise<boolean> {
   const sql = getSql();
   const rows = await sql`
     UPDATE memory_lifecycle_review SET status = 'rejected', resolved_at = now()

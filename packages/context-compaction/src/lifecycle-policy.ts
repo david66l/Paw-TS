@@ -24,22 +24,12 @@ export const DEFAULT_CONTEXT_COMPACTION_LIFECYCLE_POLICY_V1: ContextCompactionLi
 export type ContextCompactionAttemptOutcomeV1 = Readonly<{
   modelTurn: number;
   fullInputTokens: number;
-  outcome:
-    | "committed"
-    | "low_savings"
-    | "quality_rejected"
-    | "error"
-    | "cancelled"
-    | "unknown";
+  outcome: "committed" | "low_savings" | "quality_rejected" | "error" | "cancelled" | "unknown";
 }>;
 
 export interface ContextCompactionHealthV1 {
   readonly canAttempt: boolean;
-  readonly reason:
-    | "ready"
-    | "cooldown"
-    | "circuit_open"
-    | "low_savings_backoff";
+  readonly reason: "ready" | "cooldown" | "circuit_open" | "low_savings_backoff";
   readonly consecutiveFailures: number;
   readonly consecutiveLowSavings: number;
   readonly lastAttemptModelTurn?: number;
@@ -59,9 +49,7 @@ export function evaluateContextCompactionSavingsV1(
   assertTokenCount(beforeTokens, "before");
   assertTokenCount(afterTokens, "after");
   const savingsBasisPoints =
-    beforeTokens === 0
-      ? 0
-      : Math.floor(((beforeTokens - afterTokens) * 10_000) / beforeTokens);
+    beforeTokens === 0 ? 0 : Math.floor(((beforeTokens - afterTokens) * 10_000) / beforeTokens);
   return Object.freeze({
     savingsBasisPoints,
     classification:
@@ -133,8 +121,7 @@ export function projectContextCompactionHealthV1(
   }
   if (
     consecutiveLowSavings >= frozen.lowSavingsBackoffCount &&
-    currentFullInputTokens * 10_000 <=
-      lastLowSavingsTokens * frozen.lowSavingsRegrowthBasisPoints
+    currentFullInputTokens * 10_000 <= lastLowSavingsTokens * frozen.lowSavingsRegrowthBasisPoints
   ) {
     return health(
       false,
@@ -156,13 +143,7 @@ export function projectContextCompactionHealthV1(
       lastAttemptModelTurn,
     );
   }
-  return health(
-    true,
-    "ready",
-    consecutiveFailures,
-    consecutiveLowSavings,
-    lastAttemptModelTurn,
-  );
+  return health(true, "ready", consecutiveFailures, consecutiveLowSavings, lastAttemptModelTurn);
 }
 
 export function freezeContextCompactionLifecyclePolicyV1(

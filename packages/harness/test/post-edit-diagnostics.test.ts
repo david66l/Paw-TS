@@ -8,18 +8,11 @@ import { diagnoseEditedFilesV1, executeTool } from "../src/index.js";
 describe("post-edit diagnostics", () => {
   test("reports clean and broken TypeScript/JSON syntax with bounded authority", () => {
     const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-diagnostics-"));
-    writeFileSync(
-      path.join(workspaceRoot, "clean.ts"),
-      "export const n = 1;\n",
-    );
+    writeFileSync(path.join(workspaceRoot, "clean.ts"), "export const n = 1;\n");
     writeFileSync(path.join(workspaceRoot, "broken.ts"), "export const = ;\n");
     writeFileSync(path.join(workspaceRoot, "broken.json"), '{"value": }\n');
 
-    const result = diagnoseEditedFilesV1(workspaceRoot, [
-      "clean.ts",
-      "broken.ts",
-      "broken.json",
-    ]);
+    const result = diagnoseEditedFilesV1(workspaceRoot, ["clean.ts", "broken.ts", "broken.json"]);
     expect(result.authority).toBe("syntax_only_not_verification");
     expect(result.status).toBe("issues");
     expect(result.issueCount).toBe(2);
@@ -31,13 +24,8 @@ describe("post-edit diagnostics", () => {
   });
 
   test("attaches syntax errors to a successful edit tool result", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-edit-diagnostics-"),
-    );
-    writeFileSync(
-      path.join(workspaceRoot, "source.ts"),
-      "export const n = 1;\n",
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-edit-diagnostics-"));
+    writeFileSync(path.join(workspaceRoot, "source.ts"), "export const n = 1;\n");
 
     const result = await executeTool({ workspaceRoot }, "workspace.edit_file", {
       path: "source.ts",
@@ -57,9 +45,7 @@ describe("post-edit diagnostics", () => {
   });
 
   test("unsupported files are explicit unavailable, never fake-clean", () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-diagnostics-skip-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-diagnostics-skip-"));
     writeFileSync(path.join(workspaceRoot, "README.md"), "# hello\n");
     const result = diagnoseEditedFilesV1(workspaceRoot, ["README.md"]);
     expect(result.status).toBe("unavailable");

@@ -44,9 +44,7 @@ describe("Anthropic native tools", () => {
     const captured: Array<Record<string, unknown>> = [];
     global.fetch = Object.assign(
       async (_input: string | URL | Request, init?: RequestInit) => {
-        captured.push(
-          JSON.parse(String(init?.body)) as Record<string, unknown>,
-        );
+        captured.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
         return new Response(
           JSON.stringify({
             content: [{ type: "text", text: "continuing" }],
@@ -162,9 +160,7 @@ describe("Anthropic native tools", () => {
     const captured: Array<Record<string, unknown>> = [];
     global.fetch = Object.assign(
       async (_input: string | URL | Request, init?: RequestInit) => {
-        captured.push(
-          JSON.parse(String(init?.body)) as Record<string, unknown>,
-        );
+        captured.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
         return new Response(
           JSON.stringify({
             content: [
@@ -275,9 +271,7 @@ describe("Anthropic native tools", () => {
     const captured: Array<Record<string, unknown>> = [];
     global.fetch = Object.assign(
       async (_input: string | URL | Request, init?: RequestInit) => {
-        captured.push(
-          JSON.parse(String(init?.body)) as Record<string, unknown>,
-        );
+        captured.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
         return streamResponse(payload);
       },
       { preconnect: originalFetch.preconnect },
@@ -341,10 +335,7 @@ describe("Anthropic native tools", () => {
       },
       finishReason: "tool_use",
     });
-    expect(settlement.message.toolCalls?.map((call) => call.id)).toEqual([
-      "call-a",
-      "call-b",
-    ]);
+    expect(settlement.message.toolCalls?.map((call) => call.id)).toEqual(["call-a", "call-b"]);
   });
 
   test("real provider plus adapter treats clean EOF without terminal proof as unknown", async () => {

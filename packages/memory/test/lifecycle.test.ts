@@ -22,21 +22,14 @@ import {
   runLifecycleOnce,
   scanDeletionCandidates,
 } from "../src/longterm/lifecycle/janitor.js";
-import {
-  recordAdoption,
-  recordRetrievalHits,
-} from "../src/longterm/observability/ledger.js";
+import { recordAdoption, recordRetrievalHits } from "../src/longterm/observability/ledger.js";
 import { queryOpLog } from "../src/longterm/observability/op-log.js";
 import { collectMemoryStats } from "../src/longterm/observability/stats.js";
-import type {
-  ProfileInsight,
-  SemanticFact,
-} from "../src/longterm/store/engine.js";
+import type { ProfileInsight, SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -49,22 +42,14 @@ describe("isAutoMode（灰度判定）", () => {
   const cfg = DEFAULT_LIFECYCLE_CONFIG;
   test("前 200 条一律人工复核", () => {
     expect(isAutoMode({ total: 0, resolved: 0, rejected: 0 }, cfg)).toBe(false);
-    expect(isAutoMode({ total: 199, resolved: 199, rejected: 0 }, cfg)).toBe(
-      false,
-    );
+    expect(isAutoMode({ total: 199, resolved: 199, rejected: 0 }, cfg)).toBe(false);
   });
   test("≥200 条且误删率 <5% → 全自动", () => {
-    expect(isAutoMode({ total: 200, resolved: 200, rejected: 5 }, cfg)).toBe(
-      true,
-    );
-    expect(isAutoMode({ total: 300, resolved: 250, rejected: 12 }, cfg)).toBe(
-      true,
-    ); // 4.8%
+    expect(isAutoMode({ total: 200, resolved: 200, rejected: 5 }, cfg)).toBe(true);
+    expect(isAutoMode({ total: 300, resolved: 250, rejected: 12 }, cfg)).toBe(true); // 4.8%
   });
   test("误删率 ≥5% → 继续人工", () => {
-    expect(isAutoMode({ total: 200, resolved: 200, rejected: 10 }, cfg)).toBe(
-      false,
-    );
+    expect(isAutoMode({ total: 200, resolved: 200, rejected: 10 }, cfg)).toBe(false);
   });
   test("CLI 解析 gc 参数", () => {
     expect(parseMemoryArgs(["gc", "--dry-run"])).toEqual({
@@ -99,10 +84,7 @@ const emit = (e: RunEvent) => emitted.push(e);
 /** 灰度复核流测试里被 reject 的条目（供全自动模式测试断言复核结论优先） */
 let rejectedEntryId = "";
 
-function makeSemantic(
-  fact: string,
-  overrides: Partial<SemanticFact> = {},
-): SemanticFact {
+function makeSemantic(fact: string, overrides: Partial<SemanticFact> = {}): SemanticFact {
   const now = new Date().toISOString();
   return {
     id: "",
@@ -123,9 +105,7 @@ function makeSemantic(
   };
 }
 
-async function putTracked<T extends SemanticFact | ProfileInsight>(
-  entry: T,
-): Promise<string> {
+async function putTracked<T extends SemanticFact | ProfileInsight>(entry: T): Promise<string> {
   await engine.put(entry);
   const id = deriveEntryId(entry);
   createdIds.push(id);
@@ -161,16 +141,12 @@ describe("生命周期 db 集成（§7.9）", () => {
     await recordAdoption(`${RUN}_8_0`, [eight]);
 
     // 5 次注入（freq<8 试用期保护）
-    const five = await putTracked(
-      makeSemantic("Beryl entry with five failed task participations"),
-    );
+    const five = await putTracked(makeSemantic("Beryl entry with five failed task participations"));
     for (let i = 0; i < 5; i++)
       await recordRetrievalHits(engine, [five], { runId: `${RUN}_5_${i}` });
 
     // freq=2 utility=0 新条目
-    const two = await putTracked(
-      makeSemantic("Coral entry barely injected twice"),
-    );
+    const two = await putTracked(makeSemantic("Coral entry barely injected twice"));
     await recordRetrievalHits(engine, [two], { runId: `${RUN}_2` });
     await recordRetrievalHits(engine, [two], { runId: `${RUN}_2b` });
 
@@ -235,9 +211,7 @@ describe("生命周期 db 集成（§7.9）", () => {
   });
 
   it("灰度复核流：候选进队列 → 不重复进 → approve 软失效 / reject 保护", async () => {
-    const target = await putTracked(
-      makeSemantic("Dune entry reviewed by human before deletion"),
-    );
+    const target = await putTracked(makeSemantic("Dune entry reviewed by human before deletion"));
     for (let i = 0; i < 8; i++)
       await recordRetrievalHits(engine, [target], { runId: `${RUN}_r_${i}` });
 
@@ -252,9 +226,7 @@ describe("生命周期 db 集成（§7.9）", () => {
     expect(r2.alreadyInQueue).toContain(target);
 
     const queue = await listReviewQueue();
-    expect(
-      queue.some((q) => q.entryId === target && q.status === "pending"),
-    ).toBe(true);
+    expect(queue.some((q) => q.entryId === target && q.status === "pending")).toBe(true);
 
     // approve → 软失效 + op-log + RunEvent
     expect(await approveReview(target, { engine, emit })).toBe(true);
@@ -262,16 +234,11 @@ describe("生命周期 db 集成（§7.9）", () => {
     const purges = await queryOpLog({ entryId: target, op: "lifecycle.purge" });
     expect(purges.length).toBe(1);
     expect(
-      emitted.some(
-        (e) =>
-          e.type === "memory.lifecycle.purge" && e.entryIds.includes(target),
-      ),
+      emitted.some((e) => e.type === "memory.lifecycle.purge" && e.entryIds.includes(target)),
     ).toBe(true);
 
     // reject 路径：另一个候选
-    const kept = await putTracked(
-      makeSemantic("Ebb entry rejected from deletion review"),
-    );
+    const kept = await putTracked(makeSemantic("Ebb entry rejected from deletion review"));
     rejectedEntryId = kept;
     for (let i = 0; i < 8; i++)
       await recordRetrievalHits(engine, [kept], { runId: `${RUN}_k_${i}` });
@@ -302,9 +269,7 @@ describe("生命周期 db 集成（§7.9）", () => {
   });
 
   it("gc --dry-run 不动数据；真实 gc 先归档再物理删除，归档可查", async () => {
-    const dead = await putTracked(
-      makeSemantic("Gale entry invalidated then garbage collected"),
-    );
+    const dead = await putTracked(makeSemantic("Gale entry invalidated then garbage collected"));
     await engine.invalidate(dead, new Date().toISOString());
 
     const dry = await collectGarbage({ repo: REPO, dryRun: true });
@@ -358,11 +323,9 @@ describe("生命周期 db 集成（§7.9）", () => {
     expect((cnt as { n: number }).n).toBe(500);
 
     // 效用为 0（ratio 0）的先删；utility=9（ratio 0.9）的全保留
-    const [low] =
-      await sql`SELECT t_invalid FROM memory_items WHERE id = 'm7cap-10'`; // g=10 → utility 0
+    const [low] = await sql`SELECT t_invalid FROM memory_items WHERE id = 'm7cap-10'`; // g=10 → utility 0
     expect((low as { t_invalid: unknown }).t_invalid).not.toBeNull();
-    const [high] =
-      await sql`SELECT t_invalid FROM memory_items WHERE id = 'm7cap-9'`; // g=9 → utility 9
+    const [high] = await sql`SELECT t_invalid FROM memory_items WHERE id = 'm7cap-9'`; // g=9 → utility 9
     expect((high as { t_invalid: unknown }).t_invalid).toBeNull();
   });
 
@@ -395,9 +358,7 @@ describe("生命周期 db 集成（§7.9）", () => {
       FROM generate_series(1, 200) g
     `;
 
-    const target = await putTracked(
-      makeSemantic("Hail entry auto purged after gray period"),
-    );
+    const target = await putTracked(makeSemantic("Hail entry auto purged after gray period"));
     for (let i = 0; i < 8; i++)
       await recordRetrievalHits(engine, [target], { runId: `${RUN}_a_${i}` });
 

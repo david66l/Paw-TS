@@ -1,14 +1,7 @@
 import path from "node:path";
-import {
-  type AppState,
-  FileSystemAppStateStore,
-  type RunResult,
-} from "@paw/core";
+import { type AppState, FileSystemAppStateStore, type RunResult } from "@paw/core";
 import type { ChatMessage, LanguageModel } from "@paw/models";
-import {
-  type RunOrchestratorOptions,
-  createRunOrchestrator,
-} from "./orchestrator-factory.js";
+import { type RunOrchestratorOptions, createRunOrchestrator } from "./orchestrator-factory.js";
 import type { AgentOrchestrator } from "./orchestrator.js";
 import type { StubRunSession } from "./stub-run.js";
 
@@ -93,8 +86,7 @@ export function createRunSessionController(): RunSessionController {
 }
 
 /** 创建持久会话的选项。 */
-export interface PersistentSessionOptions
-  extends Omit<RunOrchestratorOptions, "memoryExtraction"> {
+export interface PersistentSessionOptions extends Omit<RunOrchestratorOptions, "memoryExtraction"> {
   readonly model?: LanguageModel;
   readonly maxSteps?: number;
 }
@@ -124,9 +116,7 @@ export interface PersistentSession {
  *
  * @param opts 持久会话选项
  */
-export function createPersistentSession(
-  opts: PersistentSessionOptions,
-): PersistentSession {
+export function createPersistentSession(opts: PersistentSessionOptions): PersistentSession {
   const runId = `session-${Date.now()}`;
   const workspaceRoot = opts.workspaceRoot;
 
@@ -153,10 +143,7 @@ export function createPersistentSession(
     statesDir: path.join(workspaceRoot, ".paw", "states"),
   });
 
-  async function submit(
-    input: string,
-    abortSignal?: AbortSignal,
-  ): Promise<RunResult> {
+  async function submit(input: string, abortSignal?: AbortSignal): Promise<RunResult> {
     const state: AppState | null = appStateStore.load(runId);
 
     if (state) {

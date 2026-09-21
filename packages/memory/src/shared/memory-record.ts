@@ -32,11 +32,7 @@ import type { LegacyMemoryRecordV1, MemoryPriority } from "@paw/protocol";
 import type { AutoMemoryEntry } from "../compat/auto-memory.js";
 import type { SessionMemory } from "../session/session-memory.js";
 import { EmbeddingCache } from "./embedding-cache.js";
-import {
-  extractErrorSignatures,
-  extractFilePaths,
-  inferTags,
-} from "./memory-query.js";
+import { extractErrorSignatures, extractFilePaths, inferTags } from "./memory-query.js";
 import { kindFromLegacyType } from "./memory-types.js";
 
 export type {
@@ -121,10 +117,7 @@ export function sessionMemoryToRecord(sm: SessionMemory): LegacyMemoryRecordV1 {
  * - tags 回退到 [entry.type]（至少有一个类型标签）
  * - relatedFiles 优先使用 entry 中的值，否则从 content 中提取文件路径
  */
-export function autoMemoryToRecord(
-  entry: AutoMemoryEntry,
-  mtime?: number,
-): LegacyMemoryRecordV1 {
+export function autoMemoryToRecord(entry: AutoMemoryEntry, mtime?: number): LegacyMemoryRecordV1 {
   // 基准时间戳：优先使用 mtime，回退到当前时间
   const ts = mtime ?? Date.now();
 

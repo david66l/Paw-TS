@@ -38,8 +38,6 @@ describe("tool guidance v1", () => {
 
   test("does not create an empty control", () => {
     expect(selectToolGuidanceV1({})).toBeUndefined();
-    expect(
-      selectToolGuidanceV1({ repeatToolReminders: [" ", ""] }),
-    ).toBeUndefined();
+    expect(selectToolGuidanceV1({ repeatToolReminders: [" ", ""] })).toBeUndefined();
   });
 });

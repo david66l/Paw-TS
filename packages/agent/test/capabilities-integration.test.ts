@@ -41,8 +41,7 @@ function cycleModel(responses: string[]) {
         totalTokens: number;
       };
     }> {
-      const text =
-        responses[i++] ?? '{"action":"final_answer","summary":"Done."}';
+      const text = responses[i++] ?? '{"action":"final_answer","summary":"Done."}';
       return {
         text,
         usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
@@ -93,9 +92,7 @@ describe("Agent Workflow", () => {
 
     // Primary contract: write landed. Status may be completed (with skip_verify)
     // or incomplete under parallel policy-singleton races in the test process.
-    expect(readFileSync(path.join(dir, "config.json"), "utf8")).toBe(
-      '{"key":"updated"}',
-    );
+    expect(readFileSync(path.join(dir, "config.json"), "utf8")).toBe('{"key":"updated"}');
     expect(["completed", "incomplete"]).toContain(r.status);
     if (r.status === "completed") {
       expect(r.message).toContain("Config updated.");
@@ -104,9 +101,7 @@ describe("Agent Workflow", () => {
     const toolCalls = events.filter((e) => e.event.type === "tool.call");
     expect(
       toolCalls.some(
-        (e) =>
-          e.event.type === "tool.call" &&
-          e.event.tool === "workspace.write_file",
+        (e) => e.event.type === "tool.call" && e.event.tool === "workspace.write_file",
       ),
     ).toBe(true);
 
@@ -401,10 +396,7 @@ describe("Memory System", () => {
       updatedAt: Date.now(),
       task: "Refactor auth module",
       currentState: "In progress: extracted JWT logic",
-      filesAndFunctions: [
-        "src/auth.ts:verifyToken()",
-        "src/middleware.ts:authMiddleware()",
-      ],
+      filesAndFunctions: ["src/auth.ts:verifyToken()", "src/middleware.ts:authMiddleware()"],
       keyDecisions: ["Use RS256 instead of HS256 for production"],
       errorsAndFixes: ["Fixed circular dep by moving types to shared"],
       relevantContext: "User prefers functional programming style",
@@ -416,9 +408,7 @@ describe("Memory System", () => {
     expect(loaded?.session).toBe("run-001");
     expect(loaded?.project).toBe("TestProject");
     expect(loaded?.task).toBe("Refactor auth module");
-    expect(loaded?.keyDecisions).toEqual([
-      "Use RS256 instead of HS256 for production",
-    ]);
+    expect(loaded?.keyDecisions).toEqual(["Use RS256 instead of HS256 for production"]);
     expect(loaded?.filesAndFunctions).toEqual([
       "src/auth.ts:verifyToken()",
       "src/middleware.ts:authMiddleware()",
@@ -495,33 +485,24 @@ Migrate to OAuth2 with PKCE.
 - Should we support SAML?`,
         };
       },
+      // biome-ignore lint/correctness/useYield: deliberate failing test double — it must expose the async-generator interface and reject on first next()
       async *completeStream() {
         throw new Error("Not implemented");
       },
     };
 
-    const result = await runCompressionAgent(
-      mockModel,
-      "Compress this conversation.",
-      "run-003",
-    );
+    const result = await runCompressionAgent(mockModel, "Compress this conversation.", "run-003");
     expect(result.summary).toContain("Active Task");
     expect(result.sessionMemory.session).toBe("run-003");
     expect(result.sessionMemory.task).toContain("OAuth2");
-    expect(result.sessionMemory.keyDecisions).toContain(
-      "Use RS256 for token signing",
-    );
+    expect(result.sessionMemory.keyDecisions).toContain("Use RS256 for token signing");
     expect(result.sessionMemory.errorsAndFixes).toContain(
       "Fixed circular dependency by creating shared types package",
     );
     expect(result.sessionMemory.filesAndFunctions).toContain("- src/auth.ts");
-    expect(result.sessionMemory.currentState).toContain(
-      "Extracted JWT utilities",
-    );
+    expect(result.sessionMemory.currentState).toContain("Extracted JWT utilities");
     expect(result.sessionMemory.relevantContext).toContain("Next Steps:");
-    expect(result.sessionMemory.relevantContext).toContain(
-      "Pending Questions:",
-    );
+    expect(result.sessionMemory.relevantContext).toContain("Pending Questions:");
   });
 });
 
@@ -597,14 +578,9 @@ describe("Context Compression", () => {
     expect(prompt1).toContain("[User]");
 
     // With existing summary (anchored)
-    const prompt2 = compactor.buildSummaryPrompt(
-      headMessages,
-      "Previous summary text.",
-    );
+    const prompt2 = compactor.buildSummaryPrompt(headMessages, "Previous summary text.");
     expect(prompt2).toContain("Previous Summary");
-    expect(prompt2).toContain(
-      "Update the summary with the new conversation below",
-    );
+    expect(prompt2).toContain("Update the summary with the new conversation below");
     // v3 P2.4: chapter-level revision rule
     expect(prompt2).toContain("REVISION RULE");
     expect(prompt2).toContain("Keep all unaffected sections verbatim");
@@ -692,9 +668,7 @@ describe("Context Compression", () => {
       .slice(-10)
       .filter(
         (m) =>
-          m.role === "user" &&
-          !m.content.includes("<persisted-output>") &&
-          m.content.length > 100,
+          m.role === "user" && !m.content.includes("<persisted-output>") && m.content.length > 100,
       ).length;
     expect(recentFull).toBeGreaterThan(0);
     cleanup(toolDir);
@@ -722,12 +696,8 @@ describe("Context Compression", () => {
     ];
 
     const result = pruneToolResults(messages, { toolResultsDir: toolDir });
-    const skillMsg = result.messages.find((m) =>
-      m.content.includes("[Tool skill completed]"),
-    );
-    const webMsg = result.messages.find((m) =>
-      m.content.includes("[Tool web_fetch completed]"),
-    );
+    const skillMsg = result.messages.find((m) => m.content.includes("[Tool skill completed]"));
+    const webMsg = result.messages.find((m) => m.content.includes("[Tool web_fetch completed]"));
     const listMsg = result.messages.find((m) =>
       m.content.includes("[Tool workspace.list_dir completed]"),
     );

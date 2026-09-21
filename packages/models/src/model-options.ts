@@ -24,19 +24,14 @@
  * `parameters` 使用 JSON Schema 格式描述函数的输入参数结构，
  * 例如：`{type:"object", properties:{path:{type:"string"}}, required:["path"]}`
  */
-import type {
-  ToolDefinition as CoreToolDefinition,
-  ModelRequestOptionsV1,
-} from "@paw/core";
+import type { ToolDefinition as CoreToolDefinition, ModelRequestOptionsV1 } from "@paw/core";
 
 export type ToolDefinition = CoreToolDefinition;
 
 /** Used only when the selected model has no declared output capability. */
 export const FALLBACK_MODEL_OUTPUT_TOKENS = 8_192;
 
-export function resolveModelOutputLimit(
-  nativeMaxOutputTokens?: number,
-): number {
+export function resolveModelOutputLimit(nativeMaxOutputTokens?: number): number {
   if (
     nativeMaxOutputTokens !== undefined &&
     (!Number.isSafeInteger(nativeMaxOutputTokens) || nativeMaxOutputTokens <= 0)
@@ -49,9 +44,7 @@ export function resolveModelOutputLimit(
 /** 单次模型完成调用的选项 */
 export interface ModelCompleteOptions extends ModelRequestOptionsV1 {
   /** In-process metadata callback, excluded from request serialization and replay. */
-  readonly onObservation?: (
-    event: import("./observation.js").ModelObservationEvent,
-  ) => void;
+  readonly onObservation?: (event: import("./observation.js").ModelObservationEvent) => void;
   /** 用于取消正在进行的模型请求的 AbortSignal */
   readonly signal?: AbortSignal;
   /** Per-request positive output-token cap for bounded auxiliary protocols. */
@@ -70,16 +63,11 @@ export function resolveRequestMaxOutputTokens(
   capability: number | undefined,
   fallback?: number,
 ): number | undefined {
-  if (
-    requested !== undefined &&
-    (!Number.isSafeInteger(requested) || requested <= 0)
-  ) {
+  if (requested !== undefined && (!Number.isSafeInteger(requested) || requested <= 0)) {
     throw new Error("maxOutputTokens must be a positive safe integer");
   }
   if (requested !== undefined) {
-    return capability === undefined
-      ? requested
-      : Math.min(requested, capability);
+    return capability === undefined ? requested : Math.min(requested, capability);
   }
   return capability ?? fallback;
 }

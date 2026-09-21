@@ -19,11 +19,7 @@ function fakeModel(text: string): LanguageModel {
 
 describe("runCompressionAgent", () => {
   it("returns summary and session memory", async () => {
-    const result = await runCompressionAgent(
-      fakeModel(SUMMARY),
-      "Compress this",
-      "run-1",
-    );
+    const result = await runCompressionAgent(fakeModel(SUMMARY), "Compress this", "run-1");
     expect(result.summary).toContain("## Active Task");
     expect(result.sessionMemory.session).toBe("run-1");
     expect(result.sessionMemory.task).toBe("Test task");
@@ -33,11 +29,7 @@ describe("runCompressionAgent", () => {
   });
 
   it("handles empty result gracefully", async () => {
-    const result = await runCompressionAgent(
-      fakeModel(""),
-      "Compress this",
-      "run-2",
-    );
+    const result = await runCompressionAgent(fakeModel(""), "Compress this", "run-2");
     expect(result.summary).toBe("");
     expect(result.sessionMemory.session).toBe("run-2");
     expect(result.sessionMemory.task).toBeUndefined();
@@ -48,8 +40,7 @@ describe("runCompressionAgent", () => {
     const capturingModel: LanguageModel = {
       label: "capture",
       async complete(messages: readonly ChatMessage[]) {
-        receivedUser =
-          messages.find((m) => m.role === "user")?.content?.toString() ?? "";
+        receivedUser = messages.find((m) => m.role === "user")?.content?.toString() ?? "";
         return { text: "## Active Task\nCaptured" };
       },
       async *completeStream() {

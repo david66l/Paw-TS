@@ -41,9 +41,7 @@ describe("file durable JSON payload store", () => {
     const canonicalRoot = fs.realpathSync.native(root);
     const directories: string[] = [];
     let current = canonicalRoot;
-    for (const segment of path
-      .relative(canonicalRoot, path.dirname(file))
-      .split(path.sep)) {
+    for (const segment of path.relative(canonicalRoot, path.dirname(file)).split(path.sep)) {
       current = path.join(current, segment);
       directories.push(current);
     }
@@ -54,12 +52,8 @@ describe("file durable JSON payload store", () => {
         verified: true,
       });
       for (const directory of directories) {
-        expect(
-          stat.mock.calls.filter((args) => args[0] === directory),
-        ).toHaveLength(2);
-        expect(
-          realpath.mock.calls.filter((args) => args[0] === directory),
-        ).toHaveLength(2);
+        expect(stat.mock.calls.filter((args) => args[0] === directory)).toHaveLength(2);
+        expect(realpath.mock.calls.filter((args) => args[0] === directory)).toHaveLength(2);
       }
     } finally {
       stat.mockRestore();
@@ -89,36 +83,21 @@ describe("file durable JSON payload store", () => {
       swapped = true;
       // Both final paths must remain in this isolated test workspace.
       for (const target of [storeDir, displaced]) {
-        const relative = path.relative(
-          path.resolve(root),
-          path.resolve(target),
-        );
-        if (
-          !relative ||
-          path.isAbsolute(relative) ||
-          relative.split(path.sep).includes("..")
-        ) {
+        const relative = path.relative(path.resolve(root), path.resolve(target));
+        if (!relative || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
           throw new Error("Test move escaped fixture");
         }
       }
       fs.renameSync(storeDir, displaced);
-      fs.symlinkSync(
-        displaced,
-        storeDir,
-        process.platform === "win32" ? "junction" : "dir",
-      );
+      fs.symlinkSync(displaced, storeDir, process.platform === "win32" ? "junction" : "dir");
     });
     try {
-      await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
-        "unsafe directory",
-      );
+      await expect(writer.resolve(payload, binding, signal())).rejects.toThrow("unsafe directory");
       expect(swapped).toBe(true);
     } finally {
       close.mockRestore();
     }
-    expect(fs.readFileSync(path.join(displaced, path.basename(file)))).toEqual(
-      originalBytes,
-    );
+    expect(fs.readFileSync(path.join(displaced, path.basename(file)))).toEqual(originalBytes);
   });
 
   test("canonical paths escaping through a same-prefix sibling fail the containment fallback", async () => {
@@ -153,11 +132,7 @@ describe("file durable JSON payload store", () => {
       a: 1,
     };
 
-    const first = await writer.prepare(
-      original as unknown as JsonValue,
-      binding,
-      signal(),
-    );
+    const first = await writer.prepare(original as unknown as JsonValue, binding, signal());
     original.a = 99;
     const firstOriginalItem = original.z[0];
     if (!firstOriginalItem) throw new Error("test fixture item is missing");
@@ -168,18 +143,12 @@ describe("file durable JSON payload store", () => {
     expect(Object.isFrozen(writer)).toBeTrue();
     expect(Object.isFrozen(resolved)).toBeTrue();
     expect(Object.isFrozen((resolved as { z: unknown[] }).z)).toBeTrue();
-    expect(
-      Object.isFrozen((resolved as { z: Array<{ b: number }> }).z[0]),
-    ).toBeTrue();
+    expect(Object.isFrozen((resolved as { z: Array<{ b: number }> }).z[0])).toBeTrue();
     expect(() => {
       (resolved as { a: number }).a = 500;
     }).toThrow();
 
-    const second = await writer.prepare(
-      { a: 1, z: [{ b: 2 }] },
-      binding,
-      signal(),
-    );
+    const second = await writer.prepare({ a: 1, z: [{ b: 2 }] }, binding, signal());
     expect(second).toEqual(first);
     expect(payloadArtifactFiles(root)).toHaveLength(1);
     expect(await writer.resolve(first, binding, signal())).toEqual({
@@ -194,11 +163,7 @@ describe("file durable JSON payload store", () => {
     const root = tempRoot();
     const writer = createWriter(root, acquire(root));
     const binding = modelBinding(5, "model-canonical");
-    const payload = await writer.prepare(
-      { canonical: true },
-      binding,
-      signal(),
-    );
+    const payload = await writer.prepare({ canonical: true }, binding, signal());
     const finalPath = artifactPath(root, payload);
     const canonicalBytes = fs.readFileSync(finalPath, "utf8");
 
@@ -210,17 +175,10 @@ describe("file durable JSON payload store", () => {
       "utf8",
     );
     await expect(
-      writer.resolve(
-        artifactRef(nonCanonicalHash, payload.hash),
-        binding,
-        signal(),
-      ),
+      writer.resolve(artifactRef(nonCanonicalHash, payload.hash), binding, signal()),
     ).rejects.toThrow("not canonical JSON");
 
-    const wrongTypeEnvelope = JSON.parse(canonicalBytes) as Record<
-      string,
-      JsonValue
-    >;
+    const wrongTypeEnvelope = JSON.parse(canonicalBytes) as Record<string, JsonValue>;
     wrongTypeEnvelope.payloadType = "not_durable_json";
     const wrongTypeBytes = canonicalJson(wrongTypeEnvelope);
     const wrongTypeHash = hash(Buffer.from(wrongTypeBytes));
@@ -230,11 +188,7 @@ describe("file durable JSON payload store", () => {
       "utf8",
     );
     await expect(
-      writer.resolve(
-        artifactRef(wrongTypeHash, payload.hash),
-        binding,
-        signal(),
-      ),
+      writer.resolve(artifactRef(wrongTypeHash, payload.hash), binding, signal()),
     ).rejects.toThrow("envelope is invalid");
 
     fs.rmSync(finalPath);
@@ -242,9 +196,9 @@ describe("file durable JSON payload store", () => {
     await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
       "envelope hash mismatch",
     );
-    await expect(
-      writer.prepare({ canonical: true }, binding, signal()),
-    ).rejects.toThrow("collision");
+    await expect(writer.prepare({ canonical: true }, binding, signal())).rejects.toThrow(
+      "collision",
+    );
     expect(fs.readFileSync(finalPath, "utf8")).toBe(nonCanonicalBytes);
   });
 
@@ -274,9 +228,7 @@ describe("file durable JSON payload store", () => {
       },
     ];
     for (const wrong of wrongBindings) {
-      await expect(writer.resolve(payload, wrong, signal())).rejects.toThrow(
-        "binding mismatch",
-      );
+      await expect(writer.resolve(payload, wrong, signal())).rejects.toThrow("binding mismatch");
     }
   });
 
@@ -295,29 +247,17 @@ describe("file durable JSON payload store", () => {
       originSeq: 20,
       field: { kind: "task_checkpoint", checkpointId: "checkpoint-1" },
     };
-    const attachment = await writer.prepare(
-      "attachment text",
-      attachmentBinding,
-      signal(),
-    );
-    const checkpoint = await writer.prepare(
-      { summary: "stable" },
-      checkpointBinding,
-      signal(),
-    );
+    const attachment = await writer.prepare("attachment text", attachmentBinding, signal());
+    const checkpoint = await writer.prepare({ summary: "stable" }, checkpointBinding, signal());
 
-    expect(await writer.resolve(attachment, attachmentBinding, signal())).toBe(
-      "attachment text",
-    );
-    expect(await writer.resolve(attachment, attachmentBinding, signal())).toBe(
-      "attachment text",
-    );
-    expect(
-      await writer.resolve(checkpoint, checkpointBinding, signal()),
-    ).toEqual({ summary: "stable" });
-    expect(
-      await writer.resolve(checkpoint, checkpointBinding, signal()),
-    ).toEqual({ summary: "stable" });
+    expect(await writer.resolve(attachment, attachmentBinding, signal())).toBe("attachment text");
+    expect(await writer.resolve(attachment, attachmentBinding, signal())).toBe("attachment text");
+    expect(await writer.resolve(checkpoint, checkpointBinding, signal())).toEqual({
+      summary: "stable",
+    });
+    expect(await writer.resolve(checkpoint, checkpointBinding, signal())).toEqual({
+      summary: "stable",
+    });
     await expect(
       writer.resolve(
         checkpoint,
@@ -338,21 +278,9 @@ describe("file durable JSON payload store", () => {
     const writer = createWriter(root, acquire(root));
     const value = { same: "value" };
 
-    const original = await writer.prepare(
-      value,
-      modelBinding(3, "model-3"),
-      signal(),
-    );
-    const differentOrigin = await writer.prepare(
-      value,
-      modelBinding(4, "model-3"),
-      signal(),
-    );
-    const differentOwner = await writer.prepare(
-      value,
-      modelBinding(3, "model-other"),
-      signal(),
-    );
+    const original = await writer.prepare(value, modelBinding(3, "model-3"), signal());
+    const differentOrigin = await writer.prepare(value, modelBinding(4, "model-3"), signal());
+    const differentOwner = await writer.prepare(value, modelBinding(3, "model-other"), signal());
 
     expect(refId(differentOrigin)).not.toBe(refId(original));
     expect(refId(differentOwner)).not.toBe(refId(original));
@@ -362,18 +290,9 @@ describe("file durable JSON payload store", () => {
   test("rejects copied artifacts across workspace, session, and run identities", async () => {
     const sourceRoot = tempRoot();
     const sourceLease = acquire(sourceRoot, "session-source", "run-source");
-    const sourceWriter = createWriter(
-      sourceRoot,
-      sourceLease,
-      "session-source",
-      "run-source",
-    );
+    const sourceWriter = createWriter(sourceRoot, sourceLease, "session-source", "run-source");
     const binding = modelBinding(7, "model-7");
-    const payload = await sourceWriter.prepare(
-      { source: true },
-      binding,
-      signal(),
-    );
+    const payload = await sourceWriter.prepare({ source: true }, binding, signal());
     const sourceArtifact = artifactPath(sourceRoot, payload);
     await sourceLease.release();
 
@@ -388,25 +307,17 @@ describe("file durable JSON payload store", () => {
     ];
     for (const target of targets) {
       const targetLease = acquire(target.root, target.sessionId, target.runId);
-      const targetWriter = createWriter(
-        target.root,
-        targetLease,
-        target.sessionId,
-        target.runId,
-      );
+      const targetWriter = createWriter(target.root, targetLease, target.sessionId, target.runId);
       const seed = await targetWriter.prepare(
         { target: true },
         modelBinding(1, "target-model"),
         signal(),
       );
       const targetDir = path.dirname(artifactPath(target.root, seed));
-      fs.copyFileSync(
-        sourceArtifact,
-        path.join(targetDir, path.basename(sourceArtifact)),
+      fs.copyFileSync(sourceArtifact, path.join(targetDir, path.basename(sourceArtifact)));
+      await expect(targetWriter.resolve(payload, binding, signal())).rejects.toThrow(
+        "binding mismatch",
       );
-      await expect(
-        targetWriter.resolve(payload, binding, signal()),
-      ).rejects.toThrow("binding mismatch");
       await targetLease.release();
     }
   });
@@ -472,20 +383,14 @@ describe("file durable JSON payload store", () => {
 
     const roomyWriter = createWriter(root, lease);
     const binding = modelBinding(2, "model-2");
-    const payload = await roomyWriter.prepare(
-      { value: "x".repeat(500) },
-      binding,
-      signal(),
-    );
+    const payload = await roomyWriter.prepare({ value: "x".repeat(500) }, binding, signal());
     const restrictiveReader = createFileDurableJsonPayloadReaderV1({
       workspaceRoot: root,
       sessionId: "session-1",
       runId: "run-1",
       policy: { ...policy, maxArtifactBytes: 128 },
     });
-    await expect(
-      restrictiveReader.resolve(payload, binding, signal()),
-    ).rejects.toThrow("unsafe");
+    await expect(restrictiveReader.resolve(payload, binding, signal())).rejects.toThrow("unsafe");
   });
 
   test("binds the complete artifact size policy into the reference", async () => {
@@ -520,12 +425,8 @@ describe("file durable JSON payload store", () => {
     expect(await twoMiB.resolve(second, binding, signal())).toEqual({
       value: "same",
     });
-    await expect(oneMiB.resolve(second, binding, signal())).rejects.toThrow(
-      "binding mismatch",
-    );
-    await expect(twoMiB.resolve(first, binding, signal())).rejects.toThrow(
-      "binding mismatch",
-    );
+    await expect(oneMiB.resolve(second, binding, signal())).rejects.toThrow("binding mismatch");
+    await expect(twoMiB.resolve(first, binding, signal())).rejects.toThrow("binding mismatch");
   });
 
   test("rejects non-issued and identity-mismatched execution leases", () => {
@@ -620,15 +521,11 @@ describe("file durable JSON payload store", () => {
     fs.linkSync(finalPath, tempPath);
     const before = rawTree(root);
 
-    await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
-      "unsafe",
-    );
+    await expect(writer.resolve(payload, binding, signal())).rejects.toThrow("unsafe");
     expect(rawTree(root)).toEqual(before);
     expect(fs.lstatSync(finalPath).nlink).toBe(2);
 
-    expect(await writer.prepare({ linked: true }, binding, signal())).toEqual(
-      payload,
-    );
+    expect(await writer.prepare({ linked: true }, binding, signal())).toEqual(payload);
     expect(fs.existsSync(tempPath)).toBeFalse();
     expect(fs.lstatSync(finalPath).nlink).toBe(1);
   });
@@ -649,9 +546,7 @@ describe("file durable JSON payload store", () => {
     fs.linkSync(finalPath, aliasPath);
     const before = rawTree(root);
 
-    await expect(writer.prepare(value, binding, signal())).rejects.toThrow(
-      "collision",
-    );
+    await expect(writer.prepare(value, binding, signal())).rejects.toThrow("collision");
     expect(rawTree(root)).toEqual(before);
     expect(fs.existsSync(finalPath)).toBeTrue();
     expect(fs.existsSync(aliasPath)).toBeTrue();
@@ -682,19 +577,13 @@ describe("file durable JSON payload store", () => {
     const root = tempRoot();
     const writer = createWriter(root, acquire(root));
     const binding = modelBinding(11, "model-11");
-    const payload = await writer.prepare(
-      { linked: "outside" },
-      binding,
-      signal(),
-    );
+    const payload = await writer.prepare({ linked: "outside" }, binding, signal());
     const finalPath = artifactPath(root, payload);
     const alias = path.join(root, "external-payload-hardlink.json");
     fs.linkSync(finalPath, alias);
     const before = rawTree(root);
 
-    await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
-      "unsafe",
-    );
+    await expect(writer.resolve(payload, binding, signal())).rejects.toThrow("unsafe");
     expect(rawTree(root)).toEqual(before);
     expect(fs.lstatSync(alias).nlink).toBe(2);
   });
@@ -705,11 +594,7 @@ describe("file durable JSON payload store", () => {
       const root = tempRoot();
       const writer = createWriter(root, acquire(root));
       const binding = modelBinding(12, "model-12");
-      const payload = await writer.prepare(
-        { symbolic: false },
-        binding,
-        signal(),
-      );
+      const payload = await writer.prepare({ symbolic: false }, binding, signal());
       const finalPath = artifactPath(root, payload);
       const outside = path.join(tempRoot(), "outside.json");
       fs.copyFileSync(finalPath, outside);
@@ -717,9 +602,7 @@ describe("file durable JSON payload store", () => {
       fs.symlinkSync(outside, finalPath, "file");
       const before = rawTree(root);
 
-      await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
-        "unsafe",
-      );
+      await expect(writer.resolve(payload, binding, signal())).rejects.toThrow("unsafe");
       expect(rawTree(root)).toEqual(before);
     },
   );
@@ -735,16 +618,10 @@ describe("file durable JSON payload store", () => {
     fs.mkdirSync(outsideDir);
     fs.copyFileSync(finalPath, path.join(outsideDir, path.basename(finalPath)));
     fs.rmSync(storeDir, { recursive: true });
-    fs.symlinkSync(
-      outsideDir,
-      storeDir,
-      process.platform === "win32" ? "junction" : "dir",
-    );
+    fs.symlinkSync(outsideDir, storeDir, process.platform === "win32" ? "junction" : "dir");
     const before = rawTree(root);
 
-    await expect(writer.resolve(payload, binding, signal())).rejects.toThrow(
-      "unsafe directory",
-    );
+    await expect(writer.resolve(payload, binding, signal())).rejects.toThrow("unsafe directory");
     expect(rawTree(root)).toEqual(before);
   });
 
@@ -766,21 +643,15 @@ describe("file durable JSON payload store", () => {
       originSeq: 14,
       field: { kind: "model_response" as const, modelCallId: "model-14" },
     };
-    const payload = await writer.prepare(
-      { detached: true },
-      mutableBinding,
-      signal(),
-    );
+    const payload = await writer.prepare({ detached: true }, mutableBinding, signal());
     (mutablePolicy as { maxArtifactBytes: number }).maxArtifactBytes = 1;
     mutableBinding.originSeq = 99;
     mutableBinding.field.modelCallId = "mutated";
 
-    expect(
-      await writer.resolve(payload, modelBinding(14, "model-14"), signal()),
-    ).toEqual({ detached: true });
-    expect(
-      Object.isFrozen(DEFAULT_FILE_DURABLE_JSON_PAYLOAD_POLICY_V1),
-    ).toBeTrue();
+    expect(await writer.resolve(payload, modelBinding(14, "model-14"), signal())).toEqual({
+      detached: true,
+    });
+    expect(Object.isFrozen(DEFAULT_FILE_DURABLE_JSON_PAYLOAD_POLICY_V1)).toBeTrue();
   });
 });
 
@@ -830,11 +701,7 @@ function acquire(
   return result.lease;
 }
 
-function acquireAt(
-  root: string,
-  clock: () => number,
-  ttlMs: number,
-): FileSessionExecutionLeaseV1 {
+function acquireAt(root: string, clock: () => number, ttlMs: number): FileSessionExecutionLeaseV1 {
   ownerSequence += 1;
   const result = acquireFileSessionExecutionLeaseV1({
     workspaceRoot: root,
@@ -862,10 +729,7 @@ function modelBinding(
   };
 }
 
-function artifactRef(
-  envelopeHash: string,
-  valueHash: string,
-): DurableJsonPayloadV1 {
+function artifactRef(envelopeHash: string, valueHash: string): DurableJsonPayloadV1 {
   return {
     kind: "artifact_ref",
     artifactRef: `paw-payload:v1:${envelopeHash}`,
@@ -882,9 +746,7 @@ function artifactPath(root: string, payload: DurableJsonPayloadV1): string {
   if (payload.kind !== "artifact_ref") throw new Error("expected artifact ref");
   const hash = payload.artifactRef.split(":").at(-1);
   if (!hash) throw new Error("artifact ref has no hash");
-  const matches = filesUnder(root).filter(
-    (file) => path.basename(file) === `${hash}.json`,
-  );
+  const matches = filesUnder(root).filter((file) => path.basename(file) === `${hash}.json`);
   if (matches.length !== 1) {
     throw new Error(`expected one payload artifact, found ${matches.length}`);
   }
@@ -924,9 +786,7 @@ function rawTree(root: string): readonly string[] {
         entries.push(`dir:${relative}`);
         visit(full);
       } else {
-        entries.push(
-          `file:${relative}:${stat.nlink}:${stat.size}:${hash(fs.readFileSync(full))}`,
-        );
+        entries.push(`file:${relative}:${stat.nlink}:${stat.size}:${hash(fs.readFileSync(full))}`);
       }
     }
   };
@@ -956,9 +816,6 @@ function canonicalJson(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`)
     .join(",")}}`;
 }

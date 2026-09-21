@@ -2,15 +2,8 @@ import { expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type {
-  ChatMessage,
-  LanguageModel,
-  ModelCompletionResult,
-} from "@paw/models";
-import {
-  buildPawNextTaskProfileV3,
-  runFreshPawNextTaskV3,
-} from "@paw/paw-next";
+import type { ChatMessage, LanguageModel, ModelCompletionResult } from "@paw/models";
+import { buildPawNextTaskProfileV3, runFreshPawNextTaskV3 } from "@paw/paw-next";
 import { desktopProfile, fingerprint } from "../agent-host/paw-next-profile.js";
 import { runDesktopNext } from "../agent-host/paw-next.js";
 
@@ -19,11 +12,7 @@ const final = (text: string): ModelCompletionResult => ({
   nativeAssistantContent: text,
   finishReason: "stop",
 });
-const tool = (
-  id: string,
-  name: string,
-  args: Record<string, unknown>,
-): ModelCompletionResult => ({
+const tool = (id: string, name: string, args: Record<string, unknown>): ModelCompletionResult => ({
   text: "",
   nativeAssistantContent: "",
   finishReason: "tool_calls",
@@ -60,9 +49,7 @@ function modelWith(complete: LanguageModel["complete"]): LanguageModel {
   };
 }
 const lastResult = (messages: readonly ChatMessage[]) => {
-  const turn = [...messages]
-    .reverse()
-    .find((message) => message.nativeToolTurn)?.nativeToolTurn;
+  const turn = [...messages].reverse().find((message) => message.nativeToolTurn)?.nativeToolTurn;
   if (!turn?.results[0]) throw new Error("Missing native result");
   return JSON.parse(turn.results[0].content);
 };
@@ -105,15 +92,9 @@ test("fresh desktop projects a write receipt, recalls the original diff and reco
           });
           expect(receipt.payload).not.toHaveProperty("diff");
           expect(receipt.payload).toHaveProperty("diagnostics");
-          const turn = messages.find(
-            (message) => message.nativeToolTurn,
-          )?.nativeToolTurn;
-          expect(turn?.reasoningPassback).toBe(
-            "Keep this exact native reasoning.",
-          );
-          expect(turn?.calls[0]?.rawArguments).toBe(
-            JSON.stringify({ path: "note.txt", content }),
-          );
+          const turn = messages.find((message) => message.nativeToolTurn)?.nativeToolTurn;
+          expect(turn?.reasoningPassback).toBe("Keep this exact native reasoning.");
+          expect(turn?.calls[0]?.rawArguments).toBe(JSON.stringify({ path: "note.txt", content }));
           const { id, part, offset, limit } = receipt.payload.diffRecall;
           return tool("recall", "context_recall", { id, part, offset, limit });
         }
@@ -122,9 +103,7 @@ test("fresh desktop projects a write receipt, recalls the original diff and reco
         expect(recalled.isError).toBe(false);
         expect(recalled.status).toBe("completed");
         expect(recalled.payload).toBeString();
-        const original = JSON.parse(
-          recalled.payload.split("--- content ---\n")[1],
-        );
+        const original = JSON.parse(recalled.payload.split("--- content ---\n")[1]);
         expect(original.diff).toContain("+line 0: exact generated content");
         expect(original).not.toHaveProperty("diffRecall");
         return final("Created note.txt and checked its recorded diff.");
@@ -143,10 +122,7 @@ test("fresh desktop projects a write receipt, recalls the original diff and reco
       resolveToolApproval: async () => true,
       onEvent() {},
     };
-    const result = await runDesktopNext(
-      "Create note.txt with the specified 100 lines",
-      options,
-    );
+    const result = await runDesktopNext("Create note.txt with the specified 100 lines", options);
     if (modelFailure) throw modelFailure;
     expect(result.ok, result.text).toBe(true);
     expect(calls).toBe(3);
@@ -159,16 +135,14 @@ test("fresh desktop projects a write receipt, recalls the original diff and reco
     );
     const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
     expect(record.compactMutationReceipts).toBe(true);
-    const recovered = await runDesktopNext(
-      "Create note.txt with the specified 100 lines",
-      { ...options, intent: "recover" },
-    );
+    const recovered = await runDesktopNext("Create note.txt with the specified 100 lines", {
+      ...options,
+      intent: "recover",
+    });
     expect(recovered.ok, recovered.text).toBe(true);
     expect(JSON.parse(recovered.text).runId).toBe(record.runId);
     expect(calls).toBe(3);
-    expect(JSON.parse(fs.readFileSync(recordPath, "utf8")).configHash).toBe(
-      record.configHash,
-    );
+    expect(JSON.parse(fs.readFileSync(recordPath, "utf8")).configHash).toBe(record.configHash);
   } finally {
     cleanup(root);
   }
@@ -177,9 +151,7 @@ test("fresh desktop projects a write receipt, recalls the original diff and reco
 test.each([false, true])(
   "desktop restores frozen receipt policy=%s without upgrading old sessions",
   async (enabled) => {
-    const root = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-receipt-recovery-"),
-    );
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-receipt-recovery-"));
     try {
       let calls = 0;
       const model = modelWith(async (messages) => {
@@ -267,14 +239,8 @@ test.each([false, true])(
       };
       const dir = path.join(root, ".paw", "desktop-next");
       fs.mkdirSync(dir, { recursive: true });
-      for (const name of [
-        `conversation-${fingerprint("receipt")}`,
-        identity.runId,
-      ])
-        fs.writeFileSync(
-          path.join(dir, `${name}.json`),
-          JSON.stringify(record),
-        );
+      for (const name of [`conversation-${fingerprint("receipt")}`, identity.runId])
+        fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(record));
       const before = calls;
       const result = await runDesktopNext(identity.goal, {
         workspaceRoot: root,
@@ -291,10 +257,7 @@ test.each([false, true])(
       expect(JSON.parse(result.text).runId).toBe(identity.runId);
       expect(calls).toBe(before);
       const saved = JSON.parse(
-        fs.readFileSync(
-          path.join(dir, `conversation-${fingerprint("receipt")}.json`),
-          "utf8",
-        ),
+        fs.readFileSync(path.join(dir, `conversation-${fingerprint("receipt")}.json`), "utf8"),
       );
       expect(saved.configHash).toBe(record.configHash);
       expect(saved.compactMutationReceipts).toBe(enabled ? true : undefined);

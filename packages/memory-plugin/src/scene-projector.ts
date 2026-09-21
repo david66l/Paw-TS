@@ -1,5 +1,4 @@
-export const PAW_MEMORY_SCENE_PROJECTOR_VERSION_V1 =
-  "paw.memory-scene-projector.v1" as const;
+export const PAW_MEMORY_SCENE_PROJECTOR_VERSION_V1 = "paw.memory-scene-projector.v1" as const;
 
 export interface SourceGroundedMemoryAtomV1 {
   readonly id: string;
@@ -38,10 +37,7 @@ export function projectSourceGroundedMemoryScenesV1(input: {
   const sources = [...input.sources]
     .map(validateSource)
     .filter((source) => source.atoms.length > 0)
-    .sort(
-      (left, right) =>
-        left.rank - right.rank || left.sourceId.localeCompare(right.sourceId),
-    );
+    .sort((left, right) => left.rank - right.rank || left.sourceId.localeCompare(right.sourceId));
   if (sources.length === 0) return Object.freeze([]);
   const perSourceBudget = Math.floor(input.maxChars / sources.length);
   const scenes: SourceGroundedMemorySceneV1[] = [];
@@ -51,8 +47,7 @@ export function projectSourceGroundedMemoryScenesV1(input: {
     const lines: string[] = [];
     let used = 0;
     for (const atom of source.atoms) {
-      const seqLabel =
-        atom.sourceSeqs.length > 0 ? atom.sourceSeqs.join(",") : "?";
+      const seqLabel = atom.sourceSeqs.length > 0 ? atom.sourceSeqs.join(",") : "?";
       const line = `[${atom.kind} @${seqLabel}] ${atom.statement}`;
       const separator = lines.length > 0 ? 1 : 0;
       if (used + separator + line.length > perSourceBudget) continue;
@@ -79,11 +74,7 @@ function validateSource(source: SourceGroundedMemorySceneInputV1): Readonly<{
   rank: number;
   atoms: readonly SourceGroundedMemoryAtomV1[];
 }> {
-  if (
-    !source.sourceId.trim() ||
-    !Number.isSafeInteger(source.rank) ||
-    source.rank < 0
-  ) {
+  if (!source.sourceId.trim() || !Number.isSafeInteger(source.rank) || source.rank < 0) {
     throw namedError("MemorySceneSourceInvalid");
   }
   const seenIds = new Set<string>();
@@ -102,9 +93,7 @@ function validateSource(source: SourceGroundedMemorySceneInputV1): Readonly<{
       seenIds.add(atom.id);
       if (
         atom.confidence !== undefined &&
-        (!Number.isFinite(atom.confidence) ||
-          atom.confidence < 0 ||
-          atom.confidence > 1)
+        (!Number.isFinite(atom.confidence) || atom.confidence < 0 || atom.confidence > 1)
       ) {
         throw namedError("MemorySceneAtomConfidenceInvalid");
       }

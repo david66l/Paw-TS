@@ -77,12 +77,8 @@ describe("facet v2 state projection", () => {
       member(facet.id, oldAvoidance.id, "state", "initial"),
       member(facet.id, rejectedForum.id, "event", "initial"),
       member(facet.id, joinedCommunity.id, "event", "initial"),
-      member(facet.id, currentParticipation.id, "state", "state_change", [
-        oldAvoidance.id,
-      ]),
-      member(facet.id, supportiveCondition.id, "condition", "supports", [
-        currentParticipation.id,
-      ]),
+      member(facet.id, currentParticipation.id, "state", "state_change", [oldAvoidance.id]),
+      member(facet.id, supportiveCondition.id, "condition", "supports", [currentParticipation.id]),
     ];
 
     const projection = projectMemoryFacetStateV2({
@@ -100,9 +96,7 @@ describe("facet v2 state projection", () => {
     expect(projection.currentStates.map((item) => item.memoryId)).toEqual([
       "current-participation",
     ]);
-    expect(projection.historicalStates.map((item) => item.memoryId)).toEqual([
-      "old-avoidance",
-    ]);
+    expect(projection.historicalStates.map((item) => item.memoryId)).toEqual(["old-avoidance"]);
     expect(projection.events.map((item) => item.memoryId)).toEqual([
       "joined-community",
       "rejected-forum",
@@ -140,9 +134,7 @@ describe("facet v2 state projection", () => {
       entries: [detailed, concise],
     });
 
-    expect(projection.currentStates.map((item) => item.memoryId)).toEqual([
-      "concise",
-    ]);
+    expect(projection.currentStates.map((item) => item.memoryId)).toEqual(["concise"]);
     expect(projection.contextualStates.map((item) => item.memoryId)).toEqual([
       "detailed-technical",
     ]);
@@ -195,9 +187,7 @@ describe("facet v2 state projection", () => {
       }),
     ]);
     expect(facet.canonicalKey).toBe("learning.film.history");
-    expect(
-      deriveMemoryFacetIdV2({ scope, canonicalKey: "learning film history" }),
-    ).toBe(facet.id);
+    expect(deriveMemoryFacetIdV2({ scope, canonicalKey: "learning film history" })).toBe(facet.id);
   });
 
   test("fails closed on dangling cross-facet links and logs only the reason", () => {
@@ -216,9 +206,7 @@ describe("facet v2 state projection", () => {
       projectMemoryFacetStateV2(
         {
           facet,
-          memberships: [
-            member(facet.id, current.id, "state", "state_change", ["missing"]),
-          ],
+          memberships: [member(facet.id, current.id, "state", "state_change", ["missing"])],
           entries: [current],
         },
         { onEvent: (event) => events.push(event), now: () => 10 },

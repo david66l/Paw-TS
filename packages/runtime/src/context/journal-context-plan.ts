@@ -1,8 +1,4 @@
-import type {
-  Context,
-  PortCallOptions,
-  SessionInputSnapshot,
-} from "@paw/agent-loop";
+import type { Context, PortCallOptions, SessionInputSnapshot } from "@paw/agent-loop";
 import type { ModelContextSectionV1, ModelRequestV1 } from "@paw/core";
 import type { InputFactV1 } from "@paw/protocol";
 import type { VerifiedCanonicalPayloadEvidenceV1 } from "../payload/verified-model-response-evidence.js";

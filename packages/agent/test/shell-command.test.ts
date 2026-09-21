@@ -8,18 +8,10 @@ import {
 describe("isGitDiffCommand", () => {
   test("accepts Git global options before the diff subcommand", () => {
     expect(isGitDiffCommand("git --no-pager diff -- src/a.ts")).toBe(true);
-    expect(isGitDiffCommand("git -P --no-replace-objects diff HEAD")).toBe(
-      true,
-    );
-    expect(isGitDiffCommand('git -C "repo path" --work-tree=. diff')).toBe(
-      true,
-    );
-    expect(isGitDiffCommand("git -c core.autocrlf=false diff -- a.py")).toBe(
-      true,
-    );
-    expect(isGitDiffCommand("git.exe --no-optional-locks diff --stat")).toBe(
-      true,
-    );
+    expect(isGitDiffCommand("git -P --no-replace-objects diff HEAD")).toBe(true);
+    expect(isGitDiffCommand('git -C "repo path" --work-tree=. diff')).toBe(true);
+    expect(isGitDiffCommand("git -c core.autocrlf=false diff -- a.py")).toBe(true);
+    expect(isGitDiffCommand("git.exe --no-optional-locks diff --stat")).toBe(true);
   });
 
   test("rejects compound commands whose diff execution is ambiguous", () => {
@@ -53,12 +45,7 @@ describe("isGitDiffCommand", () => {
       tokenizeCommandSegment(
         '"C:\\Program Files\\Python310\\python.exe" -m pytest tests\\test_a.py',
       ),
-    ).toEqual([
-      "C:\\Program Files\\Python310\\python.exe",
-      "-m",
-      "pytest",
-      "tests\\test_a.py",
-    ]);
+    ).toEqual(["C:\\Program Files\\Python310\\python.exe", "-m", "pytest", "tests\\test_a.py"]);
     expect(tokenizeCommandSegment("git diff repo\\ path/file.ts")).toEqual([
       "git",
       "diff",
@@ -87,36 +74,16 @@ describe("containsExecutedGitDiffCommand", () => {
   });
 
   test("rejects chains that can skip, transform, hide, or background the diff", () => {
-    expect(containsExecutedGitDiffCommand("true || git --no-pager diff")).toBe(
-      false,
-    );
-    expect(containsExecutedGitDiffCommand("git --no-pager diff | head")).toBe(
-      false,
-    );
-    expect(containsExecutedGitDiffCommand("git --no-pager diff; true")).toBe(
-      false,
-    );
-    expect(
-      containsExecutedGitDiffCommand("git --no-pager diff && echo reviewed"),
-    ).toBe(false);
-    expect(
-      containsExecutedGitDiffCommand("git status --short\ngit --no-pager diff"),
-    ).toBe(false);
-    expect(
-      containsExecutedGitDiffCommand("git --no-pager diff > review.txt"),
-    ).toBe(false);
-    expect(
-      containsExecutedGitDiffCommand("git --no-pager diff & echo done"),
-    ).toBe(false);
-    expect(containsExecutedGitDiffCommand("echo $(git --no-pager diff)")).toBe(
-      false,
-    );
-    expect(containsExecutedGitDiffCommand("echo 'git --no-pager diff'")).toBe(
-      false,
-    );
-    expect(
-      containsExecutedGitDiffCommand("echo ok # comment && git diff"),
-    ).toBe(false);
+    expect(containsExecutedGitDiffCommand("true || git --no-pager diff")).toBe(false);
+    expect(containsExecutedGitDiffCommand("git --no-pager diff | head")).toBe(false);
+    expect(containsExecutedGitDiffCommand("git --no-pager diff; true")).toBe(false);
+    expect(containsExecutedGitDiffCommand("git --no-pager diff && echo reviewed")).toBe(false);
+    expect(containsExecutedGitDiffCommand("git status --short\ngit --no-pager diff")).toBe(false);
+    expect(containsExecutedGitDiffCommand("git --no-pager diff > review.txt")).toBe(false);
+    expect(containsExecutedGitDiffCommand("git --no-pager diff & echo done")).toBe(false);
+    expect(containsExecutedGitDiffCommand("echo $(git --no-pager diff)")).toBe(false);
+    expect(containsExecutedGitDiffCommand("echo 'git --no-pager diff'")).toBe(false);
+    expect(containsExecutedGitDiffCommand("echo ok # comment && git diff")).toBe(false);
     for (const hidden of [
       "git diff --output=review.txt",
       "git diff --output review.txt",

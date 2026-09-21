@@ -65,19 +65,13 @@ describe("bounded token counts", () => {
       const encoder = get_encoding(name);
       try {
         const estimator = new TiktokenEstimator(name);
-        for (const text of [
-          "",
-          "中文与代码 const a = 1; 🐾",
-          "abc 中文 🐾\n".repeat(1100),
-        ]) {
+        for (const text of ["", "中文与代码 const a = 1; 🐾", "abc 中文 🐾\n".repeat(1100)]) {
           const expected =
             text.length <= 8192
               ? encoder.encode(text).length
               : Array.from(
                   { length: Math.ceil(text.length / 4096) },
-                  (_, index) =>
-                    encoder.encode(text.slice(index * 4096, (index + 1) * 4096))
-                      .length,
+                  (_, index) => encoder.encode(text.slice(index * 4096, (index + 1) * 4096)).length,
                 ).reduce((sum, n) => sum + n, 0);
           expect(estimator.count(text)).toBe(expected);
           expect(estimator.count(text)).toBe(expected);

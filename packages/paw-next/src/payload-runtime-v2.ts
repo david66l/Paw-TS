@@ -1,9 +1,5 @@
 import type { SessionInputSnapshot } from "@paw/agent-loop";
-import type {
-  InputFactV1,
-  ModelResponseV1,
-  RunJournalEnvelopeV1,
-} from "@paw/protocol";
+import type { InputFactV1, ModelResponseV1, RunJournalEnvelopeV1 } from "@paw/protocol";
 import {
   type FileRunSessionV1,
   type FileSessionExecutionLeaseV1,
@@ -56,9 +52,7 @@ export interface PawNextPayloadReadBundleV2 {
 export function createPawNextPayloadReadBundleV2(input: {
   readonly taskOptions: PawNextFilePayloadTaskOptionsV1;
 }): PawNextPayloadReadBundleV2 {
-  const policy = freezeFileDurableJsonPayloadRuntimePolicyV1(
-    input.taskOptions.payloadRuntime,
-  );
+  const policy = freezeFileDurableJsonPayloadRuntimePolicyV1(input.taskOptions.payloadRuntime);
   const reader = createFileDurableJsonPayloadReaderV1({
     workspaceRoot: input.taskOptions.workspaceRoot,
     sessionId: input.taskOptions.sessionId,
@@ -67,10 +61,7 @@ export function createPawNextPayloadReadBundleV2(input: {
   });
   const payloadIdentity = reader.readCanonicalPayloadIdentity();
   return Object.freeze({
-    async loadForPrefix(
-      prefix: readonly RunJournalEnvelopeV1[],
-      signal?: AbortSignal,
-    ) {
+    async loadForPrefix(prefix: readonly RunJournalEnvelopeV1[], signal?: AbortSignal) {
       const index = await buildVerifiedCanonicalPayloadIndexV1({
         fullPrefix: prefix,
         resolver: reader,
@@ -93,9 +84,7 @@ export function createPawNextPayloadExecutionBundleV2(input: {
   readonly taskOptions: PawNextFilePayloadTaskOptionsV1;
   readonly signal: AbortSignal;
 }): PawNextPayloadExecutionBundleV2 {
-  const policy = freezeFileDurableJsonPayloadRuntimePolicyV1(
-    input.taskOptions.payloadRuntime,
-  );
+  const policy = freezeFileDurableJsonPayloadRuntimePolicyV1(input.taskOptions.payloadRuntime);
   const identity = {
     workspaceRoot: input.taskOptions.workspaceRoot,
     sessionId: input.taskOptions.sessionId,

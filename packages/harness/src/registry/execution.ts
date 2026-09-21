@@ -1,8 +1,5 @@
 import path from "node:path";
-import {
-  captureWorkspaceRevision,
-  compareWorkspaceRevisions,
-} from "../workspace-revision.js";
+import { captureWorkspaceRevision, compareWorkspaceRevisions } from "../workspace-revision.js";
 
 import {
   type ToolErrorCode,
@@ -82,10 +79,7 @@ import {
   toolDefinitions,
 } from "./definitions.js";
 
-type AcceptanceUpdateInput = Omit<
-  import("@paw/core").AgentAcceptanceUpdateAction,
-  "type"
->;
+type AcceptanceUpdateInput = Omit<import("@paw/core").AgentAcceptanceUpdateAction, "type">;
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v !== null && typeof v === "object" && !Array.isArray(v)
@@ -117,9 +111,7 @@ function schemaForTool(tool: string): JsonObjectSchema | null {
   const sanitized = tool.replace(/\./g, "_");
   const def = toolDefinitions().find((d) => d.function.name === sanitized);
   const schema = def?.function.parameters;
-  return schema && typeof schema === "object"
-    ? (schema as JsonObjectSchema)
-    : null;
+  return schema && typeof schema === "object" ? (schema as JsonObjectSchema) : null;
 }
 
 function matchesJsonType(value: unknown, expected: string): boolean {
@@ -149,10 +141,7 @@ function matchesJsonType(value: unknown, expected: string): boolean {
  * schema returned by `toolDefinitions`. A null result means validation passed;
  * failures use the same model-facing ToolRunResult as `executeTool`.
  */
-export function validateToolArguments(
-  tool: string,
-  args: unknown,
-): ToolRunResult | null {
+export function validateToolArguments(tool: string, args: unknown): ToolRunResult | null {
   const schema = schemaForTool(tool);
   if (!schema) {
     return null;
@@ -169,11 +158,9 @@ export function validateToolArguments(
     if (!(name in rec)) {
       return {
         ok: false,
-        payload: makeToolError(
-          "E_SCHEMA_INVALID",
-          `missing required field: ${name}`,
-          { field: name },
-        ),
+        payload: makeToolError("E_SCHEMA_INVALID", `missing required field: ${name}`, {
+          field: name,
+        }),
         summary: `${tool}: E_SCHEMA_INVALID missing required field: ${name}`,
       };
     }
@@ -185,11 +172,10 @@ export function validateToolArguments(
     if (!matchesJsonType(rec[name], prop.type)) {
       return {
         ok: false,
-        payload: makeToolError(
-          "E_SCHEMA_INVALID",
-          `field ${name} must be ${prop.type}`,
-          { field: name, expected: prop.type },
-        ),
+        payload: makeToolError("E_SCHEMA_INVALID", `field ${name} must be ${prop.type}`, {
+          field: name,
+          expected: prop.type,
+        }),
         summary: `${tool}: E_SCHEMA_INVALID field ${name} must be ${prop.type}`,
       };
     }
@@ -221,9 +207,7 @@ function diagnosticSummarySuffix(diagnostics: {
       : "; syntax diagnostics: unavailable";
 }
 
-function parseAcceptanceUpdate(
-  rec: Record<string, unknown>,
-): AcceptanceUpdateInput | string {
+function parseAcceptanceUpdate(rec: Record<string, unknown>): AcceptanceUpdateInput | string {
   const rawAdd = Array.isArray(rec.add) ? rec.add : [];
   const rawUpdates = Array.isArray(rec.updates) ? rec.updates : [];
   const add: Array<AcceptanceUpdateInput["add"][number]> = [];
@@ -233,11 +217,7 @@ function parseAcceptanceUpdate(
     if (!item || typeof item.text !== "string" || !item.text.trim()) {
       return `add[${index}].text must be a non-empty string`;
     }
-    if (
-      item.source !== "user" &&
-      item.source !== "repository" &&
-      item.source !== "verification"
-    ) {
+    if (item.source !== "user" && item.source !== "repository" && item.source !== "verification") {
       return `add[${index}].source must be user, repository, or verification`;
     }
     if (item.ref !== undefined && typeof item.ref !== "string") {
@@ -246,9 +226,7 @@ function parseAcceptanceUpdate(
     add.push({
       text: item.text.trim(),
       source: item.source,
-      ...(typeof item.ref === "string" && item.ref.trim()
-        ? { ref: item.ref.trim() }
-        : {}),
+      ...(typeof item.ref === "string" && item.ref.trim() ? { ref: item.ref.trim() } : {}),
     });
   }
   for (const [index, raw] of rawUpdates.entries()) {
@@ -267,8 +245,7 @@ function parseAcceptanceUpdate(
     if (item.evidence !== undefined && typeof item.evidence !== "string") {
       return `updates[${index}].evidence must be a string`;
     }
-    const evidence =
-      typeof item.evidence === "string" ? item.evidence.trim() : "";
+    const evidence = typeof item.evidence === "string" ? item.evidence.trim() : "";
     if (item.status === "satisfied" && !evidence) {
       return `updates[${index}] satisfied requires non-empty evidence`;
     }
@@ -396,10 +373,8 @@ export async function executeTool(
         : typeof rec.filePattern === "string"
           ? rec.filePattern
           : undefined;
-    const maxResults =
-      num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
-    const maxDepth =
-      num(rec.max_depth, undefined) ?? num(rec.maxDepth, undefined);
+    const maxResults = num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
+    const maxDepth = num(rec.max_depth, undefined) ?? num(rec.maxDepth, undefined);
     const caseSensitive =
       typeof rec.case_sensitive === "boolean"
         ? rec.case_sensitive
@@ -423,8 +398,7 @@ export async function executeTool(
     if (r.error) {
       return toolErrorResult("search", errorCodeForToolPayload(r), r.error);
     }
-    const n =
-      r.match_count ?? (Array.isArray(r.matches) ? r.matches.length : 0);
+    const n = r.match_count ?? (Array.isArray(r.matches) ? r.matches.length : 0);
     const tail = r.truncated ? " (truncated)" : "";
     return {
       ok: true,
@@ -440,8 +414,7 @@ export async function executeTool(
       });
     }
     const globPath = typeof rec.path === "string" ? rec.path : ".";
-    const maxDepth =
-      num(rec.max_depth, undefined) ?? num(rec.maxDepth, undefined);
+    const maxDepth = num(rec.max_depth, undefined) ?? num(rec.maxDepth, undefined);
     const r = globWorkspaceFiles(ctx.workspaceRoot, globPath, {
       pattern,
       ...(maxDepth !== undefined ? { maxDepth } : {}),
@@ -470,10 +443,8 @@ export async function executeTool(
         : typeof rec.filePattern === "string"
           ? rec.filePattern
           : undefined;
-    const maxResults =
-      num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
-    const maxDepth =
-      num(rec.max_depth, undefined) ?? num(rec.maxDepth, undefined);
+    const maxResults = num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
+    const maxDepth = num(rec.max_depth, undefined) ?? num(rec.maxDepth, undefined);
     const caseSensitive =
       typeof rec.case_sensitive === "boolean"
         ? rec.case_sensitive
@@ -492,10 +463,8 @@ export async function executeTool(
         : typeof rec.outputMode === "string"
           ? (rec.outputMode as "content" | "files_with_matches" | "count")
           : "files_with_matches";
-    const contextBefore =
-      num(rec["-B"], undefined) ?? num(rec.context_before, undefined);
-    const contextAfter =
-      num(rec["-A"], undefined) ?? num(rec.context_after, undefined);
+    const contextBefore = num(rec["-B"], undefined) ?? num(rec.context_before, undefined);
+    const contextAfter = num(rec["-A"], undefined) ?? num(rec.context_after, undefined);
     const context = num(rec["-C"], undefined) ?? num(rec.context, undefined);
     const showLineNumbers =
       typeof rec["-n"] === "boolean"
@@ -503,8 +472,7 @@ export async function executeTool(
         : typeof rec.show_line_numbers === "boolean"
           ? rec.show_line_numbers
           : true;
-    const headLimit =
-      num(rec.head_limit, undefined) ?? num(rec.headLimit, undefined);
+    const headLimit = num(rec.head_limit, undefined) ?? num(rec.headLimit, undefined);
     const offset = num(rec.offset, undefined) ?? 0;
     const r = grepWorkspaceText(ctx.workspaceRoot, grepPath, {
       pattern,
@@ -564,20 +532,12 @@ export async function executeTool(
       createDirectories,
     });
     if (r.error) {
-      return toolErrorResult(
-        "write_file",
-        errorCodeForToolPayload(r),
-        r.error,
-        { path: filePath },
-      );
+      return toolErrorResult("write_file", errorCodeForToolPayload(r), r.error, { path: filePath });
     }
     if (r.changed === false) {
-      return toolErrorResult(
-        "write_file",
-        "E_USER",
-        "write produced no content change",
-        { path: filePath },
-      );
+      return toolErrorResult("write_file", "E_USER", "write produced no content change", {
+        path: filePath,
+      });
     }
     ctx.watcher?.markAgentWritten(filePath);
     const diagnostics = diagnoseEditedFilesV1(ctx.workspaceRoot, [filePath]);
@@ -613,19 +573,14 @@ export async function executeTool(
       });
     }
     if (oldString.length === 0) {
-      const created = writeWorkspaceFile(
-        ctx.workspaceRoot,
-        filePath,
-        newString,
-        { createDirectories: true, createOnly: true },
-      );
+      const created = writeWorkspaceFile(ctx.workspaceRoot, filePath, newString, {
+        createDirectories: true,
+        createOnly: true,
+      });
       if (created.error) {
-        return toolErrorResult(
-          "edit_file",
-          errorCodeForToolPayload(created),
-          created.error,
-          { path: filePath },
-        );
+        return toolErrorResult("edit_file", errorCodeForToolPayload(created), created.error, {
+          path: filePath,
+        });
       }
       ctx.watcher?.markAgentWritten(filePath);
       const diagnostics = diagnoseEditedFilesV1(ctx.workspaceRoot, [filePath]);
@@ -635,8 +590,7 @@ export async function executeTool(
         summary: `edit_file(create): ${filePath} (${created.bytes_written ?? 0} bytes)${diagnosticSummarySuffix(diagnostics)}`,
       };
     }
-    const startLine =
-      num(rec.start_line, undefined) ?? num(rec.startLine, undefined);
+    const startLine = num(rec.start_line, undefined) ?? num(rec.startLine, undefined);
     const endLine = num(rec.end_line, undefined) ?? num(rec.endLine, undefined);
     const fuzzy =
       typeof rec.fuzzy === "boolean"
@@ -645,9 +599,7 @@ export async function executeTool(
           ? rec.fuzzy_match
           : false;
     const replaceAll =
-      rec.replace_all === true ||
-      rec.replaceAll === true ||
-      rec.replace_all === "true";
+      rec.replace_all === true || rec.replaceAll === true || rec.replace_all === "true";
     const r = editWorkspaceFile(ctx.workspaceRoot, filePath, {
       oldString: oldString || undefined,
       newString,
@@ -682,19 +634,11 @@ export async function executeTool(
     };
   }
   if (tool === UNDO_LAST_EDIT) {
-    const checkpointNamespaceId =
-      ctx.checkpointNamespaceId?.trim() ?? ctx.parentRunId?.trim();
+    const checkpointNamespaceId = ctx.checkpointNamespaceId?.trim() ?? ctx.parentRunId?.trim();
     if (!checkpointNamespaceId) {
-      return toolErrorResult(
-        "undo_last_edit",
-        "E_USER",
-        "safe undo requires an active Agent run",
-      );
+      return toolErrorResult("undo_last_edit", "E_USER", "safe undo requires an active Agent run");
     }
-    const undone = undoLastSafeFileMutationCheckpoint(
-      ctx.workspaceRoot,
-      checkpointNamespaceId,
-    );
+    const undone = undoLastSafeFileMutationCheckpoint(ctx.workspaceRoot, checkpointNamespaceId);
     if (undone.status === "none") {
       return toolErrorResult(
         "undo_last_edit",
@@ -716,9 +660,7 @@ export async function executeTool(
         `safe undo refused because checkpoint metadata is invalid: ${undone.reason}`,
       );
     }
-    const paths = undone.entry.targets.filter(
-      (target) => target !== "__shell_cmd__",
-    );
+    const paths = undone.entry.targets.filter((target) => target !== "__shell_cmd__");
     for (const restoredPath of paths) {
       ctx.watcher?.markAgentWritten(restoredPath);
     }
@@ -741,17 +683,11 @@ export async function executeTool(
       });
     }
     if (!ctx.managedJobs) {
-      return toolErrorResult(
-        "job_start",
-        "E_FATAL",
-        "managed job controller not configured",
-      );
+      return toolErrorResult("job_start", "E_FATAL", "managed job controller not configured");
     }
-    const cwd =
-      typeof rec.cwd === "string" && rec.cwd.trim() ? rec.cwd : undefined;
+    const cwd = typeof rec.cwd === "string" && rec.cwd.trim() ? rec.cwd : undefined;
     const outputLimitBytes =
-      num(rec.output_limit_bytes, undefined) ??
-      num(rec.outputLimitBytes, undefined);
+      num(rec.output_limit_bytes, undefined) ?? num(rec.outputLimitBytes, undefined);
     if (
       outputLimitBytes !== undefined &&
       (!Number.isSafeInteger(outputLimitBytes) ||
@@ -779,20 +715,14 @@ export async function executeTool(
       const message = error instanceof Error ? error.message : String(error);
       return toolErrorResult(
         "job_start",
-        message.startsWith("[ToolExecutionPolicy:")
-          ? "E_POLICY_DENIED"
-          : "E_FATAL",
+        message.startsWith("[ToolExecutionPolicy:") ? "E_POLICY_DENIED" : "E_FATAL",
         message,
       );
     }
   }
   if (tool === JOB_LIST) {
     if (!ctx.managedJobs) {
-      return toolErrorResult(
-        "job_list",
-        "E_FATAL",
-        "managed job controller not configured",
-      );
+      return toolErrorResult("job_list", "E_FATAL", "managed job controller not configured");
     }
     const jobs = ctx.managedJobs.list();
     return {
@@ -805,11 +735,7 @@ export async function executeTool(
     const id = typeof rec.id === "string" ? rec.id.trim() : "";
     if (!id) return toolErrorResult("job_read", "E_USER", "missing id");
     if (!ctx.managedJobs) {
-      return toolErrorResult(
-        "job_read",
-        "E_FATAL",
-        "managed job controller not configured",
-      );
+      return toolErrorResult("job_read", "E_FATAL", "managed job controller not configured");
     }
     try {
       const read = ctx.managedJobs.read(id);
@@ -830,11 +756,7 @@ export async function executeTool(
     const id = typeof rec.id === "string" ? rec.id.trim() : "";
     if (!id) return toolErrorResult("job_wait", "E_USER", "missing id");
     if (!ctx.managedJobs) {
-      return toolErrorResult(
-        "job_wait",
-        "E_FATAL",
-        "managed job controller not configured",
-      );
+      return toolErrorResult("job_wait", "E_FATAL", "managed job controller not configured");
     }
     const requested = num(rec.timeout_sec, undefined) ?? 10;
     if (!Number.isFinite(requested) || requested < 0.1 || requested > 30) {
@@ -845,11 +767,7 @@ export async function executeTool(
       );
     }
     try {
-      const waited = await ctx.managedJobs.wait(
-        id,
-        Math.floor(requested * 1_000),
-        ctx.abortSignal,
-      );
+      const waited = await ctx.managedJobs.wait(id, Math.floor(requested * 1_000), ctx.abortSignal);
       return {
         ok: true,
         payload: waited,
@@ -869,16 +787,10 @@ export async function executeTool(
     const id = typeof rec.id === "string" ? rec.id.trim() : "";
     if (!id) return toolErrorResult("job_kill", "E_USER", "missing id");
     if (!ctx.managedJobs) {
-      return toolErrorResult(
-        "job_kill",
-        "E_FATAL",
-        "managed job controller not configured",
-      );
+      return toolErrorResult("job_kill", "E_FATAL", "managed job controller not configured");
     }
     const reason =
-      typeof rec.reason === "string" && rec.reason.trim()
-        ? rec.reason.trim()
-        : undefined;
+      typeof rec.reason === "string" && rec.reason.trim() ? rec.reason.trim() : undefined;
     try {
       const status = ctx.managedJobs.kill(id, reason);
       return {
@@ -901,10 +813,8 @@ export async function executeTool(
         field: "command",
       });
     }
-    const cwd =
-      typeof rec.cwd === "string" && rec.cwd.trim() ? rec.cwd : undefined;
-    const timeoutSec =
-      num(rec.timeout_sec, undefined) ?? num(rec.timeoutSec, undefined);
+    const cwd = typeof rec.cwd === "string" && rec.cwd.trim() ? rec.cwd : undefined;
+    const timeoutSec = num(rec.timeout_sec, undefined) ?? num(rec.timeoutSec, undefined);
     const timeoutMs =
       timeoutSec !== undefined && Number.isFinite(timeoutSec)
         ? Math.floor(timeoutSec * 1000)
@@ -924,8 +834,7 @@ export async function executeTool(
             ...shellOpts,
             ...(onChunk
               ? {
-                  onChunk: (chunk: string, isStderr: boolean) =>
-                    onChunk(tool, chunk, isStderr),
+                  onChunk: (chunk: string, isStderr: boolean) => onChunk(tool, chunk, isStderr),
                 }
               : {}),
           })
@@ -965,8 +874,7 @@ export async function executeTool(
   }
   if (tool === WEBFETCH) {
     const url = typeof rec.url === "string" ? rec.url : "";
-    const maxLength =
-      num(rec.max_length, undefined) ?? num(rec.maxLength, undefined);
+    const maxLength = num(rec.max_length, undefined) ?? num(rec.maxLength, undefined);
     if (ctx.webAccess) {
       const outcome = await ctx.webAccess.fetch(
         { url, ...(maxLength === undefined ? {} : { maxLength }) },
@@ -1008,8 +916,7 @@ export async function executeTool(
         summary: "web_search: missing query",
       };
     }
-    const maxResults =
-      num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
+    const maxResults = num(rec.max_results, undefined) ?? num(rec.maxResults, undefined);
     if (ctx.webAccess) {
       const outcome = await ctx.webAccess.search(
         { query, ...(maxResults === undefined ? {} : { maxResults }) },
@@ -1048,11 +955,7 @@ export async function executeTool(
       return toolErrorResult("acceptance_update", "E_SCHEMA_INVALID", parsed);
     }
     if (!ctx.acceptanceLedger) {
-      return toolErrorResult(
-        "acceptance_update",
-        "E_FATAL",
-        "acceptance ledger not configured",
-      );
+      return toolErrorResult("acceptance_update", "E_FATAL", "acceptance ledger not configured");
     }
     const result = await ctx.acceptanceLedger.apply(parsed);
     if (!result.ok) {
@@ -1080,15 +983,11 @@ export async function executeTool(
         const id = typeof o.id === "string" ? o.id : "";
         const content = typeof o.content === "string" ? o.content : "";
         const status =
-          o.status === "pending" ||
-          o.status === "in_progress" ||
-          o.status === "done"
+          o.status === "pending" || o.status === "in_progress" || o.status === "done"
             ? o.status
             : "pending";
         const priority =
-          o.priority === "low" ||
-          o.priority === "medium" ||
-          o.priority === "high"
+          o.priority === "low" || o.priority === "medium" || o.priority === "high"
             ? o.priority
             : undefined;
         if (!id || !content) return null;
@@ -1123,11 +1022,7 @@ export async function executeTool(
   }
   if (tool === PROGRESS_READ) {
     if (!ctx.taskProgress) {
-      return toolErrorResult(
-        "progress_read",
-        "E_FATAL",
-        "task progress service not configured",
-      );
+      return toolErrorResult("progress_read", "E_FATAL", "task progress service not configured");
     }
     const outcome = await ctx.taskProgress.read(ctx.abortSignal);
     if (!outcome.ok) {
@@ -1166,8 +1061,7 @@ export async function executeTool(
       typeof rec.action === "string"
         ? (rec.action as "edit" | "append" | "insert" | "delete")
         : "edit";
-    const cellIndex =
-      num(rec.cell_index, undefined) ?? num(rec.cellIndex, undefined);
+    const cellIndex = num(rec.cell_index, undefined) ?? num(rec.cellIndex, undefined);
     const source = typeof rec.source === "string" ? rec.source : undefined;
     const cellType =
       rec.cell_type === "code" || rec.cell_type === "markdown"
@@ -1197,8 +1091,7 @@ export async function executeTool(
   }
   if (tool === BRIEF) {
     const briefPath = typeof rec.path === "string" ? rec.path : ".";
-    const maxFiles =
-      num(rec.max_files, undefined) ?? num(rec.maxFiles, undefined);
+    const maxFiles = num(rec.max_files, undefined) ?? num(rec.maxFiles, undefined);
     const r = generateBrief(ctx.workspaceRoot, {
       path: briefPath,
       ...(maxFiles !== undefined ? { maxFiles } : {}),
@@ -1229,8 +1122,7 @@ export async function executeTool(
     return { ok: true, payload: r, summary: `git_status: ${summary}` };
   }
   if (tool === GIT_LOG) {
-    const maxCount =
-      num(rec.max_count, undefined) ?? num(rec.maxCount, undefined) ?? 10;
+    const maxCount = num(rec.max_count, undefined) ?? num(rec.maxCount, undefined) ?? 10;
     const r = await gitLogAsync(ctx.workspaceRoot, maxCount, ctx.abortSignal);
     if (r.error) {
       return { ok: false, payload: r, summary: `git_log: ${r.error}` };
@@ -1239,8 +1131,7 @@ export async function executeTool(
     return { ok: true, payload: r, summary: `git_log: ${n} commit(s)` };
   }
   if (tool === GIT_DIFF) {
-    const diffPath =
-      typeof rec.path === "string" && rec.path.trim() ? rec.path : undefined;
+    const diffPath = typeof rec.path === "string" && rec.path.trim() ? rec.path : undefined;
     const r = await gitDiffAsync(ctx.workspaceRoot, diffPath, ctx.abortSignal);
     if (r.error) {
       return { ok: false, payload: r, summary: `git_diff: ${r.error}` };
@@ -1265,8 +1156,7 @@ export async function executeTool(
         summary: "run_agent: sub-agent launcher not configured",
       };
     }
-    const maxSteps =
-      num(rec.max_steps, undefined) ?? num(rec.maxSteps, undefined);
+    const maxSteps = num(rec.max_steps, undefined) ?? num(rec.maxSteps, undefined);
     const sharedContext = ctx.buildSubAgentSharedContext?.({
       goal,
       args: rec,
@@ -1310,32 +1200,23 @@ export async function executeTool(
         summary: "create_agent: name and prompt required",
       };
     }
-    const role =
-      typeof rec.role === "string" && rec.role.trim() ? rec.role.trim() : name;
-    const tools =
-      typeof rec.tools === "string" && rec.tools.trim()
-        ? rec.tools.trim()
-        : "inherit";
+    const role = typeof rec.role === "string" && rec.role.trim() ? rec.role.trim() : name;
+    const tools = typeof rec.tools === "string" && rec.tools.trim() ? rec.tools.trim() : "inherit";
     const childPolicy =
       rec.child_policy === "read_write" || rec.childPolicy === "read_write"
         ? "read_write"
         : "read_only";
-    const modelRaw =
-      typeof rec.model === "string" ? rec.model.trim() : "inherit";
-    const model =
-      modelRaw === "flash" || modelRaw === "pro" ? modelRaw : "inherit";
+    const modelRaw = typeof rec.model === "string" ? rec.model.trim() : "inherit";
+    const model = modelRaw === "flash" || modelRaw === "pro" ? modelRaw : "inherit";
     const outputFormat =
       typeof rec.output_format === "string" && rec.output_format.trim()
         ? rec.output_format.trim().replace(/\n/g, " ")
         : typeof rec.outputFormat === "string" && rec.outputFormat.trim()
           ? rec.outputFormat.trim().replace(/\n/g, " ")
           : "Return a clear summary of what you did.";
-    const emoji =
-      typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "";
+    const emoji = typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "";
     const description =
-      typeof rec.description === "string" && rec.description.trim()
-        ? rec.description.trim()
-        : "";
+      typeof rec.description === "string" && rec.description.trim() ? rec.description.trim() : "";
     const overwrite = rec.overwrite === true;
 
     // Prefer injected writer when available (full validate + registry reload)
@@ -1519,9 +1400,7 @@ export async function executeTool(
     }
     const r = applyWorkspacePatch(ctx.workspaceRoot, patchText);
     if (r.ok) {
-      for (const f of r.results
-        .filter((rr) => rr.ok && rr.changed === true)
-        .map((rr) => rr.path)) {
+      for (const f of r.results.filter((rr) => rr.ok && rr.changed === true).map((rr) => rr.path)) {
         ctx.watcher?.markAgentWritten(f);
       }
     }
@@ -1530,15 +1409,11 @@ export async function executeTool(
           .filter((result) => result.ok && result.changed === true)
           .map((result) => result.path)
       : [];
-    const diagnostics = r.ok
-      ? diagnoseEditedFilesV1(ctx.workspaceRoot, changedPaths)
-      : undefined;
+    const diagnostics = r.ok ? diagnoseEditedFilesV1(ctx.workspaceRoot, changedPaths) : undefined;
     return {
       ok: r.ok,
       payload: diagnostics ? { ...r, diagnostics } : r,
-      summary: diagnostics
-        ? `${r.summary}${diagnosticSummarySuffix(diagnostics)}`
-        : r.summary,
+      summary: diagnostics ? `${r.summary}${diagnosticSummarySuffix(diagnostics)}` : r.summary,
     };
   }
   if (tool === SYMBOL_SEARCH) {
@@ -1550,14 +1425,12 @@ export async function executeTool(
         summary: "symbol_search: missing query",
       };
     }
-    const maxResults =
-      num(rec.max_results, undefined) ?? num(rec.maxResults, undefined) ?? 20;
+    const maxResults = num(rec.max_results, undefined) ?? num(rec.maxResults, undefined) ?? 20;
     const r = searchWorkspaceSymbols(ctx.workspaceRoot, query, { maxResults });
     if (r.error) {
       return { ok: false, payload: r, summary: `symbol_search: ${r.error}` };
     }
-    const totalSymbols =
-      r.matches?.reduce((sum, m) => sum + m.symbols.length, 0) ?? 0;
+    const totalSymbols = r.matches?.reduce((sum, m) => sum + m.symbols.length, 0) ?? 0;
     const tail = r.truncated ? " (truncated)" : "";
     return {
       ok: true,
@@ -1570,8 +1443,7 @@ export async function executeTool(
       return {
         ok: false,
         payload: {
-          error:
-            "memory Runtime unavailable (Postgres down or not initialized)",
+          error: "memory Runtime unavailable (Postgres down or not initialized)",
         },
         summary: "memory.list: runtime unavailable",
       };
@@ -1713,15 +1585,11 @@ export async function executeTool(
         summary: "context.recall: missing id",
       };
     }
-    const part =
-      rec.part === "tail" || rec.part === "chunk" ? rec.part : "head";
+    const part = rec.part === "tail" || rec.part === "chunk" ? rec.part : "head";
     const offset = num(rec.offset, undefined) ?? 0;
     const limit = num(rec.limit, undefined) ?? 8000;
     if (ctx.payloadRecall) {
-      const outcome = await ctx.payloadRecall.recall(
-        { id, part, offset, limit },
-        ctx.abortSignal,
-      );
+      const outcome = await ctx.payloadRecall.recall({ id, part, offset, limit }, ctx.abortSignal);
       if (!outcome.ok) {
         return {
           ok: false,
@@ -1767,9 +1635,7 @@ export async function executeTool(
     const head = [
       `[recalled archive id=${entry?.id}, tool=${entry?.tool}, ok=${entry?.ok}, created at turn ${entry?.turn}]`,
       `[window ${window?.part ?? "head"} offset=${window?.offset ?? 0} len=${window?.length ?? 0} total=${window?.total ?? 0}]`,
-      ...(entry?.callerText
-        ? [`[producing action] ${entry.callerText.slice(0, 400)}`]
-        : []),
+      ...(entry?.callerText ? [`[producing action] ${entry.callerText.slice(0, 400)}`] : []),
       "--- content ---",
     ].join("\n");
     return {
@@ -1800,9 +1666,7 @@ async function executeMcpProxy(
   if (action === "search") {
     const query = typeof args.query === "string" ? args.query.trim() : "";
     const requestedLimit =
-      typeof args.limit === "number" && Number.isInteger(args.limit)
-        ? args.limit
-        : 8;
+      typeof args.limit === "number" && Number.isInteger(args.limit) ? args.limit : 8;
     const limit = Math.min(Math.max(requestedLimit, 1), 20);
     const terms = query
       .toLowerCase()
@@ -1819,10 +1683,7 @@ async function executeMcpProxy(
         const score =
           exact && id.toLowerCase() === exact
             ? 10_000
-            : terms.reduce(
-                (total, term) => total + (haystack.includes(term) ? 1 : 0),
-                0,
-              );
+            : terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
         return { candidate, id, score };
       })
       .filter((entry) => allowedTargets.has(entry.id))

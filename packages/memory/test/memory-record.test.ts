@@ -17,9 +17,7 @@ describe("isMemoryMetaQuery", () => {
 
   it("does not match technical memory-task queries", () => {
     expect(
-      isMemoryMetaQuery(
-        "只读任务：检查 packages/core/src/memory-retriever.ts，说明 path scoring",
-      ),
+      isMemoryMetaQuery("只读任务：检查 packages/core/src/memory-retriever.ts，说明 path scoring"),
     ).toBe(false);
     expect(isMemoryMetaQuery("Explain memory-retriever scoring")).toBe(false);
     expect(isMemoryMetaQuery("上下文记忆机制如何实现")).toBe(false);

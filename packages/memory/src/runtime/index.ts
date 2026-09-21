@@ -12,9 +12,7 @@ import type { MemoryRuntime, MemoryRuntimeOptions } from "./types.js";
  * 默认 v2（spec v2 长记忆管线）；v1 仅经 opts.runtime === "v1"
  * 或 PAW_MEMORY_RUNTIME=v1 显式回滚时使用。
  */
-export async function createMemoryRuntime(
-  opts: MemoryRuntimeOptions,
-): Promise<MemoryRuntime> {
+export async function createMemoryRuntime(opts: MemoryRuntimeOptions): Promise<MemoryRuntime> {
   const kind = opts.runtime ?? process.env.PAW_MEMORY_RUNTIME ?? "v2";
   if (kind === "v1") return new MemoryRuntimeImpl(opts);
   return new MemoryRuntimeV2(opts);

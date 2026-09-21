@@ -16,10 +16,7 @@ describe("interactive control reducer", () => {
   const reducer = createInteractiveControlReducerV1();
 
   test("treats a natural stop as a configured reducer decision", () => {
-    const state = reducer.reduce(
-      [model({ status: "completed", hasToolCalls: false })],
-      config,
-    );
+    const state = reducer.reduce([model({ status: "completed", hasToolCalls: false })], config);
     expect(state.decision).toEqual({
       kind: "completed",
       reason: "interactive-natural-stop",
@@ -29,22 +26,15 @@ describe("interactive control reducer", () => {
   test("continues through tool calls and ordinary tool business failures", () => {
     expect(
       reducer.reduce(
-        [
-          model({ status: "completed", hasToolCalls: true }),
-          tool({ status: "failed" }),
-        ],
+        [model({ status: "completed", hasToolCalls: true }), tool({ status: "failed" })],
         config,
       ).decision,
     ).toEqual({ kind: "continue" });
   });
 
   test("fails closed for unknown effects, denial, runtime failure and abort", () => {
-    expect(reducer.reduce(toolBatch("unknown"), config).decision.kind).toBe(
-      "incomplete",
-    );
-    expect(reducer.reduce(toolBatch("rejected"), config).decision.kind).toBe(
-      "await_user",
-    );
+    expect(reducer.reduce(toolBatch("unknown"), config).decision.kind).toBe("incomplete");
+    expect(reducer.reduce(toolBatch("rejected"), config).decision.kind).toBe("await_user");
     expect(
       reducer.reduce(
         [
@@ -60,18 +50,16 @@ describe("interactive control reducer", () => {
       ).decision,
     ).toEqual({ kind: "failed", reason: "E_CONTEXT" });
     expect(
-      reducer.reduce(
-        [{ type: "abort.requested", source: "user", reason: "stop" }],
-        config,
-      ).decision,
+      reducer.reduce([{ type: "abort.requested", source: "user", reason: "stop" }], config)
+        .decision,
     ).toEqual({ kind: "aborted", reason: "stop" });
   });
 
   test("does not let provider stop bypass the interactive wait rule", () => {
-    const state = reducer.reduce(
-      [model({ status: "completed", hasToolCalls: false })],
-      { ...config, naturalStop: "await_user" },
-    );
+    const state = reducer.reduce([model({ status: "completed", hasToolCalls: false })], {
+      ...config,
+      naturalStop: "await_user",
+    });
     expect(state.decision).toEqual({
       kind: "await_user",
       reason: "interactive-turn-finished",
@@ -108,9 +96,7 @@ describe("interactive control reducer", () => {
       }),
     ];
     for (const naturalStop of ["complete", "await_user"] as const) {
-      expect(
-        reducer.reduce(facts, { ...config, naturalStop }).decision,
-      ).toEqual({
+      expect(reducer.reduce(facts, { ...config, naturalStop }).decision).toEqual({
         kind: "incomplete",
         reason: "model-visible-output-missing",
       });
@@ -156,10 +142,7 @@ function tool(
 }
 
 function toolBatch(
-  ...statuses: readonly Extract<
-    InputFactV1,
-    { type: "tool.settled" }
-  >["status"][]
+  ...statuses: readonly Extract<InputFactV1, { type: "tool.settled" }>["status"][]
 ): InputFactV1[] {
   return [
     model({ status: "completed", hasToolCalls: true }),
@@ -174,8 +157,6 @@ function toolBatch(
         order: index,
       }),
     ),
-    ...statuses.map((status, index) =>
-      tool({ callId: `call-${index}`, status }),
-    ),
+    ...statuses.map((status, index) => tool({ callId: `call-${index}`, status })),
   ];
 }

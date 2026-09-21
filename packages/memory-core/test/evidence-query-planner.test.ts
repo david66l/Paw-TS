@@ -66,20 +66,15 @@ describe("typed evidence query planner v3", () => {
       roleConstraint: "user",
       needsPlanning: true,
     });
-    expect(
-      classifyMemoryEvidenceQueryV3("What did you recommend last time?"),
-    ).toEqual({
+    expect(classifyMemoryEvidenceQueryV3("What did you recommend last time?")).toEqual({
       answerShape: "lookup",
       temporalMode: "any",
       roleConstraint: "assistant",
       needsPlanning: true,
     });
     expect(
-      JSON.parse(
-        buildMemoryEvidenceQueryPlanRequestV3(
-          "What did you recommend last time?",
-        ).user,
-      ).intentBoundary.answerShape,
+      JSON.parse(buildMemoryEvidenceQueryPlanRequestV3("What did you recommend last time?").user)
+        .intentBoundary.answerShape,
     ).toBe("fixed");
     expect(
       classifyMemoryEvidenceQueryV3(
@@ -87,26 +82,24 @@ describe("typed evidence query planner v3", () => {
       ).answerShape,
     ).toBe("recommend");
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "How many recommendations did you give me last time?",
-      ).answerShape,
+      classifyMemoryEvidenceQueryV3("How many recommendations did you give me last time?")
+        .answerShape,
     ).toBe("aggregate");
     expect(
       classifyMemoryEvidenceQueryV3(
         "What was the difference between the two recommendations you gave?",
       ).answerShape,
     ).toBe("compare");
-    expect(
-      classifyMemoryEvidenceQueryV3("What did I recommend last time?"),
-    ).toMatchObject({ answerShape: "lookup", roleConstraint: "user" });
+    expect(classifyMemoryEvidenceQueryV3("What did I recommend last time?")).toMatchObject({
+      answerShape: "lookup",
+      roleConstraint: "user",
+    });
     for (const query of [
       "I've been struggling with this routine. Any advice?",
       "Do you think it would be a good idea for me to attend?",
       "My bike is performing better. Could there be a reason for this?",
     ]) {
-      expect(classifyMemoryEvidenceQueryV3(query).answerShape).toBe(
-        "recommend",
-      );
+      expect(classifyMemoryEvidenceQueryV3(query).answerShape).toBe("recommend");
     }
   });
 
@@ -121,10 +114,7 @@ describe("typed evidence query planner v3", () => {
       },
     });
 
-    const plan = await planner.plan(
-      "Which city did I visit?",
-      new AbortController().signal,
-    );
+    const plan = await planner.plan("Which city did I visit?", new AbortController().signal);
 
     expect(plan).toEqual({
       plannerVersion: PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
@@ -164,29 +154,25 @@ describe("typed evidence query planner v3", () => {
       },
     });
 
-    const plan = await planner.plan(
-      "Which city did I visit?",
-      new AbortController().signal,
-      {
-        revision: {
-          currentRequirements: [
-            {
-              requirementId: "root",
-              label: "Travel fact",
-              searchText: "travel",
-              temporalMode: "any",
-              roleConstraint: "user",
-            },
-          ],
-          deficiencies: [
-            {
-              reason: "weak_support",
-              targetRequirementId: "root",
-            },
-          ],
-        },
+    const plan = await planner.plan("Which city did I visit?", new AbortController().signal, {
+      revision: {
+        currentRequirements: [
+          {
+            requirementId: "root",
+            label: "Travel fact",
+            searchText: "travel",
+            temporalMode: "any",
+            roleConstraint: "user",
+          },
+        ],
+        deficiencies: [
+          {
+            reason: "weak_support",
+            targetRequirementId: "root",
+          },
+        ],
       },
-    );
+    });
 
     expect(plan.requirements[0]?.searchText).toBe("city the user visited");
     expect(JSON.parse(capturedUser).revision).toEqual({
@@ -248,9 +234,7 @@ describe("typed evidence query planner v3", () => {
       "Which option did we decide on?",
       "What title did you and I choose?",
     ]) {
-      expect(classifyMemoryEvidenceQueryV3(sharedQuestion).roleConstraint).toBe(
-        "any",
-      );
+      expect(classifyMemoryEvidenceQueryV3(sharedQuestion).roleConstraint).toBe("any");
     }
   });
 
@@ -285,8 +269,7 @@ describe("typed evidence query planner v3", () => {
     expect(assistantPlan.roleConstraint).toBe("assistant");
     expect(assistantPlan.requirements[0]?.roleConstraint).toBe("assistant");
 
-    const recommendationQuery =
-      "Given my circumstances, which option fits me best?";
+    const recommendationQuery = "Given my circumstances, which option fits me best?";
     const recommendationPlan = parseMemoryEvidenceQueryPlanV3(
       JSON.stringify({
         answerShape: "recommend",
@@ -310,9 +293,7 @@ describe("typed evidence query planner v3", () => {
     expect(classifyMemoryEvidenceIntentBoundaryV1(fixedQuery)).toMatchObject({
       roleConstraint: "fixed",
     });
-    const request = JSON.parse(
-      buildMemoryEvidenceQueryPlanRequestV3(ambiguousQuery).user,
-    );
+    const request = JSON.parse(buildMemoryEvidenceQueryPlanRequestV3(ambiguousQuery).user);
     expect(request.intentBoundary).toEqual({
       answerShape: "semantic",
       temporalMode: "semantic",
@@ -321,8 +302,7 @@ describe("typed evidence query planner v3", () => {
   });
 
   test("models mixed dialogue recall as a typed obligation DAG", () => {
-    const query =
-      "What constraint did I give you, and what answer did you provide?";
+    const query = "What constraint did I give you, and what answer did you provide?";
     const plan = parseMemoryEvidenceQueryPlanV3(
       JSON.stringify({
         answerShape: "lookup",
@@ -527,20 +507,14 @@ describe("typed evidence query planner v3", () => {
       ),
     ).toThrow("MemoryEvidenceQueryPlanShapeInvalid");
 
-    expect(
-      classifyMemoryEvidenceQueryV3(
-        "Can you remind me what that preference was?",
-      ),
-    ).toEqual({
+    expect(classifyMemoryEvidenceQueryV3("Can you remind me what that preference was?")).toEqual({
       answerShape: "lookup",
       temporalMode: "any",
       roleConstraint: "any",
       needsPlanning: true,
     });
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "What amount was in the plan from our previous conversation?",
-      ),
+      classifyMemoryEvidenceQueryV3("What amount was in the plan from our previous conversation?"),
     ).toEqual({
       answerShape: "lookup",
       temporalMode: "any",
@@ -548,33 +522,26 @@ describe("typed evidence query planner v3", () => {
       needsPlanning: true,
     });
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "What city did I say I visited in our last conversation?",
-      ).roleConstraint,
-    ).toBe("user");
-    expect(
-      classifyMemoryEvidenceQueryV3(
-        "What was my preference in the previous chat?",
-      ).roleConstraint,
-    ).toBe("user");
-    expect(
-      classifyMemoryEvidenceQueryV3(
-        "What did I describe about my vacation in the previous chat?",
-      ).roleConstraint,
-    ).toBe("user");
-    expect(
-      classifyMemoryEvidenceQueryV3("上次对话里本人提过的爱好是什么？")
+      classifyMemoryEvidenceQueryV3("What city did I say I visited in our last conversation?")
         .roleConstraint,
     ).toBe("user");
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "What was my preference when we discussed the options?",
-      ).roleConstraint,
+      classifyMemoryEvidenceQueryV3("What was my preference in the previous chat?").roleConstraint,
     ).toBe("user");
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "Which city did I mention when we discussed travel?",
-      ).roleConstraint,
+      classifyMemoryEvidenceQueryV3("What did I describe about my vacation in the previous chat?")
+        .roleConstraint,
+    ).toBe("user");
+    expect(classifyMemoryEvidenceQueryV3("上次对话里本人提过的爱好是什么？").roleConstraint).toBe(
+      "user",
+    );
+    expect(
+      classifyMemoryEvidenceQueryV3("What was my preference when we discussed the options?")
+        .roleConstraint,
+    ).toBe("user");
+    expect(
+      classifyMemoryEvidenceQueryV3("Which city did I mention when we discussed travel?")
+        .roleConstraint,
     ).toBe("user");
   });
 
@@ -604,9 +571,7 @@ describe("typed evidence query planner v3", () => {
       "你上次推荐了什么？",
       "提醒我你上次给我推荐了什么？",
     ]) {
-      expect(classifyMemoryEvidenceQueryV3(query).roleConstraint).toBe(
-        "assistant",
-      );
+      expect(classifyMemoryEvidenceQueryV3(query).roleConstraint).toBe("assistant");
     }
 
     for (const query of [
@@ -626,14 +591,12 @@ describe("typed evidence query planner v3", () => {
     }
 
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "Can you remind me what the capital of France is?",
-      ).roleConstraint,
+      classifyMemoryEvidenceQueryV3("Can you remind me what the capital of France is?")
+        .roleConstraint,
     ).toBe("user");
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "Can you remind me what the capital of France was?",
-      ).roleConstraint,
+      classifyMemoryEvidenceQueryV3("Can you remind me what the capital of France was?")
+        .roleConstraint,
     ).toBe("user");
     for (const query of [
       "What was I told last time?",
@@ -648,19 +611,16 @@ describe("typed evidence query planner v3", () => {
       expect(classifyMemoryEvidenceQueryV3(query).roleConstraint).toBe("any");
     }
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "Do you remember what you said after I was told to wait?",
-      ).roleConstraint,
+      classifyMemoryEvidenceQueryV3("Do you remember what you said after I was told to wait?")
+        .roleConstraint,
     ).toBe("assistant");
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "Do you remember what I said after I was told to wait?",
-      ).roleConstraint,
-    ).toBe("user");
-    expect(
-      classifyMemoryEvidenceQueryV3("提醒我你的建议我采纳了哪个？")
+      classifyMemoryEvidenceQueryV3("Do you remember what I said after I was told to wait?")
         .roleConstraint,
     ).toBe("user");
+    expect(classifyMemoryEvidenceQueryV3("提醒我你的建议我采纳了哪个？").roleConstraint).toBe(
+      "user",
+    );
     for (const query of [
       "Can you remind me which of my proposals you selected?",
       "提醒我我的方案你改了什么？",
@@ -691,9 +651,7 @@ describe("typed evidence query planner v3", () => {
       expect(needsCertifiedAssistantDialogueCandidateV1(query)).toBe(true);
     }
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "What amount was in the plan from our previous conversation?",
-      ),
+      classifyMemoryEvidenceQueryV3("What amount was in the plan from our previous conversation?"),
     ).toMatchObject({ roleConstraint: "user", needsPlanning: true });
     expect(
       needsCertifiedAssistantDialogueCandidateV1(
@@ -710,25 +668,17 @@ describe("typed evidence query planner v3", () => {
         "What did I call the draft in our previous conversation?",
       ),
     ).toBe(false);
-    expect(
-      needsCertifiedAssistantDialogueCandidateV1("What is my current address?"),
-    ).toBe(false);
+    expect(needsCertifiedAssistantDialogueCandidateV1("What is my current address?")).toBe(false);
 
-    const ordinaryRequest = buildMemoryEvidenceQueryPlanRequestV3(
-      "What is my current address?",
-    );
-    expect(ordinaryRequest.system).not.toContain(
-      "certifiedAssistantDialogueCandidate=true",
-    );
+    const ordinaryRequest = buildMemoryEvidenceQueryPlanRequestV3("What is my current address?");
+    expect(ordinaryRequest.system).not.toContain("certifiedAssistantDialogueCandidate=true");
     expect(JSON.parse(ordinaryRequest.user)).not.toHaveProperty(
       "certifiedAssistantDialogueCandidate",
     );
     const certifiedRequest = buildMemoryEvidenceQueryPlanRequestV3(
       "What amount was in the plan from our previous conversation?",
     );
-    expect(certifiedRequest.system).toContain(
-      "certifiedAssistantDialogueCandidate=true",
-    );
+    expect(certifiedRequest.system).toContain("certifiedAssistantDialogueCandidate=true");
     expect(JSON.parse(certifiedRequest.user)).toMatchObject({
       certifiedAssistantDialogueCandidate: true,
     });
@@ -889,9 +839,7 @@ describe("typed evidence query planner v3", () => {
       }),
       query,
     );
-    expect(reversed.requirements[0]?.searchText).toBe(
-      plan.requirements[0]?.searchText,
-    );
+    expect(reversed.requirements[0]?.searchText).toBe(plan.requirements[0]?.searchText);
 
     const long = "x".repeat(100);
     const uncollapsed = parseMemoryEvidenceQueryPlanV3(
@@ -942,9 +890,7 @@ describe("typed evidence query planner v3", () => {
 
   test("keeps answer shape and recency as independent intent axes", () => {
     expect(
-      classifyMemoryEvidenceQueryV3(
-        "How many Instagram followers do I currently have?",
-      ),
+      classifyMemoryEvidenceQueryV3("How many Instagram followers do I currently have?"),
     ).toEqual({
       answerShape: "aggregate",
       temporalMode: "latest",
@@ -964,30 +910,24 @@ describe("typed evidence query planner v3", () => {
   });
 
   test("classifies ordinal and relative-time questions as ordered evidence", () => {
-    expect(
-      classifyMemoryEvidenceQueryV3("Which suggestion did you mention first?"),
-    ).toEqual({
+    expect(classifyMemoryEvidenceQueryV3("Which suggestion did you mention first?")).toEqual({
       answerShape: "lookup",
       temporalMode: "history",
       roleConstraint: "assistant",
       needsPlanning: true,
     });
-    expect(
-      classifyMemoryEvidenceQueryV3("How many days ago did I visit that city?"),
-    ).toEqual({
+    expect(classifyMemoryEvidenceQueryV3("How many days ago did I visit that city?")).toEqual({
       answerShape: "aggregate",
       temporalMode: "range",
       roleConstraint: "user",
       needsPlanning: true,
     });
-    expect(classifyMemoryEvidenceQueryV3("我第一次提到的是哪个城市？")).toEqual(
-      {
-        answerShape: "lookup",
-        temporalMode: "history",
-        roleConstraint: "user",
-        needsPlanning: true,
-      },
-    );
+    expect(classifyMemoryEvidenceQueryV3("我第一次提到的是哪个城市？")).toEqual({
+      answerShape: "lookup",
+      temporalMode: "history",
+      roleConstraint: "user",
+      needsPlanning: true,
+    });
   });
 
   test("does not confuse a profile field with an ordinal event", () => {
@@ -1012,9 +952,7 @@ describe("typed evidence query planner v3", () => {
       roleConstraint: "assistant",
       needsPlanning: true,
     });
-    expect(
-      classifyMemoryEvidenceQueryV3("我的旅行偏好这些年怎么变化的？"),
-    ).toEqual({
+    expect(classifyMemoryEvidenceQueryV3("我的旅行偏好这些年怎么变化的？")).toEqual({
       answerShape: "lookup",
       temporalMode: "history",
       roleConstraint: "user",

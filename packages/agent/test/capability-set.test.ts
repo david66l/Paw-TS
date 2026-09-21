@@ -23,9 +23,7 @@ describe("CapabilitySetV1", () => {
       configuredTools: CORE_MODEL_EXECUTABLE_TOOLS,
     });
 
-    expect(new Set(set.modelToolNames)).toEqual(
-      new Set(CORE_MODEL_EXECUTABLE_TOOLS),
-    );
+    expect(new Set(set.modelToolNames)).toEqual(new Set(CORE_MODEL_EXECUTABLE_TOOLS));
     expect(set.executableToolNames).toEqual(set.modelToolNames);
     expect(set.modelActions).toEqual(CORE_MODEL_ACTIONS);
     expect(set.modelToolDefinitions).toHaveLength(4);
@@ -84,10 +82,7 @@ describe("CapabilitySetV1", () => {
       definitions,
       toolNameMap,
       configuredTools: ["workspace.read_file", "mcp:github/search_code"],
-      availableMcpToolNames: [
-        "mcp:github/create_issue",
-        "mcp:github/search_code",
-      ],
+      availableMcpToolNames: ["mcp:github/create_issue", "mcp:github/search_code"],
     });
 
     expect(set.modelToolNames).toEqual(["workspace.read_file", MCP_PROXY]);
@@ -95,10 +90,9 @@ describe("CapabilitySetV1", () => {
     expect(set.knownToolNames.has("mcp:github/search_code")).toBe(false);
     expect(set.knownToolNames.has(MCP_PROXY)).toBe(true);
     expect(
-      parseAgentActionFromModelText(
-        '{"tool":"mcp:github/search_code","args":{"query":"cache"}}',
-        { knownTools: set.knownToolNames },
-      ),
+      parseAgentActionFromModelText('{"tool":"mcp:github/search_code","args":{"query":"cache"}}', {
+        knownTools: set.knownToolNames,
+      }),
     ).toBeNull();
     expect(
       parseAgentActionFromModelText(

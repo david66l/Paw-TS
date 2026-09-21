@@ -45,9 +45,7 @@ export function createPartitionedHybridMemoryEmbeddingServiceV1(
       ]);
       return combine(rawDense, rawLexical, denseDimensions, denseWeight);
     },
-    async embedMany(
-      texts: readonly string[],
-    ): Promise<readonly (readonly number[])[]> {
+    async embedMany(texts: readonly string[]): Promise<readonly (readonly number[])[]> {
       const [denseVectors, lexicalVectors] = await Promise.all([
         input.dense.embedMany(texts),
         Promise.all(texts.map((text) => lexical.embed(text))),
@@ -55,12 +53,7 @@ export function createPartitionedHybridMemoryEmbeddingServiceV1(
       return Object.freeze(
         texts.map((_text, index) =>
           Object.freeze(
-            combine(
-              denseVectors[index]!,
-              lexicalVectors[index]!,
-              denseDimensions,
-              denseWeight,
-            ),
+            combine(denseVectors[index]!, lexicalVectors[index]!, denseDimensions, denseWeight),
           ),
         ),
       );

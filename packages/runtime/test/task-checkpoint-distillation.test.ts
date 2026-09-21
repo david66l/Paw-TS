@@ -63,9 +63,7 @@ describe("crash-safe task checkpoint distillation", () => {
       expect(first.distillerCalls).toBe(1);
       expect(calls).toBe(1);
       expect(
-        (await session.readInputSnapshot()).entries
-          .slice(-3)
-          .map((entry) => entry.fact.type),
+        (await session.readInputSnapshot()).entries.slice(-3).map((entry) => entry.fact.type),
       ).toEqual([
         "context.checkpoint_distillation_claimed",
         "context.checkpoint_distillation_settled",
@@ -205,10 +203,7 @@ describe("crash-safe task checkpoint distillation", () => {
       codec,
       signal,
       {
-        loadPayloadEvidence: artifactCheckpointEvidenceLoader(
-          artifacts,
-          evidenceStats,
-        ),
+        loadPayloadEvidence: artifactCheckpointEvidenceLoader(artifacts, evidenceStats),
       },
     );
     expect(first.status).toBe("conflict");
@@ -226,10 +221,7 @@ describe("crash-safe task checkpoint distillation", () => {
       codec,
       signal,
       {
-        loadPayloadEvidence: artifactCheckpointEvidenceLoader(
-          artifacts,
-          evidenceStats,
-        ),
+        loadPayloadEvidence: artifactCheckpointEvidenceLoader(artifacts, evidenceStats),
       },
     );
     expect(resumed).toMatchObject({
@@ -260,10 +252,7 @@ describe("crash-safe task checkpoint distillation", () => {
       codec,
       signal,
       {
-        loadPayloadEvidence: artifactCheckpointEvidenceLoader(
-          artifacts,
-          evidenceStats,
-        ),
+        loadPayloadEvidence: artifactCheckpointEvidenceLoader(artifacts, evidenceStats),
       },
     );
     expect(first).toMatchObject({ status: "conflict", distillerCalls: 1 });
@@ -280,10 +269,7 @@ describe("crash-safe task checkpoint distillation", () => {
       codec,
       signal,
       {
-        loadPayloadEvidence: artifactCheckpointEvidenceLoader(
-          artifacts,
-          evidenceStats,
-        ),
+        loadPayloadEvidence: artifactCheckpointEvidenceLoader(artifacts, evidenceStats),
       },
     );
 
@@ -330,10 +316,7 @@ describe("crash-safe task checkpoint distillation", () => {
       codec,
       signal,
       {
-        loadPayloadEvidence: artifactCheckpointEvidenceLoader(
-          artifacts,
-          evidenceStats,
-        ),
+        loadPayloadEvidence: artifactCheckpointEvidenceLoader(artifacts, evidenceStats),
       },
     );
     expect(first).toMatchObject({ status: "conflict", distillerCalls: 1 });
@@ -357,10 +340,7 @@ describe("crash-safe task checkpoint distillation", () => {
         codec,
         signal,
         {
-          loadPayloadEvidence: artifactCheckpointEvidenceLoader(
-            artifacts,
-            evidenceStats,
-          ),
+          loadPayloadEvidence: artifactCheckpointEvidenceLoader(artifacts, evidenceStats),
         },
       );
     } catch (error) {
@@ -392,9 +372,7 @@ describe("crash-safe task checkpoint distillation", () => {
     });
     let distillerCalls = 0;
     let evidenceLoads = 0;
-    const loadPayloadEvidence = async (
-      snapshot: SessionInputSnapshot<InputFactV1>,
-    ) => {
+    const loadPayloadEvidence = async (snapshot: SessionInputSnapshot<InputFactV1>) => {
       evidenceLoads += 1;
       const fullPrefix = await session.readCanonicalPrefix();
       const budget = {
@@ -529,9 +507,7 @@ describe("crash-safe task checkpoint distillation", () => {
             status: "completed",
             checkpoint: {
               ...checkpointValue(),
-              confirmedFacts: [
-                { statement: "outside range", sourceSeqs: [99] },
-              ],
+              confirmedFacts: [{ statement: "outside range", sourceSeqs: [99] }],
             },
           };
         },
@@ -691,9 +667,7 @@ describe("crash-safe task checkpoint distillation", () => {
   });
 });
 
-class MemorySession
-  implements Session<InputFactV1, unknown>, LocationAwarePayloadSessionSourceV1
-{
+class MemorySession implements Session<InputFactV1, unknown>, LocationAwarePayloadSessionSourceV1 {
   private readonly entries: { seq: number; fact: InputFactV1 }[];
   private tailSeq: number;
   private commitCount = 0;
@@ -744,9 +718,7 @@ class MemorySession
   async appendInputFacts(facts: readonly InputFactV1[]): Promise<void> {
     if (
       this.rejectSettlementAppend &&
-      facts.some(
-        (fact) => fact.type === "context.checkpoint_distillation_settled",
-      )
+      facts.some((fact) => fact.type === "context.checkpoint_distillation_settled")
     ) {
       this.rejectSettlementAppend = false;
       throw new Error("simulated settlement crash");
@@ -767,10 +739,7 @@ class MemorySession
       this.nextCommitError = undefined;
       throw error;
     }
-    if (
-      expectedTailSeq !== this.tailSeq ||
-      this.commitCount === this.conflictCommit
-    ) {
+    if (expectedTailSeq !== this.tailSeq || this.commitCount === this.conflictCommit) {
       return "conflict";
     }
     await this.appendInputFacts(facts);
@@ -815,9 +784,7 @@ function distillationInput() {
 function checkpointValue(): TaskCheckpointV1 {
   return {
     schemaVersion: TASK_CHECKPOINT_SCHEMA_VERSION_V1,
-    confirmedFacts: [
-      { statement: "old answer was inspected", sourceSeqs: [3] },
-    ],
+    confirmedFacts: [{ statement: "old answer was inspected", sourceSeqs: [3] }],
     currentHypotheses: [],
     ruledOut: [],
     changedFiles: [],
@@ -920,11 +887,7 @@ function toolBoundaryFacts(): readonly InputFactV1[] {
   ];
 }
 
-function promoted(
-  inputId: string,
-  delivery: "initial" | "steer",
-  content: string,
-): InputFactV1 {
+function promoted(inputId: string, delivery: "initial" | "steer", content: string): InputFactV1 {
   return {
     type: "input.promoted",
     inputId,
@@ -943,11 +906,7 @@ function modelDispatch(modelCallId: string, turn: number): InputFactV1 {
   };
 }
 
-function modelSettled(
-  modelCallId: string,
-  turn: number,
-  assistantContent: string,
-): InputFactV1 {
+function modelSettled(modelCallId: string, turn: number, assistantContent: string): InputFactV1 {
   const response = {
     schemaVersion: MODEL_RESPONSE_SCHEMA_VERSION_V1,
     providerProtocol: "openai-compatible" as const,
@@ -1022,9 +981,7 @@ function artifactCheckpointEvidence(
   stats: { loads: number; lookups: number },
 ): VerifiedCanonicalPayloadEvidenceV1 {
   const expected = stableStringify(expectedSnapshot as unknown as JsonValue);
-  const assertSnapshot = (
-    snapshot: SessionInputSnapshot<InputFactV1>,
-  ): void => {
+  const assertSnapshot = (snapshot: SessionInputSnapshot<InputFactV1>): void => {
     if (stableStringify(snapshot as unknown as JsonValue) !== expected) {
       throw new Error("distillation evidence snapshot drift");
     }
@@ -1036,8 +993,7 @@ function artifactCheckpointEvidence(
       stats.lookups += 1;
       if (
         input.location.kind !== "task_checkpoint" ||
-        input.location.carrierType !==
-          "context.checkpoint_distillation_settled" ||
+        input.location.carrierType !== "context.checkpoint_distillation_settled" ||
         input.location.checkpointId !== "checkpoint-distilled-1"
       ) {
         throw new Error("distillation evidence location drift");
@@ -1107,9 +1063,6 @@ function stableStringify(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${stableStringify(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key] as JsonValue)}`)
     .join(",")}}`;
 }

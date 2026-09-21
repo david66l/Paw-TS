@@ -82,12 +82,8 @@ export interface VerifiedCanonicalPayloadIndexV1 {
   requireOccurrence(
     lookup: VerifiedCanonicalPayloadOccurrenceLookupV1,
   ): VerifiedCanonicalPayloadOccurrenceV1;
-  findModelResponse(
-    lookup: VerifiedCanonicalModelResponseLookupV1,
-  ): ModelResponseV1 | undefined;
-  requireModelResponse(
-    lookup: VerifiedCanonicalModelResponseLookupV1,
-  ): ModelResponseV1;
+  findModelResponse(lookup: VerifiedCanonicalModelResponseLookupV1): ModelResponseV1 | undefined;
+  requireModelResponse(lookup: VerifiedCanonicalModelResponseLookupV1): ModelResponseV1;
 }
 
 export interface BuildVerifiedCanonicalPayloadIndexOptionsV1 {
@@ -123,18 +119,11 @@ export async function buildVerifiedCanonicalPayloadIndexV1(
   const prefix = freezePrefix(parseRunJournalPrefixV1(options.fullPrefix));
   const first = prefix[0];
   if (!first) {
-    throw new Error(
-      "Verified canonical payload index requires a non-empty identity-bound prefix",
-    );
+    throw new Error("Verified canonical payload index requires a non-empty identity-bound prefix");
   }
   const resolver = captureResolver(options.resolver);
-  const identity = parseCanonicalPayloadIdentity(
-    resolver.readCanonicalPayloadIdentity(),
-  );
-  if (
-    identity.sessionId !== first.sessionId ||
-    identity.runId !== first.runId
-  ) {
+  const identity = parseCanonicalPayloadIdentity(resolver.readCanonicalPayloadIdentity());
+  if (identity.sessionId !== first.sessionId || identity.runId !== first.runId) {
     throw new Error("Canonical payload resolver journal identity mismatch");
   }
   const projected = projectCanonicalDurableJsonPayloadBindingsV1(prefix);
@@ -145,17 +134,11 @@ export async function buildVerifiedCanonicalPayloadIndexV1(
 
   for (const occurrence of projected) {
     throwIfAborted(options.signal);
-    const bindingKey = canonicalJsonStringifyV1(
-      occurrence.binding as unknown as JsonValue,
-    );
-    const payloadKey = canonicalJsonStringifyV1(
-      occurrence.payload as unknown as JsonValue,
-    );
+    const bindingKey = canonicalJsonStringifyV1(occurrence.binding as unknown as JsonValue);
+    const payloadKey = canonicalJsonStringifyV1(occurrence.payload as unknown as JsonValue);
     const earlierPayload = payloadByBinding.get(bindingKey);
     if (earlierPayload !== undefined && earlierPayload !== payloadKey) {
-      throw new Error(
-        "Canonical durable JSON payload binding has conflicting carriers",
-      );
+      throw new Error("Canonical durable JSON payload binding has conflicting carriers");
     }
     payloadByBinding.set(bindingKey, payloadKey);
 
@@ -164,11 +147,7 @@ export async function buildVerifiedCanonicalPayloadIndexV1(
       const resolved =
         occurrence.payload.kind === "inline"
           ? occurrence.payload.value
-          : await resolver.resolve(
-              occurrence.payload,
-              occurrence.binding,
-              options.signal,
-            );
+          : await resolver.resolve(occurrence.payload, occurrence.binding, options.signal);
       throwIfAborted(options.signal);
       value = immutableCanonicalJsonCloneV1(resolved);
       const actualHash = await resolver.hash(value);
@@ -177,13 +156,8 @@ export async function buildVerifiedCanonicalPayloadIndexV1(
         throw new Error("Canonical durable JSON payload hash mismatch");
       }
       const byteLength = canonicalUtf8ByteLength(value);
-      if (
-        byteLength > budget.maxTotalBytes ||
-        totalBytes > budget.maxTotalBytes - byteLength
-      ) {
-        throw new Error(
-          "Canonical durable JSON payload total byte budget exceeded",
-        );
+      if (byteLength > budget.maxTotalBytes || totalBytes > budget.maxTotalBytes - byteLength) {
+        throw new Error("Canonical durable JSON payload total byte budget exceeded");
       }
       totalBytes += byteLength;
       resolvedByBinding.set(bindingKey, value);
@@ -205,9 +179,7 @@ export async function buildVerifiedCanonicalPayloadIndexV1(
   const byLocation = new Map<string, VerifiedCanonicalPayloadOccurrenceV1>();
   const modelResponses = new Map<string, ModelResponseV1>();
   for (const occurrence of occurrences) {
-    const locationKey = canonicalJsonStringifyV1(
-      occurrence.location as unknown as JsonValue,
-    );
+    const locationKey = canonicalJsonStringifyV1(occurrence.location as unknown as JsonValue);
     if (byLocation.has(locationKey)) {
       throw new Error("Duplicate canonical durable JSON payload location");
     }
@@ -268,11 +240,7 @@ export function assertVerifiedCanonicalPayloadIndexMatchesV1(
   index: VerifiedCanonicalPayloadIndexV1,
   options: AssertVerifiedCanonicalPayloadIndexMatchesOptionsV1,
 ): void {
-  if (
-    !index ||
-    typeof index !== "object" ||
-    !issuedVerifiedIndexes.has(index)
-  ) {
+  if (!index || typeof index !== "object" || !issuedVerifiedIndexes.has(index)) {
     throw new Error("Verified canonical payload index was not issued here");
   }
   const prefix = freezePrefix(parseRunJournalPrefixV1(options.fullPrefix));
@@ -308,8 +276,7 @@ function captureResolver(
     throw new Error("Canonical durable JSON payload resolver is invalid");
   }
   return Object.freeze({
-    readCanonicalPayloadIdentity:
-      value.readCanonicalPayloadIdentity.bind(value),
+    readCanonicalPayloadIdentity: value.readCanonicalPayloadIdentity.bind(value),
     resolve: value.resolve.bind(value),
     hash: value.hash.bind(value),
   });
@@ -348,11 +315,7 @@ function assertOccurrenceValue(
         fact.type === "context.checkpoint_recorded"
           ? fact
           : findCheckpointClaim(prefix, fact.claimId);
-      assertCheckpointSourceRange(
-        checkpoint,
-        source.sourceFromSeq,
-        source.sourceThroughSeq,
-      );
+      assertCheckpointSourceRange(checkpoint, source.sourceFromSeq, source.sourceThroughSeq);
       return;
     }
   }
@@ -401,10 +364,7 @@ function assertModelResponseObservationIdentity(
     const fact = envelope.record.fact;
     assertCanonicalModelResponseCarrierV1(fact, response);
     const observed = observations.get(fact.modelCallId) ?? [];
-    if (
-      fact.status === "truncated" ||
-      response.toolCalls.some((call) => !call.argumentsValid)
-    ) {
+    if (fact.status === "truncated" || response.toolCalls.some((call) => !call.argumentsValid)) {
       if (observed.length !== 0) {
         throw new Error("Invalid or truncated model calls have observations");
       }
@@ -440,10 +400,7 @@ export function assertCanonicalModelResponseCarrierV1(
   if (settlement.hasToolCalls !== response.toolCalls.length > 0) {
     throw new Error("Model response tool-call flag mismatch");
   }
-  if (
-    settlement.hasVisibleOutput !==
-    response.assistantContent.trim().length > 0
-  ) {
+  if (settlement.hasVisibleOutput !== response.assistantContent.trim().length > 0) {
     throw new Error("Model response visible-output flag mismatch");
   }
   if (settlement.finishReason !== response.finishReason) {
@@ -489,9 +446,7 @@ function assertCheckpointSourceRange(
   for (const item of items) {
     for (const seq of item.sourceSeqs) {
       if (seq < sourceFromSeq || seq > sourceThroughSeq) {
-        throw new Error(
-          "Task checkpoint cites a fact outside its source range",
-        );
+        throw new Error("Task checkpoint cites a fact outside its source range");
       }
     }
   }
@@ -526,13 +481,9 @@ function findExactOccurrence(
   return occurrence;
 }
 
-function modelResponseKey(
-  lookup: VerifiedCanonicalModelResponseLookupV1,
-): string {
+function modelResponseKey(lookup: VerifiedCanonicalModelResponseLookupV1): string {
   if (!Number.isSafeInteger(lookup.carrierSeq) || lookup.carrierSeq <= 0) {
-    throw new Error(
-      "model response carrierSeq must be a positive safe integer",
-    );
+    throw new Error("model response carrierSeq must be a positive safe integer");
   }
   assertStableId(lookup.modelCallId, "modelCallId");
   return canonicalJsonStringifyV1({
@@ -542,9 +493,7 @@ function modelResponseKey(
   } as unknown as JsonValue);
 }
 
-function parseBudget(
-  value: VerifiedCanonicalPayloadBudgetV1,
-): VerifiedCanonicalPayloadBudgetV1 {
+function parseBudget(value: VerifiedCanonicalPayloadBudgetV1): VerifiedCanonicalPayloadBudgetV1 {
   if (
     !value ||
     typeof value !== "object" ||
@@ -568,8 +517,7 @@ function parseCanonicalPayloadIdentity(
     !value ||
     typeof value !== "object" ||
     Array.isArray(value) ||
-    Object.keys(value).sort().join("\0") !==
-      "runId\0sessionId\0workspaceRoot" ||
+    Object.keys(value).sort().join("\0") !== "runId\0sessionId\0workspaceRoot" ||
     typeof value.workspaceRoot !== "string" ||
     value.workspaceRoot.length === 0
   ) {
@@ -584,9 +532,7 @@ function parseCanonicalPayloadIdentity(
   });
 }
 
-function freezePrefix(
-  prefix: readonly RunJournalEnvelopeV1[],
-): readonly RunJournalEnvelopeV1[] {
+function freezePrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
   return immutableCanonicalJsonCloneV1(
     prefix as unknown as JsonValue,
   ) as unknown as readonly RunJournalEnvelopeV1[];

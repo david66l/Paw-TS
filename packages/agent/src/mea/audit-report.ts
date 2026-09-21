@@ -32,16 +32,8 @@ export interface MeaAuditReportV1 {
   readonly summary: string;
 }
 
-const COMPLETIONS: readonly MeaAuditCompletion[] = [
-  "complete",
-  "incomplete",
-  "blocked",
-];
-const INTEGRITIES: readonly MeaAuditIntegrity[] = [
-  "clean",
-  "suspect",
-  "violation",
-];
+const COMPLETIONS: readonly MeaAuditCompletion[] = ["complete", "incomplete", "blocked"];
+const INTEGRITIES: readonly MeaAuditIntegrity[] = ["clean", "suspect", "violation"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -141,8 +133,7 @@ export function parseMeaAuditReportV1(raw: string | null | undefined): {
       unmetCriteria,
       verifiedFacts,
       summary:
-        boundedText(parsed.summary, 600) ||
-        `审计完成：${completion} / integrity=${integrity}。`,
+        boundedText(parsed.summary, 600) || `审计完成：${completion} / integrity=${integrity}。`,
     },
   };
 }

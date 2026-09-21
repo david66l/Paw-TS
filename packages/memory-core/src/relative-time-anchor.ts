@@ -38,15 +38,7 @@ const WEEKDAYS_EN: readonly (readonly string[])[] = [
   ["saturday", "sat"],
 ];
 
-const WEEKDAYS_ZH: readonly string[] = [
-  "日",
-  "一",
-  "二",
-  "三",
-  "四",
-  "五",
-  "六",
-];
+const WEEKDAYS_ZH: readonly string[] = ["日", "一", "二", "三", "四", "五", "六"];
 
 function weekdayIndexEn(word: string): number | null {
   const normalized = word.toLowerCase().replace(/\.$/, "");
@@ -164,11 +156,7 @@ const RULES: readonly PatternRule[] = [
       const count = parseCount(match[1] ?? "");
       if (count === null) return null;
       const unit = match[2] ?? "";
-      const multiplier = unit.startsWith("天")
-        ? 1
-        : unit.includes("月")
-          ? 30
-          : 7;
+      const multiplier = unit.startsWith("天") ? 1 : unit.includes("月") ? 30 : 7;
       const day = startOfDayUtc(cutoffMs) - count * multiplier * DAY_MS;
       return {
         startMs: day,
@@ -194,17 +182,12 @@ const RULES: readonly PatternRule[] = [
     },
   },
   {
-    regex:
-      /(?:过去|最近)(\d{1,3}|[一二两三四五六七八九十]+)\s*(天|周|个?星期|个?月)/,
+    regex: /(?:过去|最近)(\d{1,3}|[一二两三四五六七八九十]+)\s*(天|周|个?星期|个?月)/,
     build: (match, cutoffMs) => {
       const count = parseCount(match[1] ?? "");
       if (count === null) return null;
       const unit = match[2] ?? "";
-      const multiplier = unit.startsWith("天")
-        ? 1
-        : unit.includes("月")
-          ? 30
-          : 7;
+      const multiplier = unit.startsWith("天") ? 1 : unit.includes("月") ? 30 : 7;
       const end = startOfDayUtc(cutoffMs) + DAY_MS;
       return {
         startMs: end - count * multiplier * DAY_MS,

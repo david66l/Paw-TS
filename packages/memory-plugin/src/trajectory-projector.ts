@@ -73,16 +73,10 @@ export function projectMemoryTrajectoriesV1(
   const olderToNewer = new Map<string, Set<string>>();
   const neighbors = new Map<string, Set<string>>();
   for (const relation of input.relations) {
-    if (
-      relation.status !== "active" ||
-      relation.relationType !== "supersedes"
-    ) {
+    if (relation.status !== "active" || relation.relationType !== "supersedes") {
       continue;
     }
-    if (
-      !entries.has(relation.fromMemoryId) ||
-      !entries.has(relation.toMemoryId)
-    ) {
+    if (!entries.has(relation.fromMemoryId) || !entries.has(relation.toMemoryId)) {
       throw namedError("MemoryTrajectoryDanglingRelation");
     }
     add(newerToOlder, relation.fromMemoryId, relation.toMemoryId);
@@ -122,10 +116,7 @@ export function projectMemoryTrajectoriesV1(
     components
       .map((ids) => {
         const ordered = ids.sort((left, right) =>
-          compareEntries(
-            requiredEntry(entries, left),
-            requiredEntry(entries, right),
-          ),
+          compareEntries(requiredEntry(entries, left), requiredEntry(entries, right)),
         );
         const retained = ordered.slice(Math.max(0, ordered.length - maxStates));
         const states = retained.map((id) => {
@@ -142,9 +133,7 @@ export function projectMemoryTrajectoriesV1(
             supersededByMemoryIds: frozenSorted(olderToNewer.get(id)),
           }) satisfies MemoryTrajectoryStateV1;
         });
-        const sources = new Set(
-          ordered.map((id) => requiredEntry(entries, id).source),
-        );
+        const sources = new Set(ordered.map((id) => requiredEntry(entries, id).source));
         const trajectoryId = createHash("sha256")
           .update(PAW_MEMORY_TRAJECTORY_PROJECTOR_VERSION_V1)
           .update("\n")
@@ -163,8 +152,7 @@ export function projectMemoryTrajectoriesV1(
         const leftTime = left.states.at(-1)?.validFrom ?? "";
         const rightTime = right.states.at(-1)?.validFrom ?? "";
         return (
-          rightTime.localeCompare(leftTime) ||
-          left.trajectoryId.localeCompare(right.trajectoryId)
+          rightTime.localeCompare(leftTime) || left.trajectoryId.localeCompare(right.trajectoryId)
         );
       })
       .slice(0, maxTrajectories),
@@ -175,10 +163,7 @@ function validIso(value: string): boolean {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
 
-function requiredEntry(
-  entries: ReadonlyMap<string, MemoryEntry>,
-  id: string,
-): MemoryEntry {
+function requiredEntry(entries: ReadonlyMap<string, MemoryEntry>, id: string): MemoryEntry {
   const entry = entries.get(id);
   if (!entry) throw namedError("MemoryTrajectoryEntryMissing");
   return entry;
@@ -207,9 +192,7 @@ function add(map: Map<string, Set<string>>, key: string, value: string): void {
   map.set(key, values);
 }
 
-function frozenSorted(
-  values: ReadonlySet<string> | undefined,
-): readonly string[] {
+function frozenSorted(values: ReadonlySet<string> | undefined): readonly string[] {
   return Object.freeze([...(values ?? [])].sort());
 }
 
@@ -221,12 +204,7 @@ function compareEntries(left: MemoryEntry, right: MemoryEntry): number {
   );
 }
 
-function bounded(
-  value: number,
-  min: number,
-  max: number,
-  error: string,
-): number {
+function bounded(value: number, min: number, max: number, error: string): number {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
     throw namedError(error);
   }

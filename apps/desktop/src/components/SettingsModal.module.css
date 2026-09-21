@@ -34,8 +34,7 @@
   border: 1px solid var(--glass-border-strong);
   background: var(--glass-bg-strong);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur))
-    saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow: var(--glass-highlight), var(--glass-shadow);
   overflow: hidden;
   animation: dialogIn 0.16s ease;
@@ -175,8 +174,7 @@
 .segActive {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.56);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 1px 4px
-    rgba(30, 41, 59, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 1px 4px rgba(30, 41, 59, 0.06);
 }
 
 @keyframes overlayIn {
@@ -239,8 +237,7 @@
 }
 
 .skinPreview[data-skin="paper"] {
-  background: url("../assets/paper/paper-fibers-v1.webp") center / 240px,
-    #f0eee6;
+  background: url("../assets/paper/paper-fibers-v1.webp") center / 240px, #f0eee6;
   --preview-accent: #8061a5;
 }
 

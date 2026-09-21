@@ -57,11 +57,7 @@ test("production desktop puts remaining-time evidence into the first request and
   const files = fs.readdirSync(path.join(root, ".paw/desktop-next"));
   const record = JSON.parse(
     fs.readFileSync(
-      path.join(
-        root,
-        ".paw/desktop-next",
-        files.find((f) => f.startsWith("conversation-"))!,
-      ),
+      path.join(root, ".paw/desktop-next", files.find((f) => f.startsWith("conversation-"))!),
       "utf8",
     ),
   );
@@ -77,9 +73,7 @@ test("unbounded desktop has no manufactured deadline or extra model turn", async
     workspaceRoot: root,
     model: model(async (messages) => {
       calls++;
-      expect(messages.map((m) => m.content).join("\n")).not.toContain(
-        "[Paw execution budget v1]",
-      );
+      expect(messages.map((m) => m.content).join("\n")).not.toContain("[Paw execution budget v1]");
       return {
         text: "A closure keeps lexical bindings.",
         finishReason: "stop",
@@ -94,9 +88,7 @@ test("deadline cancels a live uncooperative request without replay or late tool 
   const root = workspace();
   let calls = 0;
   let providerSignal: AbortSignal | undefined;
-  let settle:
-    | ((result: Awaited<ReturnType<LanguageModel["complete"]>>) => void)
-    | undefined;
+  let settle: ((result: Awaited<ReturnType<LanguageModel["complete"]>>) => void) | undefined;
   const deadline = { deadlineAtMs: Date.now() + 2000, reserveMs: 500 };
   const result = await runDesktopNext("Implement the requested change", {
     ...common,
@@ -214,9 +206,7 @@ test("desktop delivery ledger links actual file readback, survives recovery and 
       calls++;
       const prompt = messages.map((message) => message.content).join("\n");
       expect(
-        options?.tools?.some(
-          (tool) => tool.function.name === "workspace_acceptance_update",
-        ),
+        options?.tools?.some((tool) => tool.function.name === "workspace_acceptance_update"),
       ).toBe(true);
       if (calls === 1)
         return invoke("workspace_acceptance_update", {
@@ -238,13 +228,10 @@ test("desktop delivery ledger links actual file readback, survives recovery and 
           content: "Hello\n",
         });
       }
-      if (calls === 3)
-        return invoke("workspace_read_file", { path: "README.md" });
+      if (calls === 3) return invoke("workspace_read_file", { path: "README.md" });
       if (calls === 4) {
         const marker = prompt.lastIndexOf("[Paw Delivery State]");
-        const state = JSON.parse(
-          prompt.slice(prompt.indexOf("\n", marker) + 1).split("\n")[0]!,
-        );
+        const state = JSON.parse(prompt.slice(prompt.indexOf("\n", marker) + 1).split("\n")[0]!);
         expect(state.references).toHaveLength(1);
         return invoke("workspace_acceptance_update", {
           add: [],
@@ -258,8 +245,7 @@ test("desktop delivery ledger links actual file readback, survives recovery and 
           reason: "Read back the required bytes",
         });
       }
-      if (calls === 5)
-        expect(prompt).toContain('"readiness":"evidence_linked"');
+      if (calls === 5) expect(prompt).toContain('"readiness":"evidence_linked"');
       else expect(prompt).not.toContain("[Paw Delivery State]");
       return { text: "README contains Hello.", finishReason: "stop" };
     } catch (error) {
@@ -281,13 +267,9 @@ test("desktop delivery ledger links actual file readback, survives recovery and 
   expect(result.ok, result.text).toBe(true);
   expect(calls).toBe(5);
   expect(fs.readFileSync(path.join(root, "README.md"), "utf8")).toBe("Hello\n");
-  expect(
-    (await runDesktopNext("Recover", { ...options, intent: "recover" })).ok,
-  ).toBe(true);
+  expect((await runDesktopNext("Recover", { ...options, intent: "recover" })).ok).toBe(true);
   expect(calls).toBe(5);
-  expect(
-    (await runDesktopNext("A separate question: say hello", options)).ok,
-  ).toBe(true);
+  expect((await runDesktopNext("A separate question: say hello", options)).ok).toBe(true);
   expect(calls).toBe(6);
 }, 30_000);
 

@@ -41,26 +41,18 @@ export function getUsingToolsSection(opts: {
 
   const examples: string[] = [];
   if (hasTool("workspace.read_file")) {
-    examples.push(
-      `{"tool":"workspace.read_file","args":{"path":"<relative-path>"}}`,
-    );
+    examples.push(`{"tool":"workspace.read_file","args":{"path":"<relative-path>"}}`);
   }
   if (hasTool("workspace.run_shell")) {
-    examples.push(
-      `{"tool":"workspace.run_shell","args":{"command":"<shell command>","cwd":"."}}`,
-    );
+    examples.push(`{"tool":"workspace.run_shell","args":{"command":"<shell command>","cwd":"."}}`);
   }
 
   const actions: string[] = [];
   if (hasAction("action.final_answer")) {
-    actions.push(
-      `{"action":"final_answer","summary":"..."} — task is done, report to the user`,
-    );
+    actions.push(`{"action":"final_answer","summary":"..."} — task is done, report to the user`);
   }
   if (hasAction("action.ask_user")) {
-    actions.push(
-      `{"action":"ask_user","question":"..."} — ask the user a question`,
-    );
+    actions.push(`{"action":"ask_user","question":"..."} — ask the user a question`);
   }
   if (hasAction("action.plan_update")) {
     actions.push(
@@ -126,14 +118,10 @@ export function getUsingToolsSection(opts: {
     );
   }
   if (hasTool("workspace.glob")) {
-    dedicatedGuidance.push(
-      "- To search for files use workspace.glob — never use find or ls",
-    );
+    dedicatedGuidance.push("- To search for files use workspace.glob — never use find or ls");
   }
   if (hasTool("workspace.grep")) {
-    dedicatedGuidance.push(
-      "- To search content use workspace.grep — never use grep or rg",
-    );
+    dedicatedGuidance.push("- To search content use workspace.grep — never use grep or rg");
   }
   if (dedicatedGuidance.length > 0) {
     lines.push(
@@ -179,18 +167,14 @@ export function getUsingToolsSection(opts: {
   // 工作模式：复杂任务按"计划→执行→验证"流程，简单任务直接修改
   const workModeSteps: string[] = [];
   if (hasAction("action.plan_update")) {
-    workModeSteps.push(
-      "- Start with plan_update when a complex task needs explicit stages.",
-    );
+    workModeSteps.push("- Start with plan_update when a complex task needs explicit stages.");
   }
   if (hasTool("workspace.todo_write")) {
     workModeSteps.push(
       "- Use workspace.todo_write to track actionable tasks and update them as work progresses.",
     );
   }
-  workModeSteps.push(
-    "- Read only what is needed, implement the next clear change, and verify it.",
-  );
+  workModeSteps.push("- Read only what is needed, implement the next clear change, and verify it.");
   if (hasAction("action.final_answer")) {
     workModeSteps.push(
       "- Call final_answer only when the work is done or cannot proceed honestly.",

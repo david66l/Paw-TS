@@ -65,9 +65,7 @@ export function createMemoryEvidenceCoverageInputPortV1(
   options: MemoryEvidenceCoverageInputPortOptionsV1,
 ): LoopInputPort {
   const report = options.baseInput.reportSafeBoundary.bind(options.baseInput);
-  const consume = options.baseInput.consumePromotedInputIds.bind(
-    options.baseInput,
-  );
+  const consume = options.baseInput.consumePromotedInputIds.bind(options.baseInput);
   const readSnapshot = options.session.readInputSnapshot.bind(options.session);
   const commitFacts = options.session.commitInputFacts.bind(options.session);
   const now = options.now ?? Date.now;
@@ -99,10 +97,7 @@ export function createMemoryEvidenceCoverageInputPortV1(
                 readSnapshot,
                 commitFacts,
               });
-              emit(
-                options.onEvent,
-                eventFromFact("commit", fact, now() - started),
-              );
+              emit(options.onEvent, eventFromFact("commit", fact, now() - started));
             }
           }
         }
@@ -160,15 +155,10 @@ async function settleCoverage(
       coverage: plan.coverage,
       supplementalStates: plan.supplementalStates,
       spans: plan.spans,
-      ...(completed
-        ? {}
-        : { reasonCode: "memory_evidence_coverage_not_needed" }),
+      ...(completed ? {} : { reasonCode: "memory_evidence_coverage_not_needed" }),
       settledAt: input.now(),
     });
-    emit(
-      input.options.onEvent,
-      eventFromFact("plan", fact, input.now() - started),
-    );
+    emit(input.options.onEvent, eventFromFact("plan", fact, input.now() - started));
     return fact;
   } catch (error) {
     return Object.freeze({
@@ -200,19 +190,13 @@ function eventFromFact(
     queryId: fact.queryId,
     planRevision: fact.planRevision,
     requirementCount: fact.requirements.length,
-    coveredCount: fact.coverage.filter((item) => item.status === "covered")
-      .length,
-    partialCount: fact.coverage.filter((item) => item.status === "partial")
-      .length,
-    missingCount: fact.coverage.filter((item) => item.status === "missing")
-      .length,
+    coveredCount: fact.coverage.filter((item) => item.status === "covered").length,
+    partialCount: fact.coverage.filter((item) => item.status === "partial").length,
+    missingCount: fact.coverage.filter((item) => item.status === "missing").length,
     expansionTopicCount: topics.size,
     supplementalStateCount: fact.supplementalStates.length,
     spanCount: fact.spans.length,
-    contentChars: fact.spans.reduce(
-      (sum, span) => sum + span.content.length,
-      0,
-    ),
+    contentChars: fact.spans.reduce((sum, span) => sum + span.content.length, 0),
     status: fact.status,
     durationMs: Math.max(0, durationMs),
   });
@@ -229,9 +213,7 @@ async function commitUniqueCoverage(
   let snapshot = input.initialSnapshot;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     if (hasCoverage(snapshot, input.fact.queryId)) return;
-    if (
-      (await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed"
-    ) {
+    if ((await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed") {
       return;
     }
     snapshot = await input.readSnapshot();
@@ -239,37 +221,24 @@ async function commitUniqueCoverage(
   throw new Error("Memory evidence coverage journal commit conflict");
 }
 
-function hasPriorEvidence(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasPriorEvidence(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   let topic = false;
   let raw = false;
   for (const entry of snapshot.entries) {
-    if (
-      entry.fact.type === "memory.topic_evidence_settled" &&
-      entry.fact.queryId === queryId
-    ) {
+    if (entry.fact.type === "memory.topic_evidence_settled" && entry.fact.queryId === queryId) {
       topic = true;
     }
-    if (
-      entry.fact.type === "memory.raw_evidence_settled" &&
-      entry.fact.queryId === queryId
-    ) {
+    if (entry.fact.type === "memory.raw_evidence_settled" && entry.fact.queryId === queryId) {
       raw = true;
     }
   }
   return topic && raw;
 }
 
-function hasCoverage(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasCoverage(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   return snapshot.entries.some(
     (entry) =>
-      entry.fact.type === "memory.evidence_coverage_settled" &&
-      entry.fact.queryId === queryId,
+      entry.fact.type === "memory.evidence_coverage_settled" && entry.fact.queryId === queryId,
   );
 }
 
@@ -290,9 +259,8 @@ function assertExactScope(
 function stableReasonCode(error: unknown): string {
   const name = error instanceof Error ? error.name : "Unknown";
   return (
-    `MemoryEvidenceCoverage_${name}`
-      .replace(/[^A-Za-z0-9_.:-]/g, "_")
-      .slice(0, 160) || "MemoryEvidenceCoverage_Unknown"
+    `MemoryEvidenceCoverage_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160) ||
+    "MemoryEvidenceCoverage_Unknown"
   );
 }
 

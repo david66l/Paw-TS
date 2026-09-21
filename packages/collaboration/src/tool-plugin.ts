@@ -27,16 +27,13 @@ import {
 } from "./roster.js";
 
 export const COLLABORATION_TOOL_PLUGIN_ID_V1 = "paw.collaboration" as const;
-export const COLLABORATION_PROVIDER_TOOL_NAME_V1 =
-  "workspace_delegate" as const;
+export const COLLABORATION_PROVIDER_TOOL_NAME_V1 = "workspace_delegate" as const;
 
 export function createCollaborationToolPluginV1(input?: {
   readonly policy?: CollaborationPolicyV1;
   readonly roster?: CollaborationRosterV1;
 }): RuntimeToolPluginV1 {
-  const policy = freezeCollaborationPolicyV1(
-    input?.policy ?? DEFAULT_COLLABORATION_POLICY_V1,
-  );
+  const policy = freezeCollaborationPolicyV1(input?.policy ?? DEFAULT_COLLABORATION_POLICY_V1);
   const roster = input?.roster ?? DEFAULT_COLLABORATION_ROSTER_V1;
   const contextBudgetDescription = `Each child's goal + scope + acceptance, including headings and bullet formatting, must fit ${policy.maxGoalChars} characters total. Keep criteria concise and reference workspace files instead of copying their contents.`;
   const taskProperties = {
@@ -84,8 +81,7 @@ export function createCollaborationToolPluginV1(input?: {
     agent_id: {
       type: "string",
       maxLength: 100,
-      description:
-        "Required explicit team member id from the Current Team Brief",
+      description: "Required explicit team member id from the Current Team Brief",
     },
   } as const;
   const definition: ToolDefinition = {
@@ -115,8 +111,7 @@ export function createCollaborationToolPluginV1(input?: {
             type: "array",
             minItems: 1,
             maxItems: policy.maxMissionTasks,
-            description:
-              "Optional task graph. Prefer no tasks for a single specialist.",
+            description: "Optional task graph. Prefer no tasks for a single specialist.",
             items: {
               type: "object",
               additionalProperties: false,
@@ -164,10 +159,7 @@ export function createCollaborationToolPluginV1(input?: {
       const root = canonicalRuntimeResourcePathV1(workspaceRoot);
       const collaborationDomain = path.join(root, ".paw", "collaboration");
       const plan = parseCollaborationDelegationPlanV1(args.delegation_plan);
-      const requiresWrite = collaborationDelegationRequiresWriteV1(
-        plan,
-        roster,
-      );
+      const requiresWrite = collaborationDelegationRequiresWriteV1(plan, roster);
       return {
         lockDomain: collaborationDomain,
         effectClass: "read",
@@ -221,10 +213,7 @@ function agentAbilitiesV1(agent: CollaborationAgentSpecV1): readonly string[] {
   const has = (suffix: string): boolean =>
     inherits ||
     tools.some(
-      (tool) =>
-        tool === suffix ||
-        tool.endsWith(`.${suffix}`) ||
-        tool.endsWith(`_${suffix}`),
+      (tool) => tool === suffix || tool.endsWith(`.${suffix}`) || tool.endsWith(`_${suffix}`),
     );
   const hasPrefix = (prefix: string): boolean =>
     inherits ||
@@ -240,10 +229,7 @@ function agentAbilitiesV1(agent: CollaborationAgentSpecV1): readonly string[] {
     agent.effect !== "inspect" && has("run_shell") ? "shell" : undefined,
     agent.effect !== "inspect" && hasPrefix("job_") ? "job" : undefined,
     agent.effect === "mutate" &&
-    (has("write_file") ||
-      has("edit_file") ||
-      has("apply_patch") ||
-      has("notebook_edit"))
+    (has("write_file") || has("edit_file") || has("apply_patch") || has("notebook_edit"))
       ? "edit"
       : undefined,
   ].filter((ability): ability is string => ability !== undefined);

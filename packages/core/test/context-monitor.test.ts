@@ -47,10 +47,7 @@ describe("P5.1 evaluateTrigger 规则引擎", () => {
       msg("user", "[Tool workspace.run_shell failed]\nerror: build failed"),
       msg("assistant", "looking into it"),
       msg("user", "try again"),
-      msg(
-        "user",
-        "[Tool workspace.run_shell failed]\nexception: still failing",
-      ),
+      msg("user", "[Tool workspace.run_shell failed]\nexception: still failing"),
       msg("assistant", "still investigating"),
     ];
     const d = evaluateTrigger(messages);

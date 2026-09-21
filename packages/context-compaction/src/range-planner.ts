@@ -1,7 +1,4 @@
-import type {
-  JournalContextPlanV1,
-  JournalContextTimelineUnitPlanV1,
-} from "@paw/runtime";
+import type { JournalContextPlanV1, JournalContextTimelineUnitPlanV1 } from "@paw/runtime";
 
 import {
   type ContextCompactionPolicyV1,
@@ -89,22 +86,14 @@ export function planSemanticCheckpointRangeV1(
     ).map((unit) => unit.sourceFromSeq),
   );
   const firstEligibleIndex = checkpoint
-    ? afterCheckpoint.findIndex(
-        (unit) => !unit.protected && !retained.has(unit.sourceFromSeq),
-      )
-    : units.findIndex(
-        (unit) => !unit.protected && !retained.has(unit.sourceFromSeq),
-      );
+    ? afterCheckpoint.findIndex((unit) => !unit.protected && !retained.has(unit.sourceFromSeq))
+    : units.findIndex((unit) => !unit.protected && !retained.has(unit.sourceFromSeq));
   const source = checkpoint ? afterCheckpoint : units;
   if (firstEligibleIndex < 0) return undefined;
 
   if (checkpoint) {
     const preceding = source.slice(0, firstEligibleIndex);
-    if (
-      preceding.some(
-        (unit) => unit.protected || retained.has(unit.sourceFromSeq),
-      )
-    ) {
+    if (preceding.some((unit) => unit.protected || retained.has(unit.sourceFromSeq))) {
       return undefined;
     }
   }
@@ -123,15 +112,11 @@ export function planSemanticCheckpointRangeV1(
     sourceFromSeq: checkpoint?.sourceFromSeq ?? first.sourceFromSeq,
     sourceThroughSeq: last.sourceThroughSeq,
     newUnitSourceSeqs: Object.freeze(block.map((unit) => unit.sourceFromSeq)),
-    ...(checkpoint === undefined
-      ? {}
-      : { supersedesCheckpointId: checkpoint.checkpointId }),
+    ...(checkpoint === undefined ? {} : { supersedesCheckpointId: checkpoint.checkpointId }),
   });
 }
 
-function assertTimelineUnits(
-  units: readonly JournalContextTimelineUnitPlanV1[],
-): void {
+function assertTimelineUnits(units: readonly JournalContextTimelineUnitPlanV1[]): void {
   let previousThroughSeq = 0;
   for (const unit of units) {
     if (

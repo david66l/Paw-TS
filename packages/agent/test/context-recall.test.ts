@@ -62,9 +62,7 @@ describe("P3 冷库接线 — 截断 → 归档 → context.recall", () => {
       payload: big,
       turn: 3,
     });
-    const toolMsg = messages.find((m) =>
-      m.includes("[Tool workspace.run_shell"),
-    )!;
+    const toolMsg = messages.find((m) => m.includes("[Tool workspace.run_shell"))!;
     expect(toolMsg).toBeDefined();
     // 截断预览（头尾）+ 引用桩
     expect(toolMsg).toContain("[truncated");
@@ -130,16 +128,12 @@ describe("P3 冷库接线 — 截断 → 归档 → context.recall", () => {
 
     // 每轮 ≤2 次：第 3 次被预算拒绝
     registry.startTurn(2);
-    await executeTool(
-      { workspaceRoot: ROOT, artifactRegistry: registry },
-      CONTEXT_RECALL,
-      { id: stub!.id },
-    );
-    await executeTool(
-      { workspaceRoot: ROOT, artifactRegistry: registry },
-      CONTEXT_RECALL,
-      { id: stub!.id },
-    );
+    await executeTool({ workspaceRoot: ROOT, artifactRegistry: registry }, CONTEXT_RECALL, {
+      id: stub!.id,
+    });
+    await executeTool({ workspaceRoot: ROOT, artifactRegistry: registry }, CONTEXT_RECALL, {
+      id: stub!.id,
+    });
     const third = await executeTool(
       { workspaceRoot: ROOT, artifactRegistry: registry },
       CONTEXT_RECALL,
@@ -216,8 +210,6 @@ describe("P3 冷库接线 — 截断 → 归档 → context.recall", () => {
     expect(outcome.truncated).toBe(true);
     expect(outcome.fullText).toBe(big);
     const small = "ok";
-    expect(
-      truncatePayloadWithOutcome(small, "workspace.run_shell").truncated,
-    ).toBe(false);
+    expect(truncatePayloadWithOutcome(small, "workspace.run_shell").truncated).toBe(false);
   });
 });

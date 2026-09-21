@@ -47,9 +47,7 @@ describe("independent aspect edge linker v1", () => {
       (packet) => packet.source.claimId === "current-detail",
     );
     expect(currentPacket?.aspectId).toBe(setup.detailAspectId);
-    expect(currentPacket?.targets.map((target) => target.claimId)).toEqual([
-      "old-detail",
-    ]);
+    expect(currentPacket?.targets.map((target) => target.claimId)).toEqual(["old-detail"]);
     expect(currentPacket?.targets[0]?.allowedProposals).toEqual([
       {
         fromClaimId: "current-detail",
@@ -82,9 +80,7 @@ describe("independent aspect edge linker v1", () => {
         edgeType: "supports",
       },
     ]);
-    expect(
-      currentPacket?.targets.some((target) => target.claimId === "cooking"),
-    ).toBe(false);
+    expect(currentPacket?.targets.some((target) => target.claimId === "cooking")).toBe(false);
   });
 
   test("keeps event pairs supports-only", () => {
@@ -95,9 +91,7 @@ describe("independent aspect edge linker v1", () => {
       observedAt: mar,
       catalog: setup.catalog,
     });
-    const packet = build.packets.find(
-      (item) => item.source.claimId === "detail-workshop",
-    );
+    const packet = build.packets.find((item) => item.source.claimId === "detail-workshop");
     expect(packet?.targets[0]?.allowedProposals).toEqual([
       {
         fromClaimId: "detail-workshop",
@@ -133,10 +127,7 @@ describe("independent aspect edge linker v1", () => {
     );
 
     expect(result.edges).toHaveLength(1);
-    expect(result.edges[0]?.evidenceRefs).toEqual([
-      "l0:current-detail",
-      "l0:old-detail",
-    ]);
+    expect(result.edges[0]?.evidenceRefs).toEqual(["l0:current-detail", "l0:old-detail"]);
     expect(result.edges[0]?.effectiveFrom).toBe(mar);
     const applied = applyMemoryAspectEdgeLinkingV1(input.snapshot, result);
     expect(applied.aspects).toEqual(input.snapshot.aspects);
@@ -353,9 +344,9 @@ describe("independent aspect edge linker v1", () => {
       input,
     );
     const applied = applyMemoryAspectEdgeLinkingV1(input.snapshot, linking);
-    expect(() =>
-      buildMemoryAspectEdgeLinkerRequestV1({ ...input, snapshot: applied }),
-    ).toThrow("MemoryAspectEdgeLinkerTargetInvalid");
+    expect(() => buildMemoryAspectEdgeLinkerRequestV1({ ...input, snapshot: applied })).toThrow(
+      "MemoryAspectEdgeLinkerTargetInvalid",
+    );
   });
 
   test("reconciles multiple base-revision packets with one graph commit", () => {
@@ -398,17 +389,15 @@ describe("independent aspect edge linker v1", () => {
       eventInput,
     );
 
-    const reconciled = reconcileMemoryAspectEdgeLinkingsV1(
-      stateInput.snapshot,
-      [stateLinking, eventLinking],
-    );
+    const reconciled = reconcileMemoryAspectEdgeLinkingsV1(stateInput.snapshot, [
+      stateLinking,
+      eventLinking,
+    ]);
     expect(reconciled.acceptedLinkingRevisions).toHaveLength(2);
     expect(reconciled.rejected).toEqual([]);
     expect(reconciled.snapshot.edges).toHaveLength(2);
     expect(reconciled.snapshot.aspects).toEqual(stateInput.snapshot.aspects);
-    expect(reconciled.snapshot.memberships).toEqual(
-      stateInput.snapshot.memberships,
-    );
+    expect(reconciled.snapshot.memberships).toEqual(stateInput.snapshot.memberships);
   });
 
   test("isolates only high-signal unresolved pairs for recovery", () => {
@@ -439,9 +428,7 @@ describe("independent aspect edge linker v1", () => {
 
     expect(recovery.metrics.unresolvedPairCount).toBe(3);
     expect(recovery.metrics.selectedPairCount).toBeGreaterThan(0);
-    expect(
-      recovery.packets.every((packet) => packet.targets.length === 1),
-    ).toBe(true);
+    expect(recovery.packets.every((packet) => packet.targets.length === 1)).toBe(true);
   });
 
   test("rechecks generic supports when a specific state relation is allowed", () => {
@@ -457,8 +444,7 @@ describe("independent aspect edge linker v1", () => {
         JSON.stringify({
           decisions: packet.targets.map((target) => {
             const adjudicate =
-              packet.source.claimId === "current-detail" &&
-              target.claimId === "old-detail";
+              packet.source.claimId === "current-detail" && target.claimId === "old-detail";
             return {
               targetClaimId: target.claimId,
               disposition: adjudicate ? "edge" : "no_edge",
@@ -485,8 +471,7 @@ describe("independent aspect edge linker v1", () => {
     expect(
       recovery.packets.some(
         (packet) =>
-          packet.source.claimId === "current-detail" &&
-          packet.targets[0]?.claimId === "old-detail",
+          packet.source.claimId === "current-detail" && packet.targets[0]?.claimId === "old-detail",
       ),
     ).toBe(true);
   });
@@ -552,9 +537,7 @@ function packetFor(sourceClaimId: string): MemoryAspectEdgeLinkingInputV1 {
     observedAt: mar,
     catalog: setup.catalog,
   });
-  const packet = build.packets.find(
-    (item) => item.source.claimId === sourceClaimId,
-  );
+  const packet = build.packets.find((item) => item.source.claimId === sourceClaimId);
   if (packet === undefined) throw new Error("test packet missing");
   return packet;
 }
@@ -569,11 +552,7 @@ function claim(id: string, validFrom: string) {
   });
 }
 
-function membership(
-  claimId: string,
-  aspectId: string,
-  role: "state" | "event",
-) {
+function membership(claimId: string, aspectId: string, role: "state" | "event") {
   return createMemoryClaimAspectMembershipV1({
     scope,
     claimId,

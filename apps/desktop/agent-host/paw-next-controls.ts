@@ -6,9 +6,7 @@ import type {
 
 import { desktopAttachments } from "./paw-next-attachments.js";
 
-type ManagedJobs = Parameters<
-  NonNullable<RunFreshPawNextTaskInputV3["onManagedJobsReady"]>
->[1];
+type ManagedJobs = Parameters<NonNullable<RunFreshPawNextTaskInputV3["onManagedJobsReady"]>>[1];
 
 /** Process-local handles; input and cancellation outcomes remain in V3 journals. */
 export class DesktopNextControls {
@@ -19,10 +17,7 @@ export class DesktopNextControls {
   managedJobs(runId: string, jobs: ManagedJobs) {
     this.jobs.set(runId, jobs);
   }
-  onJobSnapshot?: (
-    runId: string,
-    job: import("@paw/harness").ManagedJobReadV1,
-  ) => void;
+  onJobSnapshot?: (runId: string, job: import("@paw/harness").ManagedJobReadV1) => void;
   refreshJobs() {
     const result: {
       runId: string;
@@ -43,8 +38,7 @@ export class DesktopNextControls {
   }
   stopJob(runId: string, jobId: string) {
     const jobs = this.jobs.get(runId);
-    if (this.closed || !jobs)
-      throw new Error("此后台任务已结束或不属于当前运行。");
+    if (this.closed || !jobs) throw new Error("此后台任务已结束或不属于当前运行。");
     return jobs.kill(jobId, "Stopped from desktop");
   }
 
@@ -63,13 +57,8 @@ export class DesktopNextControls {
   }
 
   async submit(inputId: string, content: string, attachments?: unknown) {
-    if (this.closed || !this.inbox)
-      throw new Error("任务尚未就绪或已结束，请稍后重试。");
-    if (
-      typeof content !== "string" ||
-      !content.trim() ||
-      content.length > 64_000
-    )
+    if (this.closed || !this.inbox) throw new Error("任务尚未就绪或已结束，请稍后重试。");
+    if (typeof content !== "string" || !content.trim() || content.length > 64_000)
       throw new Error("追加指令须为 1–64000 个字符。");
     const parsedAttachments = desktopAttachments(attachments);
     return this.inbox.accept({
@@ -83,8 +72,7 @@ export class DesktopNextControls {
 
   cancel(childId: string) {
     const child = this.children.get(childId);
-    if (this.closed || !child?.cancel)
-      throw new Error("此子任务已结束或不属于当前运行。");
+    if (this.closed || !child?.cancel) throw new Error("此子任务已结束或不属于当前运行。");
     child.cancel();
   }
 }

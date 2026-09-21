@@ -16,9 +16,7 @@ describe("canonical durable payload binding projection", () => {
 
     const occurrences = projectCanonicalDurableJsonPayloadBindingsV1(prefix);
 
-    expect(
-      occurrences.map(({ location, binding }) => ({ location, binding })),
-    ).toEqual([
+    expect(occurrences.map(({ location, binding }) => ({ location, binding }))).toEqual([
       {
         location: {
           kind: "input_attachment",
@@ -209,9 +207,7 @@ describe("canonical durable payload binding projection", () => {
     const occurrences = projectCanonicalDurableJsonPayloadBindingsV1(prefix);
 
     expect(occurrences).toHaveLength(10);
-    expect(
-      occurrences.filter(({ payload }) => payload.kind === "artifact_ref"),
-    ).toHaveLength(9);
+    expect(occurrences.filter(({ payload }) => payload.kind === "artifact_ref")).toHaveLength(9);
   });
 
   test("rejects one artifact ref reused across attachments with different owners", () => {
@@ -231,15 +227,9 @@ describe("canonical durable payload binding projection", () => {
   });
 
   test("rejects refs moved across attachment, model, tool, or checkpoint carriers", () => {
-    for (const drift of [
-      "attachment_to_model",
-      "model_to_tool",
-      "tool_to_checkpoint",
-    ] as const) {
+    for (const drift of ["attachment_to_model", "model_to_tool", "tool_to_checkpoint"] as const) {
       expect(() =>
-        projectCanonicalDurableJsonPayloadBindingsV1(
-          completePrefix({ crossCarrierReuse: drift }),
-        ),
+        projectCanonicalDurableJsonPayloadBindingsV1(completePrefix({ crossCarrierReuse: drift })),
       ).toThrow("reused across canonical bindings");
     }
   });
@@ -256,21 +246,14 @@ describe("canonical durable payload binding projection", () => {
 interface CompletePrefixOptions {
   readonly duplicateAcceptedAttachmentRef?: boolean;
   readonly initialUsesAcceptedRef?: boolean;
-  readonly crossCarrierReuse?:
-    | "attachment_to_model"
-    | "model_to_tool"
-    | "tool_to_checkpoint";
+  readonly crossCarrierReuse?: "attachment_to_model" | "model_to_tool" | "tool_to_checkpoint";
   readonly directUsesDistilledRef?: boolean;
 }
 
-function completePrefix(
-  options: CompletePrefixOptions = {},
-): readonly RunJournalEnvelopeV1[] {
+function completePrefix(options: CompletePrefixOptions = {}): readonly RunJournalEnvelopeV1[] {
   const journal = new JournalFixture();
   const attachmentA = artifact("a");
-  const attachmentB = options.duplicateAcceptedAttachmentRef
-    ? attachmentA
-    : artifact("b");
+  const attachmentB = options.duplicateAcceptedAttachmentRef ? attachmentA : artifact("b");
   const acceptedAttachments = [
     attachment("attachment-a", attachmentA),
     attachment("attachment-b", attachmentB),
@@ -279,20 +262,11 @@ function completePrefix(
     ? attachmentA
     : inline("initial attachment");
   const modelPayload =
-    options.crossCarrierReuse === "attachment_to_model"
-      ? attachmentA
-      : artifact("c");
-  const toolPayload =
-    options.crossCarrierReuse === "model_to_tool"
-      ? modelPayload
-      : artifact("d");
+    options.crossCarrierReuse === "attachment_to_model" ? attachmentA : artifact("c");
+  const toolPayload = options.crossCarrierReuse === "model_to_tool" ? modelPayload : artifact("d");
   const distilledPayload =
-    options.crossCarrierReuse === "tool_to_checkpoint"
-      ? toolPayload
-      : artifact("e");
-  const directPayload = options.directUsesDistilledRef
-    ? distilledPayload
-    : artifact("f");
+    options.crossCarrierReuse === "tool_to_checkpoint" ? toolPayload : artifact("e");
+  const directPayload = options.directUsesDistilledRef ? distilledPayload : artifact("f");
 
   journal.fact({
     type: "attempt.started",
@@ -447,10 +421,7 @@ class JournalFixture {
   }
 }
 
-function envelope(
-  seq: number,
-  record: RunJournalEnvelopeV1["record"],
-): RunJournalEnvelopeV1 {
+function envelope(seq: number, record: RunJournalEnvelopeV1["record"]): RunJournalEnvelopeV1 {
   return {
     schemaVersion: RUN_JOURNAL_SCHEMA_VERSION_V1,
     sessionId: "session-1",
@@ -483,9 +454,7 @@ function attachment(attachmentId: string, content: DurableJsonPayloadV1) {
   };
 }
 
-function clonePrefix(
-  prefix: readonly RunJournalEnvelopeV1[],
-): RunJournalEnvelopeV1[] {
+function clonePrefix(prefix: readonly RunJournalEnvelopeV1[]): RunJournalEnvelopeV1[] {
   return JSON.parse(JSON.stringify(prefix)) as RunJournalEnvelopeV1[];
 }
 

@@ -70,14 +70,7 @@ describe("checkpoint", () => {
     saveCheckpoint(root, "run-1", 1, "workspace.edit_file", {
       path: "a.txt",
     });
-    const metaPath = path.join(
-      root,
-      ".paw",
-      "checkpoints",
-      "run-1",
-      "1",
-      "_meta.json",
-    );
+    const metaPath = path.join(root, ".paw", "checkpoints", "run-1", "1", "_meta.json");
     const originalMeta = readFileSync(metaPath, "utf8");
 
     writeFileSync(path.join(root, "a.txt"), "later", "utf8");
@@ -98,9 +91,7 @@ describe("checkpoint", () => {
         path: "a.txt",
       }).seq,
     ).toBe(2);
-    expect(
-      existsSync(path.join(root, ".paw", "checkpoints", "run-gap", "1")),
-    ).toBe(false);
+    expect(existsSync(path.join(root, ".paw", "checkpoints", "run-gap", "1"))).toBe(false);
   });
 
   test("checkpoint storage refuses a redirected Paw directory", () => {
@@ -139,9 +130,9 @@ describe("checkpoint", () => {
     expect(() => finalizeCheckpoint(root, "late-run", 1)).toThrow(
       "checkpoint storage path is not a safe directory",
     );
-    expect(() =>
-      inspectLastSafeFileMutationCheckpoint(root, "late-run"),
-    ).toThrow("checkpoint storage path is not a safe directory");
+    expect(() => inspectLastSafeFileMutationCheckpoint(root, "late-run")).toThrow(
+      "checkpoint storage path is not a safe directory",
+    );
     expect(() => undoLastSafeFileMutationCheckpoint(root, "late-run")).toThrow(
       "checkpoint storage path is not a safe directory",
     );
@@ -176,9 +167,9 @@ describe("checkpoint", () => {
     expect(() => finalizeCheckpoint(root, "late-seq", 1)).toThrow(
       "checkpoint storage path is not a safe directory",
     );
-    expect(() =>
-      inspectLastSafeFileMutationCheckpoint(root, "late-seq"),
-    ).toThrow("checkpoint storage path is not a safe directory");
+    expect(() => inspectLastSafeFileMutationCheckpoint(root, "late-seq")).toThrow(
+      "checkpoint storage path is not a safe directory",
+    );
     expect(readFileSync(outsideMeta, "utf8")).toBe(originalMeta);
   });
 
@@ -217,30 +208,17 @@ describe("checkpoint", () => {
     const barrier = path.join(root, "go");
     const first = runCheckpointChild([root, readyOne, barrier, "first"]);
     const second = runCheckpointChild([root, readyTwo, barrier, "second"]);
-    await waitForCheckpointChildren(
-      () => existsSync(readyOne) && existsSync(readyTwo),
-    );
+    await waitForCheckpointChildren(() => existsSync(readyOne) && existsSync(readyTwo));
     writeFileSync(barrier, "go", "utf8");
 
     const results = await Promise.all([first, second]);
     expect(results.filter((item) => item.status === "saved")).toHaveLength(1);
-    expect(results.filter((item) => item.status === "rejected")).toHaveLength(
-      1,
+    expect(results.filter((item) => item.status === "rejected")).toHaveLength(1);
+    expect(results.find((item) => item.status === "rejected")?.message).toContain(
+      "checkpoint sequence target already exists: 1",
     );
     expect(
-      results.find((item) => item.status === "rejected")?.message,
-    ).toContain("checkpoint sequence target already exists: 1");
-    expect(
-      existsSync(
-        path.join(
-          root,
-          ".paw",
-          "checkpoints",
-          "concurrent-run",
-          "1",
-          "_meta.json",
-        ),
-      ),
+      existsSync(path.join(root, ".paw", "checkpoints", "concurrent-run", "1", "_meta.json")),
     ).toBe(true);
   }, 15_000);
 
@@ -249,12 +227,8 @@ describe("checkpoint", () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
 
-    expect(() =>
-      saveCheckpoint(root, "run-partial", 1, "workspace.run_shell", cyclic),
-    ).toThrow();
-    expect(
-      existsSync(path.join(root, ".paw", "checkpoints", "run-partial", "1")),
-    ).toBe(true);
+    expect(() => saveCheckpoint(root, "run-partial", 1, "workspace.run_shell", cyclic)).toThrow();
+    expect(existsSync(path.join(root, ".paw", "checkpoints", "run-partial", "1"))).toBe(true);
     expect(() =>
       saveCheckpoint(root, "run-partial", 1, "workspace.run_shell", {
         command: "echo retry",
@@ -410,10 +384,7 @@ describe("checkpoint", () => {
     let injected = false;
     Object.defineProperty(fs, "writeFileSync", {
       configurable: true,
-      value(
-        file: fs.PathOrFileDescriptor,
-        data: string | NodeJS.ArrayBufferView,
-      ) {
+      value(file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView) {
         const result = originalWrite(file, data);
         if (!injected && path.resolve(String(file)) === path.resolve(aPath)) {
           injected = true;
@@ -487,9 +458,7 @@ describe("checkpoint", () => {
         content: "overwrite",
       }),
     ).toThrow("reserved Paw state");
-    expect(
-      existsSync(path.join(root, ".paw", "checkpoints", "audit", "1")),
-    ).toBe(false);
+    expect(existsSync(path.join(root, ".paw", "checkpoints", "audit", "1"))).toBe(false);
   });
 
   test("checkpoint paths cannot escape through a workspace symlink", () => {
@@ -506,9 +475,7 @@ describe("checkpoint", () => {
         path: "link/victim.txt",
       }),
     ).toThrow("escapes workspace");
-    expect(readFileSync(path.join(outside, "victim.txt"), "utf8")).toBe(
-      "outside",
-    );
+    expect(readFileSync(path.join(outside, "victim.txt"), "utf8")).toBe("outside");
   });
 
   test("checkpoint preparation rejects colliding snapshot keys", () => {
@@ -529,9 +496,7 @@ describe("checkpoint", () => {
         patch: patchText,
       }),
     ).toThrow("collide after path sanitization");
-    expect(
-      existsSync(path.join(root, ".paw", "checkpoints", "run-collision")),
-    ).toBe(false);
+    expect(existsSync(path.join(root, ".paw", "checkpoints", "run-collision"))).toBe(false);
   });
 
   test("safe undo fails closed on malformed outcome metadata", () => {
@@ -543,18 +508,8 @@ describe("checkpoint", () => {
     });
     writeFileSync(filePath, "agent", "utf8");
     finalizeCheckpoint(root, "run-malformed", 1);
-    const metaPath = path.join(
-      root,
-      ".paw",
-      "checkpoints",
-      "run-malformed",
-      "1",
-      "_meta.json",
-    );
-    const meta = JSON.parse(readFileSync(metaPath, "utf8")) as Record<
-      string,
-      unknown
-    >;
+    const metaPath = path.join(root, ".paw", "checkpoints", "run-malformed", "1", "_meta.json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf8")) as Record<string, unknown>;
     writeFileSync(
       metaPath,
       JSON.stringify({
@@ -569,14 +524,9 @@ describe("checkpoint", () => {
       "utf8",
     );
 
-    const inspected = inspectLastSafeFileMutationCheckpoint(
-      root,
-      "run-malformed",
-    );
+    const inspected = inspectLastSafeFileMutationCheckpoint(root, "run-malformed");
     expect(inspected.status).toBe("invalid");
-    expect(
-      undoLastSafeFileMutationCheckpoint(root, "run-malformed").status,
-    ).toBe("invalid");
+    expect(undoLastSafeFileMutationCheckpoint(root, "run-malformed").status).toBe("invalid");
     expect(readFileSync(filePath, "utf8")).toBe("agent");
     expect(listCheckpoints(root, "run-malformed")).toHaveLength(1);
   });
@@ -590,13 +540,7 @@ describe("checkpoint", () => {
     });
     writeFileSync(filePath, "after", "utf8");
     finalizeCheckpoint(root, "run-tamper", 1);
-    const checkpointDir = path.join(
-      root,
-      ".paw",
-      "checkpoints",
-      "run-tamper",
-      "1",
-    );
+    const checkpointDir = path.join(root, ".paw", "checkpoints", "run-tamper", "1");
     const snapshot = readdirSync(checkpointDir).find(
       (name) => !name.startsWith(".") && name !== "_meta.json",
     );
@@ -626,10 +570,7 @@ describe("checkpoint", () => {
     writeFileSync(filePath, "partial", "utf8");
     finalizeCheckpoint(root, "run-failed", 2, { toolSucceeded: false });
 
-    const inspection = inspectLastSafeFileMutationCheckpoint(
-      root,
-      "run-failed",
-    );
+    const inspection = inspectLastSafeFileMutationCheckpoint(root, "run-failed");
     expect(inspection.status).toBe("conflict");
     if (inspection.status !== "conflict") throw new Error("expected conflict");
     expect(inspection.entry.seq).toBe(1);
@@ -642,23 +583,11 @@ describe("checkpoint", () => {
     saveCheckpoint(root, "run-seq", 1, "workspace.edit_file", {
       path: "a.txt",
     });
-    const metaPath = path.join(
-      root,
-      ".paw",
-      "checkpoints",
-      "run-seq",
-      "1",
-      "_meta.json",
-    );
-    const meta = JSON.parse(readFileSync(metaPath, "utf8")) as Record<
-      string,
-      unknown
-    >;
+    const metaPath = path.join(root, ".paw", "checkpoints", "run-seq", "1", "_meta.json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf8")) as Record<string, unknown>;
     writeFileSync(metaPath, JSON.stringify({ ...meta, seq: 2 }), "utf8");
 
-    expect(inspectLastSafeFileMutationCheckpoint(root, "run-seq").status).toBe(
-      "invalid",
-    );
+    expect(inspectLastSafeFileMutationCheckpoint(root, "run-seq").status).toBe("invalid");
   });
 
   test("isMutatingTool recognizes mutating tools", () => {
@@ -713,9 +642,7 @@ describe("checkpoint", () => {
     const { restoreCheckpoint } = require("../src/checkpoint.js");
     restoreCheckpoint(root, "run-bk", 1, { backup: true });
 
-    const backupDirs = existsSync(
-      path.join(root, ".paw", "checkpoints", "run-bk", ".backup"),
-    );
+    const backupDirs = existsSync(path.join(root, ".paw", "checkpoints", "run-bk", ".backup"));
     expect(backupDirs).toBe(true);
   });
 
@@ -727,23 +654,13 @@ describe("checkpoint", () => {
     });
 
     const meta = JSON.parse(
-      readFileSync(
-        path.join(root, ".paw", "checkpoints", "run-shell", "1", "_meta.json"),
-        "utf8",
-      ),
+      readFileSync(path.join(root, ".paw", "checkpoints", "run-shell", "1", "_meta.json"), "utf8"),
     );
     expect(meta.targets).toContain("__shell_cmd__");
 
     const shellMeta = JSON.parse(
       readFileSync(
-        path.join(
-          root,
-          ".paw",
-          "checkpoints",
-          "run-shell",
-          "1",
-          ".shell-meta.json",
-        ),
+        path.join(root, ".paw", "checkpoints", "run-shell", "1", ".shell-meta.json"),
         "utf8",
       ),
     );
@@ -758,16 +675,11 @@ interface CheckpointChildResult {
   readonly message?: string;
 }
 
-function runCheckpointChild(
-  args: readonly string[],
-): Promise<CheckpointChildResult> {
+function runCheckpointChild(args: readonly string[]): Promise<CheckpointChildResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [
-        path.join(import.meta.dir, "fixtures", "checkpoint-save-child.ts"),
-        ...args,
-      ],
+      [path.join(import.meta.dir, "fixtures", "checkpoint-save-child.ts"), ...args],
       {
         cwd: path.resolve(import.meta.dir, ".."),
         stdio: ["ignore", "pipe", "pipe"],
@@ -797,8 +709,7 @@ function runCheckpointChild(
 async function waitForCheckpointChildren(check: () => boolean): Promise<void> {
   const deadline = Date.now() + 10_000;
   while (!check()) {
-    if (Date.now() >= deadline)
-      throw new Error("checkpoint child barrier timeout");
+    if (Date.now() >= deadline) throw new Error("checkpoint child barrier timeout");
     await Bun.sleep(5);
   }
 }

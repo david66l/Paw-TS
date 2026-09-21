@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -116,9 +110,7 @@ describe("ManagedJobControllerV1", () => {
       turn: 3,
       ok: true,
     });
-    expect(
-      controller.drainSettlements({ taskState, executionEnvironment }),
-    ).toEqual([]);
+    expect(controller.drainSettlements({ taskState, executionEnvironment })).toEqual([]);
     expect(taskState.snapshot().mutationRevision).toBe(1);
     await controller.close();
   });
@@ -137,8 +129,7 @@ describe("ManagedJobControllerV1", () => {
       appliesTo: ({ tool }) => tool === "workspace.run_shell",
       prepare: () => readFileSync(path.join(root, "tracked.txt"), "utf8"),
       settle: (_input, prepared) => {
-        settleSawMutation =
-          readFileSync(path.join(root, "tracked.txt"), "utf8") === "after\n";
+        settleSawMutation = readFileSync(path.join(root, "tracked.txt"), "utf8") === "after\n";
         writeFileSync(path.join(root, "tracked.txt"), String(prepared), "utf8");
         return {
           allowed: false,
@@ -166,9 +157,7 @@ describe("ManagedJobControllerV1", () => {
       detail: "[ToolEffectPolicy:fixture_rejected] restored prohibited effect",
     });
     expect(settleSawMutation).toBe(true);
-    expect(readFileSync(path.join(root, "tracked.txt"), "utf8")).toBe(
-      "before\n",
-    );
+    expect(readFileSync(path.join(root, "tracked.txt"), "utf8")).toBe("before\n");
 
     const [settled] = controller.drainSettlements({
       taskState,
@@ -216,11 +205,7 @@ describe("ManagedJobControllerV1", () => {
 
   test("restores unresolved jobs as orphaned metadata and never reuses their ids", async () => {
     const root = gitFixture("recovery");
-    writeFileSync(
-      path.join(root, "quick.mjs"),
-      "process.stdout.write('ok\\n');\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "quick.mjs"), "process.stdout.write('ok\\n');\n", "utf8");
     const controller = new ManagedJobControllerV1({
       ownerId: "run-recovery",
       workspaceRoot: root,
@@ -252,9 +237,7 @@ describe("ManagedJobControllerV1", () => {
     });
     expect(controller.kill("shell-3")).toBe("already_finished");
     expect(controller.readiness().blocksCompletion).toBe(false);
-    expect(controller.recoveryIssues()).toEqual([
-      "managed_job_interrupted_orphaned",
-    ]);
+    expect(controller.recoveryIssues()).toEqual(["managed_job_interrupted_orphaned"]);
 
     const started = await controller.startShell({
       turn: 1,

@@ -45,10 +45,9 @@ export const MEMORY_RRF_VECTOR_WEIGHT_V1 = 0.35;
 
 export function createPawNextMemoryRrfPostgresProviderV1(
   profile: PawNextMemoryPluginProfileV1,
-  cache?: Omit<
-    CachedMemoryProviderOptionsV1,
-    "revisionToken" | "storageNamespace"
-  > & { readonly storageNamespace?: string },
+  cache?: Omit<CachedMemoryProviderOptionsV1, "revisionToken" | "storageNamespace"> & {
+    readonly storageNamespace?: string;
+  },
   store?: {
     readonly embedding?: MemoryEmbeddingService;
     readonly vectorPolicy?: MemoryVectorRecallPolicyV1;
@@ -75,16 +74,14 @@ export function createPawNextMemoryRrfPostgresProviderV1(
       reranker,
       vectorPolicy:
         store?.vectorPolicy ??
-        (store?.embedding &&
-        !store.embedding.model.startsWith("partitioned-ngram+dense:")
+        (store?.embedding && !store.embedding.model.startsWith("partitioned-ngram+dense:")
           ? "lexical_gap_only"
           : "always"),
       onFusionEvent: telemetry?.onFusionEvent,
     }),
     {
       ...cache,
-      storageNamespace:
-        cache?.storageNamespace ?? postgresMemoryStorageNamespaceV1(),
+      storageNamespace: cache?.storageNamespace ?? postgresMemoryStorageNamespaceV1(),
       revisionToken: engine.retrievalRevisionToken.bind(engine),
     },
   );
@@ -184,8 +181,7 @@ export function createPawNextMemoryRrfProviderV1(input: {
   readonly onFusionEvent?: (event: MemoryRrfFusionEventV1) => void;
 }): MemoryProviderV1 {
   if (!input.engine) throw new Error("Memory RRF provider engine is required");
-  const providerVersion =
-    input.providerVersion ?? PAW_NEXT_MEMORY_RRF_PROVIDER_VERSION_V1;
+  const providerVersion = input.providerVersion ?? PAW_NEXT_MEMORY_RRF_PROVIDER_VERSION_V1;
   const vectorPolicy = input.vectorPolicy ?? "always";
   if (
     (providerVersion === PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1) !==
@@ -208,28 +204,18 @@ export function createPawNextMemoryRrfProviderV1(input: {
           cards: Object.freeze([]),
         });
       }
-      const candidateK = Math.min(
-        MAX_CANDIDATES,
-        Math.max(query.maxCards * 8, 32),
-      );
+      const candidateK = Math.min(MAX_CANDIDATES, Math.max(query.maxCards * 8, 32));
       const lexical = await Promise.all(
         variants.map((variant) =>
           settleRankList(
             variant.weight * MEMORY_RRF_TEXT_WEIGHT_V1,
-            input.engine.searchText(
-              variant.text,
-              candidateK,
-              query.scope.repositoryId,
-            ),
+            input.engine.searchText(variant.text, candidateK, query.scope.repositoryId),
           ),
         ),
       );
       if (signal.aborted) throw abortError();
       const lexicalCandidateCount = uniqueCandidateCount(lexical);
-      const lexicalGateMinimum = Math.min(
-        candidateK,
-        Math.max(query.maxCards * 2, 16),
-      );
+      const lexicalGateMinimum = Math.min(candidateK, Math.max(query.maxCards * 2, 16));
       const vectorSearched =
         vectorPolicy === "always" || lexicalCandidateCount < lexicalGateMinimum;
       const vector = vectorSearched
@@ -237,11 +223,7 @@ export function createPawNextMemoryRrfProviderV1(input: {
             variants.map((variant) =>
               settleRankList(
                 variant.weight * MEMORY_RRF_VECTOR_WEIGHT_V1,
-                input.engine.searchVector(
-                  variant.text,
-                  candidateK,
-                  query.scope.repositoryId,
-                ),
+                input.engine.searchVector(variant.text, candidateK, query.scope.repositoryId),
               ),
             ),
           )
@@ -269,10 +251,7 @@ export function createPawNextMemoryRrfProviderV1(input: {
         readonly card: MemoryCardV1;
         readonly score: number;
       }> = [];
-      const rerankCandidateLimit = Math.min(
-        32,
-        Math.max(query.maxCards * 4, 10),
-      );
+      const rerankCandidateLimit = Math.min(32, Math.max(query.maxCards * 4, 10));
       for (const ranked of ranking) {
         if (candidateCards.length >= rerankCandidateLimit) break;
         let entry: MemoryEntry | null;
@@ -308,9 +287,7 @@ export function createPawNextMemoryRrfProviderV1(input: {
                     statement: card.statement,
                     rrfScore: score,
                     confidence: card.confidence,
-                    sourceRefs: Object.freeze(
-                      card.sources.map((source) => source.ref),
-                    ),
+                    sourceRefs: Object.freeze(card.sources.map((source) => source.ref)),
                   }),
                 ),
               ),
@@ -385,9 +362,7 @@ function applyRerankOrder<T extends { readonly card: MemoryCardV1 }>(
   if (!Array.isArray(order) || order.length === 0) {
     throw new Error("Memory reranker returned an empty order");
   }
-  const byId = new Map(
-    candidates.map((candidate) => [candidate.card.id, candidate]),
-  );
+  const byId = new Map(candidates.map((candidate) => [candidate.card.id, candidate]));
   const seen = new Set<string>();
   const output: T[] = [];
   for (const id of order) {
@@ -406,8 +381,7 @@ function assertRerankerBinding(
   profile: PawNextMemoryPluginProfileV1,
   reranker: MemoryRerankerV1 | undefined,
 ): void {
-  const expects =
-    profile.providerVersion === PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1;
+  const expects = profile.providerVersion === PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1;
   if (expects !== Boolean(reranker) || expects !== Boolean(profile.reranker)) {
     throw new Error("Memory reranker binding is incomplete");
   }
@@ -417,9 +391,7 @@ function assertRerankerBinding(
       reranker.identity.model !== profile.reranker?.model ||
       reranker.identity.revision !== profile.reranker?.revision)
   ) {
-    throw new Error(
-      "Memory reranker identity does not match the frozen profile",
-    );
+    throw new Error("Memory reranker identity does not match the frozen profile");
   }
 }
 
@@ -436,27 +408,17 @@ function assertEmbeddingBinding(
       embedding.version !== profile.embedding?.version ||
       embedding.dimensions !== profile.embedding?.dimensions)
   ) {
-    throw new Error(
-      "Memory embedding identity does not match the frozen profile",
-    );
+    throw new Error("Memory embedding identity does not match the frozen profile");
   }
 }
 
-function normalizeSearchVariants(
-  query: MemoryProviderQueryV1,
-): readonly MemorySearchTextV1[] {
-  const source =
-    query.searchTexts ?? createMemorySearchTextsV1(undefined, query.text);
+function normalizeSearchVariants(query: MemoryProviderQueryV1): readonly MemorySearchTextV1[] {
+  const source = query.searchTexts ?? createMemorySearchTextsV1(undefined, query.text);
   const variants: MemorySearchTextV1[] = [];
   const seen = new Set<string>();
   for (const variant of source.slice(0, MAX_SEARCH_VARIANTS)) {
     const text = variant.text.trim().replace(/\s+/g, " ").slice(0, 8_192);
-    if (
-      !text ||
-      seen.has(text) ||
-      !Number.isFinite(variant.weight) ||
-      variant.weight <= 0
-    ) {
+    if (!text || seen.has(text) || !Number.isFinite(variant.weight) || variant.weight <= 0) {
       continue;
     }
     seen.add(text);
@@ -484,15 +446,10 @@ async function settleRankList(
 
 function isInjectable(
   entry: MemoryEntry,
-): entry is Extract<
-  MemoryEntry,
-  { kind: "semantic" | "episodic" | "profile" }
-> {
+): entry is Extract<MemoryEntry, { kind: "semantic" | "episodic" | "profile" }> {
   return (
     entry.tInvalid == null &&
-    (entry.kind === "semantic" ||
-      entry.kind === "episodic" ||
-      entry.kind === "profile")
+    (entry.kind === "semantic" || entry.kind === "episodic" || entry.kind === "profile")
   );
 }
 

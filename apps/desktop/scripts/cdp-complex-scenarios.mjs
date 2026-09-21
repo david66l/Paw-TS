@@ -42,9 +42,7 @@ async function connect() {
     });
   };
   ws.onmessage = (ev) => {
-    const msg = JSON.parse(
-      typeof ev.data === "string" ? ev.data : ev.data.toString(),
-    );
+    const msg = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject, t } = pending.get(msg.id);
       clearTimeout(t);
@@ -71,9 +69,7 @@ async function evalJs(send, expression, awaitPromise = false) {
   });
   if (r.exceptionDetails) {
     throw new Error(
-      r.exceptionDetails.exception?.description ||
-        r.exceptionDetails.text ||
-        "eval failed",
+      r.exceptionDetails.exception?.description || r.exceptionDetails.text || "eval failed",
     );
   }
   return r.result?.value;
@@ -197,17 +193,12 @@ async function waitRunDone(send, timeoutMs = 180000) {
       return st.done;
     }
     // 兜底：无 abort 且状态就绪，且已跑过一段时间
-    if (
-      !st.hasAbort &&
-      /就绪|完成|失败/.test(st.status) &&
-      Date.now() - start > 4000
-    ) {
+    if (!st.hasAbort && /就绪|完成|失败/.test(st.status) && Date.now() - start > 4000) {
       await sleep(600);
       const again = await evalJs(send, `!!window.__pawTestRunDone`);
       if (again) return true;
       // 可能事件丢了但 UI 已 idle
-      if (!st.hasAbort && Date.now() - start > 8000)
-        return { fallback: true, status: st.status };
+      if (!st.hasAbort && Date.now() - start > 8000) return { fallback: true, status: st.status };
     }
     await sleep(800);
   }
@@ -250,8 +241,7 @@ async function main() {
       })()`,
       true,
     );
-    if (meta.hasList && meta.hasOnList)
-      pass("S0 Phase1 API present", JSON.stringify(meta));
+    if (meta.hasList && meta.hasOnList) pass("S0 Phase1 API present", JSON.stringify(meta));
     else fail("S0 Phase1 API present", JSON.stringify(meta));
   } catch (e) {
     fail("S0 Phase1 API present", e.message);
@@ -288,10 +278,7 @@ async function main() {
         `${lib.count} items, vitest=${lib.hasVitest} ioredis=${lib.hasIoredis}`,
       );
     else if (lib.ok && lib.count > 0)
-      pass(
-        "S1 memory.list total library",
-        `${lib.count} items (seed keywords not all present)`,
-      );
+      pass("S1 memory.list total library", `${lib.count} items (seed keywords not all present)`);
     else fail("S1 memory.list total library", JSON.stringify(lib));
 
     await clickTab(send, "Memory");
@@ -329,8 +316,7 @@ async function main() {
     const memPanel = await panelText(send);
     const body = await chatBody(send);
     const hitUi =
-      /本次会话命中[\s\S]{0,40}[1-9]/.test(memPanel) ||
-      /vitest|preference|Prefer/i.test(memPanel);
+      /本次会话命中[\s\S]{0,40}[1-9]/.test(memPanel) || /vitest|preference|Prefer/i.test(memPanel);
     const answerHit = /vitest/i.test(body);
     if (hitUi || answerHit)
       pass(
@@ -350,19 +336,12 @@ async function main() {
   // ── S3: 多轮 history（非仅记忆）───────────────────────
   try {
     await clickNewConversation(send);
-    await sendGoal(
-      send,
-      "不要调用工具。请记住一个暗号词：蓝鲸。只回复：已记下",
-    );
+    await sendGoal(send, "不要调用工具。请记住一个暗号词：蓝鲸。只回复：已记下");
     await waitRunDone(send, 90000);
-    await sendGoal(
-      send,
-      "不要调用工具。刚才我说的暗号词是什么？只输出那个词。",
-    );
+    await sendGoal(send, "不要调用工具。刚才我说的暗号词是什么？只输出那个词。");
     await waitRunDone(send, 90000);
     const body = await chatBody(send);
-    if (/蓝鲸/.test(body))
-      pass("S3 multi-turn history recall", "found 蓝鲸 in chat");
+    if (/蓝鲸/.test(body)) pass("S3 multi-turn history recall", "found 蓝鲸 in chat");
     else fail("S3 multi-turn history recall", body.slice(-400));
     await shot(send, "s3-multiturn");
   } catch (e) {
@@ -396,30 +375,17 @@ async function main() {
     const planText = await panelText(send);
 
     if (ctxHasFile)
-      pass(
-        "S4a Context panel has run data",
-        ctxText.replace(/\s+/g, " ").slice(0, 200),
-      );
+      pass("S4a Context panel has run data", ctxText.replace(/\s+/g, " ").slice(0, 200));
     else fail("S4a Context panel has run data", ctxText.slice(0, 250));
 
     // Changes may be empty if only read (we only track writes for Changes, reads go to Context)
     if (/package\.json|暂无文件变更/.test(chText))
-      pass(
-        "S4b Changes tab reachable",
-        chText.replace(/\s+/g, " ").slice(0, 120),
-      );
-    else
-      pass(
-        "S4b Changes tab reachable",
-        chText.replace(/\s+/g, " ").slice(0, 120),
-      );
+      pass("S4b Changes tab reachable", chText.replace(/\s+/g, " ").slice(0, 120));
+    else pass("S4b Changes tab reachable", chText.replace(/\s+/g, " ").slice(0, 120));
 
     const body = await chatBody(send);
     if (/@paw\/memory|memory|name/i.test(body))
-      pass(
-        "S4c tool read produced answer",
-        body.slice(-220).replace(/\s+/g, " "),
-      );
+      pass("S4c tool read produced answer", body.slice(-220).replace(/\s+/g, " "));
     else fail("S4c tool read produced answer", body.slice(-300));
 
     info(`plan panel: ${planText.replace(/\s+/g, " ").slice(0, 120)}`);
@@ -442,24 +408,12 @@ async function main() {
     const planText = await panelText(send);
     const body = await chatBody(send);
     const hasPlanItems =
-      /apps|packages|目录|步骤|1\.|2\./i.test(planText) &&
-      !/暂无执行计划/.test(planText);
+      /apps|packages|目录|步骤|1\.|2\./i.test(planText) && !/暂无执行计划/.test(planText);
     const bodyHasStructure = /apps|packages|目录/i.test(body);
-    if (hasPlanItems)
-      pass(
-        "S5 Plan panel populated",
-        planText.replace(/\s+/g, " ").slice(0, 220),
-      );
+    if (hasPlanItems) pass("S5 Plan panel populated", planText.replace(/\s+/g, " ").slice(0, 220));
     else if (bodyHasStructure)
-      fail(
-        "S5 Plan panel populated",
-        `body ok but plan empty: ${planText.slice(0, 150)}`,
-      );
-    else
-      fail(
-        "S5 Plan panel populated",
-        `plan=${planText.slice(0, 150)} body=${body.slice(-200)}`,
-      );
+      fail("S5 Plan panel populated", `body ok but plan empty: ${planText.slice(0, 150)}`);
+    else fail("S5 Plan panel populated", `plan=${planText.slice(0, 150)} body=${body.slice(-200)}`);
     await shot(send, "s5-plan");
   } catch (e) {
     fail("S5 Plan complex task", e.message);
@@ -476,11 +430,7 @@ async function main() {
     // after new chat, stream should be relatively empty / welcome
     if (/开始和 Paw|描述一个任务|就绪/.test(body) || body.length < 800)
       pass("S6 chitchat + new conversation finalize", "UI reset ok");
-    else
-      pass(
-        "S6 chitchat + new conversation finalize",
-        "completed without crash",
-      );
+    else pass("S6 chitchat + new conversation finalize", "completed without crash");
     await shot(send, "s6-new-chat");
   } catch (e) {
     fail("S6 chitchat + new conversation finalize", e.message);
@@ -502,11 +452,7 @@ async function main() {
         "S7 redis preference recall",
         `bodyHas=${/ioredis/i.test(body)} memHas=${/ioredis|Redis/i.test(mem)}`,
       );
-    else
-      fail(
-        "S7 redis preference recall",
-        body.slice(-250) + " | " + mem.slice(0, 150),
-      );
+    else fail("S7 redis preference recall", body.slice(-250) + " | " + mem.slice(0, 150));
     await shot(send, "s7-ioredis");
   } catch (e) {
     fail("S7 redis preference recall", e.message);
@@ -522,11 +468,7 @@ async function main() {
   }
   writeFileSync(
     join(OUT_DIR, "results.json"),
-    JSON.stringify(
-      { passed, failed, results, at: new Date().toISOString() },
-      null,
-      2,
-    ),
+    JSON.stringify({ passed, failed, results, at: new Date().toISOString() }, null, 2),
   );
   ws.close();
   process.exit(failed > 0 ? 1 : 0);

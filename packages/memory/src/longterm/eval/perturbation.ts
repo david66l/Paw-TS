@@ -33,15 +33,8 @@ export function parseVerdict<T extends string>(
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
     if (start === -1 || end <= start) return null;
-    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<
-      string,
-      unknown
-    >;
-    if (
-      typeof parsed.verdict !== "string" ||
-      !allowed.includes(parsed.verdict as T)
-    )
-      return null;
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+    if (typeof parsed.verdict !== "string" || !allowed.includes(parsed.verdict as T)) return null;
     return {
       verdict: parsed.verdict as T,
       reason: typeof parsed.reason === "string" ? parsed.reason : "",
@@ -85,19 +78,9 @@ async function judgeTwice<T extends string>(
   allowed: readonly T[],
   bad: readonly T[],
 ): Promise<DualVerdict<T>> {
-  const p1 = parseVerdict(
-    await judge.complete(promptA).catch(() => ""),
-    allowed,
-  );
-  const p2 = parseVerdict(
-    await judge.complete(promptB).catch(() => ""),
-    allowed,
-  );
-  return conservativeMerge(
-    p1?.verdict ?? "unjudged",
-    p2?.verdict ?? "unjudged",
-    bad,
-  );
+  const p1 = parseVerdict(await judge.complete(promptA).catch(() => ""), allowed);
+  const p2 = parseVerdict(await judge.complete(promptB).catch(() => ""), allowed);
+  return conservativeMerge(p1?.verdict ?? "unjudged", p2?.verdict ?? "unjudged", bad);
 }
 
 /** LLM 调用预算护栏（§5.2 成本纪律在评测侧的镜像） */
@@ -209,9 +192,7 @@ async function makeCtx(suite: string, opts: SuiteOptions): Promise<SuiteCtx> {
     suite === "noise"
       ? { engine, shadow: true, topK: { taskStart: NOISE_TASK_START_TOP_K } }
       : { engine, shadow: true };
-  const budget = new LlmBudget(
-    opts.llmBudget ?? (suite === "noise" ? 400 : 200),
-  );
+  const budget = new LlmBudget(opts.llmBudget ?? (suite === "noise" ? 400 : 200));
   return {
     engine,
     retriever: new TriggeredRetriever(retrieverOpts),
@@ -240,8 +221,7 @@ async function seedViaPipeline(
   opts: SuiteOptions,
 ): Promise<string[]> {
   const pipeline = (
-    opts.pipelineFactory ??
-    ((d) => new MemoryWritePipeline({ distiller: new MemoryDistiller(d) }))
+    opts.pipelineFactory ?? ((d) => new MemoryWritePipeline({ distiller: new MemoryDistiller(d) }))
   )({
     complete: async () =>
       JSON.stringify({
@@ -268,10 +248,7 @@ async function cleanupCtx(ctx: SuiteCtx, keep?: boolean): Promise<void> {
   await sql`DELETE FROM memory_op_log WHERE run_id LIKE ${ctx.repo + "%"}`;
 }
 
-function efficiencyOf(
-  stats: LlmStats | undefined,
-  budget: LlmBudget,
-): RedteamReport["efficiency"] {
+function efficiencyOf(stats: LlmStats | undefined, budget: LlmBudget): RedteamReport["efficiency"] {
   return {
     llmCalls: stats?.calls ?? budget.used,
     retries: stats?.retries ?? 0,
@@ -396,9 +373,7 @@ export function summarizeCounterfactual(items: readonly CfItemResult[]): {
 } {
   const recalled = items.filter((i) => i.recalled);
   const recallRate = items.length > 0 ? recalled.length / items.length : 0;
-  const judged = recalled.filter(
-    (i) => i.final === "corrected" || i.final === "uncorrected",
-  );
+  const judged = recalled.filter((i) => i.final === "corrected" || i.final === "uncorrected");
   const corrected = recalled.filter((i) => i.final === "corrected").length;
   const correctionRate = judged.length > 0 ? corrected / judged.length : null;
   return {
@@ -471,13 +446,7 @@ export async function runCounterfactualSuite(
       const finalAnswer = await ctx.backbone.complete(
         `任务：${f.question}\n参考记忆（可能过时）：\n${injected}\n你查阅项目文件得到：${f.evidence}\n请以项目文件为准重新回答，一句话。`,
       );
-      const [pa, pb] = cfJudgePrompts(
-        f.question,
-        injected,
-        f.evidence,
-        finalAnswer,
-        f.answerRule,
-      );
+      const [pa, pb] = cfJudgePrompts(f.question, injected, f.evidence, finalAnswer, f.answerRule);
       const dual = await judgeTwice(
         ctx.judge,
         pa,
@@ -496,9 +465,7 @@ export async function runCounterfactualSuite(
       });
     }
   } catch (e) {
-    ctx.warnings.push(
-      `套件中断: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    ctx.warnings.push(`套件中断: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     await cleanupCtx(ctx, opts.keep);
   }
@@ -567,8 +534,7 @@ export const NOISE_FIXTURES: NoiseFixture[] = [
   {
     taskId: "nz-02",
     description: "修复 garnet 缓存穿透导致的 DB 抖动",
-    whenToUse:
-      "When garnet cache penetration spikes, add negative caching with short TTL",
+    whenToUse: "When garnet cache penetration spikes, add negative caching with short TTL",
     perspective:
       "Cache penetration floods the database with misses, and negative caching absorbs them.",
     modification: [
@@ -591,34 +557,24 @@ export const NOISE_FIXTURES: NoiseFixture[] = [
   {
     taskId: "nz-04",
     description: "定位 zephyr 部署令牌轮换后失效",
-    whenToUse:
-      "When zephyr tokens mismatch after rotation, check stale rotation windows",
+    whenToUse: "When zephyr tokens mismatch after rotation, check stale rotation windows",
     perspective:
       "Token mismatches after rotation come from windows where old and new tokens overlap.",
-    modification: [
-      "Check stale rotation windows",
-      "Rotate tokens within a single window",
-    ],
+    modification: ["Check stale rotation windows", "Rotate tokens within a single window"],
   },
   {
     taskId: "nz-05",
     description: "解决 peridot 构建缓存导致的幽灵错误",
-    whenToUse:
-      "When peridot builds fail mysteriously, clear the incremental cache first",
+    whenToUse: "When peridot builds fail mysteriously, clear the incremental cache first",
     perspective:
       "Mysterious build failures are often stale incremental cache rather than source problems.",
-    modification: [
-      "Clear the incremental build cache",
-      "Retry the build before deep debugging",
-    ],
+    modification: ["Clear the incremental build cache", "Retry the build before deep debugging"],
   },
   {
     taskId: "nz-06",
     description: "排查 topaz 会话租约每小时过期",
-    whenToUse:
-      "When topaz sessions expire hourly, renew the lease in a background loop",
-    perspective:
-      "Hourly session expiry means the lease is never renewed in the background.",
+    whenToUse: "When topaz sessions expire hourly, renew the lease in a background loop",
+    perspective: "Hourly session expiry means the lease is never renewed in the background.",
     modification: [
       "Renew the lease in a background loop",
       "Keep the renewal interval below the expiry window",
@@ -627,8 +583,7 @@ export const NOISE_FIXTURES: NoiseFixture[] = [
   {
     taskId: "nz-07",
     description: "修复 olivine 模块解析在 ESM 迁移后报错",
-    whenToUse:
-      "When olivine module resolution fails after ESM migration, check the exports field",
+    whenToUse: "When olivine module resolution fails after ESM migration, check the exports field",
     perspective:
       "Module resolution failures after migration usually trace to a missing exports mapping.",
     modification: [
@@ -639,10 +594,8 @@ export const NOISE_FIXTURES: NoiseFixture[] = [
   {
     taskId: "nz-08",
     description: "处理 iolite 队列积压导致的延迟告警",
-    whenToUse:
-      "When iolite queue depth grows, scale consumers before raising timeouts",
-    perspective:
-      "Growing queue depth is a throughput problem, not a latency one.",
+    whenToUse: "When iolite queue depth grows, scale consumers before raising timeouts",
+    perspective: "Growing queue depth is a throughput problem, not a latency one.",
     modification: [
       "Scale up queue consumers first",
       "Avoid masking the backlog with larger timeouts",
@@ -651,20 +604,14 @@ export const NOISE_FIXTURES: NoiseFixture[] = [
   {
     taskId: "nz-09",
     description: "解决 beryl 日志轮转磁盘打满",
-    whenToUse:
-      "When beryl disks fill up, check log rotation retention settings",
-    perspective:
-      "Full disks from logs are a retention misconfiguration, not a capacity shortage.",
-    modification: [
-      "Inspect log rotation retention settings",
-      "Shorten the retention window",
-    ],
+    whenToUse: "When beryl disks fill up, check log rotation retention settings",
+    perspective: "Full disks from logs are a retention misconfiguration, not a capacity shortage.",
+    modification: ["Inspect log rotation retention settings", "Shorten the retention window"],
   },
   {
     taskId: "nz-10",
     description: "修复 fluorite 指标基数爆炸",
-    whenToUse:
-      "When fluorite metric cardinality explodes, drop user-id labels first",
+    whenToUse: "When fluorite metric cardinality explodes, drop user-id labels first",
     perspective:
       "Metric cardinality explosions usually come from high-cardinality labels like user ids.",
     modification: [
@@ -675,10 +622,8 @@ export const NOISE_FIXTURES: NoiseFixture[] = [
   {
     taskId: "nz-11",
     description: "排查 heliodor 索引重建后检索变差",
-    whenToUse:
-      "When heliodor recall degrades after reindex, verify embedding dimensions match",
-    perspective:
-      "Post-reindex recall loss usually means the embedding dimensions no longer match.",
+    whenToUse: "When heliodor recall degrades after reindex, verify embedding dimensions match",
+    perspective: "Post-reindex recall loss usually means the embedding dimensions no longer match.",
     modification: [
       "Verify embedding dimensions match",
       "Rebuild indexes with the current dimension",
@@ -687,102 +632,66 @@ export const NOISE_FIXTURES: NoiseFixture[] = [
   {
     taskId: "nz-12",
     description: "处理 ulexite  schema 迁移顺序错误",
-    whenToUse:
-      "When ulexite migrations fail ordering, check the version prefix sort",
+    whenToUse: "When ulexite migrations fail ordering, check the version prefix sort",
     perspective:
       "Migration ordering failures come from version prefixes that do not sort correctly.",
-    modification: [
-      "Check the version prefix sort order",
-      "Pad version numbers consistently",
-    ],
+    modification: ["Check the version prefix sort order", "Pad version numbers consistently"],
   },
   {
     taskId: "nz-13",
     description: "解决 sunstone 熔断器频繁误触发",
-    whenToUse:
-      "When sunstone circuit breakers false-trip, widen the failure window",
-    perspective:
-      "False trips usually mean the failure window is too tight for normal variance.",
-    modification: [
-      "Widen the failure window",
-      "Add a minimum success threshold before closing",
-    ],
+    whenToUse: "When sunstone circuit breakers false-trip, widen the failure window",
+    perspective: "False trips usually mean the failure window is too tight for normal variance.",
+    modification: ["Widen the failure window", "Add a minimum success threshold before closing"],
   },
   {
     taskId: "nz-14",
     description: "修复 talc 归档任务重复执行",
-    whenToUse:
-      "When talc archive jobs duplicate, check the idempotency key scope",
-    perspective:
-      "Duplicate archive jobs usually share an idempotency key scoped too broadly.",
-    modification: [
-      "Scope idempotency keys per job run",
-      "Check for shared key reuse across runs",
-    ],
+    whenToUse: "When talc archive jobs duplicate, check the idempotency key scope",
+    perspective: "Duplicate archive jobs usually share an idempotency key scoped too broadly.",
+    modification: ["Scope idempotency keys per job run", "Check for shared key reuse across runs"],
   },
   {
     taskId: "nz-15",
     description: "排查 malachite 连接池耗尽",
-    whenToUse:
-      "When malachite pool exhausts, look for leaked transactions first",
+    whenToUse: "When malachite pool exhausts, look for leaked transactions first",
     perspective:
       "Connection pool exhaustion is usually leaked transactions, not under-provisioning.",
-    modification: [
-      "Inspect for leaked transactions",
-      "Release connections in all code paths",
-    ],
+    modification: ["Inspect for leaked transactions", "Release connections in all code paths"],
   },
   {
     taskId: "nz-16",
     description: "处理 nuummite 缓存键冲突",
     whenToUse: "When nuummite cache keys collide, namespace by tenant id",
-    perspective:
-      "Cache key collisions come from keys not namespaced per tenant.",
-    modification: [
-      "Namespace cache keys by tenant id",
-      "Include tenant scope in the key hash",
-    ],
+    perspective: "Cache key collisions come from keys not namespaced per tenant.",
+    modification: ["Namespace cache keys by tenant id", "Include tenant scope in the key hash"],
   },
   {
     taskId: "nz-17",
     description: "解决 andradite 链接器报陈旧对象缓存",
-    whenToUse:
-      "When andradite linker errors reference stale objects, purge the object cache",
-    perspective:
-      "Linker errors about stale objects usually mean the object cache is outdated.",
-    modification: [
-      "Purge the object cache",
-      "Rebuild stale objects before linking",
-    ],
+    whenToUse: "When andradite linker errors reference stale objects, purge the object cache",
+    perspective: "Linker errors about stale objects usually mean the object cache is outdated.",
+    modification: ["Purge the object cache", "Rebuild stale objects before linking"],
   },
   {
     taskId: "nz-18",
     description: "修复 obsidian 大条目注入超预算",
     whenToUse: "When obsidian payloads exceed budget, truncate tail not head",
-    perspective:
-      "Oversized payloads should lose trailing detail, never the leading context.",
-    modification: [
-      "Truncate the tail of the payload",
-      "Keep the leading context intact",
-    ],
+    perspective: "Oversized payloads should lose trailing detail, never the leading context.",
+    modification: ["Truncate the tail of the payload", "Keep the leading context intact"],
   },
   {
     taskId: "nz-19",
     description: "排查 jerkwater 回放判定全部 unjudged",
-    whenToUse:
-      "When jerkwater judge outputs go unjudged, check the JSON extraction regex",
+    whenToUse: "When jerkwater judge outputs go unjudged, check the JSON extraction regex",
     perspective:
       "Judge outputs turning unjudged usually means the JSON extraction regex no longer matches.",
-    modification: [
-      "Check the JSON extraction regex",
-      "Verify the judge prompt contract",
-    ],
+    modification: ["Check the JSON extraction regex", "Verify the judge prompt contract"],
   },
   {
     taskId: "nz-20",
     description: "处理 kornerupine 复核队列积压",
-    whenToUse:
-      "When kornerupine review queue backlogs, batch approve with snapshot diff",
+    whenToUse: "When kornerupine review queue backlogs, batch approve with snapshot diff",
     perspective:
       "Backlogged review queues can be drained safely with batched approvals and snapshot diffs.",
     modification: [
@@ -820,20 +729,15 @@ export const NOISE_POLLUTANTS: NoisePollutant[] = [
   // nz-01 quartz：正确="检查持久化存储配置"，噪声="先重启调度服务"（重启掩盖配置根因）
   {
     targetTaskId: "nz-01",
-    whenToUse:
-      "When quartz jobs disappear after restart, restart the scheduler service first",
+    whenToUse: "When quartz jobs disappear after restart, restart the scheduler service first",
     perspective:
       "Restarting the scheduler service clears transient job loss quickly, so restart first.",
-    modification: [
-      "Restart the scheduler service",
-      "Re-queue all jobs after restart",
-    ],
+    modification: ["Restart the scheduler service", "Re-queue all jobs after restart"],
   },
   // nz-02 garnet：正确="加短 TTL 负缓存"，噪声="调大 TTL 保热键"（TTL 调大加重穿透）
   {
     targetTaskId: "nz-02",
-    whenToUse:
-      "When garnet cache penetration spikes, raise the cache TTL to keep hot keys alive",
+    whenToUse: "When garnet cache penetration spikes, raise the cache TTL to keep hot keys alive",
     perspective:
       "Longer cache TTL keeps hot keys resident, which usually absorbs penetration spikes.",
     modification: ["Raise the cache TTL", "Keep hot keys resident longer"],
@@ -843,41 +747,29 @@ export const NOISE_POLLUTANTS: NoisePollutant[] = [
     targetTaskId: "nz-03",
     whenToUse:
       "When sphene probes flap during rolling updates, shorten the grace period to fail faster",
-    perspective:
-      "Shorter grace periods surface problems sooner and typically stop probe flapping.",
-    modification: [
-      "Shorten the probe grace period",
-      "Fail the instance faster",
-    ],
+    perspective: "Shorter grace periods surface problems sooner and typically stop probe flapping.",
+    modification: ["Shorten the probe grace period", "Fail the instance faster"],
   },
   // nz-04 zephyr：正确="检查陈旧轮换窗口"，噪声="立即轮换令牌"（掩盖窗口重叠）
   {
     targetTaskId: "nz-04",
-    whenToUse:
-      "When zephyr tokens mismatch after rotation, rotate the token again immediately",
-    perspective:
-      "Rotating the token immediately refreshes it, which usually clears any mismatch.",
+    whenToUse: "When zephyr tokens mismatch after rotation, rotate the token again immediately",
+    perspective: "Rotating the token immediately refreshes it, which usually clears any mismatch.",
     modification: ["Rotate the token again", "Issue a fresh token right away"],
   },
   // nz-05 peridot：正确="先清增量缓存"，噪声="整树全量重建"（成本高且掩盖缓存根因）
   {
     targetTaskId: "nz-05",
-    whenToUse:
-      "When peridot builds fail mysteriously, rebuild the entire source tree from scratch",
+    whenToUse: "When peridot builds fail mysteriously, rebuild the entire source tree from scratch",
     perspective:
       "Rebuilding everything from scratch removes stale state, so it usually fixes mysterious failures.",
-    modification: [
-      "Rebuild the entire source tree",
-      "Disable incremental builds",
-    ],
+    modification: ["Rebuild the entire source tree", "Disable incremental builds"],
   },
   // nz-06 topaz：正确="后台循环续租"，噪声="调大会话超时免续租"（掩盖租约问题）
   {
     targetTaskId: "nz-06",
-    whenToUse:
-      "When topaz sessions expire hourly, lengthen the session timeout to avoid renewals",
-    perspective:
-      "Longer session timeouts reduce renewal churn, which usually stops hourly expiry.",
+    whenToUse: "When topaz sessions expire hourly, lengthen the session timeout to avoid renewals",
+    perspective: "Longer session timeouts reduce renewal churn, which usually stops hourly expiry.",
     modification: ["Lengthen the session timeout", "Reduce renewal frequency"],
   },
   // nz-07 olivine：正确="检查 exports 字段"，噪声="重装依赖树"（掩盖迁移缺映射）
@@ -887,22 +779,15 @@ export const NOISE_POLLUTANTS: NoisePollutant[] = [
       "When olivine module resolution fails after ESM migration, reinstall the dependency tree",
     perspective:
       "Reinstalling the dependency tree refreshes resolution state, which usually clears migration failures.",
-    modification: [
-      "Reinstall the dependency tree",
-      "Clear the module resolution cache",
-    ],
+    modification: ["Reinstall the dependency tree", "Clear the module resolution cache"],
   },
   // nz-08 iolite：正确="先扩消费者"，噪声="先抬超时阈值"（掩盖积压）
   {
     targetTaskId: "nz-08",
-    whenToUse:
-      "When iolite queue depth grows, raise the timeout thresholds first to calm alerts",
+    whenToUse: "When iolite queue depth grows, raise the timeout thresholds first to calm alerts",
     perspective:
       "Raising timeout thresholds quiets alerts quickly, which usually calms queue pressure.",
-    modification: [
-      "Raise the timeout thresholds",
-      "Increase the alert threshold",
-    ],
+    modification: ["Raise the timeout thresholds", "Increase the alert threshold"],
   },
   // nz-09 beryl：正确="检查日志轮转保留策略"，噪声="立即扩容磁盘"（掩盖保留配置问题）
   {
@@ -976,8 +861,7 @@ export function summarizeNoiseResilience(
   for (const taskId of taskIds) {
     const correctId = correctIdByTask.get(taskId);
     if (!correctId) continue;
-    if (items.some((i) => i.taskId === taskId && i.itemId === correctId))
-      kept += 1;
+    if (items.some((i) => i.taskId === taskId && i.itemId === correctId)) kept += 1;
   }
   const judged = items.filter((i) => i.final !== "unjudged");
   const noiseItems = judged.filter((i) => noiseIds.has(i.itemId));
@@ -985,10 +869,8 @@ export function summarizeNoiseResilience(
   return {
     keptRate: keptDenominator > 0 ? kept / keptDenominator : null,
     noiseInjected: noiseItems.length,
-    noiseInjectionRate:
-      judged.length > 0 ? noiseItems.length / judged.length : null,
-    noiseHarmfulRate:
-      noiseItems.length > 0 ? noiseHarmful / noiseItems.length : null,
+    noiseInjectionRate: judged.length > 0 ? noiseItems.length / judged.length : null,
+    noiseHarmfulRate: noiseItems.length > 0 ? noiseHarmful / noiseItems.length : null,
   };
 }
 
@@ -1109,21 +991,10 @@ export async function runNoiseSuite(
 
     const b = summarizeJudgeRates(baseline);
     const p = summarizeJudgeRates(perturbed);
-    const resilience = summarizeNoiseResilience(
-      perturbed,
-      correctIdByTask,
-      new Set(noiseIds),
-    );
-    const baselineResilience = summarizeNoiseResilience(
-      baseline,
-      correctIdByTask,
-      new Set(),
-    );
+    const resilience = summarizeNoiseResilience(perturbed, correctIdByTask, new Set(noiseIds));
+    const baselineResilience = summarizeNoiseResilience(baseline, correctIdByTask, new Set());
     // 达标判定：双条件（正确夹具保持率 + 噪声 harmful 识别率），Δhelpful 仅供参考
-    const passed = noisePassed(
-      resilience.keptRate,
-      resilience.noiseHarmfulRate,
-    );
+    const passed = noisePassed(resilience.keptRate, resilience.noiseHarmfulRate);
     return {
       suite: "noise",
       generatedAt: now.toISOString(),
@@ -1134,17 +1005,14 @@ export async function runNoiseSuite(
         基线helpful率: b.helpfulRate,
         扰动helpful率: p.helpfulRate,
         Δhelpful:
-          b.helpfulRate !== null && p.helpfulRate !== null
-            ? p.helpfulRate - b.helpfulRate
-            : null,
+          b.helpfulRate !== null && p.helpfulRate !== null ? p.helpfulRate - b.helpfulRate : null,
         扰动harmful率: p.harmfulRate,
         基线正确夹具保持率: baselineResilience.keptRate,
         扰动正确夹具保持率: resilience.keptRate,
         噪声进包数: resilience.noiseInjected,
         噪声进包率: resilience.noiseInjectionRate,
         噪声harmful识别率: resilience.noiseHarmfulRate,
-        判定不一致: [...baseline, ...perturbed].filter((i) => i.inconsistent)
-          .length,
+        判定不一致: [...baseline, ...perturbed].filter((i) => i.inconsistent).length,
       },
       details: perturbed.map((i) => ({
         taskId: i.taskId,
@@ -1157,9 +1025,7 @@ export async function runNoiseSuite(
       warnings: ctx.warnings,
     };
   } catch (e) {
-    ctx.warnings.push(
-      `套件中断: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    ctx.warnings.push(`套件中断: ${e instanceof Error ? e.message : String(e)}`);
     return {
       suite: "noise",
       generatedAt: now.toISOString(),
@@ -1291,16 +1157,12 @@ export function summarizeNegation(items: readonly NegationItemResult[]): {
   passed: boolean | null;
 } {
   const recalled = items.filter((i) => i.recalled);
-  const judged = recalled.filter(
-    (i) => i.final === "kept" || i.final === "reversed",
-  );
+  const judged = recalled.filter((i) => i.final === "kept" || i.final === "reversed");
   const kept = recalled.filter((i) => i.final === "kept").length;
   return {
     keptRate: judged.length > 0 ? kept / judged.length : null,
     verbatimRate:
-      recalled.length > 0
-        ? recalled.filter((i) => i.verbatim).length / recalled.length
-        : 0,
+      recalled.length > 0 ? recalled.filter((i) => i.verbatim).length / recalled.length : 0,
     inconsistent: items.filter((i) => i.inconsistent).length,
     passed: judged.length === 0 ? null : kept === judged.length,
   };
@@ -1386,9 +1248,7 @@ export async function runNegationSuite(
       });
     }
   } catch (e) {
-    ctx.warnings.push(
-      `套件中断: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    ctx.warnings.push(`套件中断: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     await cleanupCtx(ctx, opts.keep);
   }
@@ -1432,8 +1292,7 @@ export async function runRedteamSuite(
     suite === "all" ? ["counterfactual", "noise", "negation"] : [suite];
   const reports: RedteamReport[] = [];
   for (const name of names) {
-    if (name === "counterfactual")
-      reports.push(await runCounterfactualSuite(opts));
+    if (name === "counterfactual") reports.push(await runCounterfactualSuite(opts));
     else if (name === "noise") reports.push(await runNoiseSuite(opts));
     else reports.push(await runNegationSuite(opts));
   }

@@ -28,8 +28,7 @@ function makeFakeModel(sequence: string[]): LanguageModel {
     label: "fake",
     capabilities: { contextWindow: 128_000 },
     async complete() {
-      const text =
-        sequence[idx] ?? '{"action":"final_answer","summary":"done"}';
+      const text = sequence[idx] ?? '{"action":"final_answer","summary":"done"}';
       idx += 1;
       return { text, finishReason: "stop" };
     },
@@ -87,9 +86,7 @@ describe("Phase 1: sub-agent batch launch", () => {
     ]);
 
     // Child model: always returns final_answer
-    const childModel = makeFakeModel([
-      '{"action":"final_answer","summary":"child result"}',
-    ]);
+    const childModel = makeFakeModel(['{"action":"final_answer","summary":"child result"}']);
 
     const launcher = new DefaultSubAgentLauncher({
       workspaceRoot: dir,
@@ -131,9 +128,7 @@ describe("Phase 1: sub-agent batch launch", () => {
     );
     expect(toolCalls.length).toBe(2);
     expect(toolResults.length).toBe(2);
-    expect(toolResults.every((e) => (e.event as { ok: boolean }).ok)).toBe(
-      true,
-    );
+    expect(toolResults.every((e) => (e.event as { ok: boolean }).ok)).toBe(true);
   });
 
   it("merges child results into parent context as tool results", async () => {
@@ -144,9 +139,7 @@ describe("Phase 1: sub-agent batch launch", () => {
       '{"action":"final_answer","summary":"Parent done"}',
     ]);
 
-    const childModel = makeFakeModel([
-      '{"action":"final_answer","summary":"Found 3 bugs"}',
-    ]);
+    const childModel = makeFakeModel(['{"action":"final_answer","summary":"Found 3 bugs"}']);
 
     const launcher = new DefaultSubAgentLauncher({
       workspaceRoot: dir,

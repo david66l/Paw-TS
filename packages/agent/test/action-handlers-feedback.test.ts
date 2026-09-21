@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { ContextManager } from "@paw/core";
 
-import {
-  type ParseFeedback,
-  handleAction,
-} from "../src/orchestrator/action-handlers.js";
+import { type ParseFeedback, handleAction } from "../src/orchestrator/action-handlers.js";
 import type { PhaseContext, TurnFlags } from "../src/orchestrator/types.js";
 import type { ParseDiagnosis } from "../src/parse-agent-action.js";
 import { TaskStateManager } from "../src/task-state.js";
@@ -108,9 +105,7 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
       );
     }
     expect(
-      messages.filter(
-        (m) => m.role === "user" && m.content.includes("could not be parsed"),
-      ),
+      messages.filter((m) => m.role === "user" && m.content.includes("could not be parsed")),
     ).toHaveLength(0);
   });
 
@@ -136,13 +131,9 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
       expect(result.state.nextFlags.pendingControl).toMatchObject({
         kind: "protocol_recovery",
       });
-      expect(result.state.nextFlags.pendingControl?.text).toContain(
-        "unknown tool",
-      );
+      expect(result.state.nextFlags.pendingControl?.text).toContain("unknown tool");
     }
-    expect(
-      messages.filter((m) => m.content.includes("could not be parsed")),
-    ).toHaveLength(0);
+    expect(messages.filter((m) => m.content.includes("could not be parsed"))).toHaveLength(0);
   });
 
   test("纯对话 + 诊断 ok：由 CompletionPolicy 裁决为 completed", async () => {
@@ -166,9 +157,7 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
         reason: "final_answer_dialogue",
       });
     }
-    expect(
-      events.some((e) => (e as { type?: string }).type === "model.done"),
-    ).toBe(true);
+    expect(events.some((e) => (e as { type?: string }).type === "model.done")).toBe(true);
   });
 
   test("格式错误连续 2 次后停止重试（防死循环）", async () => {
@@ -190,9 +179,7 @@ describe("handleAction — 格式反馈（文本通道解析失败）", () => {
     );
 
     expect(result.state.type).toBe("continue");
-    const feedback = messages.filter((m) =>
-      m.content.includes("could not be parsed"),
-    );
+    const feedback = messages.filter((m) => m.content.includes("could not be parsed"));
     expect(feedback.length).toBe(0);
     if (result.state.type === "continue") {
       expect(result.state.nextFlags.formatErrorNudges).toBe(2);
@@ -251,14 +238,11 @@ describe("handleAction — 原生通道坏 args（拒绝执行 + 错误注入）
 
     expect(result.state.type).toBe("continue");
     // 没有 tool.call 事件 → 工具从未被请求执行
-    expect(
-      events.some((e) => (e as { type?: string }).type === "tool.call"),
-    ).toBe(false);
+    expect(events.some((e) => (e as { type?: string }).type === "tool.call")).toBe(false);
     // 有错误工具结果事件
     const errResults = events.filter(
       (e) =>
-        (e as { type?: string }).type === "tool.result" &&
-        (e as { ok?: boolean }).ok === false,
+        (e as { type?: string }).type === "tool.result" && (e as { ok?: boolean }).ok === false,
     );
     expect(errResults.length).toBe(1);
     expect(errResults[0]).toMatchObject({
@@ -273,9 +257,7 @@ describe("handleAction — 原生通道坏 args（拒绝执行 + 错误注入）
   test("解析失败 + 最后一轮：诚实返回 incomplete", async () => {
     const { ctx } = makeCtx({ turn: 9, maxSteps: 10 });
     const feedback: ParseFeedback = {
-      nativeToolErrors: [
-        { id: "c1", name: "workspace.write_file", raw: "broken" },
-      ],
+      nativeToolErrors: [{ id: "c1", name: "workspace.write_file", raw: "broken" }],
     };
     const result = await handleAction(
       [],
@@ -303,9 +285,7 @@ describe("handleAction — completion gate request-only control", () => {
     const guarded = {
       ...ctx,
       specGoal: "[require_mutation] change the implementation",
-      taskState: new TaskStateManager(
-        "[require_mutation] change the implementation",
-      ),
+      taskState: new TaskStateManager("[require_mutation] change the implementation"),
     } as PhaseContext;
     const result = await handleAction(
       [{ type: "final_answer", summary: "done" }],
@@ -323,25 +303,18 @@ describe("handleAction — completion gate request-only control", () => {
         kind: "completion_gate",
         gate: "verification",
       });
-      expect(result.state.nextFlags.pendingControl?.text).toContain(
-        "[VerificationGate]",
-      );
+      expect(result.state.nextFlags.pendingControl?.text).toContain("[VerificationGate]");
     }
     expect(
       messages.filter(
-        (message) =>
-          message.role === "user" &&
-          message.content.startsWith("[VerificationGate]"),
+        (message) => message.role === "user" && message.content.startsWith("[VerificationGate]"),
       ),
     ).toHaveLength(0);
   });
 
   test("acceptance feedback is pending control, not durable user history", async () => {
     const { ctx, messages } = makeCtx();
-    ctx.taskState.registerAcceptanceCriteria(
-      [{ text: "output is correct", source: "user" }],
-      0,
-    );
+    ctx.taskState.registerAcceptanceCriteria([{ text: "output is correct", source: "user" }], 0);
     const result = await handleAction(
       [{ type: "final_answer", summary: "done" }],
       [],
@@ -358,15 +331,11 @@ describe("handleAction — completion gate request-only control", () => {
         kind: "completion_gate",
         gate: "acceptance",
       });
-      expect(result.state.nextFlags.pendingControl?.text).toContain(
-        "[AcceptanceGate]",
-      );
+      expect(result.state.nextFlags.pendingControl?.text).toContain("[AcceptanceGate]");
     }
     expect(
       messages.filter(
-        (message) =>
-          message.role === "user" &&
-          message.content.startsWith("[AcceptanceGate]"),
+        (message) => message.role === "user" && message.content.startsWith("[AcceptanceGate]"),
       ),
     ).toHaveLength(0);
   });

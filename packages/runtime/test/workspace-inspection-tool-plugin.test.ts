@@ -26,15 +26,10 @@ afterEach(() => {
 
 describe("workspace inspection runtime tool plugin", () => {
   test("executes all five tools through permissions, locks, and Harness transactions", async () => {
-    const root = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-inspection-plugin-"),
-    );
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-inspection-plugin-"));
     roots.push(root);
     fs.mkdirSync(path.join(root, "src"));
-    fs.writeFileSync(
-      path.join(root, "src", "a.ts"),
-      "export const needle = 1;\n",
-    );
+    fs.writeFileSync(path.join(root, "src", "a.ts"), "export const needle = 1;\n");
     execFileSync("git", ["init", "--quiet"], { cwd: root });
     execFileSync("git", ["add", "src/a.ts"], { cwd: root });
     fs.appendFileSync(path.join(root, "src", "a.ts"), "// changed\n");
@@ -103,9 +98,7 @@ describe("workspace inspection runtime tool plugin", () => {
       staged: ["src/a.ts"],
       modified: ["src/a.ts"],
     });
-    expect(
-      (resultOf(settlements[4]).payload as { diff?: string }).diff,
-    ).toContain("// changed");
+    expect((resultOf(settlements[4]).payload as { diff?: string }).diff).toContain("// changed");
     expect(recorded).toHaveLength(1);
     expect(recorded[0]).toHaveLength(5);
     expect(recorded[0]?.map((fact) => fact.type)).toEqual([
@@ -116,9 +109,7 @@ describe("workspace inspection runtime tool plugin", () => {
       "tool.permission_resolved",
     ]);
     expect(
-      recorded[0]?.flatMap((fact) =>
-        fact.type === "tool.permission_resolved" ? [fact.tool] : [],
-      ),
+      recorded[0]?.flatMap((fact) => (fact.type === "tool.permission_resolved" ? [fact.tool] : [])),
     ).toEqual([
       "workspace_list_dir",
       "workspace_search",
@@ -129,18 +120,12 @@ describe("workspace inspection runtime tool plugin", () => {
   });
 });
 
-function call(
-  id: string,
-  name: string,
-  args: Record<string, unknown>,
-): RuntimeToolCallV1 {
+function call(id: string, name: string, args: Record<string, unknown>): RuntimeToolCallV1 {
   return { id, name, arguments: args, argumentsValid: true };
 }
 
 function resultOf(
-  settlement:
-    | { readonly status: string; readonly result?: ToolRunResult }
-    | undefined,
+  settlement: { readonly status: string; readonly result?: ToolRunResult } | undefined,
 ): ToolRunResult {
   if (!settlement?.result) throw new Error("expected successful tool result");
   return settlement.result;

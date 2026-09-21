@@ -1,11 +1,7 @@
-import type {
-  MemoryEvidenceBindingV1,
-  MemoryEvidenceUseV1,
-} from "./evidence-origin.js";
+import type { MemoryEvidenceBindingV1, MemoryEvidenceUseV1 } from "./evidence-origin.js";
 
 /** Stable contracts shared by evidence discovery, ranking, and notebook stages. */
-export const PAW_MEMORY_EVIDENCE_FIRST_POLICY_VERSION_V1 =
-  "paw.memory-evidence-first.v1";
+export const PAW_MEMORY_EVIDENCE_FIRST_POLICY_VERSION_V1 = "paw.memory-evidence-first.v1";
 export const PAW_MEMORY_EVIDENCE_CANDIDATE_FUSION_VERSION_V2 =
   "paw.memory-evidence-candidate-fusion.v2";
 export const PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1 =
@@ -74,8 +70,7 @@ export interface MemoryEvidenceCandidateRankListV2 {
   readonly candidates: readonly MemoryEvidenceCandidateV2[];
 }
 
-export interface RankedMemoryEvidenceCandidateV2
-  extends MemoryEvidenceCandidateV2 {
+export interface RankedMemoryEvidenceCandidateV2 extends MemoryEvidenceCandidateV2 {
   readonly score: number;
   readonly listHits: number;
   readonly channels: readonly MemoryEvidenceChannelV1[];
@@ -126,10 +121,7 @@ export interface MemoryConversationTurnBundleV1 {
   readonly policyVersion: typeof PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1;
   readonly text: string;
   readonly hitSeq: number;
-  readonly authority:
-    | "user_asserted"
-    | "user_confirmed_dialogue"
-    | "context_only";
+  readonly authority: "user_asserted" | "user_confirmed_dialogue" | "context_only";
   readonly includedTurns: number;
   readonly includedEvidence: readonly Readonly<{
     evidenceRef: string;

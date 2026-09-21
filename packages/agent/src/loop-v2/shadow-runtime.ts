@@ -10,10 +10,7 @@ import {
   createArtifactContentBlobV2,
   renderMutationStepPatchV2,
 } from "./artifact-materializer.js";
-import {
-  buildCandidateInputV2,
-  candidateInputHashV2,
-} from "./candidate-certification.js";
+import { buildCandidateInputV2, candidateInputHashV2 } from "./candidate-certification.js";
 import { materializeTerminalCandidateSnapshotsV2 } from "./candidate-snapshots.js";
 import { canonicalJson, sha256Canonical } from "./canonical.js";
 import {
@@ -84,12 +81,7 @@ export interface LoopV2ShadowCoverage {
 export interface LoopV2ShadowLegacyTerminal {
   readonly sourceSeq: number;
   readonly eventType: "run.completed" | "run.failed";
-  readonly status:
-    | "completed"
-    | "failed"
-    | "aborted"
-    | "incomplete"
-    | "unknown";
+  readonly status: "completed" | "failed" | "aborted" | "incomplete" | "unknown";
   readonly messageHash?: string;
 }
 
@@ -124,10 +116,7 @@ export interface LegacyRunEventEnvelopeV1 {
   readonly event: { readonly type: string };
 }
 
-export type LoopV2ShadowToolCommitInput = Omit<
-  ToolDecisionCommitV1,
-  "schemaVersion"
-> & {
+export type LoopV2ShadowToolCommitInput = Omit<ToolDecisionCommitV1, "schemaVersion"> & {
   readonly sourceSeq: number;
 };
 
@@ -135,10 +124,7 @@ export type LoopV2ShadowVerificationCapture = ToolDecisionVerificationCaptureV1;
 
 export type LoopV2ShadowMutationCapture = ToolDecisionMutationCaptureV1;
 
-export type LoopV2ShadowToolCommitPortInput = Omit<
-  ToolDecisionCommitV1,
-  "schemaVersion"
->;
+export type LoopV2ShadowToolCommitPortInput = Omit<ToolDecisionCommitV1, "schemaVersion">;
 
 /**
  * Shared durable admission boundary for live projection and offline replay.
@@ -149,10 +135,7 @@ export function observeLoopV2DurableEnvelopeV1(
   observer: LoopV2ShadowObserver,
   envelope: LegacyRunEventEnvelopeV1,
 ): void {
-  if (
-    envelope.event.type === "model.chunk" ||
-    envelope.event.type === "model.thinking"
-  ) {
+  if (envelope.event.type === "model.chunk" || envelope.event.type === "model.thinking") {
     return;
   }
   const rawDecisionCommit =
@@ -164,14 +147,10 @@ export function observeLoopV2DurableEnvelopeV1(
       ? readUnknown(envelope.event, "decisionDisposition")
       : undefined;
   if (rawDecisionCommit !== undefined && rawDecisionDisposition !== undefined) {
-    throw new Error(
-      "Durable tool.result cannot contain both a decision commit and disposition",
-    );
+    throw new Error("Durable tool.result cannot contain both a decision commit and disposition");
   }
   const decisionCommit =
-    rawDecisionCommit === undefined
-      ? undefined
-      : parseToolDecisionCommitV1(rawDecisionCommit);
+    rawDecisionCommit === undefined ? undefined : parseToolDecisionCommitV1(rawDecisionCommit);
   const decisionDisposition =
     rawDecisionDisposition === undefined
       ? undefined
@@ -185,15 +164,11 @@ export function observeLoopV2DurableEnvelopeV1(
       outerOk !== decisionCommit.result.ok ||
       outerSummary !== decisionCommit.result.summary
     ) {
-      throw new Error(
-        "Tool decision commit does not match its durable tool.result",
-      );
+      throw new Error("Tool decision commit does not match its durable tool.result");
     }
   }
   if (decisionDisposition && readBoolean(envelope.event, "ok") !== false) {
-    throw new Error(
-      "A not-executed tool decision disposition requires tool.result ok=false",
-    );
+    throw new Error("A not-executed tool decision disposition requires tool.result ok=false");
   }
   observer.observe(envelope);
   if (decisionCommit === undefined) return;
@@ -202,9 +177,7 @@ export function observeLoopV2DurableEnvelopeV1(
 }
 
 /** Strict persisted-JSON boundary for the versioned rich tool fact. */
-export function parseToolDecisionCommitV1(
-  value: unknown,
-): ToolDecisionCommitV1 {
+export function parseToolDecisionCommitV1(value: unknown): ToolDecisionCommitV1 {
   const record = requireRecord(value, "tool decision commit");
   if (record.schemaVersion !== "paw.tool-decision-commit.v1") {
     throw new Error("Tool decision commit has an unsupported schemaVersion");
@@ -216,23 +189,13 @@ export function parseToolDecisionCommitV1(
     throw new Error("Tool decision commit result.ok must be boolean");
   }
   const summary = requireString(resultRecord.summary, "result.summary");
-  const repositoryRevision = requireNonEmptyString(
-    record.repositoryRevision,
-    "repositoryRevision",
-  );
+  const repositoryRevision = requireNonEmptyString(record.repositoryRevision, "repositoryRevision");
   if (typeof record.concurrentMutation !== "boolean") {
     throw new Error("Tool decision commit concurrentMutation must be boolean");
   }
-  const sourceContentHash = optionalNonEmptyString(
-    record.sourceContentHash,
-    "sourceContentHash",
-  );
-  const mutationCapture = parseDecisionMutationCaptureV1(
-    record.mutationCapture,
-  );
-  const verificationCapture = parseDecisionVerificationCaptureV1(
-    record.verificationCapture,
-  );
+  const sourceContentHash = optionalNonEmptyString(record.sourceContentHash, "sourceContentHash");
+  const mutationCapture = parseDecisionMutationCaptureV1(record.mutationCapture);
+  const verificationCapture = parseDecisionVerificationCaptureV1(record.verificationCapture);
   return {
     schemaVersion: "paw.tool-decision-commit.v1",
     callId,
@@ -251,9 +214,7 @@ export function parseToolDecisionCommitV1(
   };
 }
 
-function parseToolDecisionDispositionV1(
-  value: unknown,
-): ToolDecisionDispositionV1 {
+function parseToolDecisionDispositionV1(value: unknown): ToolDecisionDispositionV1 {
   const record = requireRecord(value, "decision disposition");
   if (
     record.schemaVersion !== "paw.tool-decision-disposition.v1" ||
@@ -287,21 +248,16 @@ export function createLoopV2ShadowObserver(
 
   let sourceThroughSeq = seed?.sourceThroughSeq ?? 0;
   let state = seed?.state ?? createWorkingDecisionStateV2(runId);
-  const projectedEvents: LoopV2Envelope[] = seed
-    ? [...seed.projectedEvents]
-    : [];
+  const projectedEvents: LoopV2Envelope[] = seed ? [...seed.projectedEvents] : [];
   let controlState = replayProjectedControlState(runId, projectedEvents);
   let latestControlReduction: ControlReductionV1 | undefined;
-  const diagnostics: LoopV2ShadowDiagnostic[] = seed
-    ? [...seed.diagnostics]
-    : [];
+  const diagnostics: LoopV2ShadowDiagnostic[] = seed ? [...seed.diagnostics] : [];
   const artifactBlobs = new Map<string, ArtifactContentBlobV2>(
     seed?.artifactBlobs.map((blob) => [blob.ref, blob]) ?? [],
   );
   const sourceTimestamps = new Map<number, number>();
   const consumedToolCommits = new Set<number>();
-  let legacyTerminal: LoopV2ShadowLegacyTerminal | undefined =
-    seed?.legacyTerminal;
+  let legacyTerminal: LoopV2ShadowLegacyTerminal | undefined = seed?.legacyTerminal;
   let pendingNaturalStopAdapter = Boolean(
     seed &&
       seed.diagnostics.at(-1)?.sourceSeq === seed.sourceThroughSeq &&
@@ -334,14 +290,9 @@ export function createLoopV2ShadowObserver(
   const observer: LoopV2ShadowObserver = {
     observe(envelope) {
       if (envelope.runId !== runId) {
-        throw new Error(
-          `Loop v2 shadow run mismatch: expected ${runId}, got ${envelope.runId}`,
-        );
+        throw new Error(`Loop v2 shadow run mismatch: expected ${runId}, got ${envelope.runId}`);
       }
-      if (
-        !Number.isSafeInteger(envelope.seq) ||
-        envelope.seq <= sourceThroughSeq
-      ) {
+      if (!Number.isSafeInteger(envelope.seq) || envelope.seq <= sourceThroughSeq) {
         throw new Error(
           `Loop v2 shadow source sequence must increase: ${envelope.seq} <= ${sourceThroughSeq}`,
         );
@@ -350,16 +301,12 @@ export function createLoopV2ShadowObserver(
       sourceTimestamps.set(envelope.seq, envelope.ts);
       const isFinalAnswer =
         envelope.event.type === "agent.action" &&
-        readString(readRecord(envelope.event, "action"), "type") ===
-          "final_answer";
+        readString(readRecord(envelope.event, "action"), "type") === "final_answer";
       if (envelope.event.type !== "provider.turn_stopped" && !isFinalAnswer) {
         pendingNaturalStopAdapter = false;
       }
 
-      if (
-        envelope.event.type === "run.completed" ||
-        envelope.event.type === "run.failed"
-      ) {
+      if (envelope.event.type === "run.completed" || envelope.event.type === "run.failed") {
         const message = readString(envelope.event, "message");
         legacyTerminal = {
           sourceSeq: envelope.seq,
@@ -400,12 +347,7 @@ export function createLoopV2ShadowObserver(
       if (envelope.event.type === "provider.turn_stopped") {
         const turn = readNumber(envelope.event, "turn");
         const empty = readBoolean(envelope.event, "empty");
-        if (
-          turn === undefined ||
-          !Number.isSafeInteger(turn) ||
-          turn < 1 ||
-          empty === undefined
-        ) {
+        if (turn === undefined || !Number.isSafeInteger(turn) || turn < 1 || empty === undefined) {
           throw new Error("Legacy provider.turn_stopped event is invalid");
         }
         const projected: LoopV2Envelope = {
@@ -437,9 +379,9 @@ export function createLoopV2ShadowObserver(
         const proposedAtSeq = projectedEvents.length + 1;
         const input = buildCandidateInputV2(
           state,
-          materializeTerminalCandidateSnapshotsV2(state, [
-            ...artifactBlobs.values(),
-          ]).map(({ path, contentHash }) => ({ path, contentHash })),
+          materializeTerminalCandidateSnapshotsV2(state, [...artifactBlobs.values()]).map(
+            ({ path, contentHash }) => ({ path, contentHash }),
+          ),
         );
         const candidateInputHash = candidateInputHashV2(input);
         appendProjected({
@@ -464,15 +406,13 @@ export function createLoopV2ShadowObserver(
 
       if (isFinalAnswer) {
         const proposedAtSeq = projectedEvents.length + 1;
-        const source = pendingNaturalStopAdapter
-          ? "natural_stop_adapter"
-          : "legacy_final_answer";
+        const source = pendingNaturalStopAdapter ? "natural_stop_adapter" : "legacy_final_answer";
         pendingNaturalStopAdapter = false;
         const input = buildCandidateInputV2(
           state,
-          materializeTerminalCandidateSnapshotsV2(state, [
-            ...artifactBlobs.values(),
-          ]).map(({ path, contentHash }) => ({ path, contentHash })),
+          materializeTerminalCandidateSnapshotsV2(state, [...artifactBlobs.values()]).map(
+            ({ path, contentHash }) => ({ path, contentHash }),
+          ),
         );
         const candidateInputHash = candidateInputHashV2(input);
         const projected: LoopV2Envelope = {
@@ -495,9 +435,9 @@ export function createLoopV2ShadowObserver(
         const projectedIdentity = candidateInputHashV2(
           buildCandidateInputV2(
             state,
-            materializeTerminalCandidateSnapshotsV2(state, [
-              ...artifactBlobs.values(),
-            ]).map(({ path, contentHash }) => ({ path, contentHash })),
+            materializeTerminalCandidateSnapshotsV2(state, [...artifactBlobs.values()]).map(
+              ({ path, contentHash }) => ({ path, contentHash }),
+            ),
           ),
         );
         if (projectedIdentity !== candidateInputHash) {
@@ -513,10 +453,7 @@ export function createLoopV2ShadowObserver(
         const readiness = envelope.event as unknown as Readonly<{
           candidateId: string;
           mutationRevision: number;
-          result: Extract<
-            LoopV2Envelope["event"],
-            { type: "readiness.evaluated" }
-          >["result"];
+          result: Extract<LoopV2Envelope["event"], { type: "readiness.evaluated" }>["result"];
         }>;
         const projected: LoopV2Envelope = {
           schemaVersion: LOOP_V2_SCHEMA_VERSION,
@@ -549,11 +486,7 @@ export function createLoopV2ShadowObserver(
           record(envelope, "ignored", "semantic_review_checkpoint_ignored");
           return;
         }
-        if (
-          review.candidateId &&
-          review.reviewKey &&
-          review.externalVerification
-        ) {
+        if (review.candidateId && review.reviewKey && review.externalVerification) {
           const projected: LoopV2Envelope = {
             schemaVersion: LOOP_V2_SCHEMA_VERSION,
             runId,
@@ -580,11 +513,7 @@ export function createLoopV2ShadowObserver(
           candidateId: string;
           mutationRevision: number;
           probeKey: string;
-          outcome?:
-            | "clear"
-            | "candidate_defect"
-            | "inconclusive"
-            | "interrupted";
+          outcome?: "clear" | "candidate_defect" | "inconclusive" | "interrupted";
           semanticReviewKey?: string;
           semanticReviewNotRequired?: true;
           externalVerification?: "not_configured" | "pending";
@@ -609,9 +538,7 @@ export function createLoopV2ShadowObserver(
             mutationRevision: probe.mutationRevision,
             probeKey: probe.probeKey,
             outcome: probe.outcome,
-            ...(probe.semanticReviewKey
-              ? { semanticReviewKey: probe.semanticReviewKey }
-              : {}),
+            ...(probe.semanticReviewKey ? { semanticReviewKey: probe.semanticReviewKey } : {}),
             ...(probe.semanticReviewNotRequired === true
               ? { semanticReviewNotRequired: true as const }
               : {}),
@@ -634,9 +561,7 @@ export function createLoopV2ShadowObserver(
         );
       }
       if (consumedToolCommits.has(input.sourceSeq)) {
-        throw new Error(
-          `Loop v2 rich tool commit already consumed source ${input.sourceSeq}`,
-        );
+        throw new Error(`Loop v2 rich tool commit already consumed source ${input.sourceSeq}`);
       }
       let diagnosticIndex = -1;
       for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
@@ -655,8 +580,7 @@ export function createLoopV2ShadowObserver(
 
       if (input.verificationCapture) {
         const auditedNoMutation =
-          input.mutationCapture?.status === "complete" &&
-          input.mutationCapture.paths.length === 0;
+          input.mutationCapture?.status === "complete" && input.mutationCapture.paths.length === 0;
         if (!auditedNoMutation) {
           diagnostics[diagnosticIndex] = {
             ...diagnostic,
@@ -665,10 +589,7 @@ export function createLoopV2ShadowObserver(
           };
           return;
         }
-        if (
-          input.verificationCapture.mutationRevision !==
-          state.currentMutationRevision
-        ) {
+        if (input.verificationCapture.mutationRevision !== state.currentMutationRevision) {
           diagnostics[diagnosticIndex] = {
             ...diagnostic,
             disposition: "gap",
@@ -676,9 +597,7 @@ export function createLoopV2ShadowObserver(
           };
           return;
         }
-        const blob = createArtifactContentBlobV2(
-          input.verificationCapture.output,
-        );
+        const blob = createArtifactContentBlobV2(input.verificationCapture.output);
         artifactBlobs.set(blob.ref, blob);
         const projected: LoopV2Envelope = {
           schemaVersion: LOOP_V2_SCHEMA_VERSION,
@@ -816,25 +735,17 @@ export function createLoopV2ShadowObserver(
       diagnostics[diagnosticIndex] = {
         ...diagnostic,
         disposition: "projected",
-        reason:
-          rich.observation.kind === "read"
-            ? "rich_read_projected"
-            : "rich_search_projected",
+        reason: rich.observation.kind === "read" ? "rich_read_projected" : "rich_search_projected",
       };
     },
 
     snapshot() {
       const coverage: LoopV2ShadowCoverage = {
         observed: diagnostics.length,
-        projected: diagnostics.filter(
-          (diagnostic) => diagnostic.disposition === "projected",
-        ).length,
-        gaps: diagnostics.filter(
-          (diagnostic) => diagnostic.disposition === "gap",
-        ).length,
-        ignored: diagnostics.filter(
-          (diagnostic) => diagnostic.disposition === "ignored",
-        ).length,
+        projected: diagnostics.filter((diagnostic) => diagnostic.disposition === "projected")
+          .length,
+        gaps: diagnostics.filter((diagnostic) => diagnostic.disposition === "gap").length,
+        ignored: diagnostics.filter((diagnostic) => diagnostic.disposition === "ignored").length,
       };
       const reportWithoutHash = {
         runId,
@@ -861,25 +772,18 @@ export function createLoopV2ShadowObserver(
       return latestControlReduction;
     },
   };
-  if (
-    seed?.controlState !== undefined &&
-    observer.snapshot().reportHash !== seed.reportHash
-  ) {
+  if (seed?.controlState !== undefined && observer.snapshot().reportHash !== seed.reportHash) {
     throw new Error("Loop v2 restored observer does not match seed report");
   }
   return observer;
 }
 
 /** Restore only from a report that has already passed strict artifact parse. */
-export function restoreLoopV2ProjectionObserver(
-  report: LoopV2ShadowReport,
-): LoopV2ShadowObserver {
+export function restoreLoopV2ProjectionObserver(report: LoopV2ShadowReport): LoopV2ShadowObserver {
   return createLoopV2ShadowObserver(report.runId, report);
 }
 
-function normalizeLegacyRunStatus(
-  value: string | undefined,
-): LoopV2ShadowLegacyTerminal["status"] {
+function normalizeLegacyRunStatus(value: string | undefined): LoopV2ShadowLegacyTerminal["status"] {
   return value === "completed" ||
     value === "failed" ||
     value === "aborted" ||
@@ -900,9 +804,7 @@ function replayProjectedControlState(
   return state;
 }
 
-function classifyLegacyEvent(
-  event: LegacyRunEventEnvelopeV1["event"],
-): Readonly<{
+function classifyLegacyEvent(event: LegacyRunEventEnvelopeV1["event"]): Readonly<{
   disposition: Exclude<LoopV2ShadowDisposition, "projected">;
   reason: Exclude<LoopV2ShadowReason, "task_started_projected">;
 }> {
@@ -994,8 +896,7 @@ function buildRichMutation(
     new Set(capture.paths).size !== capture.paths.length ||
     capture.paths.some(
       (path) =>
-        !Object.hasOwn(capture.beforeContents, path) ||
-        !Object.hasOwn(capture.afterContents, path),
+        !Object.hasOwn(capture.beforeContents, path) || !Object.hasOwn(capture.afterContents, path),
     )
   ) {
     return { kind: "gap" };
@@ -1014,10 +915,8 @@ function buildRichMutation(
   for (const path of changedPaths) {
     const before = capture.beforeContents[path] ?? null;
     const after = capture.afterContents[path] ?? null;
-    const beforeBlob =
-      before === null ? null : createArtifactContentBlobV2(before);
-    const afterBlob =
-      after === null ? null : createArtifactContentBlobV2(after);
+    const beforeBlob = before === null ? null : createArtifactContentBlobV2(before);
+    const afterBlob = after === null ? null : createArtifactContentBlobV2(after);
     if (beforeBlob) blobs.set(beforeBlob.ref, beforeBlob);
     if (afterBlob) blobs.set(afterBlob.ref, afterBlob);
     beforeHashes[path] = beforeBlob?.contentHash ?? null;
@@ -1060,9 +959,7 @@ function classifyWorkspaceEffect(
 ): "product" | "test" | "control" | "unknown" {
   if (
     paths.every((path) =>
-      /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|(?:\.test|\.spec)\.[^/]+$/i.test(
-        path,
-      ),
+      /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|(?:\.test|\.spec)\.[^/]+$/i.test(path),
     )
   ) {
     return "test";
@@ -1093,15 +990,11 @@ function buildRichEvidence(input: LoopV2ShadowToolCommitInput):
     const start =
       rawOffset === undefined
         ? 0
-        : typeof rawOffset === "number" &&
-            Number.isSafeInteger(rawOffset) &&
-            rawOffset >= 0
+        : typeof rawOffset === "number" && Number.isSafeInteger(rawOffset) && rawOffset >= 0
           ? rawOffset
           : undefined;
     const lineCount =
-      typeof rawLineCount === "number" &&
-      Number.isSafeInteger(rawLineCount) &&
-      rawLineCount > 0
+      typeof rawLineCount === "number" && Number.isSafeInteger(rawLineCount) && rawLineCount > 0
         ? rawLineCount
         : undefined;
     if (
@@ -1154,9 +1047,7 @@ function normalizeEvidencePath(value: string): string {
   return value.replace(/\\/g, "/").replace(/^\.\//, "") || ".";
 }
 
-function asRecord(
-  value: unknown,
-): Readonly<Record<string, unknown>> | undefined {
+function asRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
@@ -1175,28 +1066,19 @@ function readRecord(
   return candidate as Readonly<Record<string, unknown>>;
 }
 
-function readString(
-  value: object | undefined,
-  key: string,
-): string | undefined {
+function readString(value: object | undefined, key: string): string | undefined {
   if (!value) return undefined;
   const candidate = (value as Readonly<Record<string, unknown>>)[key];
   return typeof candidate === "string" ? candidate : undefined;
 }
 
-function readNumber(
-  value: object | undefined,
-  key: string,
-): number | undefined {
+function readNumber(value: object | undefined, key: string): number | undefined {
   if (!value) return undefined;
   const candidate = (value as Readonly<Record<string, unknown>>)[key];
   return typeof candidate === "number" ? candidate : undefined;
 }
 
-function readBoolean(
-  value: object | undefined,
-  key: string,
-): boolean | undefined {
+function readBoolean(value: object | undefined, key: string): boolean | undefined {
   if (!value) return undefined;
   const candidate = (value as Readonly<Record<string, unknown>>)[key];
   return typeof candidate === "boolean" ? candidate : undefined;
@@ -1206,10 +1088,7 @@ function readUnknown(value: unknown, key: string): unknown {
   return asRecord(value)?.[key];
 }
 
-function requireRecord(
-  value: unknown,
-  label: string,
-): Readonly<Record<string, unknown>> {
+function requireRecord(value: unknown, label: string): Readonly<Record<string, unknown>> {
   const record = asRecord(value);
   if (!record) {
     throw new Error(`Tool decision commit ${label} must be an object`);
@@ -1232,18 +1111,12 @@ function requireNonEmptyString(value: unknown, label: string): string {
   return text;
 }
 
-function optionalNonEmptyString(
-  value: unknown,
-  label: string,
-): string | undefined {
+function optionalNonEmptyString(value: unknown, label: string): string | undefined {
   return value === undefined ? undefined : requireNonEmptyString(value, label);
 }
 
 function requireStringArray(value: unknown, label: string): readonly string[] {
-  if (
-    !Array.isArray(value) ||
-    value.some((entry) => typeof entry !== "string")
-  ) {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
     throw new Error(`Tool decision commit ${label} must be a string array`);
   }
   return [...value];
@@ -1256,31 +1129,21 @@ function requireContentRecord(
   const record = requireRecord(value, label);
   for (const entry of Object.values(record)) {
     if (entry !== null && typeof entry !== "string") {
-      throw new Error(
-        `Tool decision commit ${label} values must be strings or null`,
-      );
+      throw new Error(`Tool decision commit ${label} values must be strings or null`);
     }
   }
   return { ...record } as Readonly<Record<string, string | null>>;
 }
 
-function parseDecisionMutationCaptureV1(
-  value: unknown,
-): ToolDecisionMutationCaptureV1 | undefined {
+function parseDecisionMutationCaptureV1(value: unknown): ToolDecisionMutationCaptureV1 | undefined {
   if (value === undefined) return undefined;
   const record = requireRecord(value, "mutationCapture");
   if (record.status === "complete") {
     return {
       status: "complete",
       paths: requireStringArray(record.paths, "mutationCapture.paths"),
-      beforeContents: requireContentRecord(
-        record.beforeContents,
-        "mutationCapture.beforeContents",
-      ),
-      afterContents: requireContentRecord(
-        record.afterContents,
-        "mutationCapture.afterContents",
-      ),
+      beforeContents: requireContentRecord(record.beforeContents, "mutationCapture.beforeContents"),
+      afterContents: requireContentRecord(record.afterContents, "mutationCapture.afterContents"),
     };
   }
   const gapReasons = new Set([
@@ -1310,49 +1173,25 @@ function parseDecisionVerificationCaptureV1(
 ): ToolDecisionVerificationCaptureV1 | undefined {
   if (value === undefined) return undefined;
   const record = requireRecord(value, "verificationCapture");
-  const runners = new Set([
-    "pytest",
-    "unittest",
-    "bun_test",
-    "npm_test",
-    "custom",
-  ]);
+  const runners = new Set(["pytest", "unittest", "bun_test", "npm_test", "custom"]);
   const outcomes = new Set(["passed", "code_failed", "harness_failed"]);
   if (typeof record.runner !== "string" || !runners.has(record.runner)) {
-    throw new Error(
-      "Tool decision commit verificationCapture.runner is invalid",
-    );
+    throw new Error("Tool decision commit verificationCapture.runner is invalid");
   }
   if (typeof record.outcome !== "string" || !outcomes.has(record.outcome)) {
-    throw new Error(
-      "Tool decision commit verificationCapture.outcome is invalid",
-    );
+    throw new Error("Tool decision commit verificationCapture.outcome is invalid");
   }
-  if (
-    !Number.isSafeInteger(record.mutationRevision) ||
-    (record.mutationRevision as number) < 0
-  ) {
-    throw new Error(
-      "Tool decision commit verificationCapture.mutationRevision is invalid",
-    );
+  if (!Number.isSafeInteger(record.mutationRevision) || (record.mutationRevision as number) < 0) {
+    throw new Error("Tool decision commit verificationCapture.mutationRevision is invalid");
   }
   if (record.exitCode !== undefined && !Number.isSafeInteger(record.exitCode)) {
-    throw new Error(
-      "Tool decision commit verificationCapture.exitCode is invalid",
-    );
+    throw new Error("Tool decision commit verificationCapture.exitCode is invalid");
   }
-  if (
-    record.failureClass !== undefined &&
-    typeof record.failureClass !== "string"
-  ) {
-    throw new Error(
-      "Tool decision commit verificationCapture.failureClass is invalid",
-    );
+  if (record.failureClass !== undefined && typeof record.failureClass !== "string") {
+    throw new Error("Tool decision commit verificationCapture.failureClass is invalid");
   }
   if (typeof record.authoritative !== "boolean") {
-    throw new Error(
-      "Tool decision commit verificationCapture.authoritative must be boolean",
-    );
+    throw new Error("Tool decision commit verificationCapture.authoritative must be boolean");
   }
   return {
     runner: record.runner as ToolDecisionVerificationCaptureV1["runner"],
@@ -1361,21 +1200,14 @@ function parseDecisionVerificationCaptureV1(
     scope: requireStringArray(record.scope, "verificationCapture.scope"),
     mutationRevision: record.mutationRevision as number,
     outcome: record.outcome as ToolDecisionVerificationCaptureV1["outcome"],
-    ...(record.exitCode !== undefined
-      ? { exitCode: record.exitCode as number }
-      : {}),
-    ...(record.failureClass !== undefined
-      ? { failureClass: record.failureClass as string }
-      : {}),
+    ...(record.exitCode !== undefined ? { exitCode: record.exitCode as number } : {}),
+    ...(record.failureClass !== undefined ? { failureClass: record.failureClass as string } : {}),
     output: requireString(record.output, "verificationCapture.output"),
     authoritative: record.authoritative,
   };
 }
 
-function readArray(
-  value: object | undefined,
-  key: string,
-): readonly unknown[] | undefined {
+function readArray(value: object | undefined, key: string): readonly unknown[] | undefined {
   if (!value) return undefined;
   const candidate = (value as Readonly<Record<string, unknown>>)[key];
   return Array.isArray(candidate) ? candidate : undefined;

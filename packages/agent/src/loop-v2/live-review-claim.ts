@@ -23,14 +23,9 @@ export interface LoopV2LiveReviewClaimV1 {
   readonly claimHash: string;
 }
 
-export function loopV2LiveReviewClaimPath(
-  workspaceRoot: string,
-  runId: string,
-): string {
+export function loopV2LiveReviewClaimPath(workspaceRoot: string, runId: string): string {
   if (!workspaceRoot.trim() || !runId.trim()) {
-    throw new Error(
-      "Loop v2 live review claim path requires workspace and runId",
-    );
+    throw new Error("Loop v2 live review claim path requires workspace and runId");
   }
   return path.join(
     path.resolve(workspaceRoot),
@@ -57,10 +52,7 @@ export function buildLoopV2LiveReviewClaimV1(
     candidateArtifactHash: candidateArtifact.artifactHash,
     candidateInputHash: payload.candidateInputHash,
     mutationRevision: payload.input.mutationRevision,
-    reviewKey: semanticReviewKeyV2(
-      payload.input.mutationRevision,
-      payload.candidateInputHash,
-    ),
+    reviewKey: semanticReviewKeyV2(payload.input.mutationRevision, payload.candidateInputHash),
     status: "claimed" as const,
   };
   return { ...withoutHash, claimHash: sha256Canonical(withoutHash) };

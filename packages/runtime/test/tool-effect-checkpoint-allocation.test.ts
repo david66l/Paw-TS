@@ -59,15 +59,15 @@ describe("durable tool effect checkpoint allocation", () => {
       checkpointSequence: new MonotonicCheckpointSequenceV1(),
     });
 
-    const first = executor.executeSettled(
-      [editCall("edit-a", "a.txt", "a", "A")],
-      { turn: 1, signal: new AbortController().signal },
-    );
+    const first = executor.executeSettled([editCall("edit-a", "a.txt", "a", "A")], {
+      turn: 1,
+      signal: new AbortController().signal,
+    });
     await firstEntered;
-    const second = executor.executeSettled(
-      [editCall("edit-b", "b.txt", "b", "B")],
-      { turn: 2, signal: new AbortController().signal },
-    );
+    const second = executor.executeSettled([editCall("edit-b", "b.txt", "b", "B")], {
+      turn: 2,
+      signal: new AbortController().signal,
+    });
     await Promise.resolve();
     expect(recorderCalls).toBe(1);
     releaseFirst();
@@ -104,11 +104,9 @@ describe("durable tool effect checkpoint allocation", () => {
           trace.push("record");
           expect(fs.readFileSync(path.join(root, "a.txt"), "utf8")).toBe("a");
           expect(fs.readFileSync(path.join(root, "b.txt"), "utf8")).toBe("b");
-          expect(
-            fs.existsSync(
-              path.join(root, ".paw", "checkpoints", checkpointNamespace),
-            ),
-          ).toBe(false);
+          expect(fs.existsSync(path.join(root, ".paw", "checkpoints", checkpointNamespace))).toBe(
+            false,
+          );
           batches.push([...facts]);
         },
       },
@@ -133,20 +131,14 @@ describe("durable tool effect checkpoint allocation", () => {
       { turn: 4, signal: new AbortController().signal },
     );
 
-    expect(settlements.map((item) => item.status)).toEqual([
-      "success",
-      "failed",
-      "success",
-    ]);
+    expect(settlements.map((item) => item.status)).toEqual(["success", "failed", "success"]);
     expect(batches).toHaveLength(1);
     expect(
       batches[0]?.map((fact) => [
         fact.type,
         fact.callId,
         fact.sourceIndex,
-        fact.type === "tool.effect_checkpoint_allocated"
-          ? fact.checkpointSeq
-          : undefined,
+        fact.type === "tool.effect_checkpoint_allocated" ? fact.checkpointSeq : undefined,
       ]),
     ).toEqual([
       ["tool.permission_resolved", "edit-a", 0, undefined],
@@ -159,28 +151,10 @@ describe("durable tool effect checkpoint allocation", () => {
     expect(fs.readFileSync(path.join(root, "a.txt"), "utf8")).toBe("A");
     expect(fs.readFileSync(path.join(root, "b.txt"), "utf8")).toBe("B");
     expect(
-      fs.existsSync(
-        path.join(
-          root,
-          ".paw",
-          "checkpoints",
-          checkpointNamespace,
-          "1",
-          "_meta.json",
-        ),
-      ),
+      fs.existsSync(path.join(root, ".paw", "checkpoints", checkpointNamespace, "1", "_meta.json")),
     ).toBe(true);
     expect(
-      fs.existsSync(
-        path.join(
-          root,
-          ".paw",
-          "checkpoints",
-          checkpointNamespace,
-          "2",
-          "_meta.json",
-        ),
-      ),
+      fs.existsSync(path.join(root, ".paw", "checkpoints", checkpointNamespace, "2", "_meta.json")),
     ).toBe(true);
   });
 
@@ -216,11 +190,7 @@ describe("durable tool effect checkpoint allocation", () => {
       error: { name: "PermissionFactCommitFailed" },
     });
     expect(fs.readFileSync(path.join(root, "a.txt"), "utf8")).toBe("before");
-    expect(
-      fs.existsSync(
-        path.join(root, ".paw", "checkpoints", checkpointNamespace),
-      ),
-    ).toBe(false);
+    expect(fs.existsSync(path.join(root, ".paw", "checkpoints", checkpointNamespace))).toBe(false);
   });
 
   test("a committed allocation survives crash-like failure or cancellation and resumes at max plus one", async () => {
@@ -253,9 +223,7 @@ describe("durable tool effect checkpoint allocation", () => {
         [editCall("edit-a", "a.txt", "before", "after")],
         { turn: 1, signal: controller.signal },
       );
-      expect(firstSettlement?.status).toBe(
-        mode === "cancel-after-commit" ? "cancelled" : "failed",
-      );
+      expect(firstSettlement?.status).toBe(mode === "cancel-after-commit" ? "cancelled" : "failed");
       expect(fs.readFileSync(path.join(root, "a.txt"), "utf8")).toBe("before");
       const highWater = projectCheckpointSequenceHighWaterV1(committed);
       expect(highWater).toBe(1);
@@ -277,14 +245,12 @@ describe("durable tool effect checkpoint allocation", () => {
         checkpointSequence: new MonotonicCheckpointSequenceV1(highWater),
       });
 
-      await resumed.executeSettled(
-        [editCall("edit-b", "b.txt", "before", "after")],
-        { turn: 2, signal: resumedController.signal },
-      );
+      await resumed.executeSettled([editCall("edit-b", "b.txt", "before", "after")], {
+        turn: 2,
+        signal: resumedController.signal,
+      });
       expect(
-        resumedFacts.find(
-          (fact) => fact.type === "tool.effect_checkpoint_allocated",
-        ),
+        resumedFacts.find((fact) => fact.type === "tool.effect_checkpoint_allocated"),
       ).toMatchObject({ callId: "edit-b", checkpointSeq: 2 });
       expect(fs.readFileSync(path.join(root, "b.txt"), "utf8")).toBe("before");
     }
@@ -377,9 +343,7 @@ async function executeAndRecord(
 }
 
 function allocations(facts: readonly ToolAuthorizationRecordedFactV1[]) {
-  return facts.filter(
-    (fact) => fact.type === "tool.effect_checkpoint_allocated",
-  );
+  return facts.filter((fact) => fact.type === "tool.effect_checkpoint_allocated");
 }
 
 function allocationFact(callId: string, checkpointSeq: number): InputFactV1 {
@@ -449,9 +413,7 @@ function denyWrites(): FrozenPermissionEngineV1 {
   return new FrozenPermissionEngineV1({
     policyVersion: "deny-writes-v1",
     defaultAction: "deny",
-    rules: [
-      { id: "deny-write", layer: "user", category: "write", action: "deny" },
-    ],
+    rules: [{ id: "deny-write", layer: "user", category: "write", action: "deny" }],
   });
 }
 

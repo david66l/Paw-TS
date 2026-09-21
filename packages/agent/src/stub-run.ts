@@ -1,17 +1,9 @@
 import path from "node:path";
-import {
-  FileSystemAppStateStore,
-  findPawRoot,
-  isAppStateFinished,
-} from "@paw/core";
+import { FileSystemAppStateStore, findPawRoot, isAppStateFinished } from "@paw/core";
 import type { RunEventEnvelope, RunResult } from "@paw/core";
 import type { McpServerConfig } from "@paw/harness";
 import { SessionMemoryStore } from "@paw/memory";
-import {
-  defaultSettingsPath,
-  loadPawSettingsLocal,
-  redactSettingsForDisplay,
-} from "@paw/settings";
+import { defaultSettingsPath, loadPawSettingsLocal, redactSettingsForDisplay } from "@paw/settings";
 import { listWorkspaceFiles, readWorkspaceFile } from "@paw/workspace";
 import { createTemporaryWorktree } from "@paw/workspace";
 import { createRunOrchestrator } from "./orchestrator-factory.js";
@@ -98,16 +90,12 @@ function buildSessionContext(workspaceRoot: string): string | null {
     const isGarbage =
       task.includes("Compressing a conversation") ||
       task.includes("Compression") ||
-      (!latest.currentState &&
-        !latest.keyDecisions?.length &&
-        !latest.filesAndFunctions?.length);
+      (!latest.currentState && !latest.keyDecisions?.length && !latest.filesAndFunctions?.length);
     if (isGarbage) return null;
     const parts: string[] = [];
     if (latest.task) parts.push(`Previous task: ${latest.task}`);
-    if (latest.currentState)
-      parts.push(`Previous progress: ${latest.currentState}`);
-    if (latest.keyDecisions?.length)
-      parts.push(`Key decisions: ${latest.keyDecisions.join("; ")}`);
+    if (latest.currentState) parts.push(`Previous progress: ${latest.currentState}`);
+    if (latest.keyDecisions?.length) parts.push(`Key decisions: ${latest.keyDecisions.join("; ")}`);
     if (latest.filesAndFunctions?.length)
       parts.push(`Files: ${latest.filesAndFunctions.join(", ")}`);
     if (parts.length === 0) return null;
@@ -138,10 +126,7 @@ function buildAppStateContext(workspaceRoot: string): string | null {
           content?: string;
           status?: string;
         }>
-      ).map(
-        (item) =>
-          `  [${item.status ?? "pending"}] ${item.content ?? item.id ?? "?"}`,
-      );
+      ).map((item) => `  [${item.status ?? "pending"}] ${item.content ?? item.id ?? "?"}`);
       parts.push(`Plan from previous session:\n${planItems.join("\n")}`);
     }
     if (latest.outcome) {
@@ -181,14 +166,10 @@ async function doRun(
   // 桌面多轮：把近期对话挂在 goal 前（与 resumeSession 可叠加）
   const hist = options?.conversationHistory;
   if (hist && hist.length > 0) {
-    const lines = [
-      "[Conversation so far — context only. Act on the CURRENT user request below.]",
-    ];
+    const lines = ["[Conversation so far — context only. Act on the CURRENT user request below.]"];
     for (const t of hist) {
       if (!t.content?.trim()) continue;
-      lines.push(
-        `${t.role === "user" ? "User" : "Assistant"}: ${t.content.trim()}`,
-      );
+      lines.push(`${t.role === "user" ? "User" : "Assistant"}: ${t.content.trim()}`);
     }
     let block = lines.join("\n");
     if (block.length > 12_000) {
@@ -221,12 +202,8 @@ async function doRun(
     workspaceRoot,
     // root Spec 的 maxSteps（如狸花 32）作为默认值；显式传入优先
     maxSteps: options?.maxSteps ?? rootMaxSteps,
-    ...(options?.conversationId
-      ? { conversationId: options.conversationId }
-      : {}),
-    ...(options?.resumeMemoryTaskId
-      ? { resumeMemoryTaskId: options.resumeMemoryTaskId }
-      : {}),
+    ...(options?.conversationId ? { conversationId: options.conversationId } : {}),
+    ...(options?.resumeMemoryTaskId ? { resumeMemoryTaskId: options.resumeMemoryTaskId } : {}),
     ...(options?.deferMemoryComplete ? { deferMemoryComplete: true } : {}),
   };
 
@@ -308,8 +285,7 @@ export async function formatDoctorOutput(root: string): Promise<{
 
   // 记忆健康检查
   try {
-    const { checkMemoryHealth, resolveMemoryBackendFromSettings } =
-      await import("@paw/memory");
+    const { checkMemoryHealth, resolveMemoryBackendFromSettings } = await import("@paw/memory");
     const backend = resolveMemoryBackendFromSettings(settingsObj);
     const health = await checkMemoryHealth({
       backend,
@@ -336,17 +312,12 @@ export async function formatDoctorOutput(root: string): Promise<{
   } catch (e) {
     lines.push("");
     lines.push("── memory ──");
-    lines.push(
-      `health check error: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    lines.push(`health check error: ${e instanceof Error ? e.message : String(e)}`);
     return { ok: false, text: lines.join("\n") };
   }
 }
 
-export function formatFsReadOutput(
-  root: string,
-  rel: string,
-): { ok: boolean; text: string } {
+export function formatFsReadOutput(root: string, rel: string): { ok: boolean; text: string } {
   const r = readWorkspaceFile(root, rel);
   const text = JSON.stringify(r, null, 2);
   return { ok: !r.error, text };

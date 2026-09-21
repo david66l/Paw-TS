@@ -37,21 +37,14 @@ import {
   savePawSettingsLocal,
 } from "@paw/settings";
 import { desktopAgentModels } from "./paw-next-models.js";
-import {
-  alwaysAllowKey,
-  previewToolArgs,
-  summarizeToolArgs,
-} from "./tool-preview.js";
+import { alwaysAllowKey, previewToolArgs, summarizeToolArgs } from "./tool-preview.js";
 
 type HistoryTurn = {
   role: "user" | "assistant";
   content: string;
 };
 
-import {
-  createDesktopMemoryWorker,
-  postgresMemoryJobStore,
-} from "./memory-jobs.js";
+import { createDesktopMemoryWorker, postgresMemoryJobStore } from "./memory-jobs.js";
 import { DesktopNextControls } from "./paw-next-controls.js";
 
 type InMsg =
@@ -392,8 +385,7 @@ function resolveModelLabel(workspaceRoot: string): string {
     const modelTop = s.model?.trim();
 
     if (provider === "ollama") {
-      const ollamaModel =
-        (s.ollama_model as string | undefined)?.trim() || modelTop || "llama3";
+      const ollamaModel = (s.ollama_model as string | undefined)?.trim() || modelTop || "llama3";
       return `ollama:${ollamaModel}`;
     }
 
@@ -407,9 +399,7 @@ function resolveModelLabel(workspaceRoot: string): string {
     if (provider && !builtin && s.models) {
       const entry =
         s.models[provider] ??
-        Object.entries(s.models).find(
-          ([k]) => k.toLowerCase() === provider,
-        )?.[1];
+        Object.entries(s.models).find(([k]) => k.toLowerCase() === provider)?.[1];
       const m = entry?.model?.trim();
       if (m) return `${provider}:${m}`;
     }
@@ -507,15 +497,11 @@ function emitSettingsState(requestId: string, workspaceRoot: string): void {
   }
 }
 
-function handleSettingsGet(
-  msg: Extract<InMsg, { type: "settings.get" }>,
-): void {
+function handleSettingsGet(msg: Extract<InMsg, { type: "settings.get" }>): void {
   emitSettingsState(msg.requestId, resolveRoot(msg.workspaceRoot));
 }
 
-function handleSettingsSet(
-  msg: Extract<InMsg, { type: "settings.set" }>,
-): void {
+function handleSettingsSet(msg: Extract<InMsg, { type: "settings.set" }>): void {
   const workspaceRoot = resolveRoot(msg.workspaceRoot);
   const filePath = defaultSettingsPath(workspaceRoot);
   try {
@@ -526,10 +512,7 @@ function handleSettingsSet(
     if (msg.approvalMode === "ask" || msg.approvalMode === "auto") {
       s.tool_approval_mode = msg.approvalMode;
     }
-    savePawSettingsLocal(
-      filePath,
-      s as Parameters<typeof savePawSettingsLocal>[1],
-    );
+    savePawSettingsLocal(filePath, s as Parameters<typeof savePawSettingsLocal>[1]);
   } catch (e) {
     emit({
       type: "settings.done",
@@ -550,8 +533,7 @@ function normalizeHistory(raw: unknown): HistoryTurn[] {
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const o = item as Record<string, unknown>;
-    const role =
-      o.role === "assistant" ? "assistant" : o.role === "user" ? "user" : null;
+    const role = o.role === "assistant" ? "assistant" : o.role === "user" ? "user" : null;
     const content = typeof o.content === "string" ? o.content.trim() : "";
     if (!role || !content) continue;
     out.push({ role, content });
@@ -607,14 +589,8 @@ async function handleControl(
     if (msg.type === "context.get" || msg.type === "context.compact") {
       const data =
         msg.type === "context.get"
-          ? readDesktopContext(
-              resolveRoot(msg.workspaceRoot),
-              msg.conversationId,
-            )
-          : await compactDesktopContext(
-              resolveRoot(msg.workspaceRoot),
-              msg.conversationId,
-            );
+          ? readDesktopContext(resolveRoot(msg.workspaceRoot), msg.conversationId)
+          : await compactDesktopContext(resolveRoot(msg.workspaceRoot), msg.conversationId);
       emit({
         type: "control.done",
         requestId: msg.requestId,
@@ -625,10 +601,7 @@ async function handleControl(
       return;
     }
     if (msg.type === "monitor.get") {
-      const data = readDesktopMonitor(
-        resolveRoot(msg.workspaceRoot),
-        msg.conversationId,
-      );
+      const data = readDesktopMonitor(resolveRoot(msg.workspaceRoot), msg.conversationId);
       emit({
         type: "control.done",
         requestId: msg.requestId,
@@ -710,10 +683,7 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
       maxSteps: msg.maxSteps,
       intent: msg.intent,
       // Omitted mode must reach the model router; defaulting here disables it.
-      taskMode:
-        msg.taskMode === "long" || msg.taskMode === "standard"
-          ? msg.taskMode
-          : undefined,
+      taskMode: msg.taskMode === "long" || msg.taskMode === "standard" ? msg.taskMode : undefined,
       conversationHistory: Array.isArray(msg.history) ? history : undefined,
       conversationId,
       abortSignal: ac.signal,
@@ -792,11 +762,9 @@ async function handleRun(msg: Extract<InMsg, { type: "run" }>): Promise<void> {
     emit({ type: "error", requestId: msg.requestId, message });
   } finally {
     controls.close();
-    if (runControls.get(msg.requestId) === controls)
-      runControls.delete(msg.requestId);
+    if (runControls.get(msg.requestId) === controls) runControls.delete(msg.requestId);
     settlePendingForRequest(msg.requestId);
-    if (controllers.get(msg.requestId) === ac)
-      controllers.delete(msg.requestId);
+    if (controllers.get(msg.requestId) === ac) controllers.delete(msg.requestId);
   }
 }
 
@@ -834,14 +802,9 @@ async function handleMemoryFinalize(
   }
 }
 
-async function handleMemoryList(
-  msg: Extract<InMsg, { type: "memory.list" }>,
-): Promise<void> {
+async function handleMemoryList(msg: Extract<InMsg, { type: "memory.list" }>): Promise<void> {
   const workspaceRoot = resolveRoot(msg.workspaceRoot);
-  const limit =
-    typeof msg.limit === "number" && msg.limit > 0
-      ? Math.min(msg.limit, 100)
-      : 40;
+  const limit = typeof msg.limit === "number" && msg.limit > 0 ? Math.min(msg.limit, 100) : 40;
   try {
     const r = await listDesktopNextMemories({
       workspaceRoot,
@@ -868,9 +831,7 @@ async function handleMemoryList(
   }
 }
 
-async function handleDoctor(
-  msg: Extract<InMsg, { type: "doctor" }>,
-): Promise<void> {
+async function handleDoctor(msg: Extract<InMsg, { type: "doctor" }>): Promise<void> {
   const workspaceRoot = resolveRoot(msg.workspaceRoot);
   try {
     const r = await formatDoctorOutput(workspaceRoot);
@@ -890,9 +851,7 @@ async function handleDoctor(
   }
 }
 
-function handleCheckpointList(
-  msg: Extract<InMsg, { type: "checkpoint.list" }>,
-): void {
+function handleCheckpointList(msg: Extract<InMsg, { type: "checkpoint.list" }>): void {
   const workspaceRoot = resolveRoot(msg.workspaceRoot);
   const runId = msg.runId?.trim();
   if (!runId) {
@@ -935,9 +894,7 @@ function handleCheckpointList(
   }
 }
 
-function handleCheckpointUndo(
-  msg: Extract<InMsg, { type: "checkpoint.undo" }>,
-): void {
+function handleCheckpointUndo(msg: Extract<InMsg, { type: "checkpoint.undo" }>): void {
   const workspaceRoot = resolveRoot(msg.workspaceRoot);
   const runId = msg.runId?.trim();
   if (!runId) {
@@ -1048,10 +1005,7 @@ function handleRunsLoad(msg: Extract<InMsg, { type: "runs.load" }>): void {
       });
       return;
     }
-    const limit =
-      typeof msg.limit === "number" && msg.limit > 0
-        ? Math.min(msg.limit, 500)
-        : 200;
+    const limit = typeof msg.limit === "number" && msg.limit > 0 ? Math.min(msg.limit, 500) : 200;
     const sliced = all.slice(0, limit);
     emit({
       type: "runs.load.done",
@@ -1192,9 +1146,7 @@ function handleLine(line: string): void {
       if (p) {
         pendingAsks.delete(key);
         const answer =
-          typeof msg.answer === "string" && msg.answer.trim()
-            ? msg.answer
-            : "（用户未作答）";
+          typeof msg.answer === "string" && msg.answer.trim() ? msg.answer : "（用户未作答）";
         p.resolve(answer);
       }
       return;
@@ -1270,9 +1222,7 @@ rl.on("close", async () => {
   for (const c of controllers.values()) c.abort();
   // A bounded best-effort flush; exporter failures cannot keep the host alive.
   await Promise.race([
-    import("./cloud-telemetry.js")
-      .then((m) => m.shutdownDesktopCloudTelemetry())
-      .catch(() => {}),
+    import("./cloud-telemetry.js").then((m) => m.shutdownDesktopCloudTelemetry()).catch(() => {}),
     new Promise<void>((resolve) => setTimeout(resolve, 2_500)),
   ]);
   process.exit(0);

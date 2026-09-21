@@ -18,19 +18,15 @@ describe("hostPathToContainerPath", () => {
   });
 
   test("maps nested paths under /workspace", () => {
-    expect(
-      hostPathToContainerPath(root, path.join(root, "src", "app.ts")),
-    ).toBe("/workspace/src/app.ts");
+    expect(hostPathToContainerPath(root, path.join(root, "src", "app.ts"))).toBe(
+      "/workspace/src/app.ts",
+    );
   });
 
   test("maps a trusted instance-image workspace to /testbed", () => {
-    expect(
-      hostPathToContainerPath(
-        root,
-        path.join(root, "src", "app.ts"),
-        "/testbed",
-      ),
-    ).toBe("/testbed/src/app.ts");
+    expect(hostPathToContainerPath(root, path.join(root, "src", "app.ts"), "/testbed")).toBe(
+      "/testbed/src/app.ts",
+    );
   });
 
   test("falls back to /workspace for paths outside root", () => {
@@ -43,16 +39,14 @@ describe("containerPathToHostPath", () => {
 
   test("maps the configured container root and descendants to the host workspace", () => {
     expect(containerPathToHostPath(root, "/testbed", "/testbed")).toBe(root);
-    expect(
-      containerPathToHostPath(root, "/testbed/pkg/tests", "/testbed"),
-    ).toBe(path.join(root, "pkg", "tests"));
+    expect(containerPathToHostPath(root, "/testbed/pkg/tests", "/testbed")).toBe(
+      path.join(root, "pkg", "tests"),
+    );
   });
 
   test("rejects absolute container paths outside the mounted workspace", () => {
     expect(containerPathToHostPath(root, "/tmp", "/testbed")).toBeUndefined();
-    expect(
-      containerPathToHostPath(root, "/testbed/../etc", "/testbed"),
-    ).toBeUndefined();
+    expect(containerPathToHostPath(root, "/testbed/../etc", "/testbed")).toBeUndefined();
   });
 });
 
@@ -112,8 +106,7 @@ describe("buildDockerShellExecSpec", () => {
     expect(spec.args).toContain("--read-only");
     expect(
       spec.args.some(
-        (argument) =>
-          argument.startsWith("type=bind,") && argument.endsWith(",readonly"),
+        (argument) => argument.startsWith("type=bind,") && argument.endsWith(",readonly"),
       ),
     ).toBeTrue();
     expect(spec.containerName).toStartWith("paw-shell-");

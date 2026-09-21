@@ -63,11 +63,7 @@ describe("mergePlanItems", () => {
 
   test("upserts existing item by id", () => {
     const existing = [{ id: "t1", text: "A", status: "pending" }];
-    const result = mergePlanItems(
-      existing,
-      [{ id: "t1", text: "A updated", status: "done" }],
-      [],
-    );
+    const result = mergePlanItems(existing, [{ id: "t1", text: "A updated", status: "done" }], []);
     expect(result).toHaveLength(1);
     expect(result[0].text).toBe("A updated");
     expect(result[0].status).toBe("done");
@@ -173,8 +169,6 @@ describe("planProgress / currentPlanItemId", () => {
   });
 
   test("兼容 done 状态", () => {
-    expect(planProgress([{ id: "1", text: "a", status: "done" }]).pct).toBe(
-      100,
-    );
+    expect(planProgress([{ id: "1", text: "a", status: "done" }]).pct).toBe(100);
   });
 });

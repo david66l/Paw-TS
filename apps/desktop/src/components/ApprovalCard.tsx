@@ -26,9 +26,7 @@ export function ApprovalCard({
           <ShieldCheck size={18} />
         </span>
         <span className={styles.title}>这一步需要你的批准</span>
-        {queueSize > 1 ? (
-          <span className={styles.queue}>还有 {queueSize - 1} 条待审批</span>
-        ) : null}
+        {queueSize > 1 ? <span className={styles.queue}>还有 {queueSize - 1} 条待审批</span> : null}
       </div>
 
       <div className={styles.tool}>{item.tool}</div>
@@ -48,9 +46,7 @@ export function ApprovalCard({
           >
             {showArgs ? "隐藏参数 ▴" : "查看参数 ▾"}
           </button>
-          {showArgs ? (
-            <pre className={styles.args}>{item.argsPreview}</pre>
-          ) : null}
+          {showArgs ? <pre className={styles.args}>{item.argsPreview}</pre> : null}
         </>
       ) : null}
 

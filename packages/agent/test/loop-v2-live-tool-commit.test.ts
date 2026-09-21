@@ -38,18 +38,13 @@ interface SettledCall {
   };
 }
 
-function toolCall(
-  tool: string,
-  args: Readonly<Record<string, unknown>>,
-): AgentToolCallAction {
+function toolCall(tool: string, args: Readonly<Record<string, unknown>>): AgentToolCallAction {
   return { type: "tool_call", tool, args };
 }
 
 describe("Loop Kernel v2 live tool commit seam", () => {
   test("exclusive barrier includes TaskState and the atomic durable decision fact", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-live-commit-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-live-commit-"));
     const sourcePath = path.join(workspaceRoot, "source.ts");
     fs.writeFileSync(sourcePath, "zero\n", "utf8");
     const calls = [
@@ -80,11 +75,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
         tool: call.tool,
         args: call.args as Readonly<Record<string, unknown>>,
       }));
-      const result = await executeToolBatchV2<
-        PreparedCall,
-        SettledCall,
-        ToolRunResult
-      >(scheduled, {
+      const result = await executeToolBatchV2<PreparedCall, SettledCall, ToolRunResult>(scheduled, {
         classify(call) {
           return call.tool === "workspace.read_file"
             ? { kind: "parallel" }
@@ -143,8 +134,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
                 if (event.type === "tool.result") {
                   trace.push(`${index}:event`);
                   const input = event.decisionCommit;
-                  if (!input)
-                    throw new Error("missing durable decision commit");
+                  if (!input) throw new Error("missing durable decision commit");
                   trace.push(`${index}:projector`);
                   projected.push({
                     callId: input.callId,
@@ -178,9 +168,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
         },
       });
 
-      expect(result.committed.map((entry) => entry.index)).toEqual([
-        0, 1, 2, 3,
-      ]);
+      expect(result.committed.map((entry) => entry.index)).toEqual([0, 1, 2, 3]);
       expect(taskState.snapshot().mutationRevision).toBe(2);
       expect(fs.readFileSync(sourcePath, "utf8")).toBe("two\n");
       expect(projected.map((entry) => entry.callId)).toEqual([
@@ -211,9 +199,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
   });
 
   test("explicit v2 routes a real mixed batch through source-ordered exclusive edits", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-live-orchestrator-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-live-orchestrator-"));
     fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "zero\n", "utf8");
     const events: RunEventEnvelope[] = [];
     let modelCalls = 0;
@@ -252,32 +238,21 @@ describe("Loop Kernel v2 live tool commit seam", () => {
       });
       expect(result.status).toBe("completed");
       expect(modelCalls).toBe(2);
-      expect(
-        fs.readFileSync(path.join(workspaceRoot, "source.txt"), "utf8"),
-      ).toBe("two\n");
+      expect(fs.readFileSync(path.join(workspaceRoot, "source.txt"), "utf8")).toBe("two\n");
       expect(
         events
           .filter((event) => event.event.type === "tool.result")
-          .map((event) =>
-            event.event.type === "tool.result" ? event.event.tool : "",
-          ),
+          .map((event) => (event.event.type === "tool.result" ? event.event.tool : "")),
       ).toEqual([
         "workspace.read_file",
         "workspace.edit_file",
         "workspace.edit_file",
         "workspace.read_file",
       ]);
-      const checkpointRoot = path.join(
-        workspaceRoot,
-        ".paw",
-        "checkpoints",
-        "v2-live-mixed",
-      );
+      const checkpointRoot = path.join(workspaceRoot, ".paw", "checkpoints", "v2-live-mixed");
       expect(fs.readdirSync(checkpointRoot).sort()).toEqual(["1", "2"]);
       const durableEvents =
-        new FileSystemSessionStore({ workspaceRoot }).loadRun(
-          "v2-live-mixed",
-        ) ?? [];
+        new FileSystemSessionStore({ workspaceRoot }).loadRun("v2-live-mixed") ?? [];
       const durableToolResults = durableEvents.filter(
         (event) => event.event.type === "tool.result",
       );
@@ -286,8 +261,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
         durableToolResults.every(
           (event) =>
             event.event.type === "tool.result" &&
-            event.event.decisionCommit?.schemaVersion ===
-              "paw.tool-decision-commit.v1",
+            event.event.decisionCommit?.schemaVersion === "paw.tool-decision-commit.v1",
         ),
       ).toBeTrue();
     } finally {
@@ -296,9 +270,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
   });
 
   test("a throwing event consumer cannot erase an executed tool from the durable journal", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-durable-before-delivery-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-durable-before-delivery-"));
     fs.writeFileSync(path.join(workspaceRoot, "value.txt"), "before\n", "utf8");
     const runId = "v2-durable-before-delivery";
     const orchestrator = new AgentOrchestrator({
@@ -328,20 +300,12 @@ describe("Loop Kernel v2 live tool commit seam", () => {
         maxSteps: 2,
       });
       expect(result.status).toBe("failed");
-      expect(
-        fs.readFileSync(path.join(workspaceRoot, "value.txt"), "utf8"),
-      ).toBe("after\n");
-      const journal =
-        new FileSystemSessionStore({ workspaceRoot }).loadRunStrict(runId) ??
-        [];
-      const committed = journal.find(
-        (event) => event.event.type === "tool.result",
-      );
+      expect(fs.readFileSync(path.join(workspaceRoot, "value.txt"), "utf8")).toBe("after\n");
+      const journal = new FileSystemSessionStore({ workspaceRoot }).loadRunStrict(runId) ?? [];
+      const committed = journal.find((event) => event.event.type === "tool.result");
       expect(committed?.event.type).toBe("tool.result");
       if (committed?.event.type === "tool.result") {
-        expect(committed.event.decisionCommit?.mutationCapture?.status).toBe(
-          "complete",
-        );
+        expect(committed.event.decisionCommit?.mutationCapture?.status).toBe("complete");
       }
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
@@ -349,18 +313,13 @@ describe("Loop Kernel v2 live tool commit seam", () => {
   });
 
   test("production classifier allows only declared reads to overlap", () => {
-    expect(
-      classifyToolExecutionV2(toolCall("workspace.grep", { pattern: "needle" }))
-        .kind,
-    ).toBe("parallel");
-    expect(
-      classifyToolExecutionV2(
-        toolCall("workspace.run_shell", { command: "git status" }),
-      ).kind,
-    ).toBe("exclusive");
-    expect(classifyToolExecutionV2(toolCall("mcp.unknown", {})).kind).toBe(
-      "exclusive",
+    expect(classifyToolExecutionV2(toolCall("workspace.grep", { pattern: "needle" })).kind).toBe(
+      "parallel",
     );
+    expect(
+      classifyToolExecutionV2(toolCall("workspace.run_shell", { command: "git status" })).kind,
+    ).toBe("exclusive");
+    expect(classifyToolExecutionV2(toolCall("mcp.unknown", {})).kind).toBe("exclusive");
   });
 
   test("a child changedFiles report advances the parent mutation revision", () => {
@@ -396,9 +355,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
   });
 
   test("sub-agent launcher derives changedFiles from durable child events", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-child-changes-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-child-changes-"));
     let childCalls = 0;
     const launcher = new DefaultSubAgentLauncher({
       workspaceRoot,
@@ -418,15 +375,11 @@ describe("Loop Kernel v2 live tool commit seam", () => {
       maxSteps: 3,
     });
     try {
-      const child = await launcher.launch(
-        "write child.ts\n[allow_skip_verify]",
-        3,
-        {
-          args: { child_policy: "read_write" },
-          parentRunId: "v2-child-parent",
-          agentId: "child-v2-child-parent-0",
-        },
-      );
+      const child = await launcher.launch("write child.ts\n[allow_skip_verify]", 3, {
+        args: { child_policy: "read_write" },
+        parentRunId: "v2-child-parent",
+        agentId: "child-v2-child-parent-0",
+      });
       expect(child.status).toBe("completed");
       expect(child.changedFiles).toEqual(["child.ts"]);
     } finally {
@@ -435,9 +388,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
   });
 
   test("policy denial commits in source order without dropping a read sibling", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-policy-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-policy-"));
     fs.writeFileSync(path.join(workspaceRoot, "visible.txt"), "ok\n", "utf8");
     const calls = [
       toolCall("workspace.list_dir", { path: "." }),
@@ -474,18 +425,14 @@ describe("Loop Kernel v2 live tool commit seam", () => {
       expect(committed).toEqual(["workspace.list_dir", "workspace.write_file"]);
       expect(batch.results.map((result) => result.ok)).toEqual([true, false]);
       expect(batch.results[1]?.summary).toContain("fixture_deny");
-      expect(
-        fs.existsSync(path.join(workspaceRoot, "blocked.txt")),
-      ).toBeFalse();
+      expect(fs.existsSync(path.join(workspaceRoot, "blocked.txt"))).toBeFalse();
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
   });
 
   test("a caller-forced approval keeps otherwise read-only calls exclusive", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-read-approval-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-read-approval-"));
     fs.mkdirSync(path.join(workspaceRoot, "a"));
     fs.mkdirSync(path.join(workspaceRoot, "b"));
     let activeApprovals = 0;
@@ -525,9 +472,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
   });
 
   test("audited no-effect shell closes an exclusive mutation capture", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-shell-audit-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-shell-audit-"));
     const captures: unknown[] = [];
     try {
       const batch = await executeToolCallsV2(
@@ -586,9 +531,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
   });
 
   test("pre-aborted production batch commits explicit skips and performs no write", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-abort-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-abort-"));
     const controller = new AbortController();
     controller.abort();
     const committed: ToolRunResult[] = [];
@@ -618,10 +561,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
       expect(batch.aborted).toBeTrue();
       expect(committed).toHaveLength(2);
       expect(
-        committed.every(
-          (result) =>
-            (result.payload as { code?: string }).code === "E_RUN_ABORTED",
-        ),
+        committed.every((result) => (result.payload as { code?: string }).code === "E_RUN_ABORTED"),
       ).toBeTrue();
       expect(fs.existsSync(path.join(workspaceRoot, "never.txt"))).toBeFalse();
     } finally {
@@ -630,9 +570,7 @@ describe("Loop Kernel v2 live tool commit seam", () => {
   });
 
   test("explicit v2 keeps run_agent, grep, and edit siblings in one ordered batch", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-v2-mixed-child-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-v2-mixed-child-"));
     fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "zero\n", "utf8");
     let parentCalls = 0;
     const events: RunEventEnvelope[] = [];
@@ -683,14 +621,10 @@ describe("Loop Kernel v2 live tool commit seam", () => {
         maxSteps: 4,
       });
       expect(result.status).toBe("completed");
-      expect(
-        fs.readFileSync(path.join(workspaceRoot, "source.txt"), "utf8"),
-      ).toBe("done\n");
+      expect(fs.readFileSync(path.join(workspaceRoot, "source.txt"), "utf8")).toBe("done\n");
       const rootResults = events
         .filter((event) => event.event.type === "tool.result")
-        .map((event) =>
-          event.event.type === "tool.result" ? event.event.tool : "",
-        );
+        .map((event) => (event.event.type === "tool.result" ? event.event.tool : ""));
       expect(rootResults).toEqual([
         "workspace.run_agent",
         "workspace.grep",
@@ -771,15 +705,12 @@ describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
 
     // 1) durable tool.result 事实带内联标注与直接重跑指令
     const emitted = events.find(
-      (event): event is Extract<RunEvent, { type: "tool.result" }> =>
-        event.type === "tool.result",
+      (event): event is Extract<RunEvent, { type: "tool.result" }> => event.type === "tool.result",
     );
     expect(emitted).toBeDefined();
     expect(emitted?.summary).toContain("run_shell: exit 0");
     expect(emitted?.summary).toContain("[UntrustedExitStatus]");
-    expect(emitted?.summary).toContain(
-      "re-run the same runner directly without pipes",
-    );
+    expect(emitted?.summary).toContain("re-run the same runner directly without pipes");
 
     // 2) 同一判定源：TaskState 验证分类仍为 harness_failed/untrusted_exit_status
     const verification = taskState.snapshot().testResults.at(-1);
@@ -834,10 +765,7 @@ describe("untrusted exit status inline annotation (Loop v2.1 §6.1/K3)", () => {
     expect(read.summary).toBe("read a.ts");
 
     const call = toolCall("workspace.run_shell", { command: pipedCommand });
-    const once = annotateUntrustedShellExitSummary(
-      call,
-      shellResult("run_shell: exit 0"),
-    );
+    const once = annotateUntrustedShellExitSummary(call, shellResult("run_shell: exit 0"));
     const twice = annotateUntrustedShellExitSummary(call, once);
     expect(twice.summary.match(/\[UntrustedExitStatus\]/g)?.length).toBe(1);
   });

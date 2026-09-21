@@ -38,30 +38,23 @@ afterAll(async () => {
       [`${repoPrefix}-%`],
     )) as unknown as { id: string }[];
     for (const it of items) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-        it.id,
-      ]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [it.id]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [it.id]);
     }
     await sql.unsafe(
       `DELETE FROM memory_op_log WHERE run_id LIKE $1 OR (detail->>'repo' IS NOT NULL AND detail->>'repo' LIKE $1)`,
       [`%${repoPrefix}%`],
     );
-    await sql.unsafe("DELETE FROM outbox_events WHERE payload::text LIKE $1", [
-      `%${repoPrefix}%`,
-    ]);
+    await sql.unsafe("DELETE FROM outbox_events WHERE payload::text LIKE $1", [`%${repoPrefix}%`]);
     await sql.unsafe(
       "DELETE FROM governance_decisions WHERE candidate_id IN (SELECT id FROM memory_trial_lessons WHERE origin_task_id LIKE $1)",
       [`%${repoPrefix}%`],
     );
-    await sql.unsafe(
-      "DELETE FROM memory_trial_lessons WHERE origin_task_id LIKE $1",
-      [`%${repoPrefix}%`],
-    );
+    await sql.unsafe("DELETE FROM memory_trial_lessons WHERE origin_task_id LIKE $1", [
+      `%${repoPrefix}%`,
+    ]);
     for (const id of cleanupIds) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-        id,
-      ]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [id]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [id]);
     }
     await closeSql();
@@ -98,17 +91,11 @@ async function dbOk(): Promise<boolean> {
 describe("AgentOrchestrator 默认 v2 记忆", () => {
   test("完整 run 写入入队 + 二次 run 可检索", async () => {
     if (!(await dbOk())) {
-      console.warn(
-        "skip memory-v2-cutover: Postgres not available (set DATABASE_URL)",
-      );
+      console.warn("skip memory-v2-cutover: Postgres not available (set DATABASE_URL)");
       return;
     }
     const { dir } = makeWorkspace();
-    writeFileSync(
-      path.join(dir, "hello.txt"),
-      "hello from v2 cutover\n",
-      "utf8",
-    );
+    writeFileSync(path.join(dir, "hello.txt"), "hello from v2 cutover\n", "utf8");
 
     const events1: RunEventEnvelope[] = [];
     const o1 = new AgentOrchestrator({
@@ -125,9 +112,7 @@ describe("AgentOrchestrator 默认 v2 记忆", () => {
     });
     expect(r1.status).toBe("completed");
 
-    const retrieve1 = events1.find(
-      (e) => e.event.type === "memory.retrieve.done",
-    );
+    const retrieve1 = events1.find((e) => e.event.type === "memory.retrieve.done");
     expect(retrieve1).toBeDefined();
 
     const extracted = events1.find((e) => e.event.type === "memory.extracted");
@@ -148,9 +133,7 @@ describe("AgentOrchestrator 默认 v2 记忆", () => {
       maxSteps: 4,
     });
     expect(r2.status).toBe("completed");
-    const retrieve2 = events2.find(
-      (e) => e.event.type === "memory.retrieve.done",
-    );
+    const retrieve2 = events2.find((e) => e.event.type === "memory.retrieve.done");
     expect(retrieve2?.event.type).toBe("memory.retrieve.done");
   });
 
@@ -199,9 +182,7 @@ describe("AgentOrchestrator 默认 v2 记忆", () => {
     // 轨迹中应有 [Memory hint] 注入（T2 检索命中 seed）——由失败工具触发
     // 注：FakeLanguageModel 的 run_shell 启发式返回成功，仅当预设响应触发失败才断言；
     // 此处断言检索管线不炸 + 事件齐全即可（确定性 T2 断言在 runtime-v2 e2e）
-    expect(events.some((e) => e.event.type === "memory.retrieve.done")).toBe(
-      true,
-    );
+    expect(events.some((e) => e.event.type === "memory.retrieve.done")).toBe(true);
   });
 
   test("回滚开关：PAW_MEMORY_RUNTIME=v1 走 v1 路径", async () => {
@@ -223,9 +204,7 @@ describe("AgentOrchestrator 默认 v2 记忆", () => {
         maxSteps: 3,
       });
       expect(r.status).toBe("completed");
-      expect(events.some((e) => e.event.type === "memory.retrieve.done")).toBe(
-        true,
-      );
+      expect(events.some((e) => e.event.type === "memory.retrieve.done")).toBe(true);
     } finally {
       if (prev === undefined) process.env.PAW_MEMORY_RUNTIME = undefined;
       else process.env.PAW_MEMORY_RUNTIME = prev;

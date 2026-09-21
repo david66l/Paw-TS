@@ -11,10 +11,8 @@ import {
   toFrozenJsonValueV1,
 } from "./product-manifest.js";
 
-export const PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V2 =
-  "paw.product-manifest.v2" as const;
-export const PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V2 =
-  "paw.product-composition.v2" as const;
+export const PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V2 = "paw.product-manifest.v2" as const;
+export const PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V2 = "paw.product-composition.v2" as const;
 
 type PawNextProductManifestCommonV1 = Omit<
   PawNextProductManifestV1,
@@ -22,15 +20,13 @@ type PawNextProductManifestCommonV1 = Omit<
 >;
 
 /** The additive V2 manifest. V1 remains the inline-only product identity. */
-export interface PawNextProductManifestV2
-  extends PawNextProductManifestCommonV1 {
+export interface PawNextProductManifestV2 extends PawNextProductManifestCommonV1 {
   readonly schemaVersion: typeof PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V2;
   readonly compositionVersion: typeof PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V2;
   readonly payloadRuntime: FileDurableJsonPayloadRuntimePolicyV1;
 }
 
-export interface CreatePawNextProductManifestInputV2
-  extends CreatePawNextProductManifestInputV1 {
+export interface CreatePawNextProductManifestInputV2 extends CreatePawNextProductManifestInputV1 {
   readonly payloadRuntime: FileDurableJsonPayloadRuntimePolicyV1;
 }
 
@@ -41,9 +37,7 @@ export interface CreatePawNextProductManifestInputV2
 export function createPawNextProductManifestV2(
   input: CreatePawNextProductManifestInputV2,
 ): PawNextProductManifestV2 {
-  const payloadRuntime = freezeFileDurableJsonPayloadRuntimePolicyV1(
-    input.payloadRuntime,
-  );
+  const payloadRuntime = freezeFileDurableJsonPayloadRuntimePolicyV1(input.payloadRuntime);
   // V1 remains the authority for every common field and for the paired
   // profile/credential identity rule. Only its inline payload identity is
   // deliberately replaced below.
@@ -80,8 +74,6 @@ export function createPawNextProductManifestV2(
   }) as unknown as PawNextProductManifestV2;
 }
 
-export function hashPawNextProductManifestV2(
-  manifest: PawNextProductManifestV2,
-): string {
+export function hashPawNextProductManifestV2(manifest: PawNextProductManifestV2): string {
   return hashCanonicalJsonV1(manifest);
 }

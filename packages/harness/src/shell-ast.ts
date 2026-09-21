@@ -53,12 +53,7 @@
  *    静态参数和动态参数，对动态参数施加更严格的限制。
  */
 
-import {
-  type Node,
-  type Redirect,
-  type Word,
-  parse as unbashParse,
-} from "unbash";
+import { type Node, type Redirect, type Word, parse as unbashParse } from "unbash";
 
 // ---------------------------------------------------------------------------
 // 归约后的 AST 节点类型（为策略引擎保持稳定接口）

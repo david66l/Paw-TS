@@ -6,21 +6,13 @@ import path from "node:path";
 import { ArtifactRegistry } from "../src/context/archive.js";
 import type { ChatMessage } from "../src/context/manager.js";
 import { pruneToolResults } from "../src/context/pruner.js";
-import {
-  DEFAULT_KEEP_RECENT_TOOLS,
-  PERSISTED_OUTPUT_OPEN,
-} from "../src/tool-result/storage.js";
+import { DEFAULT_KEEP_RECENT_TOOLS, PERSISTED_OUTPUT_OPEN } from "../src/tool-result/storage.js";
 
 function tempToolResultsDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "paw-tool-results-"));
 }
 
-function toolResult(
-  tool: string,
-  ok: boolean,
-  summary: string,
-  data?: string,
-): string {
+function toolResult(tool: string, ok: boolean, summary: string, data?: string): string {
   const d = data ? `\n${data}` : "";
   return `[Tool ${tool} ${ok ? "completed" : "failed"}]\n${summary}${d}`;
 }
@@ -115,12 +107,7 @@ describe("pruneToolResults", () => {
     for (let i = 0; i < 8; i++) {
       messages.push({
         role: "user",
-        content: toolResult(
-          "read_file",
-          true,
-          `file${i}`,
-          "content".repeat(800),
-        ),
+        content: toolResult("read_file", true, `file${i}`, "content".repeat(800)),
       });
     }
 
@@ -160,9 +147,7 @@ describe("pruneToolResults", () => {
     });
     expect(result.pruned).toBe(true);
 
-    const assistantMsg = result.messages.find(
-      (m) => m.content === "let me check",
-    );
+    const assistantMsg = result.messages.find((m) => m.content === "let me check");
     expect(assistantMsg).toBeDefined();
 
     const oldTool = result.messages[3]!;
@@ -171,9 +156,7 @@ describe("pruneToolResults", () => {
 
   test("returns same reference when nothing changes", () => {
     const dir = tempToolResultsDir();
-    const messages: ChatMessage[] = [
-      { role: "user", content: toolResult("skill", true, "small") },
-    ];
+    const messages: ChatMessage[] = [{ role: "user", content: toolResult("skill", true, "small") }];
     const result = pruneToolResults(messages, { toolResultsDir: dir });
     expect(result.pruned).toBe(false);
     expect(result.messages).toEqual(messages);
@@ -234,32 +217,17 @@ describe("pruneToolResults", () => {
       { role: "system", content: "sys" },
       {
         role: "user",
-        content: toolResult(
-          "read_file",
-          true,
-          "old",
-          `[${registry.toStub(a)}]`,
-        ),
+        content: toolResult("read_file", true, "old", `[${registry.toStub(a)}]`),
       },
       { role: "assistant", content: "step1" },
       {
         role: "user",
-        content: toolResult(
-          "read_file",
-          true,
-          "mid",
-          `[${registry.toStub(b)}]`,
-        ),
+        content: toolResult("read_file", true, "mid", `[${registry.toStub(b)}]`),
       },
       { role: "assistant", content: "step2" },
       {
         role: "user",
-        content: toolResult(
-          "read_file",
-          true,
-          "new",
-          `[${registry.toStub(c)}]`,
-        ),
+        content: toolResult("read_file", true, "new", `[${registry.toStub(c)}]`),
       },
     ];
 

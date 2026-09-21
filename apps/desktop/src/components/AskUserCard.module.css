@@ -8,8 +8,7 @@
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(var(--glass-blur-chip)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur-chip))
-    saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-chip)) saturate(var(--glass-saturate));
   border-left: 3px solid var(--success);
 }
 

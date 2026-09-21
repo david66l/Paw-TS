@@ -1,23 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { InputFactV1, TaskCheckpointV1 } from "@paw/protocol";
 
-import {
-  projectCheckpointEvidenceV1,
-  verifyTaskCheckpointEvidenceV1,
-} from "../src/index.js";
-import {
-  item,
-  sourceEntries,
-  validCheckpoint,
-} from "./support/checkpoint-fixture.js";
+import { projectCheckpointEvidenceV1, verifyTaskCheckpointEvidenceV1 } from "../src/index.js";
+import { item, sourceEntries, validCheckpoint } from "./support/checkpoint-fixture.js";
 
 describe("checkpoint evidence projection and verification", () => {
   test("binds changed files and verification to completed tool lifecycles", () => {
     const evidence = projectCheckpointEvidenceV1(sourceEntries());
-    const verification = verifyTaskCheckpointEvidenceV1(
-      validCheckpoint(),
-      evidence,
-    );
+    const verification = verifyTaskCheckpointEvidenceV1(validCheckpoint(), evidence);
 
     expect(verification).toEqual({ ok: true });
     expect(evidence.items[1]).toMatchObject({
@@ -45,9 +35,7 @@ describe("checkpoint evidence projection and verification", () => {
     const forgedPath = validCheckpoint({
       changedFiles: [item("Changed src/forged.ts", [2, 3])],
     });
-    expect(issueCodes(forgedPath, evidence)).toContain(
-      "changed_file_path_mismatch",
-    );
+    expect(issueCodes(forgedPath, evidence)).toContain("changed_file_path_mismatch");
   });
 
   test("rejects invented verification and omission of completed objective evidence", () => {
@@ -55,14 +43,10 @@ describe("checkpoint evidence projection and verification", () => {
     const wrongCommand = validCheckpoint({
       verification: [item("npm test completed successfully", [4, 5])],
     });
-    expect(issueCodes(wrongCommand, evidence)).toContain(
-      "verification_command_mismatch",
-    );
+    expect(issueCodes(wrongCommand, evidence)).toContain("verification_command_mismatch");
 
     const omitted = validCheckpoint({ verification: [] });
-    expect(issueCodes(omitted, evidence)).toContain(
-      "verification_evidence_omitted",
-    );
+    expect(issueCodes(omitted, evidence)).toContain("verification_evidence_omitted");
   });
 
   test("does not let completed model prose alone become a confirmed fact", () => {

@@ -175,9 +175,7 @@ export class EmbeddingCache {
    * 将 title + summary + content 拼接为一段文本后进行向量化，
    * 使得记忆的标题和内容都对相似度计算有贡献。
    */
-  async computeMemoryEmbedding(
-    entry: EmbeddingCacheEntry,
-  ): Promise<number[] | null> {
+  async computeMemoryEmbedding(entry: EmbeddingCacheEntry): Promise<number[] | null> {
     const text = [entry.title, entry.summary, entry.content]
       .filter((x) => x.trim()) // 过滤空字段，避免多余换行
       .join("\n");
@@ -211,11 +209,7 @@ export class EmbeddingCache {
     try {
       const bytes = Buffer.from(encoded, "base64");
       if (bytes.length === 0 || bytes.length % 4 !== 0) return null;
-      const floats = new Float32Array(
-        bytes.buffer,
-        bytes.byteOffset,
-        bytes.length / 4,
-      );
+      const floats = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4);
       return Array.from(floats);
     } catch {
       return null;

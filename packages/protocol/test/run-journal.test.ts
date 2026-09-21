@@ -142,10 +142,7 @@ function toolPrelude(): readonly unknown[] {
   ];
 }
 
-function permissionFact(
-  overrides: Record<string, unknown> = {},
-  seq = 5,
-): unknown {
+function permissionFact(overrides: Record<string, unknown> = {}, seq = 5): unknown {
   return factEnvelope(
     {
       type: "tool.permission_resolved",
@@ -179,18 +176,14 @@ describe("canonical run journal protocol", () => {
           statement: "verify the current workspace before applying this lesson",
           applicability: "reference",
           scope: { repositoryId: "repo-1" },
-          sources: [
-            { kind: "memory_store_evidence", ref: "memory:item/memory-1" },
-          ],
+          sources: [{ kind: "memory_store_evidence", ref: "memory:item/memory-1" }],
           confidence: 0.8,
           contentHash: "card-hash",
         },
       ],
     };
     const valid = factEnvelope(validFact);
-    expect(parseRunJournalEnvelopeV1(valid)).toBe(
-      valid as RunJournalEnvelopeV1,
-    );
+    expect(parseRunJournalEnvelopeV1(valid)).toBe(valid as RunJournalEnvelopeV1);
     expect(() =>
       parseRunJournalEnvelopeV1(
         factEnvelope({
@@ -269,9 +262,9 @@ describe("canonical run journal protocol", () => {
     } as const;
     const topicEvidence = factEnvelope(topicEvidencePayload, 2);
     expect(parseRunJournalPrefixV1([retrieval, topicEvidence])).toHaveLength(2);
-    expect(() =>
-      parseRunJournalPrefixV1([factEnvelope(topicEvidencePayload, 1)]),
-    ).toThrow("requires a retrieval query");
+    expect(() => parseRunJournalPrefixV1([factEnvelope(topicEvidencePayload, 1)])).toThrow(
+      "requires a retrieval query",
+    );
     expect(() =>
       parseRunJournalPrefixV1([
         retrieval,
@@ -333,23 +326,16 @@ describe("canonical run journal protocol", () => {
     } as const;
     const projection = factEnvelope(projectionPayload, 2);
     expect(parseRunJournalPrefixV1([retrieval, projection])).toHaveLength(2);
+    expect(() => parseRunJournalPrefixV1([factEnvelope(projectionPayload, 1)])).toThrow(
+      "requires a retrieval query",
+    );
     expect(() =>
-      parseRunJournalPrefixV1([factEnvelope(projectionPayload, 1)]),
-    ).toThrow("requires a retrieval query");
-    expect(() =>
-      parseRunJournalPrefixV1([
-        retrieval,
-        projection,
-        factEnvelope(projectionPayload, 3),
-      ]),
+      parseRunJournalPrefixV1([retrieval, projection, factEnvelope(projectionPayload, 3)]),
     ).toThrow("duplicate memory persona projection query");
     expect(() =>
       parseRunJournalPrefixV1([
         retrieval,
-        factEnvelope(
-          { ...projectionPayload, status: "noop", sourceCount: 0 },
-          2,
-        ),
+        factEnvelope({ ...projectionPayload, status: "noop", sourceCount: 0 }, 2),
       ]),
     ).toThrow("non-completed memory persona projection cannot contain claims");
   });
@@ -386,15 +372,11 @@ describe("canonical run journal protocol", () => {
     } as const;
     const rawEvidence = factEnvelope(rawEvidencePayload, 2);
     expect(parseRunJournalPrefixV1([retrieval, rawEvidence])).toHaveLength(2);
+    expect(() => parseRunJournalPrefixV1([factEnvelope(rawEvidencePayload, 1)])).toThrow(
+      "requires a retrieval query",
+    );
     expect(() =>
-      parseRunJournalPrefixV1([factEnvelope(rawEvidencePayload, 1)]),
-    ).toThrow("requires a retrieval query");
-    expect(() =>
-      parseRunJournalPrefixV1([
-        retrieval,
-        rawEvidence,
-        factEnvelope(rawEvidencePayload, 3),
-      ]),
+      parseRunJournalPrefixV1([retrieval, rawEvidence, factEnvelope(rawEvidencePayload, 3)]),
     ).toThrow("duplicate memory raw evidence query");
     expect(() =>
       parseRunJournalPrefixV1([
@@ -487,24 +469,12 @@ describe("canonical run journal protocol", () => {
       settledAt: 1_750_000_000_002,
     } as const;
     const coverage = factEnvelope(coveragePayload, 4);
-    expect(
-      parseRunJournalPrefixV1([retrieval, topic, raw, coverage]),
-    ).toHaveLength(4);
+    expect(parseRunJournalPrefixV1([retrieval, topic, raw, coverage])).toHaveLength(4);
     expect(() =>
-      parseRunJournalPrefixV1([
-        retrieval,
-        topic,
-        factEnvelope(coveragePayload, 3),
-      ]),
+      parseRunJournalPrefixV1([retrieval, topic, factEnvelope(coveragePayload, 3)]),
     ).toThrow("requires prior topic and raw evidence");
     expect(() =>
-      parseRunJournalPrefixV1([
-        retrieval,
-        topic,
-        raw,
-        coverage,
-        factEnvelope(coveragePayload, 5),
-      ]),
+      parseRunJournalPrefixV1([retrieval, topic, raw, coverage, factEnvelope(coveragePayload, 5)]),
     ).toThrow("duplicate memory evidence coverage query");
     expect(() =>
       parseRunJournalPrefixV1([
@@ -583,9 +553,7 @@ describe("canonical run journal protocol", () => {
       },
       4,
     );
-    expect(
-      parseRunJournalPrefixV1([started, claim, staged, settled]),
-    ).toHaveLength(4);
+    expect(parseRunJournalPrefixV1([started, claim, staged, settled])).toHaveLength(4);
     expect(() =>
       parseRunJournalPrefixV1([
         started,
@@ -811,9 +779,7 @@ describe("canonical run journal protocol", () => {
         }),
       ]),
     ).toThrow("active activities");
-    expect(() =>
-      parseRunJournalPrefixV1([started, waiting, settled, settled]),
-    ).toThrow();
+    expect(() => parseRunJournalPrefixV1([started, waiting, settled, settled])).toThrow();
   });
   test("binds durable input admission to exactly one identical promotion", () => {
     const accepted = {
@@ -833,10 +799,7 @@ describe("canonical run journal protocol", () => {
     };
 
     expect(
-      parseRunJournalPrefixV1([
-        factEnvelope(accepted, 1),
-        factEnvelope(promoted, 2),
-      ]),
+      parseRunJournalPrefixV1([factEnvelope(accepted, 1), factEnvelope(promoted, 2)]),
     ).toHaveLength(2);
     expect(() =>
       parseRunJournalPrefixV1([
@@ -852,9 +815,7 @@ describe("canonical run journal protocol", () => {
       ]),
     ).toThrow("duplicate promoted input");
     expect(() =>
-      parseRunJournalPrefixV1([
-        factEnvelope({ ...promoted, inputId: "orphan-steer" }, 1),
-      ]),
+      parseRunJournalPrefixV1([factEnvelope({ ...promoted, inputId: "orphan-steer" }, 1)]),
     ).toThrow("no durable admission");
   });
 
@@ -972,12 +933,10 @@ describe("canonical run journal protocol", () => {
       ts: 1_750_000_000_001,
     });
 
-    expect(() =>
-      assertRunJournalEnvelopeCanFollowV1(previous, next),
-    ).not.toThrow();
-    expect(() =>
-      assertRunJournalEnvelopeCanFollowV1(previous, { ...next, seq: 3 }),
-    ).toThrow("contiguous");
+    expect(() => assertRunJournalEnvelopeCanFollowV1(previous, next)).not.toThrow();
+    expect(() => assertRunJournalEnvelopeCanFollowV1(previous, { ...next, seq: 3 })).toThrow(
+      "contiguous",
+    );
     expect(() =>
       assertRunJournalEnvelopeCanFollowV1(previous, {
         ...next,
@@ -1036,13 +995,7 @@ describe("canonical run journal protocol", () => {
       ).toBe(true);
     }
 
-    for (const status of [
-      "completed",
-      "failed",
-      "cancelled",
-      "unknown",
-      "rejected",
-    ] as const) {
+    for (const status of ["completed", "failed", "cancelled", "unknown", "rejected"] as const) {
       expect(
         isRunJournalEnvelopeV1(
           factEnvelope({
@@ -1050,9 +1003,7 @@ describe("canonical run journal protocol", () => {
             callId: "call-1",
             status,
             ...(status === "completed" ? { result: { ok: true } } : {}),
-            ...(status === "failed" || status === "rejected"
-              ? { errorCode: "tool-error" }
-              : {}),
+            ...(status === "failed" || status === "rejected" ? { errorCode: "tool-error" } : {}),
           }),
         ),
       ).toBe(true);
@@ -1231,15 +1182,9 @@ describe("canonical run journal protocol", () => {
       2,
     );
 
+    expect(() => parseRunJournalPrefixV1([first, latest, decisionEnvelope(1, 3)])).toThrow("stale");
     expect(() =>
-      parseRunJournalPrefixV1([first, latest, decisionEnvelope(1, 3)]),
-    ).toThrow("stale");
-    expect(() =>
-      parseRunJournalPrefixV1([
-        first,
-        decisionEnvelope(1, 2),
-        decisionEnvelope(2, 3),
-      ]),
+      parseRunJournalPrefixV1([first, decisionEnvelope(1, 2), decisionEnvelope(2, 3)]),
     ).toThrow("immediately follow");
   });
 
@@ -1267,11 +1212,7 @@ describe("canonical run journal protocol", () => {
       );
 
     expect(
-      parseRunJournalPrefixV1([
-        dispatch,
-        decisionEnvelope(1, 2),
-        settlement("model-call-1", 1, 3),
-      ]),
+      parseRunJournalPrefixV1([dispatch, decisionEnvelope(1, 2), settlement("model-call-1", 1, 3)]),
     ).toHaveLength(3);
     expect(() =>
       parseRunJournalPrefixV1([
@@ -1281,11 +1222,7 @@ describe("canonical run journal protocol", () => {
       ]),
     ).toThrow("no dispatch");
     expect(() =>
-      parseRunJournalPrefixV1([
-        dispatch,
-        decisionEnvelope(1, 2),
-        settlement("model-call-1", 2, 3),
-      ]),
+      parseRunJournalPrefixV1([dispatch, decisionEnvelope(1, 2), settlement("model-call-1", 2, 3)]),
     ).toThrow("turn mismatch");
     expect(() =>
       parseRunJournalPrefixV1([
@@ -1298,12 +1235,7 @@ describe("canonical run journal protocol", () => {
   });
 
   test("binds every observed tool call to a settled tool-bearing model turn", () => {
-    const observed = (
-      turn: number,
-      order: number,
-      seq: number,
-      callId = `call-${order}`,
-    ) =>
+    const observed = (turn: number, order: number, seq: number, callId = `call-${order}`) =>
       factEnvelope(
         {
           type: "tool.call_observed",
@@ -1317,9 +1249,7 @@ describe("canonical run journal protocol", () => {
         seq,
       );
 
-    expect(() => parseRunJournalPrefixV1([observed(1, 0, 1)])).toThrow(
-      "no model dispatch",
-    );
+    expect(() => parseRunJournalPrefixV1([observed(1, 0, 1)])).toThrow("no model dispatch");
     expect(() =>
       parseRunJournalPrefixV1([
         factEnvelope(
@@ -1334,12 +1264,12 @@ describe("canonical run journal protocol", () => {
         observed(1, 0, 2),
       ]),
     ).toThrow("precedes model settlement");
-    expect(() =>
-      parseRunJournalPrefixV1([...modelPrelude(), observed(2, 0, 3)]),
-    ).toThrow("turn mismatch");
-    expect(() =>
-      parseRunJournalPrefixV1([...modelPrelude(1, false), observed(1, 0, 3)]),
-    ).toThrow("contradicts model settlement");
+    expect(() => parseRunJournalPrefixV1([...modelPrelude(), observed(2, 0, 3)])).toThrow(
+      "turn mismatch",
+    );
+    expect(() => parseRunJournalPrefixV1([...modelPrelude(1, false), observed(1, 0, 3)])).toThrow(
+      "contradicts model settlement",
+    );
     expect(() =>
       parseRunJournalPrefixV1([
         ...modelPrelude(),
@@ -1347,9 +1277,9 @@ describe("canonical run journal protocol", () => {
         observed(1, 0, 4, "call-duplicate-order"),
       ]),
     ).toThrow("order is not contiguous");
-    expect(() =>
-      parseRunJournalPrefixV1([...modelPrelude(), observed(1, 1, 3)]),
-    ).toThrow("order is not contiguous");
+    expect(() => parseRunJournalPrefixV1([...modelPrelude(), observed(1, 1, 3)])).toThrow(
+      "order is not contiguous",
+    );
   });
 
   test("rejects ghost and mismatched tool dispatches and settlements", () => {
@@ -1379,15 +1309,15 @@ describe("canonical run journal protocol", () => {
         seq,
       );
 
-    expect(() =>
-      parseRunJournalPrefixV1([...prelude, dispatch(2, 0, 3)]),
-    ).toThrow("no observed call");
-    expect(() =>
-      parseRunJournalPrefixV1([...prelude, observed, dispatch(3, 0, 4)]),
-    ).toThrow("identity mismatch");
-    expect(() =>
-      parseRunJournalPrefixV1([...prelude, observed, dispatch(2, 1, 4)]),
-    ).toThrow("identity mismatch");
+    expect(() => parseRunJournalPrefixV1([...prelude, dispatch(2, 0, 3)])).toThrow(
+      "no observed call",
+    );
+    expect(() => parseRunJournalPrefixV1([...prelude, observed, dispatch(3, 0, 4)])).toThrow(
+      "identity mismatch",
+    );
+    expect(() => parseRunJournalPrefixV1([...prelude, observed, dispatch(2, 1, 4)])).toThrow(
+      "identity mismatch",
+    );
     expect(() =>
       parseRunJournalPrefixV1([
         factEnvelope(
@@ -1454,9 +1384,9 @@ describe("canonical run journal protocol", () => {
         seq,
       );
 
-    expect(() =>
-      parseRunJournalPrefixV1([...prelude, observed, dispatch(4), dispatch(5)]),
-    ).toThrow("duplicate tool dispatch");
+    expect(() => parseRunJournalPrefixV1([...prelude, observed, dispatch(4), dispatch(5)])).toThrow(
+      "duplicate tool dispatch",
+    );
     expect(() =>
       parseRunJournalPrefixV1([
         ...prelude,
@@ -1470,25 +1400,16 @@ describe("canonical run journal protocol", () => {
 
   test("binds tool permission identity to one dispatched unsettled call", () => {
     expect(() =>
-      parseRunJournalPrefixV1([
-        ...toolPrelude().slice(0, -1),
-        permissionFact({}, 4),
-      ]),
+      parseRunJournalPrefixV1([...toolPrelude().slice(0, -1), permissionFact({}, 4)]),
     ).toThrow("no dispatch");
+    expect(() => parseRunJournalPrefixV1([...toolPrelude(), permissionFact({ turn: 2 })])).toThrow(
+      "identity mismatch",
+    );
     expect(() =>
-      parseRunJournalPrefixV1([...toolPrelude(), permissionFact({ turn: 2 })]),
-    ).toThrow("identity mismatch");
-    expect(() =>
-      parseRunJournalPrefixV1([
-        ...toolPrelude(),
-        permissionFact({ callId: "ghost-call" }),
-      ]),
+      parseRunJournalPrefixV1([...toolPrelude(), permissionFact({ callId: "ghost-call" })]),
     ).toThrow("no observed call");
     expect(() =>
-      parseRunJournalPrefixV1([
-        ...toolPrelude(),
-        permissionFact({ tool: "shell" }),
-      ]),
+      parseRunJournalPrefixV1([...toolPrelude(), permissionFact({ tool: "shell" })]),
     ).toThrow("identity mismatch");
     expect(() =>
       parseRunJournalPrefixV1([
@@ -1507,10 +1428,7 @@ describe("canonical run journal protocol", () => {
     expect(() =>
       parseRunJournalPrefixV1([
         ...toolPrelude(),
-        factEnvelope(
-          { type: "tool.settled", callId: "call-1", status: "cancelled" },
-          5,
-        ),
+        factEnvelope({ type: "tool.settled", callId: "call-1", status: "cancelled" }, 5),
         permissionFact({}, 6),
       ]),
     ).toThrow("follows settlement");
@@ -1550,10 +1468,7 @@ describe("canonical run journal protocol", () => {
       },
     ] as const) {
       expect(() =>
-        parseRunJournalPrefixV1([
-          ...toolPrelude(),
-          factEnvelope(settlement, 5),
-        ]),
+        parseRunJournalPrefixV1([...toolPrelude(), factEnvelope(settlement, 5)]),
       ).toThrow("requires allowed permission");
     }
 
@@ -1573,11 +1488,7 @@ describe("canonical run journal protocol", () => {
               errorCode: "result-lost",
             };
       expect(
-        parseRunJournalPrefixV1([
-          ...toolPrelude(),
-          permissionFact(),
-          factEnvelope(settlement, 6),
-        ]),
+        parseRunJournalPrefixV1([...toolPrelude(), permissionFact(), factEnvelope(settlement, 6)]),
       ).toHaveLength(6);
     }
   });
@@ -1642,9 +1553,7 @@ describe("canonical run journal protocol", () => {
         ruleId: "rule-1",
       }),
     ]) {
-      expect(() =>
-        parseRunJournalPrefixV1([...toolPrelude(), permission]),
-      ).toThrow();
+      expect(() => parseRunJournalPrefixV1([...toolPrelude(), permission])).toThrow();
     }
   });
 
@@ -1769,12 +1678,8 @@ describe("canonical run journal protocol", () => {
   });
 
   test("the protocol source has no core, agent, or Node runtime dependency", async () => {
-    const source = await Bun.file(
-      new URL("../src/run-journal.ts", import.meta.url),
-    ).text();
-    const manifest = await Bun.file(
-      new URL("../package.json", import.meta.url),
-    ).json();
+    const source = await Bun.file(new URL("../src/run-journal.ts", import.meta.url)).text();
+    const manifest = await Bun.file(new URL("../package.json", import.meta.url)).json();
 
     expect(source).not.toContain("@paw/core");
     expect(source).not.toContain("@paw/agent");

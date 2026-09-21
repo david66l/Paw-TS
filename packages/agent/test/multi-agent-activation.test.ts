@@ -3,11 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  AGENT_ROSTER_ORDER,
-  DEFAULT_AGENT_SEEDS,
-  SEED_BIGE,
-} from "../src/agents/seeds.js";
+import { AGENT_ROSTER_ORDER, DEFAULT_AGENT_SEEDS, SEED_BIGE } from "../src/agents/seeds.js";
 import {
   computeProgressBaselineV1,
   evaluateInvestigationStallV1,
@@ -77,8 +73,7 @@ describe("multi-agent activation slice", () => {
     const stale = evaluateInvestigationStallV1({
       state: investigating,
       baseline: base.baseline,
-      turn: DEFAULT_PROGRESS_ADVISOR_CONFIG_V2.noDeltaThresholds
-        .changeHypothesis,
+      turn: DEFAULT_PROGRESS_ADVISOR_CONFIG_V2.noDeltaThresholds.changeHypothesis,
     });
     expect(stale.message).toContain("[ProgressAdvice:hypothesis_stale]");
 
@@ -155,9 +150,7 @@ describe("multi-agent activation slice", () => {
   });
 
   test("a 42-turn production loop receives 4/8/16 then periodic 24/32/40 advice", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-stall-cadence-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-stall-cadence-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -176,12 +169,8 @@ describe("multi-agent activation slice", () => {
       model: {
         label: "stall-cadence-fixture",
         async complete(messages) {
-          const control = messages.find((message) =>
-            message.content.includes("[ProgressAdvice:"),
-          );
-          const tag = control?.content.match(
-            /\[ProgressAdvice:([^\]]+)\]/,
-          )?.[1];
+          const control = messages.find((message) => message.content.includes("[ProgressAdvice:"));
+          const tag = control?.content.match(/\[ProgressAdvice:([^\]]+)\]/)?.[1];
           if (tag) progressTags.push(tag);
           const file = files.shift() ?? "fact-41.txt";
           return {

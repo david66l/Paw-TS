@@ -31,10 +31,7 @@ import { assertCanonicalModelResponseCarrierV1 } from "../payload/verified-canon
 import type { VerifiedCanonicalPayloadEvidenceV1 } from "../payload/verified-model-response-evidence.js";
 import { projectRuntimeActivitiesV1 } from "../tools/managed-job-controller.js";
 import { projectLatestWorkSegmentBoundaryV1 } from "../work-segment-boundary.js";
-import {
-  canonicalJsonStringifyV1,
-  immutableCanonicalJsonCloneV1,
-} from "./canonical-json.js";
+import { canonicalJsonStringifyV1, immutableCanonicalJsonCloneV1 } from "./canonical-json.js";
 import { insertJournalContextAnnotationsV1 } from "./journal-context-annotations.js";
 import type {
   JournalContextAnnotationV1,
@@ -45,10 +42,7 @@ import type {
 
 /** Artifact access and content hashing are injected; Context owns neither. */
 export interface DurablePayloadResolverV1 {
-  resolve(
-    payload: DurableJsonPayloadV1,
-    signal: AbortSignal,
-  ): Promise<JsonValue>;
+  resolve(payload: DurableJsonPayloadV1, signal: AbortSignal): Promise<JsonValue>;
   hash(value: JsonValue): string | Promise<string>;
 }
 
@@ -104,9 +98,7 @@ export interface JournalContextOptionsV1 {
   readonly loadPayloadEvidence?: (
     snapshot: SessionInputSnapshot<InputFactV1>,
     signal: AbortSignal,
-  ) =>
-    | VerifiedCanonicalPayloadEvidenceV1
-    | Promise<VerifiedCanonicalPayloadEvidenceV1>;
+  ) => VerifiedCanonicalPayloadEvidenceV1 | Promise<VerifiedCanonicalPayloadEvidenceV1>;
   readonly toolObservationProjector?: ToolObservationProjectorV1;
   /** One run freezes one provider protocol; native reasoning cannot cross it. */
   readonly providerProtocol: ModelResponseV1["providerProtocol"];
@@ -120,9 +112,7 @@ export interface JournalContextOptionsV1 {
  * Fresh, deterministic Runtime Context over one canonical InputFact snapshot.
  * It has no Session write capability and keeps model/tool turns atomic.
  */
-export function createJournalContextV1(
-  options: JournalContextOptionsV1,
-): JournalContextRuntimeV1 {
+export function createJournalContextV1(options: JournalContextOptionsV1): JournalContextRuntimeV1 {
   const planner = createJournalContextPlannerV1(options);
   return {
     plan: planner.plan.bind(planner),
@@ -147,19 +137,16 @@ export function createJournalContextPlannerV1(
           item.sourceThroughSeq > snapshot.latestInputSeq ||
           typeof item.content !== "string" ||
           !["after_unit", "after_boundary", "tail"].includes(item.placement) ||
-          (item.fallbackContent !== undefined &&
-            typeof item.fallbackContent !== "string")
+          (item.fallbackContent !== undefined && typeof item.fallbackContent !== "string")
         ) {
           throw new Error("Invalid context annotation");
         }
         return Object.freeze({ ...item });
       };
-      const annotations = (projection?.annotations ?? []).map(
-        validateAnnotation,
-      );
+      const annotations = (projection?.annotations ?? []).map(validateAnnotation);
       const runtimeActivityContent = projection?.runtimeActivityContent;
-      const optionalSections = (projection?.optionalSections ?? []).map(
-        (section) => Object.freeze({ ...section }),
+      const optionalSections = (projection?.optionalSections ?? []).map((section) =>
+        Object.freeze({ ...section }),
       );
       // Validate before admission, including duplicate identifiers and content schema.
       materializeModelRequestMessagesV1({
@@ -167,11 +154,8 @@ export function createJournalContextPlannerV1(
         contextSections: optionalSections,
       });
       const systemMessages: ChatMessage[] =
-        frozen.system === undefined
-          ? []
-          : [{ role: "system", content: frozen.system }];
-      const hardInputLimit =
-        frozen.budget.contextWindowTokens - frozen.budget.reservedOutputTokens;
+        frozen.system === undefined ? [] : [{ role: "system", content: frozen.system }];
+      const hardInputLimit = frozen.budget.contextWindowTokens - frozen.budget.reservedOutputTokens;
       const fixedTokens = estimateRequestInputTokens(
         systemMessages,
         frozen.tools,
@@ -185,9 +169,7 @@ export function createJournalContextPlannerV1(
       const segmentBoundary = projectLatestWorkSegmentBoundaryV1(snapshot);
       const requiresPayloadEvidence = snapshotHasContextArtifact(snapshot);
       if (requiresPayloadEvidence && !frozen.loadPayloadEvidence) {
-        throw new Error(
-          "Context artifact payload requires exact canonical evidence",
-        );
+        throw new Error("Context artifact payload requires exact canonical evidence");
       }
       const payloadEvidence = requiresPayloadEvidence
         ? captureCanonicalPayloadEvidence(
@@ -201,9 +183,7 @@ export function createJournalContextPlannerV1(
       throwIfAborted(callOptions);
       payloadEvidence?.assertSnapshot(snapshot);
       annotations.push(
-        ...(projection?.evidenceAnnotations?.(payloadEvidence) ?? []).map(
-          validateAnnotation,
-        ),
+        ...(projection?.evidenceAnnotations?.(payloadEvidence) ?? []).map(validateAnnotation),
       );
       const projected: ProjectedTimelineUnit[] = [];
       for (const unit of timeline) {
@@ -250,20 +230,14 @@ export function createJournalContextPlannerV1(
         payloadEvidence,
         callOptions.signal,
       );
-      const activitySection = await projectRuntimeActivitySection(
-        snapshot,
-        frozen.payloads,
-      );
+      const activitySection = await projectRuntimeActivitySection(snapshot, frozen.payloads);
       const contextSections = [
         ...(checkpointProjection?.sections ?? []),
-        ...(activitySection && !runtimeActivityContent
-          ? [activitySection]
-          : []),
+        ...(activitySection && !runtimeActivityContent ? [activitySection] : []),
       ];
       if (activitySection && runtimeActivityContent) {
         const content = runtimeActivityContent(activitySection);
-        if (typeof content !== "string")
-          throw new Error("Invalid runtime activity projection");
+        if (typeof content !== "string") throw new Error("Invalid runtime activity projection");
         annotations.push({
           sourceThroughSeq: activitySection.sourceThroughSeq,
           content,
@@ -272,16 +246,10 @@ export function createJournalContextPlannerV1(
         });
       }
       const eligibleProjected = checkpointProjection
-        ? projected.filter(
-            (_item, index) => !checkpointProjection.coveredIndices.has(index),
-          )
+        ? projected.filter((_item, index) => !checkpointProjection.coveredIndices.has(index))
         : projected;
-      const requiredAnnotations = annotations.filter(
-        (item) => item.fallbackContent !== undefined,
-      );
-      const optionalAnnotations = annotations.filter(
-        (item) => item.fallbackContent === undefined,
-      );
+      const requiredAnnotations = annotations.filter((item) => item.fallbackContent !== undefined);
+      const optionalAnnotations = annotations.filter((item) => item.fallbackContent === undefined);
       const render = (
         indices: ReadonlySet<number>,
         admitted: readonly JournalContextAnnotationV1[],
@@ -312,9 +280,7 @@ export function createJournalContextPlannerV1(
         extraSections: readonly ModelContextSectionV1[] = [],
       ) =>
         estimateRequestInputTokens(
-          materializeModelRequestMessagesV1(
-            render(indices, admitted, extraSections),
-          ),
+          materializeModelRequestMessagesV1(render(indices, admitted, extraSections)),
           frozen.tools,
           frozen.budget.estimator,
         );
@@ -335,10 +301,7 @@ export function createJournalContextPlannerV1(
         frozen.tools,
         frozen.budget,
         segmentBoundary?.rootPromotionSeq,
-        (indices) =>
-          materializeModelRequestMessagesV1(
-            render(indices, requiredAnnotations),
-          ),
+        (indices) => materializeModelRequestMessagesV1(render(indices, requiredAnnotations)),
       );
       // Current host evidence participates in selection. Historical reminders may
       // consume only remaining soft headroom and never displace protected turns.
@@ -359,16 +322,11 @@ export function createJournalContextPlannerV1(
         )
           continue;
         admitted.add(item);
-        if (
-          estimate(selected, inOrder()) >
-          hardInputLimit - frozen.budget.estimationMarginTokens
-        )
+        if (estimate(selected, inOrder()) > hardInputLimit - frozen.budget.estimationMarginTokens)
           admitted.delete(item);
       }
       const admittedSections: ModelContextSectionV1[] = [];
-      const knownSectionIds = new Set(
-        contextSections.map((section) => section.id),
-      );
+      const knownSectionIds = new Set(contextSections.map((section) => section.id));
       for (const section of optionalSections) {
         if (knownSectionIds.has(section.id)) continue;
         if (
@@ -380,11 +338,7 @@ export function createJournalContextPlannerV1(
         }
       }
       const projectedRequest = render(selected, inOrder(), admittedSections);
-      const selectedInputTokens = estimate(
-        selected,
-        inOrder(),
-        admittedSections,
-      );
+      const selectedInputTokens = estimate(selected, inOrder(), admittedSections);
       if (selectedInputTokens > hardInputLimit)
         throw new Error("selected context budget exceeds window");
       const fullInputTokens = estimate(
@@ -401,9 +355,7 @@ export function createJournalContextPlannerV1(
       };
       const request: ModelRequestV1 = {
         ...projectedRequest,
-        ...(Object.keys(requestOptions).length === 0
-          ? {}
-          : { options: requestOptions }),
+        ...(Object.keys(requestOptions).length === 0 ? {} : { options: requestOptions }),
       };
       const checkpoint = checkpointProjection?.checkpoint;
       const omittedUnitSourceSeqs = selection.omittedIndices.map(
@@ -434,21 +386,15 @@ export function createJournalContextPlannerV1(
           contextWindowTokens: frozen.budget.contextWindowTokens,
           reservedOutputTokens: frozen.budget.reservedOutputTokens,
           hardInputLimitTokens: hardInputLimit,
-          softTargetTokens:
-            hardInputLimit - frozen.budget.estimationMarginTokens,
+          softTargetTokens: hardInputLimit - frozen.budget.estimationMarginTokens,
           fixedInputTokens: expandedFixedTokens,
           protectedInputTokens: selection.protectedInputTokens,
           fullInputTokens,
           selectedInputTokens,
-          estimatedOmittedInputTokens: Math.max(
-            0,
-            fullInputTokens - selectedInputTokens,
-          ),
+          estimatedOmittedInputTokens: Math.max(0, fullInputTokens - selectedInputTokens),
           hardHeadroomTokens: hardInputLimit - selectedInputTokens,
           softHeadroomTokens:
-            hardInputLimit -
-            frozen.budget.estimationMarginTokens -
-            selectedInputTokens,
+            hardInputLimit - frozen.budget.estimationMarginTokens - selectedInputTokens,
           estimatorId: frozen.budget.estimatorId,
           estimatorVersion: frozen.budget.estimatorVersion,
         },
@@ -468,19 +414,13 @@ export function createJournalContextPlannerV1(
             eligibleProjected.map((item) => item.unit.sourceSeq),
           ),
           protectedUnitSourceSeqs: Object.freeze(
-            protectedUnitSourceSeqs.filter(
-              (seq): seq is number => seq !== undefined,
-            ),
+            protectedUnitSourceSeqs.filter((seq): seq is number => seq !== undefined),
           ),
           selectedUnitSourceSeqs: Object.freeze(
-            selectedUnitSourceSeqs.filter(
-              (seq): seq is number => seq !== undefined,
-            ),
+            selectedUnitSourceSeqs.filter((seq): seq is number => seq !== undefined),
           ),
           omittedUnitSourceSeqs: Object.freeze(
-            omittedUnitSourceSeqs.filter(
-              (seq): seq is number => seq !== undefined,
-            ),
+            omittedUnitSourceSeqs.filter((seq): seq is number => seq !== undefined),
           ),
           checkpointCoveredUnitSourceSeqs: Object.freeze(
             checkpointProjection?.coveredUnitSourceSeqs ?? [],
@@ -498,9 +438,7 @@ export function createJournalContextPlannerV1(
   };
 }
 
-function snapshotHasContextArtifact(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): boolean {
+function snapshotHasContextArtifact(snapshot: SessionInputSnapshot<InputFactV1>): boolean {
   return snapshot.entries.some(({ fact }) => {
     switch (fact.type) {
       case "input.promoted":
@@ -546,16 +484,12 @@ interface ModelUnit {
   readonly tools: ToolExchange[];
 }
 
-function scanTimeline(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): readonly TimelineUnit[] {
+function scanTimeline(snapshot: SessionInputSnapshot<InputFactV1>): readonly TimelineUnit[] {
   assertSnapshotOrder(snapshot);
   const timeline: TimelineUnit[] = [];
   const models = new Map<string, ModelUnit>();
   const calls = new Map<string, ToolExchange>();
-  let activeModel:
-    | { readonly modelCallId: string; readonly turn: number }
-    | undefined;
+  let activeModel: { readonly modelCallId: string; readonly turn: number } | undefined;
   let openToolModel: ModelUnit | undefined;
 
   const assertSafeRequestBoundary = (sourceSeq: number): void => {
@@ -594,15 +528,11 @@ function scanTimeline(
           activeModel.modelCallId !== fact.modelCallId ||
           activeModel.turn !== fact.turn
         ) {
-          throw new Error(
-            `Context cannot bind model settlement: ${fact.modelCallId}`,
-          );
+          throw new Error(`Context cannot bind model settlement: ${fact.modelCallId}`);
         }
         activeModel = undefined;
         if (models.has(fact.modelCallId)) {
-          throw new Error(
-            `Context found duplicate model settlement: ${fact.modelCallId}`,
-          );
+          throw new Error(`Context found duplicate model settlement: ${fact.modelCallId}`);
         }
         const model: ModelUnit = {
           kind: "model",
@@ -630,10 +560,7 @@ function scanTimeline(
         if (openToolModel !== model) {
           throw new Error(`Context found late tool call: ${fact.callId}`);
         }
-        if (
-          model.fact.status !== "completed" &&
-          model.fact.status !== "truncated"
-        ) {
+        if (model.fact.status !== "completed" && model.fact.status !== "truncated") {
           throw new Error("Context tool call belongs to failed model turn");
         }
         const exchange: ToolExchange = {
@@ -647,9 +574,7 @@ function scanTimeline(
       case "tool.settled": {
         const exchange = calls.get(fact.callId);
         if (!exchange || exchange.settled !== undefined) {
-          throw new Error(
-            `Context cannot bind tool settlement: ${fact.callId}`,
-          );
+          throw new Error(`Context cannot bind tool settlement: ${fact.callId}`);
         }
         if (openToolModel?.fact.modelCallId !== exchange.observed.modelCallId) {
           throw new Error(`Context found late tool settlement: ${fact.callId}`);
@@ -676,25 +601,17 @@ function scanTimeline(
   }
 
   if (activeModel) {
-    throw new Error(
-      `Context found unsettled model dispatch: ${activeModel.modelCallId}`,
-    );
+    throw new Error(`Context found unsettled model dispatch: ${activeModel.modelCallId}`);
   }
 
   for (const model of models.values()) {
-    model.tools.sort(
-      (left, right) => left.observed.order - right.observed.order,
-    );
+    model.tools.sort((left, right) => left.observed.order - right.observed.order);
     model.tools.forEach((exchange, index) => {
       if (exchange.observed.order !== index) {
-        throw new Error(
-          `Context found non-contiguous tool order in turn ${model.fact.turn}`,
-        );
+        throw new Error(`Context found non-contiguous tool order in turn ${model.fact.turn}`);
       }
       if (exchange.settled === undefined || exchange.settledSeq === undefined) {
-        throw new Error(
-          `Context found half-settled tool batch: ${exchange.observed.callId}`,
-        );
+        throw new Error(`Context found half-settled tool batch: ${exchange.observed.callId}`);
       }
     });
     const finalSettlementSeq = Math.max(
@@ -703,9 +620,7 @@ function scanTimeline(
     );
     const interleavedUnit = timeline.find(
       (unit) =>
-        unit !== model &&
-        unit.sourceSeq > model.sourceSeq &&
-        unit.sourceSeq < finalSettlementSeq,
+        unit !== model && unit.sourceSeq > model.sourceSeq && unit.sourceSeq < finalSettlementSeq,
     );
     if (interleavedUnit) {
       throw new Error(
@@ -739,14 +654,11 @@ async function projectRuntimeActivitySection(
 ): Promise<ModelContextSectionV1 | undefined> {
   const sourceEntries = snapshot.entries.filter(
     ({ fact }) =>
-      fact.type === "runtime.activity_started" ||
-      fact.type === "runtime.activity_settled",
+      fact.type === "runtime.activity_started" || fact.type === "runtime.activity_settled",
   );
   if (sourceEntries.length === 0) return undefined;
 
-  const projection = projectRuntimeActivitiesV1(
-    snapshot.entries.map(({ fact }) => fact),
-  );
+  const projection = projectRuntimeActivitiesV1(snapshot.entries.map(({ fact }) => fact));
   const activities = projection.activities
     .slice(-MAX_RUNTIME_ACTIVITY_CONTEXT_ITEMS_V1)
     .map((activity) => ({
@@ -754,9 +666,7 @@ async function projectRuntimeActivitySection(
       activityKind: activity.activityKind,
       label: activity.label,
       startedAt: activity.startedAt,
-      ...(activity.metadata === undefined
-        ? {}
-        : { metadata: activity.metadata }),
+      ...(activity.metadata === undefined ? {} : { metadata: activity.metadata }),
       ...(activity.settlement === undefined
         ? { status: "running" as const }
         : {
@@ -805,8 +715,7 @@ export function assertTaskCheckpointStableBoundaryV1(
   boundary: TaskCheckpointStableBoundaryV1,
 ): void {
   const timeline = scanTimeline(snapshot);
-  const segmentMarkerSeq =
-    projectLatestWorkSegmentBoundaryV1(snapshot)?.markerSeq ?? 0;
+  const segmentMarkerSeq = projectLatestWorkSegmentBoundaryV1(snapshot)?.markerSeq ?? 0;
   const latestUnit = timeline.at(-1);
   let latestModelSettlement: (typeof snapshot.entries)[number] | undefined;
   for (let index = snapshot.entries.length - 1; index >= 0; index -= 1) {
@@ -823,9 +732,7 @@ export function assertTaskCheckpointStableBoundaryV1(
       !latestModelSettlement ||
       latestModelSettlement.seq <= segmentMarkerSeq)
   ) {
-    throw new Error(
-      "Task checkpoint boundary is not stable in the current work segment",
-    );
+    throw new Error("Task checkpoint boundary is not stable in the current work segment");
   }
   if (
     latestUnit?.kind !== "model" ||
@@ -850,9 +757,7 @@ export function assertTaskCheckpointStableBoundaryV1(
   }
   const boundaryThroughSeq = Math.max(
     latestUnit.sourceSeq,
-    ...latestUnit.tools.map(
-      (exchange) => exchange.settledSeq ?? latestUnit.sourceSeq,
-    ),
+    ...latestUnit.tools.map((exchange) => exchange.settledSeq ?? latestUnit.sourceSeq),
   );
   const invalidTailFact = snapshot.entries.find(
     (entry) =>
@@ -882,11 +787,9 @@ export function planTaskCheckpointReplacementV1(
   const coveredUnitSourceSeqs: number[] = [];
   timeline.forEach((unit, index) => {
     const throughSeq = timelineUnitThroughSeq(unit);
-    const overlaps =
-      unit.sourceSeq <= sourceThroughSeq && throughSeq >= sourceFromSeq;
+    const overlaps = unit.sourceSeq <= sourceThroughSeq && throughSeq >= sourceFromSeq;
     if (!overlaps) return;
-    const fullyCovered =
-      unit.sourceSeq >= sourceFromSeq && throughSeq <= sourceThroughSeq;
+    const fullyCovered = unit.sourceSeq >= sourceFromSeq && throughSeq <= sourceThroughSeq;
     if (!fullyCovered) {
       throw new Error("Context checkpoint partially covers a timeline unit");
     }
@@ -938,9 +841,7 @@ async function projectLatestCheckpoint(
   );
   const checkpoint = parseTaskCheckpointV1(checkpointValue);
   const sourceEntries = snapshot.entries.filter(
-    (candidate) =>
-      candidate.seq >= fact.sourceFromSeq &&
-      candidate.seq <= fact.sourceThroughSeq,
+    (candidate) => candidate.seq >= fact.sourceFromSeq && candidate.seq <= fact.sourceThroughSeq,
   );
   if (sourceEntries.length === 0) {
     throw new Error("Context checkpoint source range has no input facts");
@@ -949,9 +850,7 @@ async function projectLatestCheckpoint(
   for (const item of checkpointItems(checkpoint)) {
     for (const sourceSeq of item.sourceSeqs) {
       if (!sourceSeqs.has(sourceSeq)) {
-        throw new Error(
-          `Context checkpoint references missing input fact seq ${sourceSeq}`,
-        );
+        throw new Error(`Context checkpoint references missing input fact seq ${sourceSeq}`);
       }
     }
   }
@@ -1009,9 +908,7 @@ function assertCheckpointChain(
   for (const entry of entries) {
     const fact = entry.fact;
     if (ids.has(fact.checkpointId)) {
-      throw new Error(
-        `Context found duplicate checkpoint: ${fact.checkpointId}`,
-      );
+      throw new Error(`Context found duplicate checkpoint: ${fact.checkpointId}`);
     }
     if (!previous && fact.supersedesCheckpointId !== undefined) {
       throw new Error("Context first checkpoint cannot supersede another");
@@ -1032,9 +929,7 @@ function assertCheckpointChain(
   }
 }
 
-function checkpointItems(
-  checkpoint: TaskCheckpointV1,
-): readonly TaskCheckpointItemV1[] {
+function checkpointItems(checkpoint: TaskCheckpointV1): readonly TaskCheckpointItemV1[] {
   return [
     ...(checkpoint.goal ? [checkpoint.goal] : []),
     ...checkpoint.confirmedFacts,
@@ -1065,9 +960,7 @@ async function projectModelTurn(
   signal: AbortSignal,
 ): Promise<ChatMessage> {
   if (unit.fact.response === undefined) {
-    throw new Error(
-      `Context-visible model settlement lacks response: ${unit.fact.modelCallId}`,
-    );
+    throw new Error(`Context-visible model settlement lacks response: ${unit.fact.modelCallId}`);
   }
   const responseValue = await resolveVerified(
     unit.fact.response,
@@ -1124,9 +1017,7 @@ async function projectModelTurn(
     }
     const observation = parseToolObservationV1(exchange.settled.observation);
     if (exchange.settled.status !== "completed" && !observation.isError) {
-      throw new Error(
-        `Context tool observation status mismatch: ${nativeCall.callId}`,
-      );
+      throw new Error(`Context tool observation status mismatch: ${nativeCall.callId}`);
     }
     results.push({
       callId: nativeCall.callId,
@@ -1161,15 +1052,9 @@ async function projectModelTurn(
   };
 }
 
-function assertModelResponseMatches(
-  unit: ModelUnit,
-  response: ModelResponseV1,
-): void {
+function assertModelResponseMatches(unit: ModelUnit, response: ModelResponseV1): void {
   assertCanonicalModelResponseCarrierV1(unit.fact, response);
-  if (
-    unit.fact.status === "completed" &&
-    unit.tools.length !== response.toolCalls.length
-  ) {
+  if (unit.fact.status === "completed" && unit.tools.length !== response.toolCalls.length) {
     throw new Error("Context model response/observation call count mismatch");
   }
 }
@@ -1185,9 +1070,7 @@ function assertToolIdentity(
     nativeCall.argumentsValid !== true ||
     !sameJson(nativeCall.args, observed.args)
   ) {
-    throw new Error(
-      `Context native tool identity mismatch: ${observed.callId}`,
-    );
+    throw new Error(`Context native tool identity mismatch: ${observed.callId}`);
   }
 }
 
@@ -1254,9 +1137,7 @@ async function resolveAttachments(
   signal: AbortSignal,
 ): Promise<readonly Attachment[]> {
   const resolved: Attachment[] = [];
-  for (const [attachmentIndex, attachment] of (
-    unit.fact.attachments ?? []
-  ).entries()) {
+  for (const [attachmentIndex, attachment] of (unit.fact.attachments ?? []).entries()) {
     const content = await resolveVerified(
       attachment.content,
       {
@@ -1273,17 +1154,13 @@ async function resolveAttachments(
       signal,
     );
     if (typeof content !== "string") {
-      throw new Error(
-        `Context attachment did not resolve to string: ${attachment.attachmentId}`,
-      );
+      throw new Error(`Context attachment did not resolve to string: ${attachment.attachmentId}`);
     }
     resolved.push({
       type: attachment.type,
       name: attachment.name,
       content,
-      ...(attachment.mimeType === undefined
-        ? {}
-        : { mimeType: attachment.mimeType }),
+      ...(attachment.mimeType === undefined ? {} : { mimeType: attachment.mimeType }),
     });
   }
   return resolved;
@@ -1299,9 +1176,7 @@ async function resolveVerified(
 ): Promise<JsonValue> {
   if (payload.kind === "artifact_ref") {
     if (!payloadEvidence) {
-      throw new Error(
-        "Context artifact payload requires exact canonical evidence",
-      );
+      throw new Error("Context artifact payload requires exact canonical evidence");
     }
     return payloadEvidence.requirePayload({ snapshot, location, payload });
   }
@@ -1320,9 +1195,7 @@ function requiredSettledSeq(exchange: ToolExchange): number {
   return exchange.settledSeq;
 }
 
-function assertSnapshotOrder(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): void {
+function assertSnapshotOrder(snapshot: SessionInputSnapshot<InputFactV1>): void {
   let previousSeq = 0;
   for (const entry of snapshot.entries) {
     if (entry.seq <= previousSeq || entry.seq > snapshot.tailSeq) {
@@ -1330,17 +1203,12 @@ function assertSnapshotOrder(
     }
     previousSeq = entry.seq;
   }
-  if (
-    snapshot.tailSeq < snapshot.latestInputSeq ||
-    snapshot.latestInputSeq !== previousSeq
-  ) {
+  if (snapshot.tailSeq < snapshot.latestInputSeq || snapshot.latestInputSeq !== previousSeq) {
     throw new Error("Context snapshot latestInputSeq is inconsistent");
   }
 }
 
-function freezeOptions(
-  options: JournalContextOptionsV1,
-): JournalContextOptionsV1 {
+function freezeOptions(options: JournalContextOptionsV1): JournalContextOptionsV1 {
   assertBudget(options.budget);
   if (
     options.loadPayloadEvidence !== undefined &&
@@ -1366,9 +1234,7 @@ function freezeOptions(
   return Object.freeze({
     payloads,
     ...(loadPayloadEvidence === undefined ? {} : { loadPayloadEvidence }),
-    ...(toolObservationProjector === undefined
-      ? {}
-      : { toolObservationProjector }),
+    ...(toolObservationProjector === undefined ? {} : { toolObservationProjector }),
     providerProtocol: options.providerProtocol,
     budget: Object.freeze({
       contextWindowTokens: options.budget.contextWindowTokens,
@@ -1380,9 +1246,7 @@ function freezeOptions(
     }),
     ...(options.system === undefined ? {} : { system: options.system }),
     ...(tools === undefined ? {} : { tools: Object.freeze(tools) }),
-    ...(options.thinkingEnabled === undefined
-      ? {}
-      : { thinkingEnabled: options.thinkingEnabled }),
+    ...(options.thinkingEnabled === undefined ? {} : { thinkingEnabled: options.thinkingEnabled }),
   });
 }
 
@@ -1396,14 +1260,8 @@ function captureToolObservationProjector(
   return Object.freeze({ project: projector.project.bind(projector) });
 }
 
-function capturePayloadResolver(
-  payloads: DurablePayloadResolverV1,
-): DurablePayloadResolverV1 {
-  if (
-    !payloads ||
-    typeof payloads.resolve !== "function" ||
-    typeof payloads.hash !== "function"
-  ) {
+function capturePayloadResolver(payloads: DurablePayloadResolverV1): DurablePayloadResolverV1 {
+  if (!payloads || typeof payloads.resolve !== "function" || typeof payloads.hash !== "function") {
     throw new Error("Context durable payload resolver is invalid");
   }
   return Object.freeze({
@@ -1466,12 +1324,8 @@ function selectTimelineMessages(
   segmentRootPromotionSeq?: number,
   projectMessages?: (indices: ReadonlySet<number>) => readonly ChatMessage[],
 ): TimelineMessageSelectionV1 {
-  const protectedIndices = protectedTimelineIndices(
-    projected,
-    segmentRootPromotionSeq,
-  );
-  const hardInputLimit =
-    budget.contextWindowTokens - budget.reservedOutputTokens;
+  const protectedIndices = protectedTimelineIndices(projected, segmentRootPromotionSeq);
+  const hardInputLimit = budget.contextWindowTokens - budget.reservedOutputTokens;
   const softTarget = hardInputLimit - budget.estimationMarginTokens;
   const estimateSelected = (indices: ReadonlySet<number>): number =>
     estimateRequestInputTokens(
@@ -1506,15 +1360,9 @@ function selectTimelineMessages(
     throw new Error("selected context budget exceeds window");
   }
   const selectedIndices = [...selected].sort((left, right) => left - right);
-  const protectedIndicesInOrder = [...protectedIndices].sort(
-    (left, right) => left - right,
-  );
-  const omittedIndices = projected.flatMap((_item, index) =>
-    selected.has(index) ? [] : [index],
-  );
-  const fullInputTokens = estimateSelected(
-    new Set(projected.map((_item, index) => index)),
-  );
+  const protectedIndicesInOrder = [...protectedIndices].sort((left, right) => left - right);
+  const omittedIndices = projected.flatMap((_item, index) => (selected.has(index) ? [] : [index]));
+  const fullInputTokens = estimateSelected(new Set(projected.map((_item, index) => index)));
   const selectedInputTokens = estimateSelected(selected);
   return {
     messages: Object.freeze(
@@ -1555,8 +1403,7 @@ function protectedTimelineUnitIndices(
   else if (firstInputIndex >= 0) protectedIndices.add(firstInputIndex);
   if (segmentRootPromotionSeq !== undefined) {
     const segmentRootIndex = timeline.findIndex(
-      (unit) =>
-        unit.kind === "input" && unit.sourceSeq === segmentRootPromotionSeq,
+      (unit) => unit.kind === "input" && unit.sourceSeq === segmentRootPromotionSeq,
     );
     if (segmentRootIndex < 0) {
       throw new Error("Context current work segment root is not visible");
@@ -1609,18 +1456,11 @@ function contextCategoryEstimates(
   };
   for (const message of request.messages)
     add(
-      message.role === "system"
-        ? "system"
-        : message.role === "user"
-          ? "input"
-          : "conversation",
+      message.role === "system" ? "system" : message.role === "user" ? "input" : "conversation",
       estimator.countMessages([message]),
     );
   if (request.options?.tools?.length)
-    add(
-      "tools",
-      estimator.count(canonicalUnknownStringify(request.options.tools)),
-    );
+    add("tools", estimator.count(canonicalUnknownStringify(request.options.tools)));
   for (const section of request.contextSections ?? [])
     add(
       section.kind,
@@ -1658,17 +1498,11 @@ function estimateRequestInputTokens(
   tools: readonly ToolDefinition[] | undefined,
   estimator: ContextTokenEstimatorV1,
 ): number {
-  const messagesTokens = assertTokenEstimate(
-    estimator.countMessages(messages),
-    "messages",
-  );
+  const messagesTokens = assertTokenEstimate(estimator.countMessages(messages), "messages");
   const toolTokens =
     tools === undefined || tools.length === 0
       ? 0
-      : assertTokenEstimate(
-          estimator.count(canonicalUnknownStringify(tools)),
-          "tools",
-        );
+      : assertTokenEstimate(estimator.count(canonicalUnknownStringify(tools)), "tools");
   return messagesTokens + toolTokens;
 }
 
@@ -1680,11 +1514,7 @@ function assertTokenEstimate(value: number, source: string): number {
 }
 
 function canonicalUnknownStringify(value: unknown): string {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return JSON.stringify(value);
   }
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -1697,10 +1527,7 @@ function canonicalUnknownStringify(value: unknown): string {
     const record = value as Readonly<Record<string, unknown>>;
     return `{${Object.keys(record)
       .sort()
-      .map(
-        (key) =>
-          `${JSON.stringify(key)}:${canonicalUnknownStringify(record[key])}`,
-      )
+      .map((key) => `${JSON.stringify(key)}:${canonicalUnknownStringify(record[key])}`)
       .join(",")}}`;
   }
   throw new Error("Context tool definition is not JSON-serializable");

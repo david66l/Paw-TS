@@ -8,15 +8,7 @@ import type { FileChangeItem, ToolRunRow } from "./types";
 export function summarizeToolCallArgs(args: unknown): string {
   if (args === null || typeof args !== "object") return "";
   const o = args as Record<string, unknown>;
-  for (const key of [
-    "path",
-    "relPath",
-    "file",
-    "command",
-    "query",
-    "goal",
-    "url",
-  ]) {
+  for (const key of ["path", "relPath", "file", "command", "query", "goal", "url"]) {
     const v = o[key];
     if (typeof v === "string" && v.trim()) {
       const t = v.trim();
@@ -27,10 +19,7 @@ export function summarizeToolCallArgs(args: unknown): string {
 }
 
 /** tool.result → 卡片行状态；拒绝是 ok=false 的特定摘要 */
-export function toolRowStatusFromResult(
-  ok: boolean,
-  summary: string,
-): ToolRunRow["status"] {
+export function toolRowStatusFromResult(ok: boolean, summary: string): ToolRunRow["status"] {
   if (!ok && /denied|拒绝/i.test(summary)) return "denied";
   return ok ? "ok" : "fail";
 }
@@ -52,10 +41,7 @@ export function mergeFileChanges(
     } else {
       const cur = next[idx]!;
       // diff 拼接：多次 edit 各产一段 unified diff，全部保留才能看到完整改动
-      const diff =
-        cur.diff && inc.diff
-          ? `${cur.diff}\n${inc.diff}`
-          : (inc.diff ?? cur.diff);
+      const diff = cur.diff && inc.diff ? `${cur.diff}\n${inc.diff}` : (inc.diff ?? cur.diff);
       next[idx] = {
         path: cur.path,
         added: cur.added + inc.added,

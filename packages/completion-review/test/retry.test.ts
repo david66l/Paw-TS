@@ -60,14 +60,10 @@ test("timeout retries the same candidate once with distinct durable identities a
     },
   };
   expect(
-    await createCompletionReviewControllerV1(options).review(candidate, [
-      "user_requested",
-    ]),
+    await createCompletionReviewControllerV1(options).review(candidate, ["user_requested"]),
   ).toMatchObject({ verdict: "allow" });
   expect(
-    await createCompletionReviewControllerV1(options).review(candidate, [
-      "user_requested",
-    ]),
+    await createCompletionReviewControllerV1(options).review(candidate, ["user_requested"]),
   ).toMatchObject({ verdict: "allow" });
   expect(attempts).toEqual([0, 1]);
   const claims = facts.filter((f) => f.type === "completion.review_claimed");
@@ -108,14 +104,10 @@ test("a crash between attempts resumes the retry without repeating the first rev
     },
   };
   await expect(
-    createCompletionReviewControllerV1(options).review(candidate, [
-      "user_requested",
-    ]),
+    createCompletionReviewControllerV1(options).review(candidate, ["user_requested"]),
   ).rejects.toThrow("simulated crash");
   expect(
-    await createCompletionReviewControllerV1(options).review(candidate, [
-      "user_requested",
-    ]),
+    await createCompletionReviewControllerV1(options).review(candidate, ["user_requested"]),
   ).toMatchObject({ verdict: "allow" });
   expect(attempts).toEqual([0, 1]);
 });
@@ -137,9 +129,7 @@ test("exhaustion stays unknown across controller recreation instead of replenish
   };
   for (let i = 0; i < 3; i++)
     expect(
-      await createCompletionReviewControllerV1(options).review(candidate, [
-        "user_requested",
-      ]),
+      await createCompletionReviewControllerV1(options).review(candidate, ["user_requested"]),
     ).toMatchObject({ status: "unknown", reasonCode: "AuditTimeout" });
   expect(calls).toBe(2);
   expect(facts).toHaveLength(4);
@@ -172,11 +162,7 @@ test("input arriving between the retry guard and claim wins without a second mod
   const commit = session.commitInputFacts.bind(session);
   session.commitInputFacts = async (tail, next) => {
     if (
-      next.some(
-        (f) =>
-          f.type === "completion.review_claimed" &&
-          f.reviewId.endsWith("-retry-1"),
-      )
+      next.some((f) => f.type === "completion.review_claimed" && f.reviewId.endsWith("-retry-1"))
     ) {
       facts.push({
         type: "input.accepted",
@@ -205,9 +191,7 @@ test("input arriving between the retry guard and claim wins without a second mod
   }).review(candidate, ["user_requested"]);
   expect(result.reasonCode).toBe("AuditTimeout");
   expect(calls).toBe(1);
-  expect(
-    facts.filter((f) => f.type === "completion.review_claimed"),
-  ).toHaveLength(1);
+  expect(facts.filter((f) => f.type === "completion.review_claimed")).toHaveLength(1);
   expect(facts.at(-1)?.type).toBe("input.accepted");
 });
 

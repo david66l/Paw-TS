@@ -36,26 +36,10 @@ body::before {
   inset: -20%;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(
-      42% 36% at 12% 18%,
-      rgba(110, 160, 255, 0.38) 0%,
-      transparent 70%
-    ),
-    radial-gradient(
-      38% 32% at 88% 12%,
-      rgba(180, 130, 255, 0.28) 0%,
-      transparent 68%
-    ),
-    radial-gradient(
-      48% 40% at 55% 92%,
-      rgba(70, 200, 255, 0.2) 0%,
-      transparent 65%
-    ),
-    radial-gradient(
-      28% 24% at 72% 48%,
-      rgba(255, 255, 255, 0.55) 0%,
-      transparent 70%
-    );
+  background: radial-gradient(42% 36% at 12% 18%, rgba(110, 160, 255, 0.38) 0%, transparent 70%),
+    radial-gradient(38% 32% at 88% 12%, rgba(180, 130, 255, 0.28) 0%, transparent 68%),
+    radial-gradient(48% 40% at 55% 92%, rgba(70, 200, 255, 0.2) 0%, transparent 65%),
+    radial-gradient(28% 24% at 72% 48%, rgba(255, 255, 255, 0.55) 0%, transparent 70%);
   filter: blur(2px);
   animation: liquidDrift 28s ease-in-out infinite alternate;
 }

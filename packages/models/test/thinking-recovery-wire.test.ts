@@ -8,8 +8,7 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
-const encode = (value: unknown) =>
-  new TextEncoder().encode(`data: ${JSON.stringify(value)}\n\n`);
+const encode = (value: unknown) => new TextEncoder().encode(`data: ${JSON.stringify(value)}\n\n`);
 const model = () =>
   new OpenAICompatibleModel({
     apiKey: "test-only",
@@ -150,9 +149,7 @@ test("real raw SSE tool fragments keep an unfinished argument stream alive", asy
                   choices: [
                     {
                       delta: {
-                        tool_calls: [
-                          { index: 0, function: { arguments: '"ok"}' } },
-                        ],
+                        tool_calls: [{ index: 0, function: { arguments: '"ok"}' } }],
                       },
                     },
                   ],
@@ -201,11 +198,9 @@ test("rescue retry signals supervision to reset the reasoning-only window", asyn
                   choices: [{ delta: { reasoning_content: "stall" } }],
                 }),
               );
-              init?.signal?.addEventListener(
-                "abort",
-                () => controller.error(init.signal?.reason),
-                { once: true },
-              );
+              init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), {
+                once: true,
+              });
             },
           }),
         );
@@ -235,9 +230,7 @@ test("rescue retry signals supervision to reset the reasoning-only window", asyn
                 ],
               }),
             );
-            controller.enqueue(
-              encode({ choices: [{ delta: {}, finish_reason: "tool_calls" }] }),
-            );
+            controller.enqueue(encode({ choices: [{ delta: {}, finish_reason: "tool_calls" }] }));
             controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
             controller.close();
           },

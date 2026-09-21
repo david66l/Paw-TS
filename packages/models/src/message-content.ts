@@ -73,7 +73,7 @@ function imageDataUrl(att: Attachment): string {
  * 默认 fallback 为 image/png。
  */
 function anthropicImageMediaType(att: Attachment): string {
-  if (att.mimeType && att.mimeType.startsWith("image/")) {
+  if (att.mimeType?.startsWith("image/")) {
     return att.mimeType;
   }
   const lower = att.name.toLowerCase();
@@ -95,9 +95,7 @@ function anthropicImageMediaType(att: Attachment): string {
  * 否则直接返回原始内容（假定已是纯 base64）。
  */
 function anthropicImageData(att: Attachment): string {
-  const raw = att.content.startsWith("data:")
-    ? (att.content.split(",", 2)[1] ?? "")
-    : att.content;
+  const raw = att.content.startsWith("data:") ? (att.content.split(",", 2)[1] ?? "") : att.content;
   return raw;
 }
 
@@ -114,9 +112,7 @@ function anthropicImageData(att: Attachment): string {
  *   - 其他附件：`{type:"text", text:"[File: name]\ncontent"}`
  * - 优化：如果最终只有一个文本 part，回退为纯字符串
  */
-export function buildOpenAiMessageContent(
-  message: ChatMessage,
-): string | OpenAiContentPart[] {
+export function buildOpenAiMessageContent(message: ChatMessage): string | OpenAiContentPart[] {
   if (!message.attachments?.length) {
     return message.content;
   }
@@ -156,9 +152,7 @@ export function buildOpenAiMessageContent(
  *
  * 同样支持单文本 block 优化为纯字符串。
  */
-export function buildAnthropicUserContent(
-  message: ChatMessage,
-): string | AnthropicContentBlock[] {
+export function buildAnthropicUserContent(message: ChatMessage): string | AnthropicContentBlock[] {
   if (!message.attachments?.length) {
     return message.content;
   }

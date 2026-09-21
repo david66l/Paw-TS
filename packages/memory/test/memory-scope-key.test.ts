@@ -27,8 +27,7 @@ import {
 } from "../src/runtime/memory-runtime-v2.js";
 import { resolveScope } from "../src/runtime/scope.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const scopeA = createMemoryScopeKey({
   tenantId: "tenant-a",
@@ -64,21 +63,17 @@ function fact(): SemanticFact {
 describe("MemoryScopeKey", () => {
   test("same repository content receives distinct physical IDs by tenant", () => {
     expect(sameMemoryScope(scopeA, scopeB)).toBe(false);
-    expect(memoryScopeFingerprint(scopeA)).not.toBe(
-      memoryScopeFingerprint(scopeB),
-    );
-    expect(deriveEntryId(fact(), scopeA)).not.toBe(
-      deriveEntryId(fact(), scopeB),
-    );
+    expect(memoryScopeFingerprint(scopeA)).not.toBe(memoryScopeFingerprint(scopeB));
+    expect(deriveEntryId(fact(), scopeA)).not.toBe(deriveEntryId(fact(), scopeB));
   });
 
   test("rejects empty or control-character identity parts", () => {
     expect(() => createMemoryScopeKey({ ...scopeA, tenantId: "  " })).toThrow(
       "Invalid memory scope tenantId",
     );
-    expect(() =>
-      createMemoryScopeKey({ ...scopeA, userId: "bad\nuser" }),
-    ).toThrow("Invalid memory scope userId");
+    expect(() => createMemoryScopeKey({ ...scopeA, userId: "bad\nuser" })).toThrow(
+      "Invalid memory scope userId",
+    );
   });
 
   test("runtime resolves tenant/user/workspace/repository as one key", () => {
@@ -144,9 +139,7 @@ describe("MemoryScopeKey", () => {
     });
     expect(getMemoryV2CoreForTests(scopeA)).not.toBeNull();
     expect(getMemoryV2CoreForTests(scopeB)).not.toBeNull();
-    expect(getMemoryV2CoreForTests(scopeA)).not.toBe(
-      getMemoryV2CoreForTests(scopeB),
-    );
+    expect(getMemoryV2CoreForTests(scopeA)).not.toBe(getMemoryV2CoreForTests(scopeB));
     await runtimeA.shutdown();
     await runtimeB.shutdown();
     expect(getMemoryV2CoreForTests(scopeA)).toBeNull();
@@ -183,12 +176,8 @@ describe("MemoryScopeKey", () => {
       expect(idA).not.toBe(idB);
       expect(await engineA.get(idA)).not.toBeNull();
       expect(await engineA.get(idB)).toBeNull();
-      expect(
-        (await engineA.query({ limit: 20 })).map((entry) => entry.id),
-      ).toContain(idA);
-      expect(
-        (await engineA.query({ limit: 20 })).map((entry) => entry.id),
-      ).not.toContain(idB);
+      expect((await engineA.query({ limit: 20 })).map((entry) => entry.id)).toContain(idA);
+      expect((await engineA.query({ limit: 20 })).map((entry) => entry.id)).not.toContain(idB);
 
       await engineB.invalidate(idA, new Date().toISOString());
       await engineB.bumpLedger(idA, "freq");
@@ -201,25 +190,15 @@ describe("MemoryScopeKey", () => {
       `;
       expect(stored[0]?.scope).toEqual(a);
 
-      const trialA = await addTrialLesson(
-        "I should isolate tenant state.",
-        runA,
-        {
-          scope: a,
-        },
-      );
-      const trialB = await addTrialLesson(
-        "I should isolate tenant state.",
-        runA,
-        {
-          scope: b,
-        },
-      );
+      const trialA = await addTrialLesson("I should isolate tenant state.", runA, {
+        scope: a,
+      });
+      const trialB = await addTrialLesson("I should isolate tenant state.", runA, {
+        scope: b,
+      });
       expect(trialA.id).not.toBe(trialB.id);
       expect(await getTrialLesson(trialA.id, b)).toBeNull();
-      expect(
-        (await listTrialLessons(undefined, a)).map((trial) => trial.id),
-      ).toEqual([trialA.id]);
+      expect((await listTrialLessons(undefined, a)).map((trial) => trial.id)).toEqual([trialA.id]);
 
       const pipelineA = new MemoryWritePipeline({ scope: a, engine: engineA });
       const pipelineB = new MemoryWritePipeline({ scope: b, engine: engineB });

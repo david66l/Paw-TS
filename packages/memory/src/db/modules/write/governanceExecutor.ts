@@ -11,12 +11,7 @@ import { getSql } from "../../connection.js";
 import { governanceDecisionDao } from "../../dao/governanceDecision.js";
 import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
 import { memoryItemDao } from "../../dao/memoryItem.js";
-import type {
-  GovernanceDecision,
-  MemoryItem,
-  MemoryStatus,
-  ScopeDescriptor,
-} from "../../types.js";
+import type { GovernanceDecision, MemoryItem, MemoryStatus, ScopeDescriptor } from "../../types.js";
 import {
   MEMORY_EMBEDDING_DIMENSIONS,
   NGramEmbeddingService,
@@ -117,9 +112,7 @@ export class GovernanceExecutor {
     }
   }
 
-  private async executeAction(
-    decision: GovernanceDecision,
-  ): Promise<ExecutionResult> {
+  private async executeAction(decision: GovernanceDecision): Promise<ExecutionResult> {
     const candidate = await memoryCandidateDao.findById(decision.candidateId);
     if (!candidate) return { success: false, reason: "Candidate not found" };
 
@@ -132,9 +125,7 @@ export class GovernanceExecutor {
           id: memoryId,
           schemaVersion: 1,
           type: decision.adjustedType ?? candidate.proposedType,
-          subjectKey:
-            candidate.proposedSubjectKey ??
-            `${candidate.proposedType}:${memoryId}`,
+          subjectKey: candidate.proposedSubjectKey ?? `${candidate.proposedType}:${memoryId}`,
           subjectKeyVersion: candidate.subjectKeyVersion,
           title: candidate.proposedTitle,
           summary: candidate.proposedSummary,
@@ -142,12 +133,10 @@ export class GovernanceExecutor {
           scope:
             (decision.adjustedScope as ScopeDescriptor) ??
             (candidate.proposedScope as ScopeDescriptor),
-          confidence:
-            decision.adjustedConfidence ?? candidate.proposedConfidence,
+          confidence: decision.adjustedConfidence ?? candidate.proposedConfidence,
           verificationStatus: "unverified" as const,
           payload:
-            (decision.adjustedPayload as Record<string, unknown>) ??
-            candidate.proposedPayload,
+            (decision.adjustedPayload as Record<string, unknown>) ?? candidate.proposedPayload,
           tags: [] as string[],
           relatedFiles: [] as string[],
           relatedSymbols: [] as string[],
@@ -169,9 +158,7 @@ export class GovernanceExecutor {
 
         // 异步生成 embedding
         try {
-          const embedder = new NGramEmbeddingService(
-            MEMORY_EMBEDDING_DIMENSIONS,
-          );
+          const embedder = new NGramEmbeddingService(MEMORY_EMBEDDING_DIMENSIONS);
           await storeEmbedding(
             memoryId,
             "1",
@@ -186,30 +173,21 @@ export class GovernanceExecutor {
 
       case "APPROVE_UPDATE": {
         const targetId = decision.targetMemoryId;
-        if (!targetId)
-          return { success: false, reason: "Missing targetMemoryId" };
+        if (!targetId) return { success: false, reason: "Missing targetMemoryId" };
 
         const existing = await memoryItemDao.findById(targetId);
-        if (!existing)
-          return { success: false, reason: `Memory ${targetId} not found` };
+        if (!existing) return { success: false, reason: `Memory ${targetId} not found` };
 
         const patch: Parameters<typeof memoryItemDao.update>[2] = {};
         if (decision.adjustedPayload)
           patch.payload = decision.adjustedPayload as Record<string, unknown>;
         if (decision.adjustedConfidence !== undefined)
           patch.confidence = decision.adjustedConfidence;
-        if (decision.resultingStatus)
-          patch.status = decision.resultingStatus as MemoryStatus;
-        if (decision.adjustedScope)
-          patch.scope = decision.adjustedScope as ScopeDescriptor;
+        if (decision.resultingStatus) patch.status = decision.resultingStatus as MemoryStatus;
+        if (decision.adjustedScope) patch.scope = decision.adjustedScope as ScopeDescriptor;
 
-        const updated = await memoryItemDao.update(
-          targetId,
-          existing.version,
-          patch,
-        );
-        if (!updated)
-          return { success: false, reason: "Update failed (version conflict)" };
+        const updated = await memoryItemDao.update(targetId, existing.version, patch);
+        if (!updated) return { success: false, reason: "Update failed (version conflict)" };
         return {
           success: true,
           memoryId: targetId,
@@ -219,24 +197,18 @@ export class GovernanceExecutor {
 
       case "APPROVE_MERGE": {
         const targetId = decision.targetMemoryId;
-        if (!targetId)
-          return { success: false, reason: "Missing targetMemoryId" };
+        if (!targetId) return { success: false, reason: "Missing targetMemoryId" };
 
         const existing = await memoryItemDao.findById(targetId);
-        if (!existing)
-          return { success: false, reason: `Memory ${targetId} not found` };
+        if (!existing) return { success: false, reason: `Memory ${targetId} not found` };
 
-        const newConfidence =
-          (existing.confidence + (decision.adjustedConfidence ?? 0.5)) / 2;
+        const newConfidence = (existing.confidence + (decision.adjustedConfidence ?? 0.5)) / 2;
         const updated = await memoryItemDao.update(targetId, existing.version, {
           confidence: newConfidence,
           verificationStatus:
-            existing.verificationStatus === "verified"
-              ? "verified"
-              : "partially_verified",
+            existing.verificationStatus === "verified" ? "verified" : "partially_verified",
         });
-        if (!updated)
-          return { success: false, reason: "Merge failed (version conflict)" };
+        if (!updated) return { success: false, reason: "Merge failed (version conflict)" };
 
         await memoryCandidateDao.updateStatus(candidate.id, "promoted");
         return {

@@ -47,10 +47,7 @@ function promoted(seq: number): unknown {
   );
 }
 
-function recordedCheckpoint(
-  seq = 3,
-  overrides: Readonly<Record<string, unknown>> = {},
-): unknown {
+function recordedCheckpoint(seq = 3, overrides: Readonly<Record<string, unknown>> = {}): unknown {
   return factEnvelope(
     {
       type: "context.checkpoint_recorded",
@@ -149,12 +146,10 @@ describe("task checkpoint v1", () => {
       }),
     ).toBe(false);
 
-    expect(() => parseTaskCheckpointV1(checkpoint([2, 2]))).toThrow(
-      "strictly increasing",
+    expect(() => parseTaskCheckpointV1(checkpoint([2, 2]))).toThrow("strictly increasing");
+    expect(() => parseTaskCheckpointV1({ ...checkpoint(), summary: "unversioned" })).toThrow(
+      "is not allowed",
     );
-    expect(() =>
-      parseTaskCheckpointV1({ ...checkpoint(), summary: "unversioned" }),
-    ).toThrow("is not allowed");
   });
 
   test("rejects evidence outside the declared source range", () => {
@@ -294,11 +289,7 @@ describe("task checkpoint v1", () => {
 
   test("rejects missing, duplicate, or malformed distillation settlements", () => {
     expect(() =>
-      parseRunJournalPrefixV1([
-        promoted(1),
-        promoted(2),
-        distillationSettlement(3),
-      ]),
+      parseRunJournalPrefixV1([promoted(1), promoted(2), distillationSettlement(3)]),
     ).toThrow("has no claim");
     expect(() =>
       parseRunJournalPrefixV1([

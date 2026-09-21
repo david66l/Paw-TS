@@ -55,9 +55,7 @@ function remapToolPolicy(tool: ToolPolicy, askToAllow: boolean): ToolPolicy {
 }
 
 /** Build a PolicyConfig for the given autonomy shell level (does not apply it). */
-export function buildAutonomyShellPolicy(
-  level: AutonomyShellLevel,
-): PolicyConfig {
+export function buildAutonomyShellPolicy(level: AutonomyShellLevel): PolicyConfig {
   const base = createBuiltinPolicyConfig();
   if (level === "interactive" || level === "supervised") {
     return base;

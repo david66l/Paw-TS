@@ -8,10 +8,7 @@ afterEach(() => {
   global.fetch = originalFetch;
 });
 
-function mockJson(
-  responseBody: unknown,
-  captured: Array<Record<string, unknown>>,
-): typeof fetch {
+function mockJson(responseBody: unknown, captured: Array<Record<string, unknown>>): typeof fetch {
   return Object.assign(
     async (_input: string | URL | Request, init?: RequestInit) => {
       captured.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
@@ -47,8 +44,7 @@ describe("OpenAI native tool turns", () => {
         choices: [
           {
             message: {
-              content:
-                "<think>inline audit only</think>I will inspect both files.",
+              content: "<think>inline audit only</think>I will inspect both files.",
               reasoning_content: "provider-exact-passback",
               tool_calls: [
                 {
@@ -86,10 +82,7 @@ describe("OpenAI native tool turns", () => {
     expect(result.thinking).toContain("inline audit only");
     expect(result.thinking).toContain("provider-exact-passback");
     expect(result.reasoningPassback).toBe("provider-exact-passback");
-    expect(result.toolCalls?.map((call) => call.id)).toEqual([
-      "provider-a",
-      "provider-b",
-    ]);
+    expect(result.toolCalls?.map((call) => call.id)).toEqual(["provider-a", "provider-b"]);
     expect(result.toolCalls?.map((call) => call.rawArguments)).toEqual([
       '{ "path": "a.ts", "line": 1 }',
       '{"line":1,"path":"a.ts"}',
@@ -119,9 +112,7 @@ describe("OpenAI native tool turns", () => {
       sourceIndex?: number;
     }> = [];
 
-    for await (const chunk of model.completeStream([
-      { role: "user", content: "go" },
-    ])) {
+    for await (const chunk of model.completeStream([{ role: "user", content: "go" }])) {
       if (chunk.type === "tool_use") calls.push(chunk);
     }
 
@@ -160,9 +151,7 @@ describe("OpenAI native tool turns", () => {
     let audit = "";
     let passback = "";
 
-    for await (const chunk of model.completeStream([
-      { role: "user", content: "go" },
-    ])) {
+    for await (const chunk of model.completeStream([{ role: "user", content: "go" }])) {
       if (chunk.type === "thinking") audit += chunk.delta;
       if (chunk.type === "reasoning_passback") passback += chunk.delta;
     }
@@ -205,9 +194,9 @@ describe("OpenAI native tool turns", () => {
         apiKey: "test",
         model: "deepseek-v4-flash",
       });
-      await expect(
-        model.complete([{ role: "user", content: "go" }]),
-      ).rejects.toThrow("OpenAI-compatible");
+      await expect(model.complete([{ role: "user", content: "go" }])).rejects.toThrow(
+        "OpenAI-compatible",
+      );
     }
   });
 
@@ -240,9 +229,9 @@ describe("OpenAI native tool turns", () => {
         apiKey: "test",
         model: "deepseek-v4-flash",
       });
-      await expect(
-        drain(model.completeStream([{ role: "user", content: "go" }])),
-      ).rejects.toThrow("OpenAI-compatible");
+      await expect(drain(model.completeStream([{ role: "user", content: "go" }]))).rejects.toThrow(
+        "OpenAI-compatible",
+      );
     }
   });
 
@@ -262,9 +251,9 @@ describe("OpenAI native tool turns", () => {
       model: "deepseek-v4-flash",
     });
 
-    await expect(
-      drain(model.completeStream([{ role: "user", content: "go" }])),
-    ).rejects.toThrow("invalid JSON stream payload");
+    await expect(drain(model.completeStream([{ role: "user", content: "go" }]))).rejects.toThrow(
+      "invalid JSON stream payload",
+    );
   });
 
   test("complete marks malformed raw arguments instead of executing an empty object", async () => {
@@ -379,14 +368,10 @@ describe("OpenAI native tool turns", () => {
     let streamAttempt = 0;
     global.fetch = Object.assign(
       async (_input: string | URL | Request, init?: RequestInit) => {
-        captured.push(
-          JSON.parse(String(init?.body)) as Record<string, unknown>,
-        );
+        captured.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
         streamAttempt += 1;
         if (streamAttempt === 1) return new Response("retry", { status: 400 });
-        return streamResponse(
-          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
-        );
+        return streamResponse('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n');
       },
       { preconnect: originalFetch.preconnect },
     ) as typeof fetch;
@@ -420,9 +405,7 @@ describe("OpenAI native tool turns", () => {
       { role: "user", content: "continue" },
     ]);
 
-    const messages = captured[0]?.messages as
-      | Array<Record<string, unknown>>
-      | undefined;
+    const messages = captured[0]?.messages as Array<Record<string, unknown>> | undefined;
     expect(messages?.[0]).toEqual({
       role: "assistant",
       content: "I need one more turn",
@@ -449,8 +432,6 @@ describe("OpenAI native tool turns", () => {
       } as unknown as import("../src/types.js").ChatMessage,
     ]);
 
-    expect(captured[0]?.messages).toEqual([
-      { role: "assistant", content: "safe fallback" },
-    ]);
+    expect(captured[0]?.messages).toEqual([{ role: "assistant", content: "safe fallback" }]);
   });
 });

@@ -1,10 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ChatMessage } from "../src/context/manager.js";
-import {
-  ApproximateEstimator,
-  FastEstimator,
-  TiktokenEstimator,
-} from "../src/token-estimator.js";
+import { ApproximateEstimator, FastEstimator, TiktokenEstimator } from "../src/token-estimator.js";
 
 describe("TiktokenEstimator", () => {
   const estimator = new TiktokenEstimator();
@@ -49,9 +45,7 @@ describe("TiktokenEstimator", () => {
       {
         role: "user",
         content: "What is this?",
-        attachments: [
-          { type: "image", name: "img.png", content: "base64data" },
-        ],
+        attachments: [{ type: "image", name: "img.png", content: "base64data" }],
       },
     ];
     const tokens = estimator.countMessages(messages);
@@ -107,9 +101,7 @@ describe("TiktokenEstimator", () => {
       "true",
       "tool failure evidence",
     ];
-    expect(native).toBe(
-      expectedFields.reduce((total, field) => total + fast.count(field), 0),
-    );
+    expect(native).toBe(expectedFields.reduce((total, field) => total + fast.count(field), 0));
     // assistantContent is the same carrier as message.content, not a second copy.
     expect(native).toBeLessThan(
       expectedFields.reduce((total, field) => total + fast.count(field), 0) +

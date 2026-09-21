@@ -21,9 +21,7 @@ import {
 
 const RUN_ID = "loop-v2-certification";
 
-function terminalPatch(
-  patch = "diff --git a/src/public.ts b/src/public.ts\n+fixed",
-) {
+function terminalPatch(patch = "diff --git a/src/public.ts b/src/public.ts\n+fixed") {
   return {
     patch,
     patchHash: sha256Canonical(patch),
@@ -31,10 +29,7 @@ function terminalPatch(
   };
 }
 
-function append(
-  state: WorkingDecisionStateV2,
-  event: LoopV2Event,
-): WorkingDecisionStateV2 {
+function append(state: WorkingDecisionStateV2, event: LoopV2Event): WorkingDecisionStateV2 {
   return projectLoopV2Event(state, {
     schemaVersion: LOOP_V2_SCHEMA_VERSION,
     runId: RUN_ID,
@@ -152,16 +147,11 @@ describe("Loop Kernel v2 candidate certification", () => {
     ]);
     const hash = candidateInputHashV2(input);
 
-    expect(input.snapshotHashes.map((snapshot) => snapshot.path)).toEqual([
-      "src/a.ts",
-      "src/z.ts",
-    ]);
+    expect(input.snapshotHashes.map((snapshot) => snapshot.path)).toEqual(["src/a.ts", "src/z.ts"]);
     expect(JSON.stringify(input)).not.toContain("proposedSummary");
     expect(JSON.stringify(input)).not.toContain("deliberation");
     expect(candidateInputHashV2(input)).toBe(hash);
-    expect(semanticReviewKeyV2(1, hash)).toBe(
-      semanticReviewKeyV2(input.mutationRevision, hash),
-    );
+    expect(semanticReviewKeyV2(1, hash)).toBe(semanticReviewKeyV2(input.mutationRevision, hash));
   });
 
   test("is ready on current host evidence while keeping external authority pending", () => {
@@ -170,12 +160,8 @@ describe("Loop Kernel v2 candidate certification", () => {
     expect(readiness.disposition).toBe("ready_for_review");
     expect(readiness.readyForSemanticReview).toBeTrue();
     expect(readiness.gaps).toEqual([]);
-    expect(readiness.pendingExternalCriterionIds).toEqual([
-      "criterion-external",
-    ]);
-    expect(readiness.currentAuthoritativeVerificationIds).toEqual([
-      "verify-r1",
-    ]);
+    expect(readiness.pendingExternalCriterionIds).toEqual(["criterion-external"]);
+    expect(readiness.currentAuthoritativeVerificationIds).toEqual(["verify-r1"]);
   });
 
   test("external code failure remains visible but does not replace patched review authority", () => {
@@ -210,9 +196,7 @@ describe("Loop Kernel v2 candidate certification", () => {
     expect(external.localVerification).toBe("code_failed");
     expect(external.readyForSemanticReview).toBeTrue();
     expect(external.gaps).toEqual([]);
-    expect(external.pendingExternalCriterionIds).toEqual([
-      "criterion-external",
-    ]);
+    expect(external.pendingExternalCriterionIds).toEqual(["criterion-external"]);
   });
 
   test("external authority still requires one current local verification attempt", () => {
@@ -220,11 +204,9 @@ describe("Loop Kernel v2 candidate certification", () => {
       ...baseState(),
       verification: {},
     };
-    const readiness = evaluateCandidateReadinessV2(
-      withoutVerification,
-      artifact,
-      { verificationAuthority: "external" },
-    );
+    const readiness = evaluateCandidateReadinessV2(withoutVerification, artifact, {
+      verificationAuthority: "external",
+    });
     expect(readiness.readyForSemanticReview).toBeFalse();
     expect(readiness.localVerification).toBe("missing");
     expect(readiness.gaps).toContainEqual(
@@ -290,9 +272,7 @@ describe("Loop Kernel v2 candidate certification", () => {
         criterionId: "criterion-public",
       }),
     );
-    expect(stale.gaps).toContainEqual(
-      expect.objectContaining({ code: "verification_missing" }),
-    );
+    expect(stale.gaps).toContainEqual(expect.objectContaining({ code: "verification_missing" }));
 
     state = append(state, {
       type: "verification.recorded",
@@ -337,9 +317,7 @@ describe("Loop Kernel v2 candidate certification", () => {
       crossCheck: "mismatch",
     });
     expect(mismatch.readyForSemanticReview).toBeFalse();
-    expect(mismatch.gaps.map((gap) => gap.code)).toContain(
-      "artifact_cross_check_mismatch",
-    );
+    expect(mismatch.gaps.map((gap) => gap.code)).toContain("artifact_cross_check_mismatch");
   });
 
   test("a current substantive pass survives an additional harness failure", () => {
@@ -362,9 +340,7 @@ describe("Loop Kernel v2 candidate certification", () => {
 
     const readiness = evaluateCandidateReadinessV2(state, artifact);
     expect(readiness.readyForSemanticReview).toBeTrue();
-    expect(readiness.currentAuthoritativeVerificationIds).toEqual([
-      "verify-r1",
-    ]);
+    expect(readiness.currentAuthoritativeVerificationIds).toEqual(["verify-r1"]);
   });
 
   test("R05 reviews one semantic candidate once across six different summaries", async () => {
@@ -382,25 +358,18 @@ describe("Loop Kernel v2 candidate certification", () => {
     );
     let ledger: SemanticReviewLedgerV2 = createSemanticReviewLedgerV2();
     let calls = 0;
-    const summaries = Array.from(
-      { length: 6 },
-      (_, index) => `Final summary wording ${index + 1}`,
-    );
+    const summaries = Array.from({ length: 6 }, (_, index) => `Final summary wording ${index + 1}`);
 
     for (const _summary of summaries) {
-      const result = await reviewCandidateOnceV2(
-        ledger,
-        payload,
-        async (value) => {
-          calls += 1;
-          return {
-            candidateInputHash: value.candidateInputHash,
-            mutationRevision: value.input.mutationRevision,
-            verdict: "pass",
-            findings: [],
-          };
-        },
-      );
+      const result = await reviewCandidateOnceV2(ledger, payload, async (value) => {
+        calls += 1;
+        return {
+          candidateInputHash: value.candidateInputHash,
+          mutationRevision: value.input.mutationRevision,
+          verdict: "pass",
+          findings: [],
+        };
+      });
       ledger = result.ledger;
     }
 
@@ -409,28 +378,16 @@ describe("Loop Kernel v2 candidate certification", () => {
   });
 
   test("R18 records malformed reviewer output once as partial and never retries", async () => {
-    const payload = buildCandidateReviewPayloadV2(
-      baseState(),
-      [],
-      terminalPatch(),
-    );
+    const payload = buildCandidateReviewPayloadV2(baseState(), [], terminalPatch());
     let calls = 0;
-    const first = await reviewCandidateOnceV2(
-      createSemanticReviewLedgerV2(),
-      payload,
-      async () => {
-        calls += 1;
-        return { verdict: "looks-good" };
-      },
-    );
-    const second = await reviewCandidateOnceV2(
-      first.ledger,
-      payload,
-      async () => {
-        calls += 1;
-        throw new Error("must not run");
-      },
-    );
+    const first = await reviewCandidateOnceV2(createSemanticReviewLedgerV2(), payload, async () => {
+      calls += 1;
+      return { verdict: "looks-good" };
+    });
+    const second = await reviewCandidateOnceV2(first.ledger, payload, async () => {
+      calls += 1;
+      throw new Error("must not run");
+    });
 
     expect(first.review.verdict).toBe("partial");
     expect(first.reused).toBeFalse();
@@ -448,11 +405,7 @@ describe("Loop Kernel v2 candidate certification", () => {
         content,
       },
     ];
-    const firstPayload = buildCandidateReviewPayloadV2(
-      baseState(),
-      snapshots,
-      terminalPatch(),
-    );
+    const firstPayload = buildCandidateReviewPayloadV2(baseState(), snapshots, terminalPatch());
     const reviewed = await reviewCandidateOnceV2(
       createSemanticReviewLedgerV2(),
       firstPayload,
@@ -479,23 +432,13 @@ describe("Loop Kernel v2 candidate certification", () => {
         authoritative: true,
       },
     });
-    const nextPayload = buildCandidateReviewPayloadV2(
-      newerState,
-      snapshots,
-      terminalPatch(),
-    );
+    const nextPayload = buildCandidateReviewPayloadV2(newerState, snapshots, terminalPatch());
 
-    expect(nextPayload.candidateInputHash).not.toBe(
-      firstPayload.candidateInputHash,
-    );
+    expect(nextPayload.candidateInputHash).not.toBe(firstPayload.candidateInputHash);
     expect(semanticReviewSubjectHashV2(nextPayload)).toBe(
       semanticReviewSubjectHashV2(firstPayload),
     );
-    const rebound = rebindSemanticReviewRecordV2(
-      firstRecord,
-      firstPayload,
-      nextPayload,
-    );
+    const rebound = rebindSemanticReviewRecordV2(firstRecord, firstPayload, nextPayload);
     expect(rebound).toMatchObject({
       reviewKey: semanticReviewKeyV2(1, nextPayload.candidateInputHash),
       completion: "completed",

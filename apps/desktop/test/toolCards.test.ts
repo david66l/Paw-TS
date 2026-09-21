@@ -27,22 +27,15 @@ describe("summarizeToolCallArgs", () => {
 
 describe("toolRowStatusFromResult", () => {
   test("denied 摘要识别", () => {
-    expect(
-      toolRowStatusFromResult(false, "tool execution denied by user"),
-    ).toBe("denied");
+    expect(toolRowStatusFromResult(false, "tool execution denied by user")).toBe("denied");
     expect(toolRowStatusFromResult(false, "exit code 1")).toBe("fail");
-    expect(toolRowStatusFromResult(true, "write_file: a.ts (9 bytes)")).toBe(
-      "ok",
-    );
+    expect(toolRowStatusFromResult(true, "write_file: a.ts (9 bytes)")).toBe("ok");
   });
 });
 
 describe("mergeFileChanges", () => {
   test("新路径追加；同路径累加 +/− 且 diff 拼接保留全部 hunk", () => {
-    const first = mergeFileChanges(
-      [],
-      [{ path: "a.ts", added: 3, removed: 1, diff: "d1" }],
-    );
+    const first = mergeFileChanges([], [{ path: "a.ts", added: 3, removed: 1, diff: "d1" }]);
     expect(first).toEqual([{ path: "a.ts", added: 3, removed: 1, diff: "d1" }]);
     const second = mergeFileChanges(first, [
       { path: "a.ts", added: 2, removed: 2, diff: "d2" },
@@ -62,9 +55,7 @@ describe("mergeFileChanges", () => {
         { path: "a.ts", added: 1, removed: 1 },
       ],
     );
-    expect(merged).toEqual([
-      { path: "a.ts", added: 2, removed: 1, diff: "keep" },
-    ]);
+    expect(merged).toEqual([{ path: "a.ts", added: 2, removed: 1, diff: "keep" }]);
   });
 });
 
@@ -83,9 +74,7 @@ describe("totalChangeStats / toolBatchSummaryLine", () => {
       { id: "1", tool: "t", summary: "", status: "ok", at: 1 },
       { id: "2", tool: "t", summary: "", status: "denied", at: 1 },
     ];
-    expect(toolBatchSummaryLine(rows)).toBe(
-      "调用 2 个工具 · 1 成功 · 1 失败/拒绝",
-    );
+    expect(toolBatchSummaryLine(rows)).toBe("调用 2 个工具 · 1 成功 · 1 失败/拒绝");
     expect(toolBatchSummaryLine([rows[0]!])).toBe("调用 1 个工具 · 全部成功");
   });
 });

@@ -78,8 +78,7 @@ export function assembleSystemPrompt(opts: SystemPromptOptions): string {
     basePrompt,
     getUsingToolsSection({
       hasTaskTool:
-        opts.modelToolNames === undefined ||
-        opts.modelToolNames.includes("workspace.todo_write"),
+        opts.modelToolNames === undefined || opts.modelToolNames.includes("workspace.todo_write"),
       hasSkills: skills !== undefined && skills.length > 0,
       toolCatalog,
       toolNames: opts.modelToolNames,

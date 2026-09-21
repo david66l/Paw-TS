@@ -24,18 +24,15 @@ export function parseWaitingUserInteractionV1(
   if (
     interaction.schemaVersion !== USER_INTERACTION_SCHEMA_V1 ||
     typeof interaction.requestId !== "string" ||
-    (interaction.status !== "waiting_user" &&
-      interaction.status !== "consumed") ||
+    (interaction.status !== "waiting_user" && interaction.status !== "consumed") ||
     typeof interaction.question !== "string" ||
     !context ||
     typeof context !== "object" ||
     Array.isArray(context) ||
-    (interaction.timeoutSec !== null &&
-      typeof interaction.timeoutSec !== "number") ||
+    (interaction.timeoutSec !== null && typeof interaction.timeoutSec !== "number") ||
     typeof interaction.requestedTurn !== "number" ||
     typeof interaction.requestedAt !== "number" ||
-    (interaction.consumedReplyId !== undefined &&
-      typeof interaction.consumedReplyId !== "string")
+    (interaction.consumedReplyId !== undefined && typeof interaction.consumedReplyId !== "string")
   ) {
     throw new Error("Invalid waiting-user interaction");
   }
@@ -76,9 +73,7 @@ export function createWaitingUserInteractionV1(input: {
   });
 }
 
-export function parseInteractionInboxV1(
-  value: unknown,
-): readonly UserReplyInboxEventV1[] {
+export function parseInteractionInboxV1(value: unknown): readonly UserReplyInboxEventV1[] {
   if (value === undefined) return Object.freeze([]);
   if (!Array.isArray(value)) throw new Error("Invalid interaction inbox");
   return Object.freeze(
@@ -129,11 +124,7 @@ export function appendUserReplyV1(
   if (interaction.requestId !== input.requestId) {
     throw new Error("User reply requestId does not match the active question");
   }
-  const appended = appendReplyToInboxV1(
-    state.interactionInbox,
-    interaction,
-    input,
-  );
+  const appended = appendReplyToInboxV1(state.interactionInbox, interaction, input);
   if (!appended.appended) return state;
   return {
     ...state,
@@ -204,23 +195,16 @@ export function prepareInteractionResumeV1(
     throw new Error("Unsupported waiting-user interaction schema");
   }
   const inbox = parseInteractionInboxV1(state.interactionInbox);
-  const reply = inbox.find(
-    (event) => event.requestId === interaction.requestId,
-  );
+  const reply = inbox.find((event) => event.requestId === interaction.requestId);
   if (!reply) return { kind: "waiting_user", interaction };
   const marker = `[User reply request_id=${interaction.requestId} reply_id=${reply.replyId}]`;
-  const alreadyInjected = state.messages.some((message) =>
-    message.content.startsWith(marker),
-  );
+  const alreadyInjected = state.messages.some((message) => message.content.startsWith(marker));
   const sanitized = sanitizeUserInput(reply.reply).text;
   const prepared: AppState = {
     ...state,
     messages: alreadyInjected
       ? state.messages
-      : [
-          ...state.messages,
-          { role: "user", content: `${marker}\n${sanitized}` },
-        ],
+      : [...state.messages, { role: "user", content: `${marker}\n${sanitized}` }],
     interaction: Object.freeze({
       ...interaction,
       status: "consumed" as const,

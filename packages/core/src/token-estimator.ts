@@ -70,10 +70,7 @@ export interface TokenEstimator {
  * latter is deliberately not counted a second time. Audit-only thinking is
  * retained for legacy callers; Paw Next strips it before request assembly.
  */
-function countMessageRequestFields(
-  message: ChatMessage,
-  count: (text: string) => number,
-): number {
+function countMessageRequestFields(message: ChatMessage, count: (text: string) => number): number {
   let tokens = count(message.content);
   if (message.thinking) tokens += count(message.thinking);
 
@@ -157,9 +154,7 @@ export class TiktokenEstimator implements TokenEstimator {
   private readonly encodingName: "cl100k_base" | "o200k_base";
   // Cache raw text counts, never mutable message objects or calibrated totals.
   // Per-instance ownership keeps encodings isolated and releases text with the estimator.
-  private readonly cachedCount = createBoundedTokenCounter((text) =>
-    this.countUncached(text),
-  );
+  private readonly cachedCount = createBoundedTokenCounter((text) => this.countUncached(text));
 
   constructor(encodingName: "cl100k_base" | "o200k_base" = "cl100k_base") {
     this.encodingName = encodingName;

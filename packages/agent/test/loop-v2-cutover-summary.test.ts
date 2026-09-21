@@ -16,10 +16,7 @@ describe("Loop Kernel v2 cutover summary", () => {
         terminalComparison: "legacy_more_permissive",
         eligibility: {
           eligible: false,
-          reasons: [
-            "product_mutation_not_required",
-            "local_verification_not_passed",
-          ],
+          reasons: ["product_mutation_not_required", "local_verification_not_passed"],
         },
         cutoverReady: false,
       },

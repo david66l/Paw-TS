@@ -65,9 +65,7 @@ test("reviewer receives actual readback including newline and byte count, withou
   const reviewer = createModelCompletionReviewerV1({
     model: {
       async complete(request) {
-        expect(JSON.parse(request.user).observations).toEqual(
-          packet.observations,
-        );
+        expect(JSON.parse(request.user).observations).toEqual(packet.observations);
         expect(request.system).toContain("not independent proof");
         return {
           status: "completed",
@@ -76,27 +74,24 @@ test("reviewer receives actual readback including newline and byte count, withou
       },
     },
   });
-  expect(
-    (await reviewer.review(value, { signal: new AbortController().signal }))
-      .status,
-  ).toBe("completed");
+  expect((await reviewer.review(value, { signal: new AbortController().signal })).status).toBe(
+    "completed",
+  );
 });
 test("stale, partial, failed and truncated reads retain their limitations", () => {
   expect(
-    createCompletionReviewEvidencePacketV1(candidate({ seq: 1 }))
-      .observations[0]?.afterLatestMutation,
+    createCompletionReviewEvidencePacketV1(candidate({ seq: 1 })).observations[0]
+      ?.afterLatestMutation,
   ).toBe(false);
   expect(
-    createCompletionReviewEvidencePacketV1(candidate({ partial: true }))
-      .observations[0]?.observedOutput?.partial,
+    createCompletionReviewEvidencePacketV1(candidate({ partial: true })).observations[0]
+      ?.observedOutput?.partial,
   ).toBe(true);
   expect(
-    createCompletionReviewEvidencePacketV1(candidate({ failed: true }))
-      .observations[0]?.outcome,
+    createCompletionReviewEvidencePacketV1(candidate({ failed: true })).observations[0]?.outcome,
   ).toBe("failed");
-  const output = createCompletionReviewEvidencePacketV1(
-    candidate({ content: "x".repeat(10_000) }),
-  ).observations[0]?.observedOutput;
+  const output = createCompletionReviewEvidencePacketV1(candidate({ content: "x".repeat(10_000) }))
+    .observations[0]?.observedOutput;
   expect(output?.text.length).toBe(4000);
   expect(output?.truncated).toBe(true);
 });
@@ -107,9 +102,7 @@ test("a source-code read does not bypass missing test verification", () => {
     action: "review",
     triggers: expect.arrayContaining(["missing_fresh_verification"]),
   });
-  expect(createCompletionReviewEvidencePacketV1(value).verification.state).toBe(
-    "missing",
-  );
+  expect(createCompletionReviewEvidencePacketV1(value).verification.state).toBe("missing");
 });
 test("plain shell inspection retains stdout, stderr and exit status independently of command classification", () => {
   const [evidence] = projectCompletionReviewToolEvidenceV1({

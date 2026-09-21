@@ -1,12 +1,6 @@
-import type {
-  EphemeralControlV1,
-  ToolGuidanceTopicV1,
-} from "../context-assembler.js";
+import type { EphemeralControlV1, ToolGuidanceTopicV1 } from "../context-assembler.js";
 
-type ToolGuidanceControlV1 = Extract<
-  EphemeralControlV1,
-  { readonly kind: "tool_guidance" }
->;
+type ToolGuidanceControlV1 = Extract<EphemeralControlV1, { readonly kind: "tool_guidance" }>;
 
 function control(
   topic: ToolGuidanceTopicV1,

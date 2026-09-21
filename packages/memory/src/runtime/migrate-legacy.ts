@@ -13,10 +13,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import {
-  type AutoMemoryEntry,
-  AutoMemoryStore,
-} from "../compat/auto-memory.js";
+import { type AutoMemoryEntry, AutoMemoryStore } from "../compat/auto-memory.js";
 import { closeSql, ping as dbPing } from "../db/connection.js";
 import { governanceDecisionDao } from "../db/dao/governanceDecision.js";
 import { memoryCandidateDao } from "../db/dao/memoryCandidate.js";
@@ -49,8 +46,7 @@ export interface MigrateLegacyResult {
 }
 
 function mapType(entry: AutoMemoryEntry): MemoryType {
-  const kind: MemoryKind | undefined =
-    entry.kind ?? kindFromLegacyType(entry.type);
+  const kind: MemoryKind | undefined = entry.kind ?? kindFromLegacyType(entry.type);
   switch (kind) {
     case "user_preference":
       return "user_preference";
@@ -130,9 +126,7 @@ export async function migrateLegacyMemories(
       written: 0,
       rejected: 0,
       pendingReview: 0,
-      errors: [
-        "Postgres ping failed. Set DATABASE_URL and run bun run memory:migrate first.",
-      ],
+      errors: ["Postgres ping failed. Set DATABASE_URL and run bun run memory:migrate first."],
       writtenIds: [],
     };
   }
@@ -143,10 +137,7 @@ export async function migrateLegacyMemories(
   for (const entry of entries) {
     const subjectKey = `legacy:file:${entry.name}`;
     try {
-      const existing = await memoryItemDao.findBySubjectKey(
-        subjectKey,
-        "active",
-      );
+      const existing = await memoryItemDao.findBySubjectKey(subjectKey, "active");
       if (existing.length > 0) {
         skippedExisting++;
         continue;
@@ -211,11 +202,7 @@ export async function migrateLegacyMemories(
         candidateId: created.id,
       });
       let dec = decision;
-      if (
-        dec.decision === "APPROVE_MERGE" &&
-        !dec.targetMemoryId &&
-        duplicateOf
-      ) {
+      if (dec.decision === "APPROVE_MERGE" && !dec.targetMemoryId && duplicateOf) {
         dec = { ...dec, targetMemoryId: duplicateOf };
       }
       await governanceDecisionDao.create(dec);
@@ -235,9 +222,7 @@ export async function migrateLegacyMemories(
         rejected++;
       }
     } catch (e) {
-      errors.push(
-        `${entry.name}: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      errors.push(`${entry.name}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -313,8 +298,7 @@ Requires DATABASE_URL and applied migrations (bun run memory:migrate).
   process.exit(result.errors.length && result.written === 0 ? 1 : 0);
 }
 
-const isMain =
-  typeof Bun !== "undefined" && Bun.main && import.meta.path === Bun.main;
+const isMain = typeof Bun !== "undefined" && Bun.main && import.meta.path === Bun.main;
 
 if (isMain) {
   main().catch((e) => {

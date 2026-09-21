@@ -37,9 +37,7 @@ const DEEPSEEK_FLASH_MODEL = "deepseek-v4-flash";
  * 从 models 命名预设里挑「flash / 便宜」条目：名字或 model 含 "flash" 即命中。
  * 支撑别名写法（provider 指向 deepseekv4pro，另有 deepseekv4flash 作辅助模型）。
  */
-function findFlashModelConfig(
-  models: ReturnType<typeof loadPawSettingsLocal>["models"],
-) {
+function findFlashModelConfig(models: ReturnType<typeof loadPawSettingsLocal>["models"]) {
   if (!models) return undefined;
   const hit = Object.entries(models).find(
     ([name, cfg]) => /flash/i.test(name) || /flash/i.test(cfg?.model ?? ""),
@@ -53,9 +51,7 @@ function findFlashModelConfig(
  * @param workspaceRoot - 工作区根目录路径，用于定位本地配置文件
  * @returns LanguageModel 实例，若配置缺失或加载失败则返回 undefined
  */
-export function createDeepSeekFlashModel(
-  workspaceRoot: string,
-): LanguageModel | undefined {
+export function createDeepSeekFlashModel(workspaceRoot: string): LanguageModel | undefined {
   try {
     const settings = loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
 
@@ -68,12 +64,8 @@ export function createDeepSeekFlashModel(
         model: flash.model.trim(),
         capabilities: { contextWindow: 1_000_000, maxOutputTokens: 384_000 },
         supportsThinkingToggle: true,
-        ...(flash.thinkingEnabled !== undefined
-          ? { thinkingEnabled: flash.thinkingEnabled }
-          : {}),
-        ...(flash.reasoningEffort !== undefined
-          ? { reasoningEffort: flash.reasoningEffort }
-          : {}),
+        ...(flash.thinkingEnabled !== undefined ? { thinkingEnabled: flash.thinkingEnabled } : {}),
+        ...(flash.reasoningEffort !== undefined ? { reasoningEffort: flash.reasoningEffort } : {}),
       });
     }
 

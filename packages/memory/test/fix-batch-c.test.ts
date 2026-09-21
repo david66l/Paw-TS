@@ -8,10 +8,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { closeSql, getSql, ping } from "../src/db/connection.js";
 import { runMemoryCommand } from "../src/longterm/cli.js";
-import {
-  appendOpLog,
-  queryOpLog,
-} from "../src/longterm/observability/op-log.js";
+import { appendOpLog, queryOpLog } from "../src/longterm/observability/op-log.js";
 import {
   DAILY_DISTILL_BUDGET,
   type MemoryStats,
@@ -21,10 +18,7 @@ import {
 import { extractMatchTerms } from "../src/longterm/retrieval/triggered.js";
 import type { SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
-import {
-  PostgresMemoryStoreEngine,
-  smokeProbe,
-} from "../src/longterm/store/postgres-engine.js";
+import { PostgresMemoryStoreEngine, smokeProbe } from "../src/longterm/store/postgres-engine.js";
 import {
   type DistillerLlm,
   MemoryDistiller,
@@ -32,8 +26,7 @@ import {
   validateCandidate,
 } from "../src/longterm/write/distiller.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -67,15 +60,9 @@ describe("#17 failureFixPair 参数化校验", () => {
       ...episodic,
       failureFixPair: { failed: "a", feedback: "b", fixed: "c" },
     };
-    expect(
-      validateCandidate(withPair, { requireFailureFixPair: true }).ok,
-    ).toBe(true);
-    expect(
-      validateCandidate(episodic, { requireFailureFixPair: false }).ok,
-    ).toBe(true);
-    expect(
-      hasFailureToSuccessTurn({ outcome: "success", trajectory: "smooth run" }),
-    ).toBe(false);
+    expect(validateCandidate(withPair, { requireFailureFixPair: true }).ok).toBe(true);
+    expect(validateCandidate(episodic, { requireFailureFixPair: false }).ok).toBe(true);
+    expect(hasFailureToSuccessTurn({ outcome: "success", trajectory: "smooth run" })).toBe(false);
   });
 
   test("distill 端到端：转折轨迹 + 缺 fixPair 的 LLM 输出 → 重试后降级", async () => {
@@ -95,9 +82,7 @@ describe("#17 failureFixPair 参数化校验", () => {
 
 describe("#21 中文分词（trial 匹配）", () => {
   test("CJK 段 ≥2 字入词；拉丁长词 >6 入词", () => {
-    const terms = extractMatchTerms(
-      "当 OlivineModuleResolutionError 出现时不要直接改配置",
-    );
+    const terms = extractMatchTerms("当 OlivineModuleResolutionError 出现时不要直接改配置");
     expect(terms).toContain("olivinemoduleresolutionerror");
     // 连续 CJK 段整体成词（无词典分词，子串匹配兜底）；单字 CJK 不入词
     expect(terms).toContain("出现时不要直接改配置");
@@ -107,9 +92,9 @@ describe("#21 中文分词（trial 匹配）", () => {
 
 describe("#14 冒烟探针（非全文）", () => {
   test("semantic 用 keywords 前 2 个；无 keywords 用前 40 字符", () => {
-    expect(
-      smokeProbe(makeSemantic("x".repeat(100), ["migration", "sql", "runner"])),
-    ).toBe("migration sql");
+    expect(smokeProbe(makeSemantic("x".repeat(100), ["migration", "sql", "runner"]))).toBe(
+      "migration sql",
+    );
     expect(smokeProbe(makeSemantic("y".repeat(100)))).toBe("y".repeat(40));
   });
 });
@@ -140,9 +125,7 @@ describe("#22 stats 成本渲染", () => {
   });
 
   test("≥80% 预算告警", () => {
-    expect(
-      renderMemoryStats(stats(Math.floor(DAILY_DISTILL_BUDGET * 0.8))),
-    ).toContain("80%");
+    expect(renderMemoryStats(stats(Math.floor(DAILY_DISTILL_BUDGET * 0.8)))).toContain("80%");
     expect(renderMemoryStats(stats(1))).not.toContain("80%");
   });
 });
@@ -193,10 +176,10 @@ describe("修复批次 C db 集成", () => {
   });
 
   it("#14 reindex：CLI 可跑 + op-log 留痕 + 关键词子集冒烟通过", async () => {
-    const entry = makeSemantic(
-      "Heliodor index rebuild probes use keyword subsets",
-      ["heliodor", "reindex"],
-    );
+    const entry = makeSemantic("Heliodor index rebuild probes use keyword subsets", [
+      "heliodor",
+      "reindex",
+    ]);
     await engine.put(entry);
     createdIds.push(deriveEntryId(entry));
 
@@ -272,26 +255,24 @@ describe("修复批次 C db 集成", () => {
 
   it("#20 replay 的 shadow 强制不可覆盖", async () => {
     // T1 只召回 episodic/profile——用 episodic 条目
-    const entry: import("../src/longterm/store/engine.js").EpisodicExperience =
-      {
-        id: "",
-        kind: "episodic",
-        repo: REPO,
-        created: new Date().toISOString(),
-        tValid: new Date().toISOString(),
-        tInvalid: null,
-        source: "agent_verified",
-        confidence: 0.9,
-        evidence: [],
-        freq: 0,
-        utility: 0,
-        whenToUse: "When replay shadow enforcement probes run",
-        perspective:
-          "Replay shadow enforcement probes verify hypothetical injection",
-        modification: ["Check the shadow flag last"],
-        issueType: "ProbeError",
-        taskId: "tsk_fixc",
-      };
+    const entry: import("../src/longterm/store/engine.js").EpisodicExperience = {
+      id: "",
+      kind: "episodic",
+      repo: REPO,
+      created: new Date().toISOString(),
+      tValid: new Date().toISOString(),
+      tInvalid: null,
+      source: "agent_verified",
+      confidence: 0.9,
+      evidence: [],
+      freq: 0,
+      utility: 0,
+      whenToUse: "When replay shadow enforcement probes run",
+      perspective: "Replay shadow enforcement probes verify hypothetical injection",
+      modification: ["Check the shadow flag last"],
+      issueType: "ProbeError",
+      taskId: "tsk_fixc",
+    };
     await engine.put(entry);
     const id = deriveEntryId(entry);
     createdIds.push(id);
@@ -326,9 +307,7 @@ describe("修复批次 C db 集成", () => {
       op: "read.shadow",
     });
     expect(shadows.length).toBeGreaterThanOrEqual(1);
-    expect(
-      await queryOpLog({ runId: `${RUN}_shadow`, op: "read.inject" }),
-    ).toHaveLength(0);
+    expect(await queryOpLog({ runId: `${RUN}_shadow`, op: "read.inject" })).toHaveLength(0);
   });
 
   it("#21 中文教训可命中 trial 随行", async () => {

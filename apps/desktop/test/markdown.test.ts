@@ -45,9 +45,7 @@ describe("Markdown (react-markdown + remark-gfm)", () => {
   });
 
   test("GFM 表格", () => {
-    const html = renderMarkdown(
-      "| name | role |\n| --- | --- |\n| paw | agent |",
-    );
+    const html = renderMarkdown("| name | role |\n| --- | --- |\n| paw | agent |");
     expect(html).toContain("<table>");
     expect(html).toContain("<th>");
     expect(html).toContain("paw");

@@ -1,9 +1,6 @@
 import { getSql } from "@paw/memory/db";
 
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 import {
   type MemoryTopicProjectionV1,
   PAW_MEMORY_TOPIC_TRAJECTORY_SNAPSHOT_VERSION_V1,
@@ -72,11 +69,9 @@ export function createPostgresMemoryTopicProjectionStoreV1(
             AND scope->>'repositoryId' = ${scope.repositoryId}
           FOR UPDATE
         `;
-        const priorHash = (
-          priorRows[0] as { projection_hash?: unknown } | undefined
-        )?.projection_hash;
-        const changed =
-          String(priorHash ?? "") !== projection.topic.projectionHash;
+        const priorHash = (priorRows[0] as { projection_hash?: unknown } | undefined)
+          ?.projection_hash;
+        const changed = String(priorHash ?? "") !== projection.topic.projectionHash;
         const topicRows = await tx`
           INSERT INTO memory_topics (
             id, schema_version, scope, family, canonical_name, normalized_name,
@@ -170,9 +165,7 @@ export function createPostgresMemoryTopicProjectionStoreV1(
         return Object.freeze({
           topicId: projection.topic.id,
           snapshotId: projection.snapshot.id,
-          topicRevision: Number(
-            (topicRows[0] as { revision?: unknown }).revision ?? 1,
-          ),
+          topicRevision: Number((topicRows[0] as { revision?: unknown }).revision ?? 1),
           changed,
         });
       });
@@ -191,10 +184,7 @@ export function createPostgresMemoryTopicProjectionStoreV1(
   });
 }
 
-function assertExactScope(
-  actual: PawNextMemoryScopeV1,
-  expected: PawNextMemoryScopeV1,
-): void {
+function assertExactScope(actual: PawNextMemoryScopeV1, expected: PawNextMemoryScopeV1): void {
   if (
     actual.tenantId !== expected.tenantId ||
     actual.userId !== expected.userId ||

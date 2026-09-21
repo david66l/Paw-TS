@@ -9,10 +9,7 @@ import type { LoopControlState } from "./contracts.js";
 import type { ControlReducer, StateHasher } from "./ports.js";
 
 /** 重放校验只依赖纯归约器、纯哈希器和派生决定映射，不接触任何外部端口。 */
-export interface ReplayVerificationV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
-> {
+export interface ReplayVerificationV1<TRunConfig, TControlState extends LoopControlState> {
   readonly runConfig: TRunConfig;
   readonly reducerVersion: string;
   readonly reducer: ControlReducer<InputFactV1, TRunConfig, TControlState>;
@@ -31,10 +28,7 @@ export interface ReplayVerificationV1<
  * DerivedDecision 永远不会回灌给归约器。此函数只验证已有日志，不写 Session，
  * 也不调用模型、工具、策略、上下文或输入端口。
  */
-export function assertReplayEquivalentV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(
+export function assertReplayEquivalentV1<TRunConfig, TControlState extends LoopControlState>(
   prefix: readonly RunJournalEnvelopeV1[],
   verification: ReplayVerificationV1<TRunConfig, TControlState>,
 ): void {
@@ -89,10 +83,7 @@ export function assertReplayEquivalentV1<
       divergence(envelope.seq, "StateHasher returned an empty state hash");
     }
     if (logged.stateHash !== stateHash) {
-      divergence(
-        envelope.seq,
-        `stateHash expected ${stateHash}, got ${logged.stateHash}`,
-      );
+      divergence(envelope.seq, `stateHash expected ${stateHash}, got ${logged.stateHash}`);
     }
 
     const expected = verification.derivedDecision({
@@ -111,10 +102,7 @@ export function assertReplayEquivalentV1<
       divergence(envelope.seq, "decision mapper changed stateHash");
     }
     if (!actionMatchesState(state, expected.action)) {
-      divergence(
-        envelope.seq,
-        "decision mapper action does not match the replayed control state",
-      );
+      divergence(envelope.seq, "decision mapper action does not match the replayed control state");
     }
     if (!sameAction(expected.action, logged.action)) {
       divergence(
@@ -125,10 +113,7 @@ export function assertReplayEquivalentV1<
   }
 }
 
-function actionMatchesState(
-  state: LoopControlState,
-  action: ControlDecisionActionV1,
-): boolean {
+function actionMatchesState(state: LoopControlState, action: ControlDecisionActionV1): boolean {
   const decision = state.decision;
   return (
     (decision.kind === "continue" && action.kind === "continue") ||
@@ -155,9 +140,7 @@ function actionMatchesState(
   );
 }
 
-function firstCursorMismatchSeq(
-  prefix: readonly RunJournalEnvelopeV1[],
-): number | undefined {
+function firstCursorMismatchSeq(prefix: readonly RunJournalEnvelopeV1[]): number | undefined {
   let latestInputSeq = 0;
   for (const envelope of prefix) {
     if (envelope.record.kind === "input_fact") {
@@ -169,19 +152,12 @@ function firstCursorMismatchSeq(
   return undefined;
 }
 
-function sameAction(
-  left: ControlDecisionActionV1,
-  right: ControlDecisionActionV1,
-): boolean {
+function sameAction(left: ControlDecisionActionV1, right: ControlDecisionActionV1): boolean {
   if (left.kind !== right.kind || left.reasonCode !== right.reasonCode) {
     return false;
   }
   if (left.kind === "wait" || right.kind === "wait") {
-    return (
-      left.kind === "wait" &&
-      right.kind === "wait" &&
-      left.waitFor === right.waitFor
-    );
+    return left.kind === "wait" && right.kind === "wait" && left.waitFor === right.waitFor;
   }
   return true;
 }

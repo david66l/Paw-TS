@@ -31,9 +31,7 @@ describe("WorkspaceWatcher", () => {
 
     writeFileSync(path.join(dir, "a.txt"), "hello");
 
-    const changed = await waitForExternalChanges(watcher, (files) =>
-      files.includes("a.txt"),
-    );
+    const changed = await waitForExternalChanges(watcher, (files) => files.includes("a.txt"));
     expect(changed).toContain("a.txt");
     watcher.stop();
   });
@@ -59,10 +57,7 @@ describe("WorkspaceWatcher", () => {
     await new Promise((r) => setTimeout(r, 100));
 
     writeFileSync(path.join(dir, "b.txt"), "content");
-    const changed = await waitForExternalChanges(
-      watcher,
-      (files) => files.length > 0,
-    );
+    const changed = await waitForExternalChanges(watcher, (files) => files.length > 0);
 
     expect(changed.length).toBeGreaterThan(0);
     expect(watcher.takeExternallyModified().length).toBe(0);

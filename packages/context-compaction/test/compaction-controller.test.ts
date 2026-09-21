@@ -43,22 +43,16 @@ describe("context compaction controller", () => {
       signal,
     });
     await controller.handleDecision(distillDecision());
-    const facts = (await session.readInputSnapshot()).entries.map(
-      (entry) => entry.fact,
+    const facts = (await session.readInputSnapshot()).entries.map((entry) => entry.fact);
+    expect(facts.filter((fact) => fact.type === "context.checkpoint_distillation_settled")).toEqual(
+      [
+        expect.objectContaining({
+          status: "unknown",
+          errorCode: "CheckpointDistillationTimeout",
+        }),
+      ],
     );
-    expect(
-      facts.filter(
-        (fact) => fact.type === "context.checkpoint_distillation_settled",
-      ),
-    ).toEqual([
-      expect.objectContaining({
-        status: "unknown",
-        errorCode: "CheckpointDistillationTimeout",
-      }),
-    ]);
-    expect(
-      facts.some((fact) => fact.type === "context.checkpoint_recorded"),
-    ).toBe(false);
+    expect(facts.some((fact) => fact.type === "context.checkpoint_recorded")).toBe(false);
   });
 
   test("uses Runtime's claim, settlement, and checkpoint transaction", async () => {
@@ -69,9 +63,9 @@ describe("context compaction controller", () => {
       distiller: {
         async distill() {
           calls += 1;
-          expect(
-            (await session.readInputSnapshot()).entries.at(-1)?.fact.type,
-          ).toBe("context.checkpoint_distillation_claimed");
+          expect((await session.readInputSnapshot()).entries.at(-1)?.fact.type).toBe(
+            "context.checkpoint_distillation_claimed",
+          );
           return { status: "completed", checkpoint: checkpoint() };
         },
       },
@@ -84,9 +78,7 @@ describe("context compaction controller", () => {
     expect(first.status === "ran" && first.result.status).toBe("committed");
     expect(calls).toBe(1);
     expect(
-      (await session.readInputSnapshot()).entries
-        .slice(-3)
-        .map((entry) => entry.fact.type),
+      (await session.readInputSnapshot()).entries.slice(-3).map((entry) => entry.fact.type),
     ).toEqual([
       "context.checkpoint_distillation_claimed",
       "context.checkpoint_distillation_settled",
@@ -122,9 +114,7 @@ describe("context compaction controller", () => {
     const resumed = await controller.handleDecision(distillDecision());
 
     expect(resumed.status).toBe("ran");
-    expect(resumed.status === "ran" && resumed.result.status).toBe(
-      "interrupted",
-    );
+    expect(resumed.status === "ran" && resumed.result.status).toBe("interrupted");
     expect(calls).toBe(1);
   });
 });
@@ -148,9 +138,7 @@ class MemorySession implements Session<InputFactV1, unknown> {
   async appendInputFacts(facts: readonly InputFactV1[]): Promise<void> {
     if (
       this.failNextSettlement &&
-      facts.some(
-        (fact) => fact.type === "context.checkpoint_distillation_settled",
-      )
+      facts.some((fact) => fact.type === "context.checkpoint_distillation_settled")
     ) {
       this.failNextSettlement = false;
       throw new Error("simulated settlement crash");
@@ -257,11 +245,7 @@ function promoted(inputId: string, content: string): InputFactV1 {
   };
 }
 
-function settled(
-  modelCallId: string,
-  turn: number,
-  assistantContent: string,
-): InputFactV1 {
+function settled(modelCallId: string, turn: number, assistantContent: string): InputFactV1 {
   const response = {
     schemaVersion: MODEL_RESPONSE_SCHEMA_VERSION_V1,
     providerProtocol: "openai-compatible" as const,
@@ -284,9 +268,7 @@ function settled(
 function checkpoint() {
   return {
     schemaVersion: TASK_CHECKPOINT_SCHEMA_VERSION_V1,
-    confirmedFacts: [
-      { statement: "Old behavior was inspected", sourceSeqs: [3] },
-    ],
+    confirmedFacts: [{ statement: "Old behavior was inspected", sourceSeqs: [3] }],
     currentHypotheses: [],
     ruledOut: [],
     changedFiles: [],

@@ -160,29 +160,20 @@ function indexFile(workspaceRoot: string, file: string): IndexedFile | null {
     kind,
     symbols,
     tests,
-    reason:
-      symbols.length > 0 ? `symbols: ${symbols.slice(0, 3).join(", ")}` : kind,
+    reason: symbols.length > 0 ? `symbols: ${symbols.slice(0, 3).join(", ")}` : kind,
   };
 }
 
-function scoreFile(
-  file: IndexedFile,
-  terms: readonly string[],
-  mentioned: Set<string>,
-): number {
+function scoreFile(file: IndexedFile, terms: readonly string[], mentioned: Set<string>): number {
   let score = mentioned.has(file.path) ? 100 : 0;
-  const haystack =
-    `${file.path} ${file.symbols.join(" ")} ${file.tests.join(" ")}`.toLowerCase();
+  const haystack = `${file.path} ${file.symbols.join(" ")} ${file.tests.join(" ")}`.toLowerCase();
   for (const term of terms) {
     if (path.basename(file.path).toLowerCase().includes(term)) score += 8;
     if (file.path.toLowerCase().includes(term)) score += 4;
     if (haystack.includes(term)) score += 6;
   }
   if (file.kind === "source") score += 2;
-  if (
-    file.kind === "test" &&
-    terms.some((t) => t.includes("test") || t.includes("spec"))
-  )
+  if (file.kind === "test" && terms.some((t) => t.includes("test") || t.includes("spec")))
     score += 8;
   return score;
 }
@@ -219,9 +210,7 @@ function fileKind(rel: string): IndexedFile["kind"] {
 }
 
 function tokenize(text: string): string[] {
-  return [
-    ...new Set(text.toLowerCase().match(/[a-z0-9_./-]{3,}/g) ?? []),
-  ].slice(0, 12);
+  return [...new Set(text.toLowerCase().match(/[a-z0-9_./-]{3,}/g) ?? [])].slice(0, 12);
 }
 
 function normalizeRel(value: string): string {
@@ -230,9 +219,7 @@ function normalizeRel(value: string): string {
 
 function symbolsIndex(index: CodeIndex): Record<string, readonly string[]> {
   return Object.fromEntries(
-    index.files
-      .filter((f) => f.symbols.length > 0)
-      .map((f) => [f.path, f.symbols]),
+    index.files.filter((f) => f.symbols.length > 0).map((f) => [f.path, f.symbols]),
   );
 }
 

@@ -2,10 +2,7 @@ import path from "node:path";
 
 import type { ShellSandboxConfig } from "@paw/harness";
 import type { PawModelTransport, PawProviderProtocol } from "@paw/models";
-import type {
-  FrozenPermissionConfigV1,
-  SessionLeaseHeartbeatPolicyV1,
-} from "@paw/runtime";
+import type { FrozenPermissionConfigV1, SessionLeaseHeartbeatPolicyV1 } from "@paw/runtime";
 import { defaultSettingsPath, pawSettingsLocalSchema } from "@paw/settings";
 
 import {
@@ -21,8 +18,7 @@ import {
 } from "./product-profile-common.js";
 import type { PawNextStartupRunIdentityV1 } from "./startup-scan.js";
 
-export const PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V1 =
-  "paw.next-product-profiles.v1" as const;
+export const PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V1 = "paw.next-product-profiles.v1" as const;
 export const DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V1 =
   ".paw/paw-next-product-profiles.v1.json" as const;
 
@@ -92,13 +88,10 @@ export interface CreatePawNextProductProfileResolverOptionsV1 {
 export function loadPawNextProductProfileStoreV1(
   options: LoadPawNextProductProfileStoreOptionsV1,
 ): PawNextProductProfileStoreV1 {
-  const workspaceRoot = canonicalPawNextWorkspaceInternal(
-    options.workspaceRoot,
-  );
+  const workspaceRoot = canonicalPawNextWorkspaceInternal(options.workspaceRoot);
   const value = readStrictPawNextWorkspaceJsonInternal(
     workspaceRoot,
-    options.profilePath ??
-      path.join(workspaceRoot, DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V1),
+    options.profilePath ?? path.join(workspaceRoot, DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V1),
     "Paw Next product profile",
   );
   return parseProfileStore(value);
@@ -114,25 +107,15 @@ export function buildPawNextTaskOptionsFromProfileV1(
 /** Build one strict V1 workspace resolver selected only by journal configHash. */
 export function createPawNextProductProfileResolverV1(
   options: CreatePawNextProductProfileResolverOptionsV1,
-): (
-  identity: PawNextStartupRunIdentityV1,
-) => RunExistingPawNextTaskOptionsV1 | undefined {
-  const workspaceRoot = canonicalPawNextWorkspaceInternal(
-    options.workspaceRoot,
-  );
+): (identity: PawNextStartupRunIdentityV1) => RunExistingPawNextTaskOptionsV1 | undefined {
+  const workspaceRoot = canonicalPawNextWorkspaceInternal(options.workspaceRoot);
   const store = loadPawNextProductProfileStoreV1({
     workspaceRoot,
-    ...(options.profilePath === undefined
-      ? {}
-      : { profilePath: options.profilePath }),
+    ...(options.profilePath === undefined ? {} : { profilePath: options.profilePath }),
   });
-  const settingsPath =
-    options.settingsPath ?? defaultSettingsPath(workspaceRoot);
+  const settingsPath = options.settingsPath ?? defaultSettingsPath(workspaceRoot);
   return (identity) => {
-    if (
-      canonicalPawNextWorkspaceInternal(identity.workspaceRoot) !==
-      workspaceRoot
-    ) {
+    if (canonicalPawNextWorkspaceInternal(identity.workspaceRoot) !== workspaceRoot) {
       throw new Error("Paw Next profile resolver workspace mismatch");
     }
     const profile = store.profiles.find(
@@ -148,8 +131,7 @@ export function createPawNextProductProfileResolverV1(
     if (!parsedSettings.success) {
       throw new Error("Paw Next credential settings schema is invalid");
     }
-    const apiKey =
-      parsedSettings.data.models?.[profile.model.credentialSlot]?.apiKey;
+    const apiKey = parsedSettings.data.models?.[profile.model.credentialSlot]?.apiKey;
     if (typeof apiKey !== "string" || !apiKey.trim()) {
       throw new Error("Named Paw Next credential slot is unavailable");
     }
@@ -167,10 +149,7 @@ export function createPawNextProductProfileResolverV1(
 }
 
 function parseProfileStore(value: unknown): PawNextProductProfileStoreV1 {
-  const root = exactRecordInternal(value, "profile store", [
-    "schemaVersion",
-    "profiles",
-  ]);
+  const root = exactRecordInternal(value, "profile store", ["schemaVersion", "profiles"]);
   if (root.schemaVersion !== PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V1) {
     throw new Error("Unsupported Paw Next product profile schemaVersion");
   }

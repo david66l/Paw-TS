@@ -18,11 +18,7 @@ function workspace() {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   for (const root of roots.splice(0)) {
-    if (
-      !path
-        .resolve(root)
-        .startsWith(path.join(os.tmpdir(), "paw-output-budget-"))
-    )
+    if (!path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-output-budget-")))
       throw new Error("Unsafe fixture path");
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -84,10 +80,7 @@ test("desktop GLM stream sends native 128K on first request and recovery while p
   expect(result.ok).toBe(true);
   expect(JSON.parse(result.text).status).toBe("completed");
   const approvedPrompt = fs
-    .readFileSync(
-      path.resolve(import.meta.dir, "./fixtures/agent-system-prompt.zh-CN.txt"),
-      "utf8",
-    )
+    .readFileSync(path.resolve(import.meta.dir, "./fixtures/agent-system-prompt.zh-CN.txt"), "utf8")
     .replace(/\r\n/g, "\n")
     .trim();
   expect(PAW_AGENT_SYSTEM_PROMPT).toBe(approvedPrompt);
@@ -100,12 +93,8 @@ test("desktop GLM stream sends native 128K on first request and recovery while p
     expect(messages[0]?.content.startsWith(approvedPrompt)).toBe(true);
     expect(messages[0]?.content).toContain("[Paw workspace context v1]");
   }
-  expect(requests.map((request) => request.max_tokens)).toEqual([
-    128_000, 128_000,
-  ]);
-  expect(requests.every((request) => request.reasoning_effort === "max")).toBe(
-    true,
-  );
+  expect(requests.map((request) => request.max_tokens)).toEqual([128_000, 128_000]);
+  expect(requests.every((request) => request.reasoning_effort === "max")).toBe(true);
   expect(
     (requests[1].messages as Array<Record<string, unknown>>).some(
       (message) => message.reasoning_content === "partial reasoning",
@@ -140,9 +129,7 @@ test("delegated agent uses its own model output capacity instead of the parent's
         ? {
             text: "",
             finishReason: "tool_calls",
-            toolCalls: [
-              call("read", "workspace_read_file", { path: "evidence.txt" }),
-            ],
+            toolCalls: [call("read", "workspace_read_file", { path: "evidence.txt" })],
           }
         : { text: "Evidence reviewed", finishReason: "stop" };
     },

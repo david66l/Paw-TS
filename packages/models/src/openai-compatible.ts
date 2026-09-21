@@ -25,26 +25,15 @@ import {
 
 import { type ModelTokenUsage, isNativeToolTurn } from "@paw/core";
 
-import type {
-  LanguageModel,
-  ModelCapabilities,
-  ModelRuntimeProfile,
-} from "./language-model.js";
+import type { LanguageModel, ModelCapabilities, ModelRuntimeProfile } from "./language-model.js";
 import { buildOpenAiMessageContent } from "./message-content.js";
-import {
-  type ModelCompleteOptions,
-  resolveRequestMaxOutputTokens,
-} from "./model-options.js";
+import { type ModelCompleteOptions, resolveRequestMaxOutputTokens } from "./model-options.js";
 import {
   parseOpenAiChatCompletionStreamDataPayload,
   parseOpenAiUsageJson,
 } from "./openai-stream-parse.js";
 import { extractThinkBlocks } from "./think-extraction.js";
-import type {
-  ChatMessage,
-  ModelCompletionResult,
-  ModelStreamChunk,
-} from "./types.js";
+import type { ChatMessage, ModelCompletionResult, ModelStreamChunk } from "./types.js";
 
 export interface OpenAICompatibleOptions {
   readonly apiKey: string;
@@ -62,10 +51,7 @@ function isGlm53(model: string): boolean {
 }
 
 /** Provider-specific fields shared by complete and completeStream. */
-function glmRequestFields(
-  model: string,
-  streaming = false,
-): Record<string, unknown> {
+function glmRequestFields(model: string, streaming = false): Record<string, unknown> {
   return isGlm53(model)
     ? {
         thinking: { type: "enabled", clear_thinking: false },
@@ -130,18 +116,12 @@ export class OpenAICompatibleModel implements LanguageModel {
 
   constructor(opts: OpenAICompatibleOptions) {
     if (opts.thinkingEnabled === false && opts.reasoningEffort !== undefined) {
-      throw new Error(
-        "reasoningEffort cannot be set when thinkingEnabled is false",
-      );
+      throw new Error("reasoningEffort cannot be set when thinkingEnabled is false");
     }
     this.apiKey = opts.apiKey;
-    this.baseUrl = (opts.baseUrl ?? "https://api.openai.com/v1").replace(
-      /\/$/,
-      "",
-    );
+    this.baseUrl = (opts.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "");
     this.model = opts.model;
-    this.supportsThinkingToggle =
-      opts.supportsThinkingToggle ?? opts.thinkingEnabled !== undefined;
+    this.supportsThinkingToggle = opts.supportsThinkingToggle ?? opts.thinkingEnabled !== undefined;
     this.label = opts.baseUrl?.includes("dashscope")
       ? `qwen:${opts.model}`
       : opts.baseUrl?.includes("deepseek")
@@ -156,12 +136,8 @@ export class OpenAICompatibleModel implements LanguageModel {
       protocol: "openai-compatible",
       model: opts.model,
       baseUrl: this.baseUrl,
-      ...(opts.thinkingEnabled !== undefined
-        ? { thinkingEnabled: opts.thinkingEnabled }
-        : {}),
-      ...(opts.reasoningEffort !== undefined
-        ? { reasoningEffort: opts.reasoningEffort }
-        : {}),
+      ...(opts.thinkingEnabled !== undefined ? { thinkingEnabled: opts.thinkingEnabled } : {}),
+      ...(opts.reasoningEffort !== undefined ? { reasoningEffort: opts.reasoningEffort } : {}),
       ...(isGlm53(opts.model)
         ? {
             thinkingEnabled: true,
@@ -184,9 +160,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     messages: readonly ChatMessage[],
     options?: ModelCompleteOptions,
   ): AsyncIterable<ModelStreamChunk> {
-    return observeModelStream(this, options, (observed) =>
-      this.streamRequest(messages, observed),
-    );
+    return observeModelStream(this, options, (observed) => this.streamRequest(messages, observed));
   }
 
   private async completeRequest(
@@ -205,8 +179,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: serializeOpenAiMessages(messages),
-      ...(requestThinking.enabled === true ||
-      requestThinking.effort !== undefined
+      ...(requestThinking.enabled === true || requestThinking.effort !== undefined
         ? {}
         : { temperature: 0.2 }),
     };
@@ -243,16 +216,13 @@ export class OpenAICompatibleModel implements LanguageModel {
       {
         type: "request",
         streaming: false,
-        maxOutputTokens:
-          typeof body.max_tokens === "number" ? body.max_tokens : undefined,
+        maxOutputTokens: typeof body.max_tokens === "number" ? body.max_tokens : undefined,
         reasoningEffort: requestThinking.effort,
       },
     );
     const raw = await res.text();
     if (!res.ok) {
-      throw new Error(
-        `OpenAI-compatible HTTP ${res.status}: ${raw.slice(0, 500)}`,
-      );
+      throw new Error(`OpenAI-compatible HTTP ${res.status}: ${raw.slice(0, 500)}`);
     }
     let parsed: unknown;
     try {
@@ -261,20 +231,14 @@ export class OpenAICompatibleModel implements LanguageModel {
       throw new Error("OpenAI-compatible: invalid JSON body");
     }
     const root =
-      parsed !== null && typeof parsed === "object"
-        ? (parsed as Record<string, unknown>)
-        : null;
+      parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
     const choices = root?.choices;
     const firstChoice =
-      Array.isArray(choices) &&
-      choices[0] !== null &&
-      typeof choices[0] === "object"
+      Array.isArray(choices) && choices[0] !== null && typeof choices[0] === "object"
         ? (choices[0] as Record<string, unknown>)
         : undefined;
     const finishReason =
-      typeof firstChoice?.finish_reason === "string"
-        ? firstChoice.finish_reason
-        : undefined;
+      typeof firstChoice?.finish_reason === "string" ? firstChoice.finish_reason : undefined;
     const first = firstChoice?.message;
     const content =
       first !== null && typeof first === "object"
@@ -289,8 +253,7 @@ export class OpenAICompatibleModel implements LanguageModel {
       first !== null && typeof first === "object"
         ? (first as Record<string, unknown>).reasoning_content
         : undefined;
-    const reasoningThinking =
-      typeof reasoningContent === "string" ? reasoningContent : undefined;
+    const reasoningThinking = typeof reasoningContent === "string" ? reasoningContent : undefined;
     const thinking =
       extracted.thinking || reasoningThinking
         ? [extracted.thinking, reasoningThinking].filter(Boolean).join("\n\n")
@@ -337,9 +300,7 @@ export class OpenAICompatibleModel implements LanguageModel {
       text,
       ...(nativeToolCalls.length > 0 ? { nativeAssistantContent } : {}),
       ...(thinking !== undefined ? { thinking } : {}),
-      ...(reasoningThinking !== undefined
-        ? { reasoningPassback: reasoningThinking }
-        : {}),
+      ...(reasoningThinking !== undefined ? { reasoningPassback: reasoningThinking } : {}),
       ...(usage !== undefined ? { usage } : {}),
       ...(finishReason ? { finishReason } : {}),
       ...(nativeToolCalls.length > 0 ? { toolCalls: nativeToolCalls } : {}),
@@ -363,8 +324,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     const baseStreamBody: Record<string, unknown> = {
       model: this.model,
       messages: messagesPayload,
-      ...(requestThinking.enabled === true ||
-      requestThinking.effort !== undefined
+      ...(requestThinking.enabled === true || requestThinking.effort !== undefined
         ? {}
         : { temperature: 0.2 }),
       stream: true as const,
@@ -407,9 +367,7 @@ export class OpenAICompatibleModel implements LanguageModel {
         type: "request",
         streaming: true,
         maxOutputTokens:
-          typeof baseStreamBody.max_tokens === "number"
-            ? baseStreamBody.max_tokens
-            : undefined,
+          typeof baseStreamBody.max_tokens === "number" ? baseStreamBody.max_tokens : undefined,
         reasoningEffort: requestThinking.effort,
       },
     );
@@ -432,9 +390,7 @@ export class OpenAICompatibleModel implements LanguageModel {
           type: "request",
           streaming: true,
           maxOutputTokens:
-            typeof baseStreamBody.max_tokens === "number"
-              ? baseStreamBody.max_tokens
-              : undefined,
+            typeof baseStreamBody.max_tokens === "number" ? baseStreamBody.max_tokens : undefined,
           reasoningEffort: requestThinking.effort,
         },
       );
@@ -446,9 +402,7 @@ export class OpenAICompatibleModel implements LanguageModel {
       }
     } else if (!res.ok) {
       const errText = await res.text();
-      throw new Error(
-        `OpenAI-compatible stream HTTP ${res.status}: ${errText.slice(0, 500)}`,
-      );
+      throw new Error(`OpenAI-compatible stream HTTP ${res.status}: ${errText.slice(0, 500)}`);
     }
     const reader = res.body?.getReader();
     if (!reader) {
@@ -485,9 +439,7 @@ export class OpenAICompatibleModel implements LanguageModel {
             continue;
           }
           if (sawDoneMarker) {
-            throw new Error(
-              "OpenAI-compatible stream emitted data after [DONE]",
-            );
+            throw new Error("OpenAI-compatible stream emitted data after [DONE]");
           }
           const payload = trimmed.slice(6);
           const part = parseOpenAiChatCompletionStreamDataPayload(payload);
@@ -519,10 +471,7 @@ export class OpenAICompatibleModel implements LanguageModel {
           if (part.thinkingDelta && part.thinkingDelta.length > 0) {
             yield { type: "thinking", delta: part.thinkingDelta };
           }
-          if (
-            part.reasoningPassbackDelta &&
-            part.reasoningPassbackDelta.length > 0
-          ) {
+          if (part.reasoningPassbackDelta && part.reasoningPassbackDelta.length > 0) {
             yield {
               type: "reasoning_passback",
               delta: part.reasoningPassbackDelta,
@@ -545,9 +494,7 @@ export class OpenAICompatibleModel implements LanguageModel {
             }
             if (delta.functionName) {
               if (entry.name && entry.name !== delta.functionName) {
-                throw new Error(
-                  `OpenAI-compatible conflicting tool name at index ${delta.index}`,
-                );
+                throw new Error(`OpenAI-compatible conflicting tool name at index ${delta.index}`);
               }
               entry.name = delta.functionName;
             }
@@ -570,9 +517,7 @@ export class OpenAICompatibleModel implements LanguageModel {
         const trimmed = buffer.replace(/\r$/, "").trim();
         if (trimmed.startsWith("data: ")) {
           if (sawDoneMarker) {
-            throw new Error(
-              "OpenAI-compatible stream emitted data after [DONE]",
-            );
+            throw new Error("OpenAI-compatible stream emitted data after [DONE]");
           }
           const payload = trimmed.slice(6);
           const part = parseOpenAiChatCompletionStreamDataPayload(payload);
@@ -600,11 +545,7 @@ export class OpenAICompatibleModel implements LanguageModel {
           if (!part.isDoneMarker && part.textDelta.length > 0) {
             yield { type: "text", delta: part.textDelta };
           }
-          if (
-            !part.isDoneMarker &&
-            part.thinkingDelta &&
-            part.thinkingDelta.length > 0
-          ) {
+          if (!part.isDoneMarker && part.thinkingDelta && part.thinkingDelta.length > 0) {
             yield { type: "thinking", delta: part.thinkingDelta };
           }
           if (
@@ -640,9 +581,7 @@ export class OpenAICompatibleModel implements LanguageModel {
             }
             if (delta.functionName) {
               if (entry.name && entry.name !== delta.functionName) {
-                throw new Error(
-                  `OpenAI-compatible conflicting tool name at index ${delta.index}`,
-                );
+                throw new Error(`OpenAI-compatible conflicting tool name at index ${delta.index}`);
               }
               entry.name = delta.functionName;
             }
@@ -656,19 +595,13 @@ export class OpenAICompatibleModel implements LanguageModel {
       reader.releaseLock();
     }
     if (!sawDoneMarker && !lastFinishReason?.trim()) {
-      throw new Error(
-        "OpenAI-compatible stream ended without a terminal marker or finish reason",
-      );
+      throw new Error("OpenAI-compatible stream ended without a terminal marker or finish reason");
     }
-    const completedCalls = [...toolCallAcc.entries()].sort(
-      ([left], [right]) => left - right,
-    );
+    const completedCalls = [...toolCallAcc.entries()].sort(([left], [right]) => left - right);
     const callIds = new Set<string>();
     for (const [index, call] of completedCalls) {
       if (call.invalid || !call.id.trim() || !call.name.trim()) {
-        throw new Error(
-          `OpenAI-compatible incomplete tool call identity at index ${index}`,
-        );
+        throw new Error(`OpenAI-compatible incomplete tool call identity at index ${index}`);
       }
       if (callIds.has(call.id)) {
         throw new Error(`OpenAI-compatible duplicate tool call id ${call.id}`);
@@ -686,9 +619,7 @@ export class OpenAICompatibleModel implements LanguageModel {
     yield {
       type: "done",
       ...(lastUsage !== undefined ? { usage: lastUsage } : {}),
-      ...(lastFinishReason !== undefined
-        ? { finishReason: lastFinishReason }
-        : {}),
+      ...(lastFinishReason !== undefined ? { finishReason: lastFinishReason } : {}),
     };
   }
 }
@@ -718,18 +649,14 @@ function extractOpenAiToolCalls(
     const t = tc as Record<string, unknown>;
     const fn = t.function;
     if (fn === null || typeof fn !== "object") {
-      throw new Error(
-        `OpenAI-compatible missing tool function at index ${index}`,
-      );
+      throw new Error(`OpenAI-compatible missing tool function at index ${index}`);
     }
     const f = fn as Record<string, unknown>;
     const id = typeof t.id === "string" ? t.id : "";
     const name = typeof f.name === "string" ? f.name : "";
     const args = typeof f.arguments === "string" ? f.arguments : "";
     if (!id.trim() || !name.trim() || typeof f.arguments !== "string") {
-      throw new Error(
-        `OpenAI-compatible incomplete tool call identity at index ${index}`,
-      );
+      throw new Error(`OpenAI-compatible incomplete tool call identity at index ${index}`);
     }
     if (ids.has(id)) {
       throw new Error(`OpenAI-compatible duplicate tool call id ${id}`);
@@ -741,9 +668,7 @@ function extractOpenAiToolCalls(
 }
 
 /** Serialize request history, expanding atomic native turns on the wire. */
-function serializeOpenAiMessages(
-  messages: readonly ChatMessage[],
-): Array<Record<string, unknown>> {
+function serializeOpenAiMessages(messages: readonly ChatMessage[]): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
   for (const message of messages) {
     const nativeTurn = message.nativeToolTurn;

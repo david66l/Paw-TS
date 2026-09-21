@@ -46,11 +46,7 @@ export type CompletionGateKindV1 =
   | "acceptance"
   | "mea_audit";
 
-export type ToolGuidanceTopicV1 =
-  | "idle_fuse"
-  | "coding_phase"
-  | "tool_recovery"
-  | "repeat_tool";
+export type ToolGuidanceTopicV1 = "idle_fuse" | "coding_phase" | "tool_recovery" | "repeat_tool";
 
 export type EphemeralControlV1 =
   | { readonly kind: "status"; readonly text: string }
@@ -69,9 +65,7 @@ export type EphemeralControlV1 =
   | { readonly kind: "readiness"; readonly text: string }
   | { readonly kind: "protocol_recovery"; readonly text: string };
 
-const CONTROL_PRIORITY_V1: Readonly<
-  Record<EphemeralControlV1["kind"], number>
-> = {
+const CONTROL_PRIORITY_V1: Readonly<Record<EphemeralControlV1["kind"], number>> = {
   status: 0,
   progress: 1,
   tool_guidance: 2,
@@ -88,10 +82,7 @@ export function selectEphemeralControlV1(
   let selected: EphemeralControlV1 | undefined;
   for (const candidate of candidates) {
     if (!candidate?.text.trim()) continue;
-    if (
-      !selected ||
-      CONTROL_PRIORITY_V1[candidate.kind] > CONTROL_PRIORITY_V1[selected.kind]
-    ) {
+    if (!selected || CONTROL_PRIORITY_V1[candidate.kind] > CONTROL_PRIORITY_V1[selected.kind]) {
       selected = candidate;
     }
   }
@@ -104,10 +95,7 @@ export interface AssembleModelContextInputV1 {
   readonly control?: EphemeralControlV1;
 }
 
-const LEGACY_HOST_PROJECTION_PREFIXES = [
-  "[Context Package]",
-  "[Status Snapshot v1]",
-] as const;
+const LEGACY_HOST_PROJECTION_PREFIXES = ["[Context Package]", "[Status Snapshot v1]"] as const;
 const LEGACY_FORMAT_RECOVERY_PATTERN =
   /^\[Your last output could not be parsed as a tool call and was NOT executed\.\]\nReason: [^\r\n]+\.\nCorrect format is a single JSON object, no surrounding text or code fences:\n\{"tool":"workspace\.read_file","args":\{"path":"<file>"\}\}\nFix the format and retry the call, or if you are done reply with:\n\{"action":"final_answer","summary":"<your complete findings>"\}$/;
 const LEGACY_NO_ACTION_FIRST_PATTERN =
@@ -261,10 +249,7 @@ const LEGACY_CODING_VERIFY =
   "[CodingPhase:verify] A source edit now exists. Preserve the remaining budget: run the narrowest relevant test next, fix exact failures, then final_answer after a passing verification.";
 
 export interface LegacyProtocolRecoveryProjectionV1 {
-  readonly pendingControl: Extract<
-    EphemeralControlV1,
-    { readonly kind: "protocol_recovery" }
-  >;
+  readonly pendingControl: Extract<EphemeralControlV1, { readonly kind: "protocol_recovery" }>;
   readonly formatErrorNudges?: number;
   readonly noActionNudges?: number;
   readonly hasEverUsedTools?: true;
@@ -281,22 +266,15 @@ export function parseLegacyToolGuidanceProjectionV1(
       break;
     }
   }
-  let pending:
-    | Extract<EphemeralControlV1, { readonly kind: "tool_guidance" }>
-    | undefined;
-  for (
-    let index = lastAssistantIndex + 1;
-    index < messages.length;
-    index += 1
-  ) {
+  let pending: Extract<EphemeralControlV1, { readonly kind: "tool_guidance" }> | undefined;
+  for (let index = lastAssistantIndex + 1; index < messages.length; index += 1) {
     const message = messages[index];
     if (message?.role !== "user") continue;
     const parsed = parseLegacyToolGuidanceTextV1(message.content);
     if (
       parsed &&
       (!pending ||
-        LEGACY_TOOL_GUIDANCE_PRIORITY[parsed.topic] >=
-          LEGACY_TOOL_GUIDANCE_PRIORITY[pending.topic])
+        LEGACY_TOOL_GUIDANCE_PRIORITY[parsed.topic] >= LEGACY_TOOL_GUIDANCE_PRIORITY[pending.topic])
     ) {
       pending = parsed;
     }
@@ -304,9 +282,7 @@ export function parseLegacyToolGuidanceProjectionV1(
   return pending;
 }
 
-const LEGACY_TOOL_GUIDANCE_PRIORITY: Readonly<
-  Record<ToolGuidanceTopicV1, number>
-> = {
+const LEGACY_TOOL_GUIDANCE_PRIORITY: Readonly<Record<ToolGuidanceTopicV1, number>> = {
   repeat_tool: 0,
   tool_recovery: 1,
   coding_phase: 2,
@@ -322,9 +298,7 @@ export function parseLegacyProtocolRecoveryProjectionV1(
   const text = tail.content;
   if (LEGACY_FORMAT_RECOVERY_PATTERN.test(text)) {
     const count = messages.filter(
-      (message) =>
-        message.role === "user" &&
-        LEGACY_FORMAT_RECOVERY_PATTERN.test(message.content),
+      (message) => message.role === "user" && LEGACY_FORMAT_RECOVERY_PATTERN.test(message.content),
     ).length;
     return {
       pendingControl: { kind: "protocol_recovery", text },
@@ -350,10 +324,7 @@ export function parseLegacyProtocolRecoveryProjectionV1(
 }
 
 export interface LegacyCompletionGateProjectionV1 {
-  readonly pendingControl: Extract<
-    EphemeralControlV1,
-    { readonly kind: "completion_gate" }
-  >;
+  readonly pendingControl: Extract<EphemeralControlV1, { readonly kind: "completion_gate" }>;
   readonly autoContinueNudges?: number;
   readonly verifyNudges?: number;
   readonly acceptanceNudges?: number;
@@ -374,9 +345,7 @@ export function parseLegacyCompletionGateProjectionV1(
 ): LegacyCompletionGateProjectionV1 | undefined {
   const tail = messages.at(-1);
   if (!tail || tail.role !== "user") return undefined;
-  const matched = LEGACY_COMPLETION_GATE_PATTERNS.find((entry) =>
-    entry.pattern.test(tail.content),
-  );
+  const matched = LEGACY_COMPLETION_GATE_PATTERNS.find((entry) => entry.pattern.test(tail.content));
   if (!matched) return undefined;
   const candidateRevisionMatch =
     matched.gate === "candidate_review"
@@ -386,12 +355,9 @@ export function parseLegacyCompletionGateProjectionV1(
     ? Number.parseInt(candidateRevisionMatch[1] ?? "", 10)
     : undefined;
   const isReportGroundingGate =
-    /^\[IndependentReview:REPORT_GROUNDING_(?:UNKNOWN|FAIL) r\d+\]/.test(
-      tail.content,
-    );
+    /^\[IndependentReview:REPORT_GROUNDING_(?:UNKNOWN|FAIL) r\d+\]/.test(tail.content);
   const candidateIdentityMatches =
-    candidateRevision !== undefined &&
-    candidateReview?.mutationRevision === candidateRevision;
+    candidateRevision !== undefined && candidateReview?.mutationRevision === candidateRevision;
   return {
     pendingControl: {
       kind: "completion_gate",
@@ -411,8 +377,7 @@ export function parseLegacyCompletionGateProjectionV1(
           candidateIdentityMatches &&
           candidateReview?.summaryFingerprint
             ? {
-                candidateReviewSummaryFingerprint:
-                  candidateReview.summaryFingerprint,
+                candidateReviewSummaryFingerprint: candidateReview.summaryFingerprint,
               }
             : {}),
         }
@@ -434,12 +399,10 @@ export function stripLegacyContextProjectionsV1(
  * request only and never written back to ContextManager/AppState. Callers must
  * build once and reuse the same array for eval capture and model invocation.
  */
-export function assembleModelContextV1(
-  input: AssembleModelContextInputV1,
-): readonly ChatMessage[] {
-  const messages = stripLegacyContextProjectionsV1(input.durable.messages).map(
-    (message) => ({ ...message }),
-  );
+export function assembleModelContextV1(input: AssembleModelContextInputV1): readonly ChatMessage[] {
+  const messages = stripLegacyContextProjectionsV1(input.durable.messages).map((message) => ({
+    ...message,
+  }));
   if (input.hostState && hasHostStateV1(input.hostState)) {
     const hostMessage: ChatMessage = {
       role: "user",
@@ -475,12 +438,9 @@ function isLegacyContextProjection(message: ChatMessage): boolean {
   if (message.role !== "user") return false;
   return (
     LEGACY_HOST_PROJECTION_PREFIXES.some(
-      (prefix) =>
-        message.content === prefix || message.content.startsWith(`${prefix}\n`),
+      (prefix) => message.content === prefix || message.content.startsWith(`${prefix}\n`),
     ) ||
-    LEGACY_CONTROL_PROJECTION_PATTERNS.some((pattern) =>
-      pattern.test(message.content),
-    ) ||
+    LEGACY_CONTROL_PROJECTION_PATTERNS.some((pattern) => pattern.test(message.content)) ||
     isLegacyLoopGuidanceProjection(message.content) ||
     !!parseLegacyToolGuidanceTextV1(message.content) ||
     isLegacyAcceptanceSuccessEcho(message.content) ||
@@ -582,10 +542,7 @@ function stableLegacyJson(value: unknown): string {
 }
 
 function isLegacyLoopGuidanceProjection(content: string): boolean {
-  if (
-    content === LEGACY_IMPLEMENTATION_GUIDANCE ||
-    content === LEGACY_MAX_STEPS_WARNING
-  ) {
+  if (content === LEGACY_IMPLEMENTATION_GUIDANCE || content === LEGACY_MAX_STEPS_WARNING) {
     return true;
   }
   const contextGuard =
@@ -595,26 +552,17 @@ function isLegacyLoopGuidanceProjection(content: string): boolean {
   if (contextGuard) {
     const used = Number.parseInt(contextGuard[1] ?? "", 10);
     const budget = Number.parseInt(contextGuard[2] ?? "", 10);
-    return (
-      Number.isSafeInteger(used) &&
-      Number.isSafeInteger(budget) &&
-      used > budget
-    );
+    return Number.isSafeInteger(used) && Number.isSafeInteger(budget) && used > budget;
   }
   const convergence =
     /^\[Convergence checkpoint\] ((?:[1-9]|1[0-2])) model turns remain\. Preserve the existing solution state and close the loop\. ([\s\S]+)$/.exec(
       content,
     );
-  return (
-    !!convergence && LEGACY_CONVERGENCE_NEXT_STEPS.has(convergence[2] ?? "")
-  );
+  return !!convergence && LEGACY_CONVERGENCE_NEXT_STEPS.has(convergence[2] ?? "");
 }
 
 function isLegacyAcceptanceSuccessEcho(content: string): boolean {
-  if (
-    !content.startsWith("Acceptance ledger updated:") ||
-    content.length > 50_000
-  ) {
+  if (!content.startsWith("Acceptance ledger updated:") || content.length > 50_000) {
     return false;
   }
   const graphMarker = "\n[Task Graph v1]\n";
@@ -644,12 +592,8 @@ function isLegacyAcceptanceSuccessEcho(content: string): boolean {
   const current = currentLine.slice("current=".length);
   const nodeLines = graphLines.slice(2);
   const truncationLine = nodeLines.at(-1);
-  const hasTruncatedNodes = /^- \.\.\. [1-9]\d* more nodes$/.test(
-    truncationLine ?? "",
-  );
-  const visibleNodeLines = hasTruncatedNodes
-    ? nodeLines.slice(0, -1)
-    : nodeLines;
+  const hasTruncatedNodes = /^- \.\.\. [1-9]\d* more nodes$/.test(truncationLine ?? "");
+  const visibleNodeLines = hasTruncatedNodes ? nodeLines.slice(0, -1) : nodeLines;
   if (
     visibleNodeLines.some(
       (line) =>
@@ -663,8 +607,7 @@ function isLegacyAcceptanceSuccessEcho(content: string): boolean {
   return (
     current === "none" ||
     (hasTruncatedNodes && current.trim().length > 0) ||
-    (current.length > 0 &&
-      visibleNodeLines.some((line) => line.startsWith(`- ${current} [`)))
+    (current.length > 0 && visibleNodeLines.some((line) => line.startsWith(`- ${current} [`)))
   );
 }
 

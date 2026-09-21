@@ -29,10 +29,7 @@ describe("queued work-segment input admission", () => {
     );
     const results = await Promise.all(calls);
 
-    expect(results.map((result) => result.status).sort()).toEqual([
-      "accepted",
-      "already_accepted",
-    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(["accepted", "already_accepted"]);
     expect(session.accepted("same-id")).toHaveLength(1);
     expect(session.commitAttempts).toBe(2);
   });
@@ -52,17 +49,12 @@ describe("queued work-segment input admission", () => {
       ),
     );
 
-    expect(
-      outcomes.filter((result) => result.status === "fulfilled"),
-    ).toHaveLength(1);
-    expect(
-      outcomes.filter((result) => result.status === "rejected"),
-    ).toHaveLength(1);
+    expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect(
       session.prefix.filter(
         (entry) =>
-          entry.record.kind === "input_fact" &&
-          entry.record.fact.type === "input.accepted",
+          entry.record.kind === "input_fact" && entry.record.fact.type === "input.accepted",
       ),
     ).toHaveLength(1);
   });
@@ -95,12 +87,7 @@ describe("queued work-segment input admission", () => {
   });
 
   test("fails closed on preflight, prospective validation, stale evidence, and abort", async () => {
-    for (const mode of [
-      "preflight",
-      "prospective",
-      "evidence",
-      "abort",
-    ] as const) {
+    for (const mode of ["preflight", "prospective", "evidence", "abort"] as const) {
       const session = new MemoryAdmissionSession(basePrefix());
       const controller = new AbortController();
       const reason = new Error(`blocked-${mode}`);

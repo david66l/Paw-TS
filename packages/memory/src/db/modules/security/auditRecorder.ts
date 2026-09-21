@@ -55,11 +55,7 @@ export const auditRecorder = {
   },
 
   /** 查询某个实体的审计历史 */
-  async queryByEntity(
-    entityType: string,
-    entityId: string,
-    limit = 50,
-  ): Promise<AuditEvent[]> {
+  async queryByEntity(entityType: string, entityId: string, limit = 50): Promise<AuditEvent[]> {
     const sql = getSql();
     const rows = (await sql.unsafe(
       `SELECT * FROM audit_records WHERE entity_type = $1 AND entity_id = $2

@@ -51,10 +51,7 @@ export function findSettingsFile(startDir: string, maxUp = 4): string | null {
 interface SettingsShape {
   provider?: string;
   defaultProvider?: string;
-  models?: Record<
-    string,
-    { baseUrl?: string; base_url?: string; model?: string; apiKey?: string }
-  >;
+  models?: Record<string, { baseUrl?: string; base_url?: string; model?: string; apiKey?: string }>;
 }
 
 export function resolveLlmConfig(opts: {
@@ -67,8 +64,7 @@ export function resolveLlmConfig(opts: {
   const cwd = opts.cwd ?? process.cwd();
   const env = opts.env ?? process.env;
   const loadSettings =
-    opts.loadSettings ??
-    ((p: string) => JSON.parse(readFileSync(p, "utf-8")) as SettingsShape);
+    opts.loadSettings ?? ((p: string) => JSON.parse(readFileSync(p, "utf-8")) as SettingsShape);
 
   const settingsPath = findSettingsFile(cwd);
   let settings: SettingsShape | null = null;
@@ -123,8 +119,7 @@ export function resolveLlmConfig(opts: {
   }
 
   return {
-    error:
-      "未找到 LLM 配置（--provider / settings.local.json / OPENAI_* 环境变量均不可用）",
+    error: "未找到 LLM 配置（--provider / settings.local.json / OPENAI_* 环境变量均不可用）",
   };
 }
 
@@ -159,9 +154,7 @@ export class ChatClient {
         const text = await this.callOnce(prompt);
         this.stats.calls += 1;
         this.stats.totalMs += Date.now() - t0;
-        this.stats.estimatedTokens += Math.ceil(
-          (prompt.length + text.length) / 4,
-        );
+        this.stats.estimatedTokens += Math.ceil((prompt.length + text.length) / 4);
         return text;
       } catch (e) {
         lastError = e instanceof Error ? e : new Error(String(e));
@@ -176,24 +169,19 @@ export class ChatClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await fetch(
-        `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            ...(this.config.apiKey
-              ? { authorization: `Bearer ${this.config.apiKey}` }
-              : {}),
-          },
-          body: JSON.stringify({
-            model: this.config.model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0,
-          }),
-          signal: controller.signal,
+      const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(this.config.apiKey ? { authorization: `Bearer ${this.config.apiKey}` } : {}),
         },
-      );
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0,
+        }),
+        signal: controller.signal,
+      });
       if (!res.ok) {
         // 错误信息只带状态码，不带响应体（防密钥/内部信息外泄）
         throw new Error(`llm http ${res.status}`);

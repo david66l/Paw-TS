@@ -55,8 +55,7 @@ import {
   createModelSemanticReviewerV2,
 } from "./semantic-reviewer.js";
 
-export interface LoopV2LiveReviewRuntimeResultV1
-  extends SemanticReviewOnceResultV2 {
+export interface LoopV2LiveReviewRuntimeResultV1 extends SemanticReviewOnceResultV2 {
   readonly modelCalls: number;
   readonly usage?: SemanticReviewUsageV2;
 }
@@ -85,9 +84,7 @@ export class LoopV2LiveReviewRuntimeV1 {
 
   constructor(options: LoopV2LiveReviewRuntimeOptionsV1) {
     if (!options.workspaceRoot.trim() || !options.runId.trim()) {
-      throw new Error(
-        "Loop v2 live review runtime requires workspace and runId",
-      );
+      throw new Error("Loop v2 live review runtime requires workspace and runId");
     }
     this.workspaceRoot = options.workspaceRoot;
     this.runId = options.runId;
@@ -119,17 +116,14 @@ export class LoopV2LiveReviewRuntimeV1 {
   }
 
   /** Persists the latest facts while keeping reviewer calls at-most-once per product revision. */
-  persistCandidate(
-    artifact: LoopV2LiveCandidateArtifactV1,
-  ): LoopV2LiveCandidateArtifactV1 {
+  persistCandidate(artifact: LoopV2LiveCandidateArtifactV1): LoopV2LiveCandidateArtifactV1 {
     if (artifact.report.runId !== this.runId) {
       throw new Error("Loop v2 live review candidate runId mismatch");
     }
     const artifactPath = loopV2LiveArtifactPath(this.workspaceRoot, this.runId);
     const prior = this.candidate;
     const settledSameProductRevision =
-      prior?.assessment.mutationRevision ===
-        artifact.assessment.mutationRevision &&
+      prior?.assessment.mutationRevision === artifact.assessment.mutationRevision &&
       (this.claim !== undefined || this.review !== undefined);
     const priorClaim = this.claim;
     const priorReview = this.review;
@@ -137,14 +131,8 @@ export class LoopV2LiveReviewRuntimeV1 {
 
     let futureReview: LoopV2LiveReviewArtifactV1 | undefined;
     if (settledSameProductRevision && prior) {
-      const previousPayload = buildLoopV2LiveReviewPayloadV1(
-        prior.report,
-        prior.policy,
-      );
-      const nextPayload = buildLoopV2LiveReviewPayloadV1(
-        artifact.report,
-        artifact.policy,
-      );
+      const previousPayload = buildLoopV2LiveReviewPayloadV1(prior.report, prior.policy);
+      const nextPayload = buildLoopV2LiveReviewPayloadV1(artifact.report, artifact.policy);
       const previousSubject = semanticReviewSubjectHashV2(previousPayload);
       const nextSubject = semanticReviewSubjectHashV2(nextPayload);
       // Keep a guard bound to the old candidate before replacing its settled
@@ -187,8 +175,7 @@ export class LoopV2LiveReviewRuntimeV1 {
           ),
         );
       } else if (priorClaim) {
-        const interrupted =
-          createInterruptedSemanticReviewRecordV2(nextPayload);
+        const interrupted = createInterruptedSemanticReviewRecordV2(nextPayload);
         futureReview = this.persistReview(
           artifact,
           buildLoopV2LiveReviewArtifactV1(artifact, interrupted),
@@ -201,9 +188,7 @@ export class LoopV2LiveReviewRuntimeV1 {
     // guard claim are already durable. Both sides of a process crash therefore
     // remain at-most-once and fail closed.
     this.commitCandidateArtifact(artifactPath, artifact);
-    const persisted = parseLoopV2LiveCandidateArtifactV1(
-      fs.readFileSync(artifactPath, "utf8"),
-    );
+    const persisted = parseLoopV2LiveCandidateArtifactV1(fs.readFileSync(artifactPath, "utf8"));
     if (persisted.artifactHash !== artifact.artifactHash) {
       throw new Error("Loop v2 candidate commit did not persist its target");
     }
@@ -216,9 +201,7 @@ export class LoopV2LiveReviewRuntimeV1 {
   async reviewCandidate(): Promise<LoopV2LiveReviewRuntimeResultV1> {
     const candidate = this.candidate;
     if (!candidate) {
-      throw new Error(
-        "Loop v2 semantic review requires a persisted candidate artifact",
-      );
+      throw new Error("Loop v2 semantic review requires a persisted candidate artifact");
     }
     if (!candidate.assessment.readiness.readyForSemanticReview) {
       throw new Error("Loop v2 semantic review requires a ready candidate");
@@ -227,18 +210,11 @@ export class LoopV2LiveReviewRuntimeV1 {
     if (!model) {
       throw new Error("Loop v2 semantic review model is not configured");
     }
-    const payload = buildLoopV2LiveReviewPayloadV1(
-      candidate.report,
-      candidate.policy,
-    );
+    const payload = buildLoopV2LiveReviewPayloadV1(candidate.report, candidate.policy);
     const existingReview =
-      this.review?.candidateArtifactHash === candidate.artifactHash
-        ? this.review
-        : undefined;
+      this.review?.candidateArtifactHash === candidate.artifactHash ? this.review : undefined;
     const existingClaim =
-      this.claim?.candidateArtifactHash === candidate.artifactHash
-        ? this.claim
-        : undefined;
+      this.claim?.candidateArtifactHash === candidate.artifactHash ? this.claim : undefined;
     let modelCalls = 0;
     let usage: SemanticReviewUsageV2 | undefined;
     let result: SemanticReviewOnceResultV2;
@@ -282,11 +258,7 @@ export class LoopV2LiveReviewRuntimeV1 {
           this.onUsage?.(modelLabel, rawUsage);
         },
       });
-      result = await reviewCandidateOnceV2(
-        createSemanticReviewLedgerV2(),
-        payload,
-        reviewer,
-      );
+      result = await reviewCandidateOnceV2(createSemanticReviewLedgerV2(), payload, reviewer);
     }
 
     if (!existingReview) {
@@ -301,26 +273,17 @@ export class LoopV2LiveReviewRuntimeV1 {
   }
 
   /** Persists the non-authoritative v1/v2 terminal comparison and rereads it. */
-  persistTerminal(
-    legacyTerminal: LoopV2LegacyTerminalV1,
-  ): LoopV2LiveTerminalArtifactV1 {
+  persistTerminal(legacyTerminal: LoopV2LegacyTerminalV1): LoopV2LiveTerminalArtifactV1 {
     const artifact = buildLoopV2LiveTerminalArtifactV1({
       runId: this.runId,
       legacyTerminal,
       ...(this.candidate ? { candidate: this.candidate } : {}),
       ...(this.review ? { review: this.review } : {}),
     });
-    const artifactPath = loopV2LiveTerminalArtifactPath(
-      this.workspaceRoot,
-      this.runId,
-    );
+    const artifactPath = loopV2LiveTerminalArtifactPath(this.workspaceRoot, this.runId);
     atomicWrite(
       artifactPath,
-      serializeLoopV2LiveTerminalArtifactV1(
-        artifact,
-        this.candidate,
-        this.review,
-      ),
+      serializeLoopV2LiveTerminalArtifactV1(artifact, this.candidate, this.review),
     );
     return parseLoopV2LiveTerminalArtifactV1(
       fs.readFileSync(artifactPath, "utf8"),
@@ -340,18 +303,10 @@ export class LoopV2LiveReviewRuntimeV1 {
       this.candidate,
       this.review,
     );
-    const artifactPath = loopV2RunResultShadowArtifactPath(
-      this.workspaceRoot,
-      this.runId,
-    );
+    const artifactPath = loopV2RunResultShadowArtifactPath(this.workspaceRoot, this.runId);
     atomicWrite(
       artifactPath,
-      serializeLoopV2RunResultShadowArtifactV1(
-        artifact,
-        terminal,
-        this.candidate,
-        this.review,
-      ),
+      serializeLoopV2RunResultShadowArtifactV1(artifact, terminal, this.candidate, this.review),
     );
     const persisted = parseLoopV2RunResultShadowArtifactV1(
       fs.readFileSync(artifactPath, "utf8"),
@@ -365,16 +320,11 @@ export class LoopV2LiveReviewRuntimeV1 {
     return persisted;
   }
 
-  private persistClaim(
-    candidate: LoopV2LiveCandidateArtifactV1,
-  ): LoopV2LiveReviewClaimV1 {
+  private persistClaim(candidate: LoopV2LiveCandidateArtifactV1): LoopV2LiveReviewClaimV1 {
     const claim = buildLoopV2LiveReviewClaimV1(candidate);
     const claimPath = loopV2LiveReviewClaimPath(this.workspaceRoot, this.runId);
     atomicWrite(claimPath, serializeLoopV2LiveReviewClaimV1(claim, candidate));
-    return parseLoopV2LiveReviewClaimV1(
-      fs.readFileSync(claimPath, "utf8"),
-      candidate,
-    );
+    return parseLoopV2LiveReviewClaimV1(fs.readFileSync(claimPath, "utf8"), candidate);
   }
 
   private commitCandidateArtifact(
@@ -388,18 +338,9 @@ export class LoopV2LiveReviewRuntimeV1 {
     candidate: LoopV2LiveCandidateArtifactV1,
     review: LoopV2LiveReviewArtifactV1,
   ): LoopV2LiveReviewArtifactV1 {
-    const reviewPath = loopV2LiveReviewArtifactPath(
-      this.workspaceRoot,
-      this.runId,
-    );
-    atomicWrite(
-      reviewPath,
-      serializeLoopV2LiveReviewArtifactV1(review, candidate),
-    );
-    return parseLoopV2LiveReviewArtifactV1(
-      fs.readFileSync(reviewPath, "utf8"),
-      candidate,
-    );
+    const reviewPath = loopV2LiveReviewArtifactPath(this.workspaceRoot, this.runId);
+    atomicWrite(reviewPath, serializeLoopV2LiveReviewArtifactV1(review, candidate));
+    return parseLoopV2LiveReviewArtifactV1(fs.readFileSync(reviewPath, "utf8"), candidate);
   }
 
   private readCandidateBoundArtifact<T>(
@@ -413,9 +354,7 @@ export class LoopV2LiveReviewRuntimeV1 {
     try {
       value = JSON.parse(serialized);
     } catch {
-      throw new Error(
-        `Loop v2 resume artifact is not valid JSON: ${path.basename(artifactPath)}`,
-      );
+      throw new Error(`Loop v2 resume artifact is not valid JSON: ${path.basename(artifactPath)}`);
     }
     if (
       typeof value !== "object" ||

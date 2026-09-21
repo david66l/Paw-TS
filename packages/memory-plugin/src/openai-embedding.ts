@@ -2,12 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { MemoryEmbeddingService } from "@paw/memory/longterm";
 
-export type MemoryEmbeddingEventTypeV1 =
-  | "hit"
-  | "miss"
-  | "retry"
-  | "store"
-  | "failed";
+export type MemoryEmbeddingEventTypeV1 = "hit" | "miss" | "retry" | "store" | "failed";
 
 export interface MemoryEmbeddingEventV1 {
   readonly schemaVersion: "paw.memory-embedding-event.v1";
@@ -37,8 +32,7 @@ export interface OpenAICompatibleMemoryEmbeddingOptionsV1 {
   readonly onEvent?: (event: MemoryEmbeddingEventV1) => void;
 }
 
-export interface ObservableMemoryEmbeddingServiceV1
-  extends MemoryEmbeddingService {
+export interface ObservableMemoryEmbeddingServiceV1 extends MemoryEmbeddingService {
   embedMany(texts: readonly string[]): Promise<readonly (readonly number[])[]>;
   snapshot(): Readonly<{
     hits: number;
@@ -77,28 +71,14 @@ export function createOpenAICompatibleMemoryEmbeddingServiceV1(
   if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0) {
     throw new Error("Memory embedding cache size must be positive");
   }
-  if (
-    !Number.isSafeInteger(maxBatchSize) ||
-    maxBatchSize < 1 ||
-    maxBatchSize > 64
-  ) {
+  if (!Number.isSafeInteger(maxBatchSize) || maxBatchSize < 1 || maxBatchSize > 64) {
     throw new Error("Memory embedding batch size must be between 1 and 64");
   }
-  if (
-    !Number.isSafeInteger(maxAttempts) ||
-    maxAttempts < 1 ||
-    maxAttempts > 5
-  ) {
+  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
     throw new Error("Memory embedding max attempts must be between 1 and 5");
   }
-  if (
-    !Number.isSafeInteger(retryBaseDelayMs) ||
-    retryBaseDelayMs < 0 ||
-    retryBaseDelayMs > 5_000
-  ) {
-    throw new Error(
-      "Memory embedding retry base delay must be between 0 and 5000ms",
-    );
+  if (!Number.isSafeInteger(retryBaseDelayMs) || retryBaseDelayMs < 0 || retryBaseDelayMs > 5_000) {
+    throw new Error("Memory embedding retry base delay must be between 0 and 5000ms");
   }
   const request = input.fetch ?? globalThis.fetch;
   if (typeof request !== "function") {
@@ -119,9 +99,7 @@ export function createOpenAICompatibleMemoryEmbeddingServiceV1(
       const vectors = await service.embedMany([text]);
       return [...vectors[0]!];
     },
-    async embedMany(
-      texts: readonly string[],
-    ): Promise<readonly (readonly number[])[]> {
+    async embedMany(texts: readonly string[]): Promise<readonly (readonly number[])[]> {
       if (texts.length === 0) return Object.freeze([]);
       const items = texts.map((text) => {
         const normalized = text.trim();
@@ -178,19 +156,11 @@ export function createOpenAICompatibleMemoryEmbeddingServiceV1(
           retryBaseDelayMs,
           onRetry(attempt, reasonCode) {
             for (const item of batch) {
-              emit(
-                input,
-                "retry",
-                model,
-                version,
-                item.textHash,
-                item.startedAt,
-                {
-                  attempt,
-                  maxAttempts,
-                  reasonCode,
-                },
-              );
+              emit(input, "retry", model, version, item.textHash, item.startedAt, {
+                attempt,
+                maxAttempts,
+                reasonCode,
+              });
             }
           },
         });
@@ -220,14 +190,7 @@ export function createOpenAICompatibleMemoryEmbeddingServiceV1(
         } catch (error) {
           for (const item of batch) {
             failures += 1;
-            emit(
-              input,
-              "failed",
-              model,
-              version,
-              item.textHash,
-              item.startedAt,
-            );
+            emit(input, "failed", model, version, item.textHash, item.startedAt);
           }
           throw error;
         } finally {
@@ -280,10 +243,7 @@ class MemoryEmbeddingRequestError extends Error {
       cause?: unknown;
     } = {},
   ) {
-    super(
-      message,
-      options.cause === undefined ? undefined : { cause: options.cause },
-    );
+    super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "MemoryEmbeddingRequestError";
     this.retryReason = options.retryReason;
   }
@@ -300,10 +260,7 @@ async function fetchEmbeddingsWithRetry(input: {
   readonly request: typeof fetch;
   readonly maxAttempts: number;
   readonly retryBaseDelayMs: number;
-  readonly onRetry: (
-    attempt: number,
-    reasonCode: MemoryEmbeddingRetryReasonV1,
-  ) => void;
+  readonly onRetry: (attempt: number, reasonCode: MemoryEmbeddingRetryReasonV1) => void;
 }): Promise<readonly (readonly number[])[]> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= input.maxAttempts; attempt += 1) {
@@ -312,9 +269,7 @@ async function fetchEmbeddingsWithRetry(input: {
     } catch (error) {
       lastError = error;
       const reasonCode =
-        error instanceof MemoryEmbeddingRequestError
-          ? error.retryReason
-          : undefined;
+        error instanceof MemoryEmbeddingRequestError ? error.retryReason : undefined;
       if (!reasonCode || attempt >= input.maxAttempts) throw error;
       input.onRetry(attempt + 1, reasonCode);
       const delayMs = input.retryBaseDelayMs * 2 ** (attempt - 1);
@@ -365,11 +320,7 @@ async function fetchEmbeddings(input: {
         `Memory embedding request failed with HTTP ${response.status}`,
         {
           retryReason:
-            response.status === 429
-              ? "http_429"
-              : response.status >= 500
-                ? "http_5xx"
-                : undefined,
+            response.status === 429 ? "http_429" : response.status >= 500 ? "http_5xx" : undefined,
         },
       );
     }
@@ -384,25 +335,18 @@ async function fetchEmbeddings(input: {
         (vector) =>
           !Array.isArray(vector) ||
           vector.length !== input.dimensions ||
-          vector.some(
-            (value) => typeof value !== "number" || !Number.isFinite(value),
-          ),
+          vector.some((value) => typeof value !== "number" || !Number.isFinite(value)),
       )
     ) {
       throw new Error("Memory embedding response vector is invalid");
     }
-    return Object.freeze(
-      vectors.map((vector) => Object.freeze(vector as number[])),
-    );
+    return Object.freeze(vectors.map((vector) => Object.freeze(vector as number[])));
   } finally {
     clearTimeout(timeout);
   }
 }
 
-function trimCache(
-  cache: Map<string, readonly number[]>,
-  maxEntries: number,
-): void {
+function trimCache(cache: Map<string, readonly number[]>, maxEntries: number): void {
   while (cache.size > maxEntries) {
     const oldest = cache.keys().next().value as string | undefined;
     if (oldest === undefined) break;
@@ -412,18 +356,12 @@ function trimCache(
 
 function embeddingEndpoint(value: string): string {
   const normalized = requiredIdentity(value, "baseUrl").replace(/\/+$/, "");
-  return normalized.endsWith("/embeddings")
-    ? normalized
-    : `${normalized}/embeddings`;
+  return normalized.endsWith("/embeddings") ? normalized : `${normalized}/embeddings`;
 }
 
 function requiredIdentity(value: string, name: string): string {
   const normalized = value.trim();
-  if (
-    !normalized ||
-    normalized.length > 512 ||
-    hasAsciiControlCharacter(normalized)
-  ) {
+  if (!normalized || normalized.length > 512 || hasAsciiControlCharacter(normalized)) {
     throw new Error(`Memory embedding ${name} is invalid`);
   }
   return normalized;
@@ -444,10 +382,7 @@ function emit(
   version: string,
   textHash: string,
   startedAt: number,
-  details: Pick<
-    MemoryEmbeddingEventV1,
-    "attempt" | "maxAttempts" | "reasonCode"
-  > = {},
+  details: Pick<MemoryEmbeddingEventV1, "attempt" | "maxAttempts" | "reasonCode"> = {},
 ): void {
   try {
     input.onEvent?.(

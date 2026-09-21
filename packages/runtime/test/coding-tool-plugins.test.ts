@@ -30,10 +30,7 @@ describe("phase-one and code-intelligence runtime tool plugins", () => {
   test("execute through one permission, checkpoint, lock, and Harness path", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-coding-plugins-"));
     roots.push(root);
-    fs.writeFileSync(
-      path.join(root, "a.ts"),
-      "export function before(): number { return 1; }\n",
-    );
+    fs.writeFileSync(path.join(root, "a.ts"), "export function before(): number { return 1; }\n");
     fs.writeFileSync(path.join(root, "notes.txt"), "not an LSP source\n");
     execFileSync("git", ["init", "--quiet"], { cwd: root });
     execFileSync("git", ["config", "user.email", "test@example.invalid"], {
@@ -95,9 +92,7 @@ describe("phase-one and code-intelligence runtime tool plugins", () => {
       ok: true,
       results: [{ path: "a.ts", ok: true, changed: true }],
     });
-    expect(fs.readFileSync(path.join(root, "a.ts"), "utf8")).toContain(
-      "function after",
-    );
+    expect(fs.readFileSync(path.join(root, "a.ts"), "utf8")).toContain("function after");
 
     const readSettlements = await executor.executeSettled(
       [
@@ -124,9 +119,7 @@ describe("phase-one and code-intelligence runtime tool plugins", () => {
       matches: [
         {
           file: "a.ts",
-          symbols: [
-            expect.objectContaining({ name: "after", kind: "function" }),
-          ],
+          symbols: [expect.objectContaining({ name: "after", kind: "function" })],
         },
       ],
     });
@@ -139,25 +132,17 @@ describe("phase-one and code-intelligence runtime tool plugins", () => {
     });
     expect(recorded.flat()).toHaveLength(5);
     expect(
-      recorded
-        .flat()
-        .filter((fact) => fact.type === "tool.effect_checkpoint_allocated"),
+      recorded.flat().filter((fact) => fact.type === "tool.effect_checkpoint_allocated"),
     ).toHaveLength(1);
   });
 });
 
-function call(
-  id: string,
-  name: string,
-  args: Record<string, unknown>,
-): RuntimeToolCallV1 {
+function call(id: string, name: string, args: Record<string, unknown>): RuntimeToolCallV1 {
   return { id, name, arguments: args, argumentsValid: true };
 }
 
 function resultOf(
-  settlement:
-    | { readonly status: string; readonly result?: ToolRunResult }
-    | undefined,
+  settlement: { readonly status: string; readonly result?: ToolRunResult } | undefined,
 ): ToolRunResult {
   if (!settlement?.result) throw new Error("expected a completed tool result");
   return settlement.result;

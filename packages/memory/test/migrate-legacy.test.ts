@@ -23,18 +23,13 @@ afterAll(async () => {
   try {
     const sql = getSql();
     for (const mid of writtenIds) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-        mid,
-      ]);
-      await sql.unsafe("DELETE FROM memory_versions WHERE memory_id = $1", [
-        mid,
-      ]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [mid]);
+      await sql.unsafe("DELETE FROM memory_versions WHERE memory_id = $1", [mid]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [mid]);
     }
-    await sql.unsafe(
-      `DELETE FROM memory_candidates WHERE proposed_subject_key LIKE $1`,
-      [`legacy:file:%`],
-    );
+    await sql.unsafe(`DELETE FROM memory_candidates WHERE proposed_subject_key LIKE $1`, [
+      `legacy:file:%`,
+    ]);
     await closeSql();
   } catch {
     /* ignore */
@@ -54,8 +49,7 @@ describe("migrateLegacyMemories", () => {
       type: "project",
       kind: "project_rule",
       confidence: 0.9,
-      content:
-        "Always use Bun for install/test scripts. Do not introduce npm-only tooling.",
+      content: "Always use Bun for install/test scripts. Do not introduce npm-only tooling.",
       priority: "high",
       tags: ["tooling", "bun"],
     });
@@ -82,10 +76,7 @@ describe("migrateLegacyMemories", () => {
     writtenIds.push(...r1.writtenIds);
 
     // 至少一条 active
-    const byKey = await memoryItemDao.findBySubjectKey(
-      "legacy:file:prefer-bun",
-      "active",
-    );
+    const byKey = await memoryItemDao.findBySubjectKey("legacy:file:prefer-bun", "active");
     if (byKey[0]) {
       writtenIds.push(byKey[0].id);
       expect(byKey[0].title).toBe("prefer-bun");
@@ -124,10 +115,7 @@ describe("migrateLegacyMemories", () => {
     expect(r.candidatesCreated).toBe(1);
     expect(r.written).toBe(0);
 
-    const items = await memoryItemDao.findBySubjectKey(
-      "legacy:file:dry-only",
-      "active",
-    );
+    const items = await memoryItemDao.findBySubjectKey("legacy:file:dry-only", "active");
     expect(items.length).toBe(0);
   });
 });

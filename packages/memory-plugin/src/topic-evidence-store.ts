@@ -16,9 +16,7 @@ import {
 
 export interface MemoryTopicEvidenceStoreV1 {
   readonly scope: PawNextMemoryScopeV1;
-  load(
-    signal: AbortSignal,
-  ): Promise<readonly MemoryTopicEvidenceCatalogItemV1[]>;
+  load(signal: AbortSignal): Promise<readonly MemoryTopicEvidenceCatalogItemV1[]>;
 }
 
 export interface MemoryTopicEvidenceStoreEventV1 {
@@ -101,10 +99,7 @@ export function createPostgresMemoryTopicEvidenceStoreV1(
   });
 }
 
-function parseTopic(
-  row: Record<string, unknown>,
-  scope: PawNextMemoryScopeV1,
-): MemoryTopicV1 {
+function parseTopic(row: Record<string, unknown>, scope: PawNextMemoryScopeV1): MemoryTopicV1 {
   const family = row.family;
   if (
     family !== "semantic" &&
@@ -123,26 +118,16 @@ function parseTopic(
     id: requiredString(row.id, "MemoryTopicEvidenceTopicInvalid"),
     scope,
     family,
-    canonicalName: requiredString(
-      row.canonical_name,
-      "MemoryTopicEvidenceTopicInvalid",
-    ),
-    normalizedName: requiredString(
-      row.normalized_name,
-      "MemoryTopicEvidenceTopicInvalid",
-    ),
+    canonicalName: requiredString(row.canonical_name, "MemoryTopicEvidenceTopicInvalid"),
+    normalizedName: requiredString(row.normalized_name, "MemoryTopicEvidenceTopicInvalid"),
     status: "active",
-    projectionHash: requiredString(
-      row.projection_hash,
-      "MemoryTopicEvidenceTopicInvalid",
-    ),
+    projectionHash: requiredString(row.projection_hash, "MemoryTopicEvidenceTopicInvalid"),
     createdAt: toIso(row.created_at),
   });
 }
 
 function parseSnapshot(value: unknown): MemoryTopicTrajectorySnapshotV1 {
-  const parsed =
-    typeof value === "string" ? (JSON.parse(value) as unknown) : value;
+  const parsed = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw namedError("MemoryTopicEvidenceSnapshotInvalid");
   }
@@ -162,10 +147,7 @@ function toIso(value: unknown): string {
   return date.toISOString();
 }
 
-function assertScopedEngine(
-  engine: MemoryStoreEngine,
-  scope: PawNextMemoryScopeV1,
-): void {
+function assertScopedEngine(engine: MemoryStoreEngine, scope: PawNextMemoryScopeV1): void {
   if (
     !engine.scope ||
     engine.scope.tenantId !== scope.tenantId ||

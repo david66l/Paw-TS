@@ -4,10 +4,7 @@ import type { ToolDefinition } from "@paw/models";
 
 import { fixMalformedToolArguments } from "../src/orchestrator/fix-malformed-args.js";
 
-function toolDef(
-  name: string,
-  properties: Record<string, unknown>,
-): ToolDefinition {
+function toolDef(name: string, properties: Record<string, unknown>): ToolDefinition {
   return {
     type: "function",
     function: {
@@ -110,21 +107,13 @@ describe("fixMalformedToolArguments", () => {
   });
 
   test("returns args unchanged for unknown tool", () => {
-    const args = fixMalformedToolArguments(
-      { x: '"[1,2]"' },
-      "workspace.unknown",
-      defs,
-    );
+    const args = fixMalformedToolArguments({ x: '"[1,2]"' }, "workspace.unknown", defs);
     expect(args).toEqual({ x: '"[1,2]"' });
   });
 
   test("returns args unchanged when schema has no properties", () => {
     const noSchema: ToolDefinition[] = [toolDef("workspace.noop", {})];
-    const args = fixMalformedToolArguments(
-      { a: "[1]" },
-      "workspace.noop",
-      noSchema,
-    );
+    const args = fixMalformedToolArguments({ a: "[1]" }, "workspace.noop", noSchema);
     expect(args).toEqual({ a: "[1]" });
   });
 });

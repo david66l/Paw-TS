@@ -93,15 +93,8 @@ describe("output recall extension", () => {
       value,
     };
 
-    const delegated = await projector.project(
-      { ...base, tool: "workspace_delegate" },
-      signal,
-    );
-    if (
-      !delegated ||
-      typeof delegated !== "object" ||
-      Array.isArray(delegated)
-    ) {
+    const delegated = await projector.project({ ...base, tool: "workspace_delegate" }, signal);
+    if (!delegated || typeof delegated !== "object" || Array.isArray(delegated)) {
       throw new Error("Delegated output was not projected to a recall stub");
     }
     const delegatedRecord = delegated as Readonly<Record<string, JsonValue>>;
@@ -131,12 +124,8 @@ describe("output recall extension", () => {
     };
     // Advertised constraints must follow this instance's policy and resolver,
     // not the legacy archive-search contract or its hard-coded 8000-char cap.
-    expect(new RegExp(parameters.properties.id.pattern).test(artifactId)).toBe(
-      true,
-    );
-    expect(
-      new RegExp(parameters.properties.id.pattern).test("search words"),
-    ).toBe(false);
+    expect(new RegExp(parameters.properties.id.pattern).test(artifactId)).toBe(true);
+    expect(new RegExp(parameters.properties.id.pattern).test("search words")).toBe(false);
     expect(parameters.properties.limit.maximum).toBe(8);
     const registry = createFrozenToolRegistryV1({
       tools: [],
@@ -193,10 +182,7 @@ describe("output recall extension", () => {
       shellBoundary: "deny",
     });
     const classify = (name: string, args: Record<string, unknown>) =>
-      registry.validateAndClassify(
-        { id: "child-read", name, arguments: args },
-        process.cwd(),
-      );
+      registry.validateAndClassify({ id: "child-read", name, arguments: args }, process.cwd());
     const recall = classify("context_recall", { id: artifactId });
     expect(recall.ok).toBe(true);
     if (recall.ok)
@@ -205,15 +191,9 @@ describe("output recall extension", () => {
         concurrencyMode: "exclusive",
         effectClass: "read",
       });
-    expect(
-      classify("workspace_read_file", { path: ".paw/settings.local.json" }).ok,
-    ).toBe(false);
-    expect(classify("workspace_read_file", { path: "../secret.txt" }).ok).toBe(
-      false,
-    );
-    expect(
-      classify("context_recall", { id: ".paw/settings.local.json" }).ok,
-    ).toBe(false);
+    expect(classify("workspace_read_file", { path: ".paw/settings.local.json" }).ok).toBe(false);
+    expect(classify("workspace_read_file", { path: "../secret.txt" }).ok).toBe(false);
+    expect(classify("context_recall", { id: ".paw/settings.local.json" }).ok).toBe(false);
   });
 
   test("pages verified Journal-bound output and rebuilds from the same prefix", async () => {
@@ -519,9 +499,7 @@ function settledRecallPrefix(
         schemaVersion: "paw.model-response.v1",
         providerProtocol: "openai-compatible",
         assistantContent: "",
-        toolCalls: [
-          nativeCall("current-recall-call", "context_recall", current, 0),
-        ],
+        toolCalls: [nativeCall("current-recall-call", "context_recall", current, 0)],
       }),
     }),
     inputFact({

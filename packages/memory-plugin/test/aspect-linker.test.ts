@@ -41,9 +41,7 @@ describe("bounded aspect linker v1", () => {
               existingMembership(setup.cookingId, "event"),
               existingMembership(setup.gardeningId, "event"),
             ],
-            edges: [
-              existingEdge("cooking-preference", "supports", setup.cookingId),
-            ],
+            edges: [existingEdge("cooking-preference", "supports", setup.cookingId)],
           },
         ],
       }),
@@ -90,9 +88,7 @@ describe("bounded aspect linker v1", () => {
       aspectCandidates: [
         {
           aspectId: preference.id,
-          representatives: [
-            linkRepresentative(old.id, "Previously preferred detail"),
-          ],
+          representatives: [linkRepresentative(old.id, "Previously preferred detail")],
         },
       ],
       relationCandidates: [{ claimId: current.id, targetClaimIds: [old.id] }],
@@ -158,9 +154,7 @@ describe("bounded aspect linker v1", () => {
     expect(firstResult.aspects[0]?.id).toBe(replay.aspects[0]?.id);
     expect(firstResult.linkingRevision).toBe(replay.linkingRevision);
     const packet = JSON.parse(buildMemoryAspectLinkerRequestV1(first).user);
-    expect(firstResult.linkingInputRevision).toBe(
-      deriveMemoryAspectLinkingInputRevisionV1(first),
-    );
+    expect(firstResult.linkingInputRevision).toBe(deriveMemoryAspectLinkingInputRevisionV1(first));
     expect(packet).toEqual(
       expect.objectContaining({
         maxNewAspects: 1,
@@ -196,9 +190,7 @@ describe("bounded aspect linker v1", () => {
             {
               claimId: unlinked.id,
               disposition: "link",
-              memberships: [
-                newMembership("duplicate-budget", "Budget tracking method"),
-              ],
+              memberships: [newMembership("duplicate-budget", "Budget tracking method")],
               edges: [],
             },
           ],
@@ -219,17 +211,12 @@ describe("bounded aspect linker v1", () => {
         targetClaimIds: ["cooking-preference", "gardening-preference"],
       },
     ]);
-    expect(JSON.stringify(packet.relationCandidates)).not.toContain(
-      "Enjoys cooking",
-    );
+    expect(JSON.stringify(packet.relationCandidates)).not.toContain("Enjoys cooking");
 
     const changed = {
       ...setup.input,
       claims: [
-        linkClaim(
-          "garden-cooking-club",
-          "Joined a different activity with cooking workshops",
-        ),
+        linkClaim("garden-cooking-club", "Joined a different activity with cooking workshops"),
       ],
     };
     expect(deriveMemoryAspectLinkingInputRevisionV1(changed)).not.toBe(
@@ -276,29 +263,19 @@ describe("bounded aspect linker v1", () => {
           {
             aspectId: preference.id,
             representatives: [
-              linkRepresentative(
-                representative.id,
-                "Previously preferred detailed responses",
-              ),
+              linkRepresentative(representative.id, "Previously preferred detailed responses"),
             ],
           },
         ],
-        relationCandidates: [
-          { claimId: current.id, targetClaimIds: [relationTarget.id] },
-        ],
+        relationCandidates: [{ claimId: current.id, targetClaimIds: [relationTarget.id] }],
       }),
       relationEvidence: [
-        linkRepresentative(
-          relationTarget.id,
-          "Detailed responses were useful for complex work",
-        ),
+        linkRepresentative(relationTarget.id, "Detailed responses were useful for complex work"),
       ],
     };
     const packet = JSON.parse(buildMemoryAspectLinkerRequestV1(input).user);
     expect(packet.evidence).toHaveLength(3);
-    expect(packet.aspectCandidates[0].representatives).not.toContain(
-      relationTarget.id,
-    );
+    expect(packet.aspectCandidates[0].representatives).not.toContain(relationTarget.id);
     const result = parseMemoryAspectLinkingV1(
       JSON.stringify({
         decisions: [
@@ -317,9 +294,7 @@ describe("bounded aspect linker v1", () => {
 
   test("allows a partially linked claim to add one missing aspect", () => {
     const setup = multiAspectSetup();
-    const combined = setup.input.snapshot.claims.find(
-      (item) => item.id === "garden-cooking-club",
-    );
+    const combined = setup.input.snapshot.claims.find((item) => item.id === "garden-cooking-club");
     if (combined === undefined) throw new Error("missing combined claim");
     const partiallyLinked = applyMemoryAspectGraphMutationV1({
       snapshot: setup.input.snapshot,
@@ -327,17 +302,11 @@ describe("bounded aspect linker v1", () => {
     });
     const input = linkerInput({
       snapshot: partiallyLinked,
-      claims: [
-        linkClaim(
-          combined.id,
-          "Joined a garden club that also holds cooking workshops",
-        ),
-      ],
+      claims: [linkClaim(combined.id, "Joined a garden club that also holds cooking workshops")],
       aspectCandidates: [
         {
           aspectId: setup.gardeningId,
-          representatives:
-            setup.input.aspectCandidates[1]?.representatives ?? [],
+          representatives: setup.input.aspectCandidates[1]?.representatives ?? [],
         },
       ],
       relationCandidates: [],
@@ -360,9 +329,7 @@ describe("bounded aspect linker v1", () => {
       input,
     );
     const applied = applyMemoryAspectLinkingV1(partiallyLinked, result);
-    expect(
-      applied.memberships.filter((item) => item.claimId === combined.id),
-    ).toHaveLength(2);
+    expect(applied.memberships.filter((item) => item.claimId === combined.id)).toHaveLength(2);
   });
 
   test("holds future supersedes until the new state becomes effective", () => {
@@ -387,9 +354,7 @@ describe("bounded aspect linker v1", () => {
       aspectCandidates: [
         {
           aspectId: preference.id,
-          representatives: [
-            linkRepresentative(old.id, "Currently prefers detailed answers"),
-          ],
+          representatives: [linkRepresentative(old.id, "Currently prefers detailed answers")],
         },
       ],
       relationCandidates: [{ claimId: future.id, targetClaimIds: [old.id] }],
@@ -470,9 +435,7 @@ describe("bounded aspect linker v1", () => {
               claimId: "garden-cooking-club",
               disposition: "link",
               memberships: [existingMembership(setup.cookingId, "event")],
-              edges: [
-                existingEdge("invented-claim", "supports", setup.cookingId),
-              ],
+              edges: [existingEdge("invented-claim", "supports", setup.cookingId)],
             },
           ],
         }),
@@ -488,13 +451,7 @@ describe("bounded aspect linker v1", () => {
               claimId: "garden-cooking-club",
               disposition: "link",
               memberships: [existingMembership(setup.cookingId, "event")],
-              edges: [
-                existingEdge(
-                  "cooking-preference",
-                  "supersedes",
-                  setup.cookingId,
-                ),
-              ],
+              edges: [existingEdge("cooking-preference", "supersedes", setup.cookingId)],
             },
           ],
         }),
@@ -536,10 +493,7 @@ describe("bounded aspect linker v1", () => {
             {
               aspectId: aspect.id,
               representatives: [
-                linkRepresentative(
-                  representative.id,
-                  "Prefers detailed work reports",
-                ),
+                linkRepresentative(representative.id, "Prefers detailed work reports"),
               ],
             },
           ],
@@ -613,16 +567,11 @@ describe("bounded aspect linker v1", () => {
     const result = await linker.link(setup, new AbortController().signal);
     expect(result.settlement).toBe("deferred_model_failure");
     expect(result.deferredClaimIds).toEqual(["unlinked-claim"]);
-    expect(events[0]).toEqual(
-      expect.objectContaining({ reasonCode: "Model_limit" }),
-    );
+    expect(events[0]).toEqual(expect.objectContaining({ reasonCode: "Model_limit" }));
 
     const aborted = new AbortController();
     aborted.abort();
-    expect(linker.link(setup, aborted.signal)).rejects.toHaveProperty(
-      "name",
-      "AbortError",
-    );
+    expect(linker.link(setup, aborted.signal)).rejects.toHaveProperty("name", "AbortError");
   });
 });
 
@@ -660,24 +609,15 @@ function multiAspectSetup() {
     gardeningId: gardening.id,
     input: linkerInput({
       snapshot,
-      claims: [
-        linkClaim(
-          combined.id,
-          "Joined a garden club that also holds cooking workshops",
-        ),
-      ],
+      claims: [linkClaim(combined.id, "Joined a garden club that also holds cooking workshops")],
       aspectCandidates: [
         {
           aspectId: cooking.id,
-          representatives: [
-            linkRepresentative(cookingPreference.id, "Enjoys cooking"),
-          ],
+          representatives: [linkRepresentative(cookingPreference.id, "Enjoys cooking")],
         },
         {
           aspectId: gardening.id,
-          representatives: [
-            linkRepresentative(gardeningPreference.id, "Enjoys gardening"),
-          ],
+          representatives: [linkRepresentative(gardeningPreference.id, "Enjoys gardening")],
         },
       ],
       relationCandidates: [
@@ -745,11 +685,7 @@ function claim(id: string, validFrom: string) {
   });
 }
 
-function membership(
-  claimId: string,
-  aspectId: string,
-  role: "state" | "event" = "state",
-) {
+function membership(claimId: string, aspectId: string, role: "state" | "event" = "state") {
   return createMemoryClaimAspectMembershipV1({
     scope,
     claimId,

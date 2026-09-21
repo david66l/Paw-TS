@@ -2,12 +2,7 @@
  * 桌面 ↔ agent-host 一次性请求封装（复用 packages 能力，不重写业务）。
  */
 
-import type {
-  CheckpointRow,
-  HostStatus,
-  RunEventRow,
-  RunSummaryRow,
-} from "../vite-env";
+import type { CheckpointRow, HostStatus, RunEventRow, RunSummaryRow } from "../vite-env";
 
 function api() {
   return window.pawDesktop;
@@ -135,9 +130,7 @@ export async function requestHostStatus(
     modelLabel: r.modelLabel,
     skillsCount: r.skillsCount,
     skillsDir: r.skillsDir,
-    ...(typeof r.agentsCount === "number"
-      ? { agentsCount: r.agentsCount }
-      : {}),
+    ...(typeof r.agentsCount === "number" ? { agentsCount: r.agentsCount } : {}),
     ...(Array.isArray(r.agents) ? { agents: r.agents } : {}),
     ...(r.error ? { error: r.error } : {}),
   };
@@ -151,9 +144,7 @@ export interface SettingsState {
   error?: string;
 }
 
-export async function requestSettings(
-  workspaceRoot?: string,
-): Promise<SettingsState> {
+export async function requestSettings(workspaceRoot?: string): Promise<SettingsState> {
   const desk = api();
   if (!desk?.getSettings || !desk.onSettingsDone) {
     throw new Error("Settings API 不可用");

@@ -30,11 +30,7 @@ import type { ModelTokenUsage } from "@paw/core";
 
 import type { LanguageModel } from "./language-model.js";
 import type { ModelCompleteOptions } from "./model-options.js";
-import type {
-  ChatMessage,
-  ModelCompletionResult,
-  ModelStreamChunk,
-} from "./types.js";
+import type { ChatMessage, ModelCompletionResult, ModelStreamChunk } from "./types.js";
 
 /** 预设的单次响应配置 */
 export interface FakeModelResponse {
@@ -98,9 +94,7 @@ export class FakeLanguageModel implements LanguageModel {
     const response = this.responses?.[this._callCount - 1];
     if (response) {
       if (response.error) {
-        throw response.error instanceof Error
-          ? response.error
-          : new Error(response.error);
+        throw response.error instanceof Error ? response.error : new Error(response.error);
       }
       const text = response.text ?? "";
       return {
@@ -223,16 +217,11 @@ export class FakeLanguageModel implements LanguageModel {
       return `Searching the workspace.\n{"tool":"workspace.search","args":${JSON.stringify(args)}}`;
     }
     // ── 读两个文件意图（"read both files" 等） ──
-    if (
-      /\bread\s+(?:both|two)\b/.test(lower) ||
-      /\bread\s+files?\b/.test(lower)
-    ) {
+    if (/\bread\s+(?:both|two)\b/.test(lower) || /\bread\s+files?\b/.test(lower)) {
       const quotes = [...text.matchAll(/["']([^"']*)["']/g)].map((m) => m[1]);
       const lines: string[] = [];
       for (const p of quotes.slice(0, 2)) {
-        lines.push(
-          `{"tool":"workspace.read_file","args":{"path":${JSON.stringify(p)}}}`,
-        );
+        lines.push(`{"tool":"workspace.read_file","args":{"path":${JSON.stringify(p)}}}`);
       }
       return `Reading files in parallel.\n${lines.join("\n")}`;
     }
@@ -255,10 +244,7 @@ export class FakeLanguageModel implements LanguageModel {
  * 根据消息和生成文本估算 token 用量。
  * 使用简单的字符数/4 估算，非精确计算但足够测试使用。
  */
-function estimateUsage(
-  messages: readonly ChatMessage[],
-  text: string,
-): ModelTokenUsage {
+function estimateUsage(messages: readonly ChatMessage[], text: string): ModelTokenUsage {
   let promptChars = 0;
   for (const m of messages) {
     promptChars += m.content.length;

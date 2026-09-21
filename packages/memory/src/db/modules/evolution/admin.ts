@@ -8,12 +8,7 @@
 import { governanceDecisionDao } from "../../dao/governanceDecision.js";
 import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
 import { memoryItemDao } from "../../dao/memoryItem.js";
-import type {
-  ActorRef,
-  GovernanceDecision,
-  MemoryCandidate,
-  MemoryItem,
-} from "../../types.js";
+import type { ActorRef, GovernanceDecision, MemoryCandidate, MemoryItem } from "../../types.js";
 import { MemoryGovernance } from "../write/memoryGovernance.js";
 import { MemoryStore } from "../write/memoryStore.js";
 

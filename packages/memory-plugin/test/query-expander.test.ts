@@ -9,13 +9,9 @@ import {
 describe("bounded memory query expansion", () => {
   test("opens only for multi-source comparison or aggregation questions", () => {
     expect(
-      shouldExpandMemoryQueryV1(
-        "How much more did I spend in Hawaii compared to Tokyo?",
-      ),
+      shouldExpandMemoryQueryV1("How much more did I spend in Hawaii compared to Tokyo?"),
     ).toBe(true);
-    expect(
-      shouldExpandMemoryQueryV1("How many dinner parties did I attend?"),
-    ).toBe(true);
+    expect(shouldExpandMemoryQueryV1("How many dinner parties did I attend?")).toBe(true);
     expect(shouldExpandMemoryQueryV1("What phone case did I buy?")).toBe(false);
   });
 

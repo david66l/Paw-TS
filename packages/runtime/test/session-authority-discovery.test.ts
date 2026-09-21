@@ -38,10 +38,7 @@ describe("strict read-only Session authority discovery", () => {
     const alpha = acquire(root, "session-alpha", "run-authority");
     await alpha.linearizeJournalBatch(linearizeInput("alpha-commit"));
     acquire(root, "session-zeta", "run-empty");
-    const orphanRunDir = path.join(
-      sessionDir(root, "session-alpha"),
-      hashText("run-orphan"),
-    );
+    const orphanRunDir = path.join(sessionDir(root, "session-alpha"), hashText("run-orphan"));
     fs.mkdirSync(path.join(orphanRunDir, "journal-artifacts"), {
       recursive: true,
     });
@@ -53,25 +50,19 @@ describe("strict read-only Session authority discovery", () => {
     expect(first.entries.map(({ entryName }) => entryName)).toEqual(
       [...first.entries.map(({ entryName }) => entryName)].sort(),
     );
-    const discovered = first.entries.filter(
-      (entry) => entry.status === "discovered",
-    );
+    const discovered = first.entries.filter((entry) => entry.status === "discovered");
     expect(discovered.map(({ sessionId }) => sessionId).sort()).toEqual([
       "session-alpha",
       "session-zeta",
     ]);
     expect(
-      discovered.find(({ sessionId }) => sessionId === "session-alpha")
-        ?.inventory.runs,
+      discovered.find(({ sessionId }) => sessionId === "session-alpha")?.inventory.runs,
     ).toMatchObject([{ runId: "run-authority" }]);
     expect(
-      discovered.find(({ sessionId }) => sessionId === "session-zeta")
-        ?.inventory.runs,
+      discovered.find(({ sessionId }) => sessionId === "session-zeta")?.inventory.runs,
     ).toEqual([]);
     expect(
-      discovered.flatMap(({ inventory }) =>
-        inventory.runs.map(({ runId }) => runId),
-      ),
+      discovered.flatMap(({ inventory }) => inventory.runs.map(({ runId }) => runId)),
     ).not.toContain("run-orphan");
     expect(isRecursivelyFrozen(first)).toBe(true);
   });
@@ -130,8 +121,7 @@ describe("strict read-only Session authority discovery", () => {
     expect(rawTreeSnapshot(root)).toBe(before);
     expect(
       result.entries.find(
-        (entry) =>
-          entry.status === "discovered" && entry.sessionId === "healthy",
+        (entry) => entry.status === "discovered" && entry.sessionId === "healthy",
       ),
     ).toBeDefined();
     expect(corruptReasonByEntry(result.entries)).toEqual({
@@ -142,33 +132,23 @@ describe("strict read-only Session authority discovery", () => {
       ["f".repeat(64)]: "unsafe_session_directory",
       "foreign-entry": "unrecognized_session_entry",
     });
-    expect(
-      result.entries.filter(({ status }) => status === "corrupt"),
-    ).toHaveLength(6);
+    expect(result.entries.filter(({ status }) => status === "corrupt")).toHaveLength(6);
   });
 
   test("an unsafe shared sessions root fails the whole scan without following it", () => {
     const root = tempRoot();
     const outside = tempRoot();
     fs.mkdirSync(path.dirname(sessionsRoot(root)), { recursive: true });
-    fs.symlinkSync(
-      outside,
-      sessionsRoot(root),
-      process.platform === "win32" ? "junction" : "dir",
-    );
+    fs.symlinkSync(outside, sessionsRoot(root), process.platform === "win32" ? "junction" : "dir");
     const outsideBefore = rawTreeSnapshot(outside);
-    expect(() =>
-      discoverFileSessionAuthoritiesV1({ workspaceRoot: root }),
-    ).toThrow("symbolic link");
+    expect(() => discoverFileSessionAuthoritiesV1({ workspaceRoot: root })).toThrow(
+      "symbolic link",
+    );
     expect(rawTreeSnapshot(outside)).toBe(outsideBefore);
   });
 });
 
-function acquire(
-  root: string,
-  sessionId: string,
-  runId: string,
-): FileSessionExecutionLeaseV1 {
+function acquire(root: string, sessionId: string, runId: string): FileSessionExecutionLeaseV1 {
   const result = acquireFileSessionExecutionLeaseV1({
     workspaceRoot: root,
     sessionId,
@@ -262,9 +242,7 @@ function rawTreeSnapshot(root: string): string {
           type: "file",
           nlink: stat.nlink,
           size: stat.size,
-          hash: createHash("sha256")
-            .update(fs.readFileSync(full))
-            .digest("hex"),
+          hash: createHash("sha256").update(fs.readFileSync(full)).digest("hex"),
         });
       }
     }

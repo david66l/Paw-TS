@@ -5,15 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type {
-  DerivedDecisionV1,
-  InputFactV1,
-  RunJournalEnvelopeV1,
-} from "@paw/protocol";
-import {
-  RUN_JOURNAL_SCHEMA_VERSION_V1,
-  parseRunJournalPrefixV1,
-} from "@paw/protocol";
+import type { DerivedDecisionV1, InputFactV1, RunJournalEnvelopeV1 } from "@paw/protocol";
+import { RUN_JOURNAL_SCHEMA_VERSION_V1, parseRunJournalPrefixV1 } from "@paw/protocol";
 import {
   EMPTY_RUN_JOURNAL_PREFIX_HASH_V1,
   FileRunSessionV1,
@@ -39,23 +32,15 @@ describe("fenced FileRunSession hard gates", () => {
     const readyOne = path.join(root, "ready-one");
     const readyTwo = path.join(root, "ready-two");
     const barrier = path.join(root, "claim-go");
-    const first = runChild(
-      childArgs("compete", root, "owner-one", 0, 100, 0, readyOne, barrier),
-    );
-    const second = runChild(
-      childArgs("compete", root, "owner-two", 0, 100, 0, readyTwo, barrier),
-    );
+    const first = runChild(childArgs("compete", root, "owner-one", 0, 100, 0, readyOne, barrier));
+    const second = runChild(childArgs("compete", root, "owner-two", 0, 100, 0, readyTwo, barrier));
     await waitFor(() => fs.existsSync(readyOne) && fs.existsSync(readyTwo));
     fs.writeFileSync(barrier, "go\n", "utf8");
 
     const results = (await Promise.all([first, second])).map(parseChildResult);
-    expect(results.filter(({ status }) => status === "committed")).toHaveLength(
-      1,
-    );
+    expect(results.filter(({ status }) => status === "committed")).toHaveLength(1);
     expect(results.filter(({ status }) => status === "busy")).toHaveLength(1);
-    expect(
-      results.find(({ status }) => status === "busy")?.artifactPublished,
-    ).toBeFalse();
+    expect(results.find(({ status }) => status === "busy")?.artifactPublished).toBeFalse();
 
     const index = commitIndex(root);
     expect(index.commits).toHaveLength(1);
@@ -68,24 +53,13 @@ describe("fenced FileRunSession hard gates", () => {
     const paused = path.join(root, "artifact-paused");
     const resume = path.join(root, "artifact-resume");
     const predecessor = runChild(
-      childArgs(
-        "pause_after_artifact",
-        root,
-        "owner-old",
-        0,
-        10,
-        0,
-        paused,
-        resume,
-      ),
+      childArgs("pause_after_artifact", root, "owner-old", 0, 10, 0, paused, resume),
     );
     await waitFor(() => fs.existsSync(paused));
     const staleArtifact = fs.readFileSync(paused, "utf8").trim();
 
     const successor = parseChildResult(
-      await runChild(
-        childArgs("commit", root, "owner-new", 10, 10, 0, "-", "-"),
-      ),
+      await runChild(childArgs("commit", root, "owner-new", 10, 10, 0, "-", "-")),
     );
     expect(successor.status).toBe("committed");
     fs.writeFileSync(resume, "go\n", "utf8");
@@ -95,9 +69,7 @@ describe("fenced FileRunSession hard gates", () => {
     const index = commitIndex(root);
     expect(index.commits).toHaveLength(1);
     expect(index.commits[0]?.artifactFileName).not.toBe(staleArtifact);
-    expect(artifactFiles(root).map((file) => path.basename(file))).toContain(
-      staleArtifact,
-    );
+    expect(artifactFiles(root).map((file) => path.basename(file))).toContain(staleArtifact);
     expect(artifactFiles(root)).toHaveLength(2);
     assertCommittedPrefix(root);
   });
@@ -105,16 +77,12 @@ describe("fenced FileRunSession hard gates", () => {
   test("a committed predecessor makes a successor with the old anchor conflict", async () => {
     const root = tempRoot();
     const predecessor = parseChildResult(
-      await runChild(
-        childArgs("commit", root, "owner-old", 0, 10, 0, "-", "-"),
-      ),
+      await runChild(childArgs("commit", root, "owner-old", 0, 10, 0, "-", "-")),
     );
     expect(predecessor.status).toBe("committed");
 
     const staleAnchor = parseChildResult(
-      await runChild(
-        childArgs("anchor_probe", root, "owner-new", 10, 10, 0, "-", "-"),
-      ),
+      await runChild(childArgs("anchor_probe", root, "owner-new", 10, 10, 0, "-", "-")),
     );
     expect(staleAnchor.status).toBe("anchor_conflict");
     expect(staleAnchor.head).toEqual(commitIndex(root).head);
@@ -176,8 +144,7 @@ describe("fenced FileRunSession hard gates", () => {
       },
       {
         name: "input CAS",
-        run: (session) =>
-          session.commitInputFacts(0, [attemptStarted("input-cas")]),
+        run: (session) => session.commitInputFacts(0, [attemptStarted("input-cas")]),
       },
       {
         name: "decision CAS",
@@ -186,9 +153,7 @@ describe("fenced FileRunSession hard gates", () => {
       {
         name: "decision and input CAS",
         run: (session) =>
-          session.commitDecisionAndInputFacts(0, decision(1), [
-            attemptStarted("decision-input"),
-          ]),
+          session.commitDecisionAndInputFacts(0, decision(1), [attemptStarted("decision-input")]),
       },
     ];
 
@@ -199,9 +164,9 @@ describe("fenced FileRunSession hard gates", () => {
       const session = open(root, lease, () => now);
       now = 10;
       const before = rawTree(root);
-      await expect(
-        Promise.resolve().then(() => operation.run(session)),
-      ).rejects.toBeInstanceOf(SessionExecutionLeaseLostError);
+      await expect(Promise.resolve().then(() => operation.run(session))).rejects.toBeInstanceOf(
+        SessionExecutionLeaseLostError,
+      );
       expect(rawTree(root), operation.name).toEqual(before);
       session.close();
     }
@@ -239,13 +204,7 @@ describe("fenced FileRunSession hard gates", () => {
 });
 
 interface ChildResult {
-  readonly status:
-    | "committed"
-    | "busy"
-    | "lost"
-    | "error"
-    | "anchor_conflict"
-    | "acquired";
+  readonly status: "committed" | "busy" | "lost" | "error" | "anchor_conflict" | "acquired";
   readonly artifactPublished: boolean;
   readonly artifactFileName?: string;
   readonly head?: { readonly tailSeq: number; readonly prefixHash: string };
@@ -362,11 +321,7 @@ async function commitTamperedArtifact(
   const content = `${JSON.stringify(artifact)}\n`;
   const artifactHash = hashBytes(content);
   const artifactFileName = `0000000000000001-0000000000000001-${artifactHash}.json`;
-  fs.writeFileSync(
-    path.join(artifactDirectory(root), artifactFileName),
-    content,
-    "utf8",
-  );
+  fs.writeFileSync(path.join(artifactDirectory(root), artifactFileName), content, "utf8");
   const result = await lease.linearizeJournalBatch({
     commitId: artifactHash,
     expectedHead: {
@@ -416,10 +371,7 @@ function assertCommittedPrefix(root: string): void {
   const index = commitIndex(root);
   const envelopes = index.commits.flatMap((commit) => {
     const artifact = JSON.parse(
-      fs.readFileSync(
-        path.join(artifactDirectory(root), commit.artifactFileName),
-        "utf8",
-      ),
+      fs.readFileSync(path.join(artifactDirectory(root), commit.artifactFileName), "utf8"),
     ) as { envelopes: RunJournalEnvelopeV1[] };
     return artifact.envelopes;
   });
@@ -516,10 +468,7 @@ function runChild(args: readonly string[]): Promise<string> {
   });
 }
 
-function runChildExpectExit(
-  args: readonly string[],
-  expectedCode: number,
-): Promise<void> {
+function runChildExpectExit(args: readonly string[], expectedCode: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [...args], {
       cwd: path.resolve(import.meta.dir, ".."),

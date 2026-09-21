@@ -52,9 +52,7 @@ export class ContextBuilder {
   private readonly estimator: TokenEstimator;
 
   constructor(policyEngine?: PolicyEngine, estimator?: TokenEstimator) {
-    this.policy =
-      policyEngine?.getDefaults().context ??
-      new PolicyEngine().getDefaults().context;
+    this.policy = policyEngine?.getDefaults().context ?? new PolicyEngine().getDefaults().context;
     // AC-P1-9 口径统一：预算决策与 memory-runtime 上报共用同一估算器
     // （原 ascii/4 + nonAscii/1.5 启发式已移除，注入主路径估算器）
     this.estimator = estimator ?? new TiktokenEstimator();
@@ -87,9 +85,7 @@ export class ContextBuilder {
       (s) => s.status !== "completed" && s.status !== "skipped",
     );
     if (activeSteps.length > 0) {
-      const planLines = activeSteps
-        .slice(0, 5)
-        .map((s) => `- [${s.status}] ${s.description}`);
+      const planLines = activeSteps.slice(0, 5).map((s) => `- [${s.status}] ${s.description}`);
       const content = `[CURRENT PLAN]\n${planLines.join("\n")}`;
       items.push(
         this.makeItem("working_memory", "plan", "hot", content, ++order, {
@@ -122,14 +118,12 @@ export class ContextBuilder {
     if (failedTests && failedTests.length > 0) {
       const content = `[FAILED TESTS]\n${failedTests.map((f) => `- ${f.testName}: ${f.message}`).join("\n")}`;
       items.push(
-        this.makeItem(
-          "working_memory",
-          "test_failures",
-          "hot",
-          content,
-          ++order,
-          { authority: 1.0, relevance: 1.0, freshness: 1.0, confidence: 1.0 },
-        ),
+        this.makeItem("working_memory", "test_failures", "hot", content, ++order, {
+          authority: 1.0,
+          relevance: 1.0,
+          freshness: 1.0,
+          confidence: 1.0,
+        }),
       );
       hotTokens += this.estimate(content);
     }
@@ -138,14 +132,12 @@ export class ContextBuilder {
     if (input.workingMemory.nextAction) {
       const content = `[NEXT ACTION]\n${input.workingMemory.nextAction.description}`;
       items.push(
-        this.makeItem(
-          "working_memory",
-          "next_action",
-          "hot",
-          content,
-          ++order,
-          { authority: 0.8, relevance: 0.9, freshness: 1.0, confidence: 0.8 },
-        ),
+        this.makeItem("working_memory", "next_action", "hot", content, ++order, {
+          authority: 0.8,
+          relevance: 0.9,
+          freshness: 1.0,
+          confidence: 0.8,
+        }),
       );
       hotTokens += this.estimate(content);
     }
@@ -155,19 +147,12 @@ export class ContextBuilder {
     for (const r of retrieved) {
       const content = `[MEMORY: ${r.memory.type}] ${r.memory.title}\n${r.memory.summary}\n(confidence: ${r.memory.confidence.toFixed(2)}, score: ${r.score.toFixed(2)})`;
       items.push(
-        this.makeItem(
-          "long_term_memory",
-          r.memory.id,
-          "warm",
-          content,
-          ++order,
-          {
-            authority: 0.7,
-            relevance: r.score,
-            freshness: 0.5,
-            confidence: r.memory.confidence,
-          },
-        ),
+        this.makeItem("long_term_memory", r.memory.id, "warm", content, ++order, {
+          authority: 0.7,
+          relevance: r.score,
+          freshness: 0.5,
+          confidence: r.memory.confidence,
+        }),
       );
     }
 
@@ -175,14 +160,12 @@ export class ContextBuilder {
     for (const ptr of input.workingMemory.contextPointers) {
       const content = `[REFERENCE] ${ptr.pointerType}: ${ptr.uri} — ${ptr.description}`;
       items.push(
-        this.makeItem(
-          "cold_pointer",
-          ptr.id,
-          "cold_pointer",
-          content,
-          ++order,
-          { authority: 0.3, relevance: 0.3, freshness: 0.3, confidence: 0.5 },
-        ),
+        this.makeItem("cold_pointer", ptr.id, "cold_pointer", content, ++order, {
+          authority: 0.3,
+          relevance: 0.3,
+          freshness: 0.3,
+          confidence: 0.5,
+        }),
       );
     }
 
@@ -190,14 +173,12 @@ export class ContextBuilder {
     if (input.workingMemory.openQuestions.length > 0) {
       const content = `[OPEN QUESTIONS]\n${input.workingMemory.openQuestions.map((q) => `- ${q.question}`).join("\n")}`;
       items.push(
-        this.makeItem(
-          "working_memory",
-          "open_questions",
-          "warm",
-          content,
-          ++order,
-          { authority: 0.5, relevance: 0.6, freshness: 0.8, confidence: 0.5 },
-        ),
+        this.makeItem("working_memory", "open_questions", "warm", content, ++order, {
+          authority: 0.5,
+          relevance: 0.6,
+          freshness: 0.8,
+          confidence: 0.5,
+        }),
       );
     }
 
@@ -237,8 +218,7 @@ export class ContextBuilder {
     // 统计
     const byPlacement: Record<string, number> = {};
     for (const item of items) {
-      byPlacement[item.placement] =
-        (byPlacement[item.placement] ?? 0) + item.estimatedTokens;
+      byPlacement[item.placement] = (byPlacement[item.placement] ?? 0) + item.estimatedTokens;
     }
 
     return {
@@ -283,12 +263,7 @@ export class ContextBuilder {
       order,
       scores: {
         ...scores,
-        total:
-          (scores.authority +
-            scores.relevance +
-            scores.freshness +
-            scores.confidence) /
-          4,
+        total: (scores.authority + scores.relevance + scores.freshness + scores.confidence) / 4,
       },
     };
   }

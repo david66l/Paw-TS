@@ -1,14 +1,8 @@
 import type { AgentToolCallAction } from "@paw/core";
 import { isGitDiffCommand } from "../shell-command.js";
 import type { TaskState } from "../task-state.js";
-import {
-  hasVerificationRetryAvailable,
-  verificationOutcome,
-} from "../task-state.js";
-import {
-  isVerificationCommand,
-  verificationCommandFamily,
-} from "../verification-command.js";
+import { hasVerificationRetryAvailable, verificationOutcome } from "../task-state.js";
+import { isVerificationCommand, verificationCommandFamily } from "../verification-command.js";
 import type { VerificationPolicy } from "./verification-gate.js";
 
 const SOURCE_MUTATION_TOOLS = new Set([
@@ -18,16 +12,12 @@ const SOURCE_MUTATION_TOOLS = new Set([
   "workspace.notebook_edit",
 ]);
 
-const CONTROL_STATE_TOOLS = new Set([
-  "workspace.todo_write",
-  "workspace.acceptance_update",
-]);
+const CONTROL_STATE_TOOLS = new Set(["workspace.todo_write", "workspace.acceptance_update"]);
 
 function isDiffInspection(call: AgentToolCallAction): boolean {
   if (call.tool === "workspace.git_diff") return true;
   if (call.tool !== "workspace.run_shell") return false;
-  const command =
-    typeof call.args.command === "string" ? call.args.command : "";
+  const command = typeof call.args.command === "string" ? call.args.command : "";
   return isGitDiffCommand(command);
 }
 
@@ -35,15 +25,13 @@ function isInvestigationCall(call: AgentToolCallAction): boolean {
   if (CONTROL_STATE_TOOLS.has(call.tool)) return false;
   if (SOURCE_MUTATION_TOOLS.has(call.tool)) return false;
   if (call.tool !== "workspace.run_shell") return !isDiffInspection(call);
-  const command =
-    typeof call.args.command === "string" ? call.args.command : "";
+  const command = typeof call.args.command === "string" ? call.args.command : "";
   return !isVerificationCommand(command) && !isDiffInspection(call);
 }
 
 function isVerificationCall(call: AgentToolCallAction): boolean {
   if (call.tool !== "workspace.run_shell") return false;
-  const command =
-    typeof call.args.command === "string" ? call.args.command : "";
+  const command = typeof call.args.command === "string" ? call.args.command : "";
   return isVerificationCommand(command);
 }
 
@@ -51,10 +39,7 @@ function shellSyntaxComplexity(command: string): number {
   return command.match(/&&|\|\||[|;<>]/g)?.length ?? 0;
 }
 
-function isSimplifiedVerificationRetry(
-  command: string,
-  failedCommand: string,
-): boolean {
+function isSimplifiedVerificationRetry(command: string, failedCommand: string): boolean {
   const next = command.replace(/\s+/g, " ").trim();
   const previous = failedCommand.replace(/\s+/g, " ").trim();
   if (!next || next === previous) return false;
@@ -68,18 +53,12 @@ function isSimplifiedVerificationRetry(
   );
 }
 
-function shellCallsSince(
-  state: TaskState,
-  revision: number | undefined,
-): number {
+function shellCallsSince(state: TaskState, revision: number | undefined): number {
   const current = state.shellCommandRevision ?? state.commandsRun.length;
   return Math.max(0, current - (revision ?? current));
 }
 
-export function isEditRecoveryRead(
-  call: AgentToolCallAction,
-  state: TaskState,
-): boolean {
+export function isEditRecoveryRead(call: AgentToolCallAction, state: TaskState): boolean {
   return (
     call.tool === "workspace.read_file" &&
     typeof call.args.path === "string" &&
@@ -122,8 +101,7 @@ export function convergenceEvidenceKey(state: TaskState): string {
     : latest.mutationRevision !== revision
       ? "stale"
       : verificationOutcome(latest);
-  const diff =
-    (state.diffInspectedRevision ?? 0) === revision ? "current" : "stale";
+  const diff = (state.diffInspectedRevision ?? 0) === revision ? "current" : "stale";
   return `r${revision}:${verification}:${diff}`;
 }
 
@@ -153,32 +131,20 @@ export function convergenceToolBlockReason(
     verificationPolicy?.authority === "external" &&
     hasVerificationRetryAvailable(state)
   ) {
-    if (
-      SOURCE_MUTATION_TOOLS.has(call.tool) ||
-      CONTROL_STATE_TOOLS.has(call.tool)
-    )
-      return null;
+    if (SOURCE_MUTATION_TOOLS.has(call.tool) || CONTROL_STATE_TOOLS.has(call.tool)) return null;
     if (isVerificationCall(call)) {
-      const command =
-        typeof call.args.command === "string" ? call.args.command : "";
+      const command = typeof call.args.command === "string" ? call.args.command : "";
       if (isSimplifiedVerificationRetry(command, latest.command)) return null;
       return "[LoopPolicy:simplify_verification_retry] The current revision has one recoverable verification invocation failure. One retry is available, but it must use the same test-runner family with a materially simpler direct command. Remove display-only pipes, redirections, wrappers, or invalid options; do not repeat or cosmetically rename the failed command.";
     }
     return "[LoopPolicy:retry_verification_directly] The current revision has one recoverable verification invocation failure. Before diff inspection or more investigation, run one materially simpler direct command from the same test-runner family. Remove display-only pipes, redirections, wrappers, or invalid options. If that retry cannot execute, the trusted external verifier will take over.";
   }
   if (!currentVerification && isInvestigationCall(call)) {
-    const directChecks = shellCallsSince(
-      state,
-      state.mutationShellCommandRevision,
-    );
+    const directChecks = shellCallsSince(state, state.mutationShellCommandRevision);
     if (call.tool === "workspace.run_shell" && directChecks < 2) return null;
     return "[LoopPolicy:verify_current_revision] The current source revision has no fresh verification. Broad investigation is deferred; run the narrowest existing repository test or direct acceptance command now.";
   }
-  if (
-    latest &&
-    currentVerification &&
-    verificationOutcome(latest) === "code_failed"
-  ) {
+  if (latest && currentVerification && verificationOutcome(latest) === "code_failed") {
     if (verificationPolicy?.authority === "external") {
       if ((state.diffInspectedRevision ?? 0) !== revision) {
         if (isDiffInspection(call) || SOURCE_MUTATION_TOOLS.has(call.tool)) {
@@ -192,10 +158,7 @@ export function convergenceToolBlockReason(
       return null;
     }
     if (isInvestigationCall(call)) {
-      const diagnosticCalls = shellCallsSince(
-        state,
-        latest.shellCommandRevision,
-      );
+      const diagnosticCalls = shellCallsSince(state, latest.shellCommandRevision);
       if (call.tool === "workspace.run_shell" && diagnosticCalls < 2) {
         return null;
       }
@@ -261,11 +224,7 @@ export function convergenceGuidance(
   verificationPolicy?: VerificationPolicy,
 ): string | null {
   const revision = state.mutationRevision ?? 0;
-  if (
-    revision === 0 ||
-    turnsRemaining <= 0 ||
-    turnsRemaining > convergenceWindow(maxSteps)
-  ) {
+  if (revision === 0 || turnsRemaining <= 0 || turnsRemaining > convergenceWindow(maxSteps)) {
     return null;
   }
   const latest = state.testResults.at(-1);

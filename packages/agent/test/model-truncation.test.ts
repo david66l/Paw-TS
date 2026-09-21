@@ -67,9 +67,7 @@ describe("Model Truncation", () => {
     const done = events.find((e) => e.event.type === "model.done");
     expect(done?.event.type).toBe("model.done");
     if (done?.event.type === "model.done") {
-      expect(done.event.text).toBe(
-        '{"action":"final_answer","summary":"Part one and part two."}',
-      );
+      expect(done.event.text).toBe('{"action":"final_answer","summary":"Part one and part two."}');
     }
   });
 
@@ -247,12 +245,8 @@ describe("Model Truncation", () => {
 
     expect(result.status).toBe("failed");
     expect(modelCalls).toBe(1);
-    expect(events.some((event) => event.event.type === "tool.call")).toBe(
-      false,
-    );
-    const durableDones = saved.filter(
-      (envelope) => envelope.event.type === "model.done",
-    );
+    expect(events.some((event) => event.event.type === "tool.call")).toBe(false);
+    const durableDones = saved.filter((envelope) => envelope.event.type === "model.done");
     expect(durableDones).toHaveLength(1);
     expect(durableDones[0]?.event).toMatchObject({
       type: "model.done",
@@ -342,12 +336,8 @@ describe("Model Truncation", () => {
 
     expect(result.status).toBe("failed");
     expect(modelCalls).toBe(2);
-    expect(events.some((event) => event.event.type === "tool.call")).toBe(
-      false,
-    );
-    const durableDones = saved.filter(
-      (envelope) => envelope.event.type === "model.done",
-    );
+    expect(events.some((event) => event.event.type === "tool.call")).toBe(false);
+    const durableDones = saved.filter((envelope) => envelope.event.type === "model.done");
     expect(durableDones).toHaveLength(1);
     expect(durableDones[0]?.event).toMatchObject({
       type: "model.done",

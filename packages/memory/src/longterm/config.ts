@@ -46,9 +46,7 @@ function parseConfig(raw: unknown): MemoryLocalConfig {
 }
 
 /** 读取配置；文件不存在/损坏 → 默认配置（零记忆基线不阻塞，场景 H） */
-export async function loadMemoryConfig(
-  root: string = process.cwd(),
-): Promise<MemoryLocalConfig> {
+export async function loadMemoryConfig(root: string = process.cwd()): Promise<MemoryLocalConfig> {
   try {
     return parseConfig(JSON.parse(await readFile(configPath(root), "utf-8")));
   } catch {
@@ -75,10 +73,6 @@ export async function saveMemoryConfig(
   const current = await loadMemoryConfig(root);
   const next = { ...current, ...patch };
   await mkdir(join(root, ".paw"), { recursive: true });
-  await writeFile(
-    configPath(root),
-    `${JSON.stringify(next, null, 2)}\n`,
-    "utf-8",
-  );
+  await writeFile(configPath(root), `${JSON.stringify(next, null, 2)}\n`, "utf-8");
   return next;
 }

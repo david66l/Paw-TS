@@ -7,15 +7,8 @@ import type {
 } from "@paw/completion-review";
 import { createCompletionReviewEvidencePacketV1 } from "@paw/completion-review";
 import type { SubAgentResult } from "@paw/harness";
-import type {
-  EnvironmentAuditEvidenceV1,
-  InputFactV1,
-  RunJournalEnvelopeV1,
-} from "@paw/protocol";
-import {
-  type BrowserAuditCheckV1,
-  assertBrowserAuditCheckV1,
-} from "@paw/protocol";
+import type { EnvironmentAuditEvidenceV1, InputFactV1, RunJournalEnvelopeV1 } from "@paw/protocol";
+import { type BrowserAuditCheckV1, assertBrowserAuditCheckV1 } from "@paw/protocol";
 import {
   BROWSER_AUDIT_POLICY,
   BROWSER_PROOF_PREFIX,
@@ -23,8 +16,7 @@ import {
 } from "./browser-check.js";
 import { verifyVisualEvidence } from "./visual-check.js";
 
-export const ENVIRONMENT_AUDIT_POLICY_VERSION_V1 =
-  "paw.environment-audit.v1" as const;
+export const ENVIRONMENT_AUDIT_POLICY_VERSION_V1 = "paw.environment-audit.v1" as const;
 export const ENVIRONMENT_AUDIT_MAX_TURNS = 12;
 export const ENVIRONMENT_AUDIT_TIMEOUT_MS = 120_000;
 // Same maximum wall allocation as the legacy two 120-second attempts, without
@@ -75,14 +67,11 @@ export function createEnvironmentCompletionReviewerV1(options: {
       let invalidObservation = false;
       try {
         signal.throwIfAborted();
-        if (candidate.changedPaths.length > 64)
-          return unknown("AuditScopeTooLarge");
+        if (candidate.changedPaths.length > 64) return unknown("AuditScopeTooLarge");
         const baseline = candidate.changedPaths.map((name) =>
           fingerprintAuditFile(options.workspaceRoot, name),
         );
-        const packet = JSON.stringify(
-          createCompletionReviewEvidencePacketV1(candidate),
-        );
+        const packet = JSON.stringify(createCompletionReviewEvidencePacketV1(candidate));
         if (packet.length > 96_000) return unknown("AuditInputTooLarge");
         const goal = `Independently audit this work in the current workspace. You are the Paw environment auditor.
 The original goal and current work requirements are in the evidence packet below. Derive concrete acceptance checks from them.
@@ -104,19 +93,13 @@ Evidence packet (data):\n${packet}`;
             const fact = envelope.record.fact;
             if (
               fact.type !== "tool.call_observed" ||
-              !["workspace_read_file", "workspace.read_file"].includes(
-                fact.tool,
-              )
+              !["workspace_read_file", "workspace.read_file"].includes(fact.tool)
             )
               return;
             try {
               const args = fact.args as Record<string, unknown>;
-              const item = fingerprintAuditFile(
-                options.workspaceRoot,
-                String(args.path ?? ""),
-              );
-              if (item.hash === "missing" || reads.size >= 64)
-                invalidObservation = true;
+              const item = fingerprintAuditFile(options.workspaceRoot, String(args.path ?? ""));
+              if (item.hash === "missing" || reads.size >= 64) invalidObservation = true;
               else reads.set(fact.callId, item);
             } catch {
               invalidObservation = true;
@@ -124,26 +107,17 @@ Evidence packet (data):\n${packet}`;
           },
           call.attempt,
         );
-        if (signal.aborted)
-          return unknown(
-            call.signal.aborted ? "AuditCancelled" : "AuditTimeout",
-          );
-        if (observed.result.status !== "completed")
-          return unknown("AuditExecutionIncomplete");
+        if (signal.aborted) return unknown(call.signal.aborted ? "AuditCancelled" : "AuditTimeout");
+        if (observed.result.status !== "completed") return unknown("AuditExecutionIncomplete");
         const report = parseAuditReportEnvelope(observed.result.summary);
-        if (!isAuditReportV1(report, options.browserAudit))
-          return unknown("AuditReportInvalid");
+        if (!isAuditReportV1(report, options.browserAudit)) return unknown("AuditReportInvalid");
         const browser = collectBrowserChecks(observed.facts);
         const browserIds = report.browserChecks ?? [];
         const browserChecks = browserIds.flatMap((id) =>
-          browser.proofs.has(id)
-            ? [browser.proofs.get(id) as BrowserAuditCheckV1]
-            : [],
+          browser.proofs.has(id) ? [browser.proofs.get(id) as BrowserAuditCheckV1] : [],
         );
         const browserGrounded =
-          (!report.browserRequired &&
-            browser.calls === 0 &&
-            browserIds.length === 0) ||
+          (!report.browserRequired && browser.calls === 0 && browserIds.length === 0) ||
           (options.browserAudit === true &&
             browserChecks.length > 0 &&
             browserChecks.length === browserIds.length);
@@ -182,12 +156,9 @@ Evidence packet (data):\n${packet}`;
           };
         }
         const stable = [...baseline, ...reads.values()].every(
-          (item) =>
-            fingerprintAuditFile(options.workspaceRoot, item.path).hash ===
-            item.hash,
+          (item) => fingerprintAuditFile(options.workspaceRoot, item.path).hash === item.hash,
         );
-        const grounded =
-          referenced.length > 0 && referenced.every((p) => successful.has(p));
+        const grounded = referenced.length > 0 && referenced.every((p) => successful.has(p));
         const missingReferences = referenced.filter((p) => !successful.has(p));
         const groundingSummary = !referenced.length
           ? "审计报告没有引用本次审计实际读取的文件，不能确认验收通过。"
@@ -198,18 +169,11 @@ Evidence packet (data):\n${packet}`;
         const locator = observed.result.childRun;
         if (!locator) return unknown("AuditJournalMissing");
         const clean =
-          stable &&
-          !invalidObservation &&
-          grounded &&
-          browserGrounded &&
-          visualGrounded;
+          stable && !invalidObservation && grounded && browserGrounded && visualGrounded;
         const environmentAudit: EnvironmentAuditEvidenceV1 = {
           policyVersion: ENVIRONMENT_AUDIT_POLICY_VERSION_V1,
           candidateHash: candidate.candidateHash,
-          sourceRevision: environmentRevision(
-            options.workspaceRoot,
-            candidate.changedPaths,
-          ),
+          sourceRevision: environmentRevision(options.workspaceRoot, candidate.changedPaths),
           childSessionId: locator.sessionId,
           childRunId: locator.runId,
           integrity: clean ? "clean" : "suspect",
@@ -218,16 +182,16 @@ Evidence packet (data):\n${packet}`;
             ...(!grounded ? [groundingSummary] : []),
             ...(invalidObservation ? ["审计过程中出现无效的读取证据。"] : []),
             ...(!visualGrounded
-              ? [
-                  "视觉验收缺少与当前截图及任务绑定的通过证据。",
-                  ...report.unmetCriteria,
-                ].slice(0, 32)
+              ? ["视觉验收缺少与当前截图及任务绑定的通过证据。", ...report.unmetCriteria].slice(
+                  0,
+                  32,
+                )
               : browserGrounded
                 ? report.unmetCriteria
-                : [
-                    "浏览器行为缺少成功且与实际调用绑定的断言证据。",
-                    ...report.unmetCriteria,
-                  ].slice(0, 32)),
+                : ["浏览器行为缺少成功且与实际调用绑定的断言证据。", ...report.unmetCriteria].slice(
+                    0,
+                    32,
+                  )),
           ].slice(0, 32),
           ...(browserChecks.length ? { browserChecks } : {}),
         };
@@ -260,13 +224,11 @@ Evidence packet (data):\n${packet}`;
         return {
           status: "completed",
           verdict:
-            report.completion === "complete" &&
-            report.unmetCriteria.length === 0
+            report.completion === "complete" && report.unmetCriteria.length === 0
               ? "allow"
               : "block",
           reasonCode:
-            report.completion === "complete" &&
-            report.unmetCriteria.length === 0
+            report.completion === "complete" && report.unmetCriteria.length === 0
               ? "environment_verified"
               : "environment_unmet",
           summary: [
@@ -280,11 +242,7 @@ Evidence packet (data):\n${packet}`;
         };
       } catch {
         return unknown(
-          call.signal.aborted
-            ? "AuditCancelled"
-            : timedOut
-              ? "AuditTimeout"
-              : "AuditUnavailable",
+          call.signal.aborted ? "AuditCancelled" : timedOut ? "AuditTimeout" : "AuditUnavailable",
         );
       } finally {
         clearTimeout(timer);
@@ -305,9 +263,7 @@ function collectBrowserChecks(facts: readonly InputFactV1[]) {
     ),
   );
   const dispatched = new Set(
-    facts.flatMap((f) =>
-      f.type === "tool.dispatch_recorded" ? [f.callId] : [],
-    ),
+    facts.flatMap((f) => (f.type === "tool.dispatch_recorded" ? [f.callId] : [])),
   );
   const proofs = new Map<string, BrowserAuditCheckV1>();
   for (const fact of facts) {
@@ -327,16 +283,13 @@ function collectBrowserChecks(facts: readonly InputFactV1[]) {
       const proof = { ...data, callId: fact.callId };
       assertBrowserAuditCheckV1(proof);
       const scenario = parseBrowserScenario(calls.get(fact.callId));
-      const expectedHash = createHash("sha256")
-        .update(JSON.stringify(scenario))
-        .digest("hex");
+      const expectedHash = createHash("sha256").update(JSON.stringify(scenario)).digest("hex");
       if (
         schemaVersion === BROWSER_AUDIT_POLICY &&
         passed === true &&
         proof.url === scenario.url &&
         proof.scenarioHash === expectedHash &&
-        proof.assertions ===
-          scenario.steps.filter((s) => s.action.startsWith("assert_")).length
+        proof.assertions === scenario.steps.filter((s) => s.action.startsWith("assert_")).length
       )
         proofs.set(fact.callId, proof);
     } catch {
@@ -421,18 +374,14 @@ export function isAuditReportV1(
   const r = v as Record<string, unknown>;
   return (
     Object.keys(r)
-      .filter(
-        (k) =>
-          k !== "notes" && !["browserRequired", "browserChecks"].includes(k),
-      )
+      .filter((k) => k !== "notes" && !["browserRequired", "browserChecks"].includes(k))
       .sort()
       .join(",") === "completion,evidencePaths,summary,unmetCriteria" &&
     // Prose is bounded at the raw envelope (96k) and persisted summary (2k)
     // boundaries. Its display length must not invalidate an otherwise grounded
     // verdict. Keep decision fields and file evidence strictly validated below.
     (r.notes === undefined || typeof r.notes === "string") &&
-    (r.browserRequired === undefined ||
-      typeof r.browserRequired === "boolean") &&
+    (r.browserRequired === undefined || typeof r.browserRequired === "boolean") &&
     (browserAudit ||
       (r.browserRequired !== true &&
         (r.browserChecks === undefined ||
@@ -451,34 +400,24 @@ export function isAuditReportV1(
       (a) =>
         Array.isArray(a) &&
         a.length <= 32 &&
-        a.every(
-          (s) =>
-            typeof s === "string" && s.trim().length > 0 && s.length <= 1000,
-        ),
+        a.every((s) => typeof s === "string" && s.trim().length > 0 && s.length <= 1000),
     )
   );
 }
 
 /** Bound content hashes include dirty/untracked files; paths cannot escape via symlinks. */
-export function fingerprintAuditFile(
-  root: string,
-  name: string,
-): { path: string; hash: string } {
+export function fingerprintAuditFile(root: string, name: string): { path: string; hash: string } {
   const canonical = fs.realpathSync(root);
   const target = path.resolve(canonical, name);
   const relative = path.relative(canonical, target);
   const within = (p: string) =>
-    p !== "" &&
-    !p.startsWith(`..${path.sep}`) &&
-    p !== ".." &&
-    !path.isAbsolute(p);
+    p !== "" && !p.startsWith(`..${path.sep}`) && p !== ".." && !path.isAbsolute(p);
   if (
     !within(relative) ||
     relative.split(path.sep).some((part) => part === ".git" || part === ".paw")
   )
     throw new Error("Audit path outside task workspace");
-  if (!fs.existsSync(target))
-    return { path: relative.split(path.sep).join("/"), hash: "missing" };
+  if (!fs.existsSync(target)) return { path: relative.split(path.sep).join("/"), hash: "missing" };
   if (!within(path.relative(canonical, fs.realpathSync(target))))
     throw new Error("Audit symlink escapes workspace");
   const stat = fs.statSync(target);
@@ -503,15 +442,11 @@ export function projectEnvironmentAcceptance(
       f.reviewerId === ENVIRONMENT_AUDIT_POLICY_VERSION_V1,
   );
   if (claim?.type !== "completion.review_claimed") {
-    const deliveryClaim = segment.find(
-      (f) => f.type === "completion.review_claimed",
-    );
+    const deliveryClaim = segment.find((f) => f.type === "completion.review_claimed");
     const review =
       deliveryClaim?.type === "completion.review_claimed"
         ? segment.find(
-            (f) =>
-              f.type === "completion.review_settled" &&
-              f.reviewId === deliveryClaim.reviewId,
+            (f) => f.type === "completion.review_settled" && f.reviewId === deliveryClaim.reviewId,
           )
         : undefined;
     if (
@@ -530,8 +465,7 @@ export function projectEnvironmentAcceptance(
       : "not_required";
   }
   const settled = segment.find(
-    (f) =>
-      f.type === "completion.review_settled" && f.reviewId === claim.reviewId,
+    (f) => f.type === "completion.review_settled" && f.reviewId === claim.reviewId,
   );
   return settled?.type === "completion.review_settled" &&
     settled.status === "completed" &&
@@ -541,10 +475,7 @@ export function projectEnvironmentAcceptance(
     : "unverified";
 }
 
-export function environmentRevision(
-  root: string,
-  names: readonly string[],
-): string {
+export function environmentRevision(root: string, names: readonly string[]): string {
   return createHash("sha256")
     .update(
       JSON.stringify(

@@ -31,22 +31,13 @@ type ObservationFixture = Readonly<{
   content?: string;
   valueSpans?: readonly Readonly<{ start: number; end: number }>[];
   eventTime?: string;
-  eventTimeBasis?:
-    | "explicit_span"
-    | "source_session_contemporaneous"
-    | "unbound";
+  eventTimeBasis?: "explicit_span" | "source_session_contemporaneous" | "unbound";
   durationEndpointRole?: "start" | "end" | "evidence" | "not_applicable";
   lifecycleRelation?: "none" | "retracts" | "supersedes" | "confirms";
   lifecycleTargetEvidenceRef?: string;
   observedAt: string;
   eventKey?: string;
-  predicateKind?:
-    | "assert"
-    | "update"
-    | "retract"
-    | "confirm"
-    | "prefer"
-    | "disprefer";
+  predicateKind?: "assert" | "update" | "retract" | "confirm" | "prefer" | "disprefer";
   polarity?: "positive" | "negative";
   modality?: "observed" | "goal" | "plan" | "forecast";
   bind?: boolean;
@@ -88,8 +79,7 @@ function executeFixture(input: {
     temporalConstraints,
     candidateScopes,
     lockedSourceIds,
-    originRevision: compileMemoryQueryAnswerOriginV1(input.query)
-      .originRevision,
+    originRevision: compileMemoryQueryAnswerOriginV1(input.query).originRevision,
     selectorVersion: "selector-test",
     selectionRevision: "selection-test",
     committedAttempt: "baseline",
@@ -153,9 +143,7 @@ function executeFixture(input: {
         {
           sourceId: `source-${item.evidenceRef}`,
           evidenceRef: item.evidenceRef,
-          content:
-            item.content ??
-            [item.value, item.eventTime].filter(Boolean).join(" on "),
+          content: item.content ?? [item.value, item.eventTime].filter(Boolean).join(" on "),
           authority: "user_asserted" as const,
           role: "user" as const,
           observedAt: item.observedAt,
@@ -166,19 +154,13 @@ function executeFixture(input: {
       ]),
     ).values(),
   ]);
-  const slotByRequirement = new Map(
-    slots.map((slot) => [slot.requirementId, slot]),
-  );
+  const slotByRequirement = new Map(slots.map((slot) => [slot.requirementId, slot]));
   const observations = input.observations.flatMap((item, observationIndex) => {
     if (item.bind === false) return [];
     const slot = slotByRequirement.get(item.requirementId);
-    const source = sourceLock.items.find(
-      (candidate) => candidate.evidenceRef === item.evidenceRef,
-    );
+    const source = sourceLock.items.find((candidate) => candidate.evidenceRef === item.evidenceRef);
     if (!slot || !source) throw new Error("fixture invalid");
-    const eventStart = item.eventTime
-      ? source.content.indexOf(item.eventTime)
-      : -1;
+    const eventStart = item.eventTime ? source.content.indexOf(item.eventTime) : -1;
     const eventLength = item.eventTime?.length ?? 0;
     return [
       bindMemoryStateObservationV2({
@@ -189,12 +171,8 @@ function executeFixture(input: {
           evidenceRef: item.evidenceRef,
           valueSpans: item.valueSpans ?? [{ start: 0, end: item.value.length }],
           eventTimeSpans:
-            eventStart < 0
-              ? []
-              : [{ start: eventStart, end: eventStart + eventLength }],
-          eventTimeBasis:
-            item.eventTimeBasis ??
-            (eventStart < 0 ? "unbound" : "explicit_span"),
+            eventStart < 0 ? [] : [{ start: eventStart, end: eventStart + eventLength }],
+          eventTimeBasis: item.eventTimeBasis ?? (eventStart < 0 ? "unbound" : "explicit_span"),
           durationEndpointRole:
             item.durationEndpointRole ??
             (slot.durationEndpointContractKind === "evidence_to_host_anchor"
@@ -202,8 +180,7 @@ function executeFixture(input: {
               : slot.durationEndpointContractKind === "distinct_evidence_pair"
                 ? input.observations
                     .slice(0, observationIndex)
-                    .filter((candidate) => candidate.bind !== false).length ===
-                  0
+                    .filter((candidate) => candidate.bind !== false).length === 0
                   ? "start"
                   : "end"
                 : "not_applicable"),
@@ -224,9 +201,7 @@ function executeFixture(input: {
   const verification = {
     verifierVersion: "test-verifier",
     verificationRevision: "test-verification",
-    acceptedObservationIds: observations.map(
-      (observation) => observation.observationId,
-    ),
+    acceptedObservationIds: observations.map((observation) => observation.observationId),
     rejectedObservationIds: [],
   };
   const bindingCertificateValidationContext = {
@@ -250,13 +225,11 @@ function executeFixture(input: {
             sources: [],
             coverage: input.requirements.map((requirement) => {
               const refs =
-                candidateScopes.find(
-                  (scope) => scope.requirementId === requirement.requirementId,
-                )?.evidenceRefs ?? [];
+                candidateScopes.find((scope) => scope.requirementId === requirement.requirementId)
+                  ?.evidenceRefs ?? [];
               return {
                 requirementId: requirement.requirementId,
-                status:
-                  refs.length > 0 ? ("covered" as const) : ("missing" as const),
+                status: refs.length > 0 ? ("covered" as const) : ("missing" as const),
                 selectedHitCount: refs.length,
                 independentEvidenceCount: new Set(refs).size,
                 closureEvidenceCount: refs.length,
@@ -299,9 +272,7 @@ function executeFixture(input: {
       slots,
       frame,
       validatedObservations,
-      bindingCertificateValidationContexts: [
-        bindingCertificateValidationContext,
-      ],
+      bindingCertificateValidationContexts: [bindingCertificateValidationContext],
       ...(coverageCertificate === undefined ? {} : { coverageCertificate }),
     }),
   };
@@ -332,10 +303,7 @@ const requirement = (
   ...extra,
 });
 
-function nodeStatus(
-  execution: ReturnType<typeof executeFixture>["result"],
-  operation: string,
-) {
+function nodeStatus(execution: ReturnType<typeof executeFixture>["result"], operation: string) {
   return execution.nodes.find((node) => node.operation === operation);
 }
 
@@ -343,10 +311,7 @@ function run(input: Parameters<typeof executeFixture>[0]) {
   return executeFixture(input);
 }
 
-function project(
-  output: ReturnType<typeof executeFixture>,
-  executionResult = output.result,
-) {
+function project(output: ReturnType<typeof executeFixture>, executionResult = output.result) {
   return buildMemoryEvidenceReaderProjectionV1({
     query: output.query,
     intent: output.intent,
@@ -359,9 +324,7 @@ function project(
     slots: output.slots,
     frame: output.frame,
     validatedObservations: output.validatedObservations,
-    bindingCertificateValidationContexts: [
-      output.bindingCertificateValidationContext,
-    ],
+    bindingCertificateValidationContexts: [output.bindingCertificateValidationContext],
     ...(output.coverageCertificate === undefined
       ? {}
       : { coverageCertificate: output.coverageCertificate }),
@@ -395,9 +358,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const latest = nodeStatus(output.result, "resolve_latest");
     expect(latest?.status).toBe("complete");
     expect(
-      latest?.values.some(
-        (value) => value.kind === "observation" && value.valueText === "new",
-      ),
+      latest?.values.some((value) => value.kind === "observation" && value.valueText === "new"),
     ).toBe(true);
   });
 
@@ -450,9 +411,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(nodeStatus(output.result, "resolve_latest")?.status).toBe(
-      "conflict",
-    );
+    expect(nodeStatus(output.result, "resolve_latest")?.status).toBe("conflict");
   });
 
   test("executes as-of only after the host binds a deterministic anchor", () => {
@@ -514,9 +473,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     });
     const range = nodeStatus(output.result, "restrict_range");
     expect(range?.status).toBe("complete");
-    expect(
-      range?.values.filter((value) => value.kind === "observation"),
-    ).toHaveLength(1);
+    expect(range?.values.filter((value) => value.kind === "observation")).toHaveLength(1);
   });
 
   test("measures an exact day duration without treating it as a range filter", () => {
@@ -524,10 +481,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "How many days elapsed between the start and the end?",
       intent: userIntent("lookup", "range"),
       closedWorld: false,
-      requirements: [
-        requirement("start", "range"),
-        requirement("end", "range"),
-      ],
+      requirements: [requirement("start", "range"), requirement("end", "range")],
       observations: [
         {
           requirementId: "start",
@@ -545,14 +499,14 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(
-      output.program.nodes.some((node) => node.operation === "restrict_range"),
-    ).toBe(false);
+    expect(output.program.nodes.some((node) => node.operation === "restrict_range")).toBe(false);
     const duration = nodeStatus(output.result, "measure_duration");
     expect(duration?.status).toBe("complete");
-    expect(
-      duration?.values.find((value) => value.kind === "temporal_duration"),
-    ).toMatchObject({ precision: "exact", unit: "day", value: 10 });
+    expect(duration?.values.find((value) => value.kind === "temporal_duration")).toMatchObject({
+      precision: "exact",
+      unit: "day",
+      value: 10,
+    });
     const projection = project(output);
     expect(projection).toMatchObject({
       status: "projected",
@@ -574,10 +528,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "How many days elapsed between the start and the end?",
       intent: userIntent("lookup", "range"),
       closedWorld: false,
-      requirements: [
-        requirement("start", "range"),
-        requirement("end", "range"),
-      ],
+      requirements: [requirement("start", "range"), requirement("end", "range")],
       observations: [
         {
           requirementId: "start",
@@ -599,8 +550,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       ...output.result,
       completeNodeCount: output.result.completeNodeCount + 1,
     };
-    const { executionRevision: _executionRevision, ...withoutRevision } =
-      forgedIdentity;
+    const { executionRevision: _executionRevision, ...withoutRevision } = forgedIdentity;
     const forged = {
       ...withoutRevision,
       executionRevision: hashCanonicalJsonV1(withoutRevision as never),
@@ -644,10 +594,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "How many days elapsed between the start and the end?",
       intent: userIntent("lookup", "range"),
       closedWorld: false,
-      requirements: [
-        requirement("start", "range"),
-        requirement("end", "range"),
-      ],
+      requirements: [requirement("start", "range"), requirement("end", "range")],
       observations: [
         {
           requirementId: "start",
@@ -673,8 +620,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     expect(output.result.stateBindingCertificates).toHaveLength(2);
     expect(
       output.result.stateBindingCertificates.every(
-        (certificate) =>
-          certificate.claimBinding.eventTime.sourceSessionAnchor !== undefined,
+        (certificate) => certificate.claimBinding.eventTime.sourceSessionAnchor !== undefined,
       ),
     ).toBe(true);
   });
@@ -684,10 +630,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "How many days elapsed between the two events?",
       intent: userIntent("lookup", "range"),
       closedWorld: false,
-      requirements: [
-        requirement("start", "range"),
-        requirement("end", "range"),
-      ],
+      requirements: [requirement("start", "range"), requirement("end", "range")],
       observations: [
         {
           requirementId: "start",
@@ -720,10 +663,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "How many days elapsed between the two events?",
       intent: userIntent("lookup", "range"),
       closedWorld: false,
-      requirements: [
-        requirement("first-view", "range"),
-        requirement("second-view", "range"),
-      ],
+      requirements: [requirement("first-view", "range"), requirement("second-view", "range")],
       observations: [
         {
           requirementId: "first-view",
@@ -746,9 +686,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       status: "partial",
       reason: "duration_endpoint_ambiguous",
     });
-    expect(
-      duration?.values.filter((value) => value.kind === "observation"),
-    ).toHaveLength(1);
+    expect(duration?.values.filter((value) => value.kind === "observation")).toHaveLength(1);
   });
 
   test("measures one event against the trusted query anchor", () => {
@@ -768,9 +706,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     });
     const duration = nodeStatus(output.result, "measure_duration");
     expect(duration?.status).toBe("complete");
-    expect(
-      duration?.values.find((value) => value.kind === "temporal_duration"),
-    ).toMatchObject({
+    expect(duration?.values.find((value) => value.kind === "temporal_duration")).toMatchObject({
       precision: "exact",
       unit: "day",
       value: 10,
@@ -873,9 +809,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const output = run({
       query: "What do I prefer?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -892,9 +826,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         slots: output.slots,
         frame: { ...output.frame, frameRevision: "stale-frame" },
         validatedObservations: output.validatedObservations,
-        bindingCertificateValidationContexts: [
-          output.bindingCertificateValidationContext,
-        ],
+        bindingCertificateValidationContexts: [output.bindingCertificateValidationContext],
         ...(output.coverageCertificate === undefined
           ? {}
           : { coverageCertificate: output.coverageCertificate }),
@@ -906,9 +838,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const output = run({
       query: "What do I prefer?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -942,9 +872,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         slots: output.slots,
         frame: output.frame,
         validatedObservations: [forged],
-        bindingCertificateValidationContexts: [
-          output.bindingCertificateValidationContext,
-        ],
+        bindingCertificateValidationContexts: [output.bindingCertificateValidationContext],
         ...(output.coverageCertificate === undefined
           ? {}
           : { coverageCertificate: output.coverageCertificate }),
@@ -956,9 +884,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const output = run({
       query: "What do I prefer now?",
       intent: userIntent("recommend", "latest"),
-      requirements: [
-        requirement("preference", "latest", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "latest", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -1000,17 +926,13 @@ describe("proof-carrying evidence execution runtime v1", () => {
       ...projectedFrameIdentity,
       frameRevision: hashCanonicalJsonV1(projectedFrameIdentity as never),
     };
-    const executeProjected = (
-      validatedObservations: typeof output.validatedObservations,
-    ) =>
+    const executeProjected = (validatedObservations: typeof output.validatedObservations) =>
       executeMemoryEvidenceProgramV1({
         program: output.program,
         slots: output.slots,
         frame: projectedFrame,
         validatedObservations,
-        bindingCertificateValidationContexts: [
-          output.bindingCertificateValidationContext,
-        ],
+        bindingCertificateValidationContexts: [output.bindingCertificateValidationContext],
         ...(output.coverageCertificate === undefined
           ? {}
           : { coverageCertificate: output.coverageCertificate }),
@@ -1022,8 +944,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     );
 
     const omitted = output.validatedObservations.find(
-      (item) =>
-        item.observation.observationId !== retainedObservation.observationId,
+      (item) => item.observation.observationId !== retainedObservation.observationId,
     );
     if (!omitted) throw new Error("fixture");
     expect(
@@ -1064,9 +985,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
             ? forgedOmitted
             : item,
         ),
-        bindingCertificateValidationContexts: [
-          output.bindingCertificateValidationContext,
-        ],
+        bindingCertificateValidationContexts: [output.bindingCertificateValidationContext],
         ...(output.coverageCertificate === undefined
           ? {}
           : { coverageCertificate: output.coverageCertificate }),
@@ -1078,9 +997,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const local = run({
       query: "What do I prefer?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -1094,9 +1011,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const foreign = run({
       query: "What should somebody else choose?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("foreign-preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("foreign-preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "foreign-preference",
@@ -1131,9 +1046,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const output = run({
       query: "What do I prefer?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -1166,9 +1079,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         slots: output.slots,
         frame: duplicatedFrame,
         validatedObservations: output.validatedObservations,
-        bindingCertificateValidationContexts: [
-          output.bindingCertificateValidationContext,
-        ],
+        bindingCertificateValidationContexts: [output.bindingCertificateValidationContext],
         ...(output.coverageCertificate === undefined
           ? {}
           : { coverageCertificate: output.coverageCertificate }),
@@ -1205,10 +1116,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       status: "partial",
       reason: "closed_world_unproven",
     });
-    expect(history?.history.map((value) => value.valueText)).toEqual([
-      "a",
-      "b",
-    ]);
+    expect(history?.history.map((value) => value.valueText)).toEqual(["a", "b"]);
   });
 
   test("compiles and executes dependency joins instead of flattening dependencies", () => {
@@ -1237,19 +1145,13 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(
-      output.program.nodes.some((node) => node.operation === "dependency_join"),
-    ).toBe(true);
-    expect(nodeStatus(output.result, "dependency_join")?.status).toBe(
-      "complete",
-    );
+    expect(output.program.nodes.some((node) => node.operation === "dependency_join")).toBe(true);
+    expect(nodeStatus(output.result, "dependency_join")?.status).toBe("complete");
     const dependencyNode = output.program.nodes.find(
       (node) => node.operation === "dependency_join",
     );
     if (!dependencyNode) throw new Error("fixture invalid");
-    expect(output.program.answerOperandNodeIds).toEqual([
-      dependencyNode.nodeId,
-    ]);
+    expect(output.program.answerOperandNodeIds).toEqual([dependencyNode.nodeId]);
     expect(
       nodeStatus(output.result, "dependency_join")?.values.some(
         (value) => value.kind === "dependency_record",
@@ -1277,9 +1179,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(nodeStatus(complete.result, "compare_operands")?.status).toBe(
-      "complete",
-    );
+    expect(nodeStatus(complete.result, "compare_operands")?.status).toBe("complete");
     const completeProjection = project(complete);
     expect(completeProjection.status).toBe("projected");
     if (completeProjection.status !== "projected") {
@@ -1320,9 +1220,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(nodeStatus(partial.result, "compare_operands")?.status).toBe(
-      "partial",
-    );
+    expect(nodeStatus(partial.result, "compare_operands")?.status).toBe("partial");
   });
 
   test("deduplicates aggregate event keys but keeps the result a lower bound", () => {
@@ -1353,9 +1251,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
       status: "partial",
       reason: "closed_world_unproven",
     });
-    expect(
-      aggregate?.values.find((value) => value.kind === "aggregate"),
-    ).toMatchObject({ lowerBoundCount: 1, closedWorld: false });
+    expect(aggregate?.values.find((value) => value.kind === "aggregate")).toMatchObject({
+      lowerBoundCount: 1,
+      closedWorld: false,
+    });
   });
 
   test("keeps distinct aggregate members from the same event", () => {
@@ -1383,10 +1282,9 @@ describe("proof-carrying evidence execution runtime v1", () => {
     expect(nodeStatus(output.result, "aggregate_operands")).toMatchObject({
       status: "complete",
     });
-    const aggregate = nodeStatus(
-      output.result,
-      "aggregate_operands",
-    )?.values.find((value) => value.kind === "aggregate");
+    const aggregate = nodeStatus(output.result, "aggregate_operands")?.values.find(
+      (value) => value.kind === "aggregate",
+    );
     expect(aggregate).toMatchObject({ lowerBoundCount: 2, closedWorld: true });
   });
 
@@ -1544,10 +1442,9 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    const aggregate = nodeStatus(
-      output.result,
-      "aggregate_operands",
-    )?.values.find((value) => value.kind === "aggregate");
+    const aggregate = nodeStatus(output.result, "aggregate_operands")?.values.find(
+      (value) => value.kind === "aggregate",
+    );
     expect(aggregate).toMatchObject({
       numericDecimal: "9007199254740994",
       numericUnit: "USD",
@@ -1607,9 +1504,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
       status: "partial",
       reason: "aggregate_materialization_incomplete",
     });
-    expect(
-      aggregate?.values.find((value) => value.kind === "aggregate"),
-    ).toMatchObject({ materializationExact: false, closedWorld: false });
+    expect(aggregate?.values.find((value) => value.kind === "aggregate")).toMatchObject({
+      materializationExact: false,
+      closedWorld: false,
+    });
   });
 
   test("requires the entire observation span to be a typed quantity", () => {
@@ -1679,9 +1577,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     });
     const aggregate = nodeStatus(output.result, "aggregate_operands");
     expect(aggregate?.status).toBe("complete");
-    expect(
-      aggregate?.values.find((value) => value.kind === "aggregate"),
-    ).toMatchObject({
+    expect(aggregate?.values.find((value) => value.kind === "aggregate")).toMatchObject({
       numericValue: 10,
       numericUnit: "USD",
       materializationExact: true,
@@ -1724,18 +1620,14 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(nodeStatus(output.result, "aggregate_operands")?.status).not.toBe(
-      "complete",
-    );
+    expect(nodeStatus(output.result, "aggregate_operands")?.status).not.toBe("complete");
   });
 
   test("completes explicit preference signals", () => {
     const output = run({
       query: "What do I prefer?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -1746,9 +1638,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(
-      nodeStatus(output.result, "compile_personalization_profile")?.status,
-    ).toBe("complete");
+    expect(nodeStatus(output.result, "compile_personalization_profile")?.status).toBe("complete");
     expect(output.result.status).toBe("complete");
   });
 
@@ -1756,9 +1646,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const output = run({
       query: "What do I prefer?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -1769,15 +1657,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    const personalization = nodeStatus(
-      output.result,
-      "compile_personalization_profile",
-    );
+    const personalization = nodeStatus(output.result, "compile_personalization_profile");
     expect(personalization?.status).toBe("complete");
     expect(
-      personalization?.values.find(
-        (value) => value.kind === "personalization_profile",
-      ),
+      personalization?.values.find((value) => value.kind === "personalization_profile"),
     ).toMatchObject({
       explicitPositiveValueIds: [],
       explicitNegativeValueIds: [],
@@ -1806,9 +1689,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     if (projection.status !== "projected") throw new Error("projection");
     expect(projection.projection.payload).toMatchObject({
       kind: "personalization",
-      constraints: [
-        { disposition: "goal", claim: { valueText: "quiet places" } },
-      ],
+      constraints: [{ disposition: "goal", claim: { valueText: "quiet places" } }],
     });
   });
 
@@ -1816,9 +1697,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const output = run({
       query: "What would suit me?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("personal-context", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("personal-context", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "personal-context",
@@ -1828,15 +1707,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    const personalization = nodeStatus(
-      output.result,
-      "compile_personalization_profile",
-    );
+    const personalization = nodeStatus(output.result, "compile_personalization_profile");
     expect(personalization?.status).toBe("complete");
     expect(
-      personalization?.values.find(
-        (value) => value.kind === "personalization_profile",
-      ),
+      personalization?.values.find((value) => value.kind === "personalization_profile"),
     ).toMatchObject({
       contextualConstraintValueIds: [expect.any(String)],
       explicitPositiveValueIds: [],
@@ -1848,9 +1722,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "What would suit me?",
       intent: userIntent("recommend", "any"),
       closedWorld: false,
-      requirements: [
-        requirement("personal-context", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("personal-context", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "personal-context",
@@ -1860,10 +1732,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    const personalization = nodeStatus(
-      output.result,
-      "compile_personalization_profile",
-    );
+    const personalization = nodeStatus(output.result, "compile_personalization_profile");
     expect(personalization?.status).toBe("complete");
     expect(personalization?.reason).toBeUndefined();
     const profile = personalization?.values.find(
@@ -1873,22 +1742,16 @@ describe("proof-carrying evidence execution runtime v1", () => {
       scope: "answer_personalization",
     });
     const coverageCertificateRevision =
-      profile?.kind === "personalization_profile"
-        ? profile.coverageCertificateRevision
-        : undefined;
+      profile?.kind === "personalization_profile" ? profile.coverageCertificateRevision : undefined;
     expect(typeof coverageCertificateRevision).toBe("string");
-    expect(coverageCertificateRevision).toBe(
-      personalization?.completionProofRevisions.at(-1),
-    );
+    expect(coverageCertificateRevision).toBe(personalization?.completionProofRevisions.at(-1));
   });
 
   test("keeps incomparable positive and negative preference signals conflicted", () => {
     const output = run({
       query: "What do I prefer?",
       intent: userIntent("recommend", "any"),
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -1907,15 +1770,10 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    const personalization = nodeStatus(
-      output.result,
-      "compile_personalization_profile",
-    );
+    const personalization = nodeStatus(output.result, "compile_personalization_profile");
     expect(personalization?.status).toBe("conflict");
     expect(
-      personalization?.values.find(
-        (value) => value.kind === "personalization_profile",
-      ),
+      personalization?.values.find((value) => value.kind === "personalization_profile"),
     ).not.toHaveProperty("coverageCertificateRevision");
   });
 
@@ -1924,9 +1782,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "What would suit me?",
       intent: userIntent("recommend", "any"),
       closedWorld: false,
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -1946,9 +1802,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(
-      nodeStatus(output.result, "compile_personalization_profile"),
-    ).toMatchObject({
+    expect(nodeStatus(output.result, "compile_personalization_profile")).toMatchObject({
       status: "partial",
       reason: "personalization_constraint_missing",
     });
@@ -1959,9 +1813,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "What would suit me now?",
       intent: userIntent("recommend", "any"),
       closedWorld: false,
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -1981,10 +1833,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    const personalization = nodeStatus(
-      output.result,
-      "compile_personalization_profile",
-    );
+    const personalization = nodeStatus(output.result, "compile_personalization_profile");
     expect(personalization?.status).toBe("complete");
     const profile = personalization?.values.find(
       (value) => value.kind === "personalization_profile",
@@ -1993,9 +1842,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       oneOffValueIds: [],
       contextualConstraintValueIds: [expect.any(String)],
     });
-    expect(
-      personalization?.values.filter((value) => value.kind === "observation"),
-    ).toHaveLength(1);
+    expect(personalization?.values.filter((value) => value.kind === "observation")).toHaveLength(1);
     const projection = project(output);
     expect(projection.status).toBe("projected");
     if (projection.status !== "projected") throw new Error("projection");
@@ -2008,13 +1855,9 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(JSON.stringify(projection.projection.payload)).not.toContain(
-      "crowded places",
-    );
+    expect(JSON.stringify(projection.projection.payload)).not.toContain("crowded places");
     expect(output.result.stateBindingCertificates).toHaveLength(2);
-    expect(projection.projection.proof.stateBindingCertificates).toHaveLength(
-      1,
-    );
+    expect(projection.projection.proof.stateBindingCertificates).toHaveLength(1);
   });
 
   test("keeps personalization partial when a lifecycle target is unbound", () => {
@@ -2022,9 +1865,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       query: "What would suit me?",
       intent: userIntent("recommend", "any"),
       closedWorld: false,
-      requirements: [
-        requirement("preference", "any", { relation: "inferred" }),
-      ],
+      requirements: [requirement("preference", "any", { relation: "inferred" })],
       observations: [
         {
           requirementId: "preference",
@@ -2035,9 +1876,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
         },
       ],
     });
-    expect(
-      nodeStatus(output.result, "compile_personalization_profile"),
-    ).toMatchObject({
+    expect(nodeStatus(output.result, "compile_personalization_profile")).toMatchObject({
       status: "partial",
       reason: "retract_target_unbound",
     });
@@ -2069,8 +1908,6 @@ describe("proof-carrying evidence execution runtime v1", () => {
       failedRequirementIds: new Set(["right"]),
     });
     expect(output.result.status).not.toBe("complete");
-    expect(
-      output.result.nodes.some((node) => node.reason === "plan_node_blocked"),
-    ).toBe(true);
+    expect(output.result.nodes.some((node) => node.reason === "plan_node_blocked")).toBe(true);
   });
 });

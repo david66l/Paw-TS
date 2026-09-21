@@ -14,10 +14,7 @@ import {
   NGramEmbeddingService,
   cosineSimilarity,
 } from "../platform/embeddingService.js";
-import {
-  PolicyEngine,
-  type RetrievalPolicy,
-} from "../platform/policyEngine.js";
+import { PolicyEngine, type RetrievalPolicy } from "../platform/policyEngine.js";
 
 export interface RetrievalRequest {
   taskId: string;
@@ -56,10 +53,7 @@ const TYPE_QUOTA: Record<string, number> = {
  * 按类型配额截断已排序（高分在前）的列表。
  * 导出供单测。
  */
-export function applyTypeQuotas(
-  scored: readonly ScoredMemory[],
-  limit: number,
-): ScoredMemory[] {
+export function applyTypeQuotas(scored: readonly ScoredMemory[], limit: number): ScoredMemory[] {
   const used: Record<string, number> = {};
   const out: ScoredMemory[] = [];
   for (const s of scored) {
@@ -81,8 +75,7 @@ export class MemoryRetriever {
 
   constructor(policyEngine?: PolicyEngine) {
     this.policy =
-      policyEngine?.getDefaults().retrieval ??
-      new PolicyEngine().getDefaults().retrieval;
+      policyEngine?.getDefaults().retrieval ?? new PolicyEngine().getDefaults().retrieval;
   }
 
   async retrieve(req: RetrievalRequest): Promise<RetrievalResult> {
@@ -144,9 +137,7 @@ export class MemoryRetriever {
           }
           const vecSim = cosineSimilarity(queryVec, storedVec);
           const score =
-            ks.kwScore > 0
-              ? Math.max(ks.kwScore, ks.kwScore * 0.7 + vecSim * 0.3)
-              : vecSim * 0.45;
+            ks.kwScore > 0 ? Math.max(ks.kwScore, ks.kwScore * 0.7 + vecSim * 0.3) : vecSim * 0.45;
           return {
             memory: ks.memory,
             score,
@@ -225,12 +216,9 @@ export class MemoryRetriever {
     const reasons: string[] = [];
     const qTerms = tokenizeForMemoryScore(query);
     for (const term of qTerms) {
-      if (item.title.toLowerCase().includes(term))
-        reasons.push(`title:${term}`);
-      if (item.summary.toLowerCase().includes(term))
-        reasons.push(`summary:${term}`);
-      if (item.subjectKey.toLowerCase().includes(term))
-        reasons.push(`subject:${term}`);
+      if (item.title.toLowerCase().includes(term)) reasons.push(`title:${term}`);
+      if (item.summary.toLowerCase().includes(term)) reasons.push(`summary:${term}`);
+      if (item.subjectKey.toLowerCase().includes(term)) reasons.push(`subject:${term}`);
     }
     return reasons.slice(0, 3);
   }

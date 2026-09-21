@@ -14,10 +14,7 @@ import { hybridRecall } from "../src/longterm/retrieval/hybrid.js";
 import type { SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import {
-  type DistillerLlm,
-  MemoryDistiller,
-} from "../src/longterm/write/distiller.js";
+import { type DistillerLlm, MemoryDistiller } from "../src/longterm/write/distiller.js";
 import {
   type GovernorLlm,
   LongtermGovernor,
@@ -27,16 +24,12 @@ import {
 } from "../src/longterm/write/governor.js";
 import { MemoryWritePipeline } from "../src/longterm/write/pipeline.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
 
-function makeFact(
-  fact: string,
-  overrides: Partial<SemanticFact> = {},
-): SemanticFact {
+function makeFact(fact: string, overrides: Partial<SemanticFact> = {}): SemanticFact {
   const now = new Date().toISOString();
   return {
     id: "",
@@ -206,15 +199,11 @@ describe("Governor db 集成", () => {
   it("§5.8-3 同一事实二次蒸馏 → 第二次裁决 NOOP，不新增条目", async () => {
     // 第一次：库空，mock Governor 判 ADD
     let governorResponse = JSON.stringify({
-      decisions: [
-        { candidate: 1, op: "ADD", target: null, reason: "new fact" },
-      ],
+      decisions: [{ candidate: 1, op: "ADD", target: null, reason: "new fact" }],
     });
     const govLlm: GovernorLlm = { complete: async () => governorResponse };
     const p1 = new MemoryWritePipeline({
-      distiller: distillerWith(
-        successEvent("The project uses vitest for unit testing").candidates,
-      ),
+      distiller: distillerWith(successEvent("The project uses vitest for unit testing").candidates),
       governorLlm: govLlm,
     });
     const r1 = await p1.processEvent({
@@ -233,14 +222,10 @@ describe("Governor db 集成", () => {
 
     // 第二次：语义等价事实，mock Governor 判 NOOP
     governorResponse = JSON.stringify({
-      decisions: [
-        { candidate: 1, op: "NOOP", target: null, reason: "与 E1 语义等价" },
-      ],
+      decisions: [{ candidate: 1, op: "NOOP", target: null, reason: "与 E1 语义等价" }],
     });
     const p2 = new MemoryWritePipeline({
-      distiller: distillerWith(
-        successEvent("The unit testing framework is vitest").candidates,
-      ),
+      distiller: distillerWith(successEvent("The unit testing framework is vitest").candidates),
       governorLlm: govLlm,
     });
     const r2 = await p2.processEvent({
@@ -264,10 +249,7 @@ describe("Governor db 集成", () => {
     const sql = getSql();
     const decs =
       await sql`SELECT decision FROM governance_decisions WHERE policy_version = 'v2-m5' ORDER BY created_at`;
-    expect(decs.map((d) => (d as { decision: string }).decision)).toEqual([
-      "ADD",
-      "NOOP",
-    ]);
+    expect(decs.map((d) => (d as { decision: string }).decision)).toEqual(["ADD", "NOOP"]);
   });
 
   it("§5.8-4 矛盾事实（jest→vitest）→ 旧条目失效 + 新条目 ADD + 检索只返回新条目 + why 可查历史", async () => {
@@ -299,9 +281,8 @@ describe("Governor db 集成", () => {
     };
     const p = new MemoryWritePipeline({
       distiller: distillerWith(
-        successEvent(
-          "The project migrated from jest to vitest for unit testing in 2026-05",
-        ).candidates,
+        successEvent("The project migrated from jest to vitest for unit testing in 2026-05")
+          .candidates,
       ),
       governorLlm: govLlm,
     });
@@ -354,9 +335,7 @@ describe("Governor db 集成", () => {
 
     const govLlm: GovernorLlm = {
       complete: async (prompt) => {
-        const m = /既有条目 E(\d+):\n {2}fact: [^\n]*custom runner/i.exec(
-          prompt,
-        );
+        const m = /既有条目 E(\d+):\n {2}fact: [^\n]*custom runner/i.exec(prompt);
         return JSON.stringify({
           decisions: [
             {
@@ -371,9 +350,8 @@ describe("Governor db 集成", () => {
     };
     const p = new MemoryWritePipeline({
       distiller: distillerWith(
-        successEvent(
-          "Tests run with a custom runner and type checks before each commit",
-        ).candidates,
+        successEvent("Tests run with a custom runner and type checks before each commit")
+          .candidates,
       ),
       governorLlm: govLlm,
     });
@@ -395,19 +373,14 @@ describe("Governor db 集成", () => {
     expect(updated.fact).toContain("type checks");
     // history 链含旧值
     expect(updated.history).toHaveLength(1);
-    expect(updated.history![0]!.fact).toBe(
-      "Tests run with a custom runner before each commit",
-    );
+    expect(updated.history![0]!.fact).toBe("Tests run with a custom runner before each commit");
     // 账本保留
     const ledger = await engine.ledger(oldId);
     expect(ledger).toEqual({ freq: 2, utility: 1 });
   });
 
   it("批量裁决：3 条候选一次 LLM 调用返回混合裁决", async () => {
-    const existing = makeFact(
-      "Builds use the custom bundler with cache enabled",
-      { repo: REPO },
-    );
+    const existing = makeFact("Builds use the custom bundler with cache enabled", { repo: REPO });
     await engine.put(existing);
     const existingId = deriveEntryId(existing);
     createdIds.push(existingId);
@@ -478,9 +451,7 @@ describe("Governor db 集成", () => {
     expect(oldEntry!.tInvalid).not.toBeNull();
     const active = await engine.query({ repo: REPO });
     const activeFacts = active.map((e) => (e as SemanticFact).fact);
-    expect(activeFacts).toContain(
-      "Lints run automatically on every save operation",
-    );
+    expect(activeFacts).toContain("Lints run automatically on every save operation");
     expect(activeFacts).toContain(
       "Builds use the custom bundler with cache disabled after migration",
     );
@@ -569,8 +540,6 @@ describe("Governor db 集成", () => {
     expect(decisions[1]!.op).toBe("NOOP");
 
     const logs = await queryOpLog({ op: "error", limit: 50 });
-    expect(
-      logs.some((l) => String(l.detail.error ?? "").includes("幻觉候选序号")),
-    ).toBe(true);
+    expect(logs.some((l) => String(l.detail.error ?? "").includes("幻觉候选序号"))).toBe(true);
   });
 });

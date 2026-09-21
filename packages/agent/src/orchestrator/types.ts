@@ -244,9 +244,7 @@ export interface PhaseContext {
   /** Optional independent semantic reviewer; absent means the gate is disabled. */
   readonly candidateReviewer?: CandidateReviewer;
   /** Strict persisted assessment created before final-answer dispatch. */
-  readonly getLoopV2CandidateAssessment?: () =>
-    | LoopV2LiveCandidateAssessmentV1
-    | undefined;
+  readonly getLoopV2CandidateAssessment?: () => LoopV2LiveCandidateAssessmentV1 | undefined;
   /** Live investigation-progress identity for bounded readiness repair. */
   readonly getLoopV2ReadinessProgressKey?: () => string | undefined;
   /** Fresh current-revision verification facts for actionable repair text. */
@@ -256,9 +254,7 @@ export interface PhaseContext {
   /** Latest pure-reducer result after a control fact was journaled. */
   readonly getLoopV2ControlReduction?: () => ControlReductionV1 | undefined;
   /** Candidate-bound, durable, at-most-once explicit-v2 review transaction. */
-  readonly reviewLoopV2Candidate?: (
-    stage?: "checkpoint" | "final_submission",
-  ) => Promise<
+  readonly reviewLoopV2Candidate?: (stage?: "checkpoint" | "final_submission") => Promise<
     SemanticReviewOnceResultV2 &
       Readonly<{
         readonly modelCalls: number;

@@ -36,8 +36,7 @@ describe("Paw Next fenced durable file Session", () => {
       basePrefixHash: EMPTY_RUN_JOURNAL_PREFIX_HASH_V1,
       clock: () => now,
     });
-    if (result.status !== "acquired")
-      throw new Error("expected acquired lease");
+    if (result.status !== "acquired") throw new Error("expected acquired lease");
     const session = new FileRunSessionV1({
       workspaceRoot: root,
       sessionId: "session-1",
@@ -121,9 +120,7 @@ describe("Paw Next fenced durable file Session", () => {
     const lease = acquire(root);
     let session = open(root, lease);
     await session.appendInputFacts([attemptStarted(), promoted("goal")]);
-    expect(await session.commitDerivedDecision(2, decision(2))).toBe(
-      "committed",
-    );
+    expect(await session.commitDerivedDecision(2, decision(2))).toBe("committed");
     session.close();
 
     const index = readFileSessionJournalCommitIndexV1({
@@ -278,10 +275,7 @@ describe("Paw Next fenced durable file Session", () => {
     const afterLease = acquire(afterRoot);
     session = open(afterRoot, afterLease);
     session.close();
-    const afterMetadata = findFiles(
-      afterRoot,
-      (name) => name === "metadata.json",
-    )[0] as string;
+    const afterMetadata = findFiles(afterRoot, (name) => name === "metadata.json")[0] as string;
     const afterTemp = metadataTempPath(afterMetadata);
     fs.linkSync(afterMetadata, afterTemp);
     expect(fs.lstatSync(afterMetadata).nlink).toBe(2);
@@ -296,28 +290,18 @@ describe("Paw Next fenced durable file Session", () => {
     const hardlinkLease = acquire(hardlinkRoot);
     let session = open(hardlinkRoot, hardlinkLease);
     session.close();
-    let metadata = findFiles(
-      hardlinkRoot,
-      (name) => name === "metadata.json",
-    )[0] as string;
+    let metadata = findFiles(hardlinkRoot, (name) => name === "metadata.json")[0] as string;
     fs.linkSync(metadata, path.join(hardlinkRoot, "external-metadata-alias"));
-    expect(() => open(hardlinkRoot, hardlinkLease)).toThrow(
-      "external hardlink",
-    );
+    expect(() => open(hardlinkRoot, hardlinkLease)).toThrow("external hardlink");
 
     const aliasesRoot = tempRoot();
     const aliasesLease = acquire(aliasesRoot);
     session = open(aliasesRoot, aliasesLease);
     session.close();
-    metadata = findFiles(
-      aliasesRoot,
-      (name) => name === "metadata.json",
-    )[0] as string;
+    metadata = findFiles(aliasesRoot, (name) => name === "metadata.json")[0] as string;
     fs.linkSync(metadata, metadataTempPath(metadata));
     fs.linkSync(metadata, metadataTempPath(metadata));
-    expect(() => open(aliasesRoot, aliasesLease)).toThrow(
-      "multiple publisher temps",
-    );
+    expect(() => open(aliasesRoot, aliasesLease)).toThrow("multiple publisher temps");
 
     if (process.platform !== "win32") {
       const symlinkRoot = tempRoot();
@@ -329,9 +313,7 @@ describe("Paw Next fenced durable file Session", () => {
         metadataTempPath(path.join(runDir, "metadata.json")),
         "file",
       );
-      expect(() => open(symlinkRoot, symlinkLease)).toThrow(
-        "metadata temp is unsafe",
-      );
+      expect(() => open(symlinkRoot, symlinkLease)).toThrow("metadata temp is unsafe");
     }
   });
 
@@ -368,9 +350,7 @@ describe("Paw Next fenced durable file Session", () => {
       },
     };
     const crashed = open(root, lease, hooks);
-    await expect(crashed.appendInputFacts([attemptStarted()])).rejects.toThrow(
-      "simulated crash",
-    );
+    await expect(crashed.appendInputFacts([attemptStarted()])).rejects.toThrow("simulated crash");
     crashed.close();
     expect(artifactFiles(root)).toHaveLength(1);
     expect(
@@ -394,16 +374,12 @@ describe("Paw Next fenced durable file Session", () => {
       afterArtifactPublished() {
         const artifactsDir = findDirectory(root, "journal-artifacts");
         fs.renameSync(artifactsDir, `${artifactsDir}.saved`);
-        fs.symlinkSync(
-          outside,
-          artifactsDir,
-          process.platform === "win32" ? "junction" : "dir",
-        );
+        fs.symlinkSync(outside, artifactsDir, process.platform === "win32" ? "junction" : "dir");
       },
     });
-    await expect(
-      session.appendInputFacts([attemptStarted()]),
-    ).rejects.toBeInstanceOf(SessionExecutionLeaseLostError);
+    await expect(session.appendInputFacts([attemptStarted()])).rejects.toBeInstanceOf(
+      SessionExecutionLeaseLostError,
+    );
     expect(
       readFileSessionJournalCommitIndexV1({
         workspaceRoot: root,
@@ -421,9 +397,9 @@ describe("Paw Next fenced durable file Session", () => {
         throw new Error("simulated crash after authority commit");
       },
     });
-    await expect(
-      crashed.appendInputFacts([attemptStarted()]),
-    ).rejects.toBeInstanceOf(SessionExecutionLeaseLostError);
+    await expect(crashed.appendInputFacts([attemptStarted()])).rejects.toBeInstanceOf(
+      SessionExecutionLeaseLostError,
+    );
 
     const recovered = open(root, lease);
     expect((await recovered.readInputSnapshot()).tailSeq).toBe(1);
@@ -447,9 +423,7 @@ describe("Paw Next fenced durable file Session", () => {
     session.close();
     const artifactsDir = findDirectory(root, "journal-artifacts");
     fs.writeFileSync(path.join(artifactsDir, "foreign.txt"), "foreign", "utf8");
-    expect(() => open(root, lease)).toThrow(
-      "Unrecognized fenced journal artifact entry",
-    );
+    expect(() => open(root, lease)).toThrow("Unrecognized fenced journal artifact entry");
   });
 
   test("ignores corrupt bytes in a safe unreferenced formal artifact", async () => {
@@ -478,9 +452,7 @@ describe("Paw Next fenced durable file Session", () => {
       session.appendInputFacts([attemptStarted()]),
       session.appendInputFacts([promoted("goal")]),
     ]);
-    expect(
-      (await session.readInputSnapshot()).entries.map(({ seq }) => seq),
-    ).toEqual([1, 2]);
+    expect((await session.readInputSnapshot()).entries.map(({ seq }) => seq)).toEqual([1, 2]);
     expect(
       readFileSessionJournalCommitIndexV1({
         workspaceRoot: root,
@@ -520,9 +492,7 @@ describe("Paw Next fenced durable file Session", () => {
       turn: 1,
       requestHash: "request-original",
     };
-    const combined = session.commitDecisionAndInputFacts(2, mutableDecision, [
-      dispatch,
-    ]);
+    const combined = session.commitDecisionAndInputFacts(2, mutableDecision, [dispatch]);
     mutableDecision.action.reasonCode = "mutated-reason";
     (dispatch as { modelCallId: string }).modelCallId = "model-mutated";
     expect(await combined).toBe("committed");
@@ -555,13 +525,9 @@ describe("Paw Next fenced durable file Session", () => {
     const session = open(root, lease);
     await session.appendInputFacts([attemptStarted(), promoted("goal")]);
     const count = artifactFiles(root).length;
-    expect(await session.commitDerivedDecision(1, decision(2))).toBe(
-      "conflict",
-    );
+    expect(await session.commitDerivedDecision(1, decision(2))).toBe("conflict");
     expect(artifactFiles(root)).toHaveLength(count);
-    expect(() => session.commitInputFacts(-1, [promoted("invalid")])).toThrow(
-      "expectedTailSeq",
-    );
+    expect(() => session.commitInputFacts(-1, [promoted("invalid")])).toThrow("expectedTailSeq");
     session.close();
   });
 
@@ -570,9 +536,7 @@ describe("Paw Next fenced durable file Session", () => {
     const lease = acquire(root);
     const session = open(root, lease);
     const before = tree(root);
-    await expect(session.createRecoverySnapshot()).rejects.toThrow(
-      "requires a non-empty journal",
-    );
+    await expect(session.createRecoverySnapshot()).rejects.toThrow("requires a non-empty journal");
     expect(tree(root)).toEqual(before);
     expect(session.readRecoveryInfo()).toEqual({
       mode: "full_journal",
@@ -590,9 +554,7 @@ describe("Paw Next fenced durable file Session", () => {
     await expect(session.readInputSnapshot()).rejects.toBeInstanceOf(
       SessionExecutionLeaseLostError,
     );
-    await expect(session.appendInputFacts([attemptStarted()])).rejects.toThrow(
-      "closed",
-    );
+    await expect(session.appendInputFacts([attemptStarted()])).rejects.toThrow("closed");
   });
 });
 
@@ -666,11 +628,7 @@ function decision(inputThroughSeq: number): DerivedDecisionV1 {
   };
 }
 
-function fileRunDirectory(
-  root: string,
-  sessionId: string,
-  runId: string,
-): string {
+function fileRunDirectory(root: string, sessionId: string, runId: string): string {
   return path.join(
     root,
     ".paw",
@@ -690,9 +648,7 @@ function metadataTempPath(metadataPath: string): string {
 }
 
 function artifactFiles(root: string): string[] {
-  return findFiles(root, (name) =>
-    /^\d{16}-\d{16}-[0-9a-f]{64}\.json$/.test(name),
-  );
+  return findFiles(root, (name) => /^\d{16}-\d{16}-[0-9a-f]{64}\.json$/.test(name));
 }
 
 function persistedEnvelopes(root: string): Array<{
@@ -737,9 +693,7 @@ function findDirectory(root: string, name: string): string {
 }
 
 function tree(root: string): readonly string[] {
-  return findFiles(root, () => true).map((file) =>
-    path.relative(root, file).replaceAll("\\", "/"),
-  );
+  return findFiles(root, () => true).map((file) => path.relative(root, file).replaceAll("\\", "/"));
 }
 
 function rawTree(root: string): readonly string[] {

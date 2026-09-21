@@ -11,9 +11,7 @@ test("desktop attachments validate binary content, count, sizes and MIME before 
     content: "const x = 1;",
   };
   expect(desktopAttachments([text])?.[0]?.type).toBe("file");
-  expect(() =>
-    desktopAttachments([{ ...text, content: "x".repeat(256 * 1024 + 1) }]),
-  ).toThrow();
+  expect(() => desktopAttachments([{ ...text, content: "x".repeat(256 * 1024 + 1) }])).toThrow();
   expect(() => desktopAttachments([text, text])).toThrow();
   expect(() =>
     desktopAttachments([
@@ -26,17 +24,11 @@ test("desktop attachments validate binary content, count, sizes and MIME before 
     ]),
   ).toThrow();
   expect(() =>
-    desktopAttachments(
-      Array.from({ length: 5 }, (_, i) => ({ ...text, id: `f${i}` })),
-    ),
+    desktopAttachments(Array.from({ length: 5 }, (_, i) => ({ ...text, id: `f${i}` }))),
   ).toThrow();
   await expect(
     readDesktopFile(new File([new Uint8Array([0, 255])], "binary.bin")),
   ).rejects.toThrow();
-  await expect(readDesktopFile(new File(["pdf"], "notes.pdf"))).rejects.toThrow(
-    "暂不支持",
-  );
-  expect((await readDesktopFile(new File(["你好"], "notes.txt"))).content).toBe(
-    "你好",
-  );
+  await expect(readDesktopFile(new File(["pdf"], "notes.pdf"))).rejects.toThrow("暂不支持");
+  expect((await readDesktopFile(new File(["你好"], "notes.txt"))).content).toBe("你好");
 });

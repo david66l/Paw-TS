@@ -19,9 +19,7 @@ import type { ChatMessage } from "@paw/models";
  * - 跳过空消息
  * - 每条消息标为 [User] 或 [Assistant]
  */
-export function formatConversationForMemoryExtraction(
-  messages: readonly ChatMessage[],
-): string {
+export function formatConversationForMemoryExtraction(messages: readonly ChatMessage[]): string {
   const blocks: string[] = [];
   for (const msg of messages) {
     if (msg.role === "system") continue;
@@ -39,11 +37,7 @@ export function formatConversationForMemoryExtraction(
  * 条件：至少 2 条非 system 非空消息。
  * 如果只有 system prompt + 一条 goal，说明对话太短，没有可提取的记忆。
  */
-export function shouldAttemptMemoryExtraction(
-  messages: readonly ChatMessage[],
-): boolean {
-  const nonSystem = messages.filter(
-    (m) => m.role !== "system" && m.content.trim().length > 0,
-  );
+export function shouldAttemptMemoryExtraction(messages: readonly ChatMessage[]): boolean {
+  const nonSystem = messages.filter((m) => m.role !== "system" && m.content.trim().length > 0);
   return nonSystem.length >= 2;
 }

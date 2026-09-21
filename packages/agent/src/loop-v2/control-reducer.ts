@@ -227,9 +227,7 @@ export function reduceControlStateV1(
     }
     case "provider.turn_stopped": {
       if (fact.turn <= prior.turn) {
-        throw new Error(
-          `Provider turn must increase: ${fact.turn} <= ${prior.turn}`,
-        );
+        throw new Error(`Provider turn must increase: ${fact.turn} <= ${prior.turn}`);
       }
       return {
         state: {
@@ -272,9 +270,7 @@ export function reduceControlStateV1(
           verificationProbe: undefined,
           consecutiveNoActionStops: 0,
         },
-        effects: [
-          { type: "request_readiness", candidateId: fact.candidate.id },
-        ],
+        effects: [{ type: "request_readiness", candidateId: fact.candidate.id }],
       };
     }
     case "readiness.evaluated": {
@@ -284,25 +280,20 @@ export function reduceControlStateV1(
         prior.readyCandidateId !== undefined ||
         prior.candidateRequirements !== undefined
       ) {
-        throw new Error(
-          "Readiness may be evaluated only once per submitted candidate",
-        );
+        throw new Error("Readiness may be evaluated only once per submitted candidate");
       }
       if (fact.result.kind === "ready") {
         const requirements = {
           semanticReview: fact.result.semanticReview ?? "required",
           verificationProbe: fact.result.verificationProbe ?? "required",
-          externalVerification:
-            fact.result.externalVerification ?? "not_configured",
+          externalVerification: fact.result.externalVerification ?? "not_configured",
         } as const;
         if (
           requirements.semanticReview === "not_required" &&
           requirements.verificationProbe === "not_required"
         ) {
           const status =
-            requirements.externalVerification === "pending"
-              ? "external_pending"
-              : "completed";
+            requirements.externalVerification === "pending" ? "external_pending" : "completed";
           return {
             state: {
               ...base,
@@ -334,11 +325,7 @@ export function reduceControlStateV1(
               : [],
         };
       }
-      const obligation = openRepairObligation(
-        prior.runId,
-        input.seq,
-        fact.result.requirement,
-      );
+      const obligation = openRepairObligation(prior.runId, input.seq, fact.result.requirement);
       return {
         state: {
           ...base,
@@ -360,9 +347,7 @@ export function reduceControlStateV1(
         prior.verificationProbe !== undefined ||
         prior.openRepairObligation !== undefined
       ) {
-        throw new Error(
-          "Semantic review may be recorded only once per ready candidate",
-        );
+        throw new Error("Semantic review may be recorded only once per ready candidate");
       }
       if (prior.readyCandidateId !== fact.candidateId) {
         throw new Error("Semantic review fact requires a ready candidate");
@@ -378,8 +363,7 @@ export function reduceControlStateV1(
         throw new Error("Semantic review fact was not requested");
       }
       if (
-        requirements.verificationProbe !==
-          (fact.verificationProbe ?? "required") ||
+        requirements.verificationProbe !== (fact.verificationProbe ?? "required") ||
         requirements.externalVerification !== fact.externalVerification
       ) {
         throw new Error("Semantic review requirements do not match readiness");
@@ -406,9 +390,7 @@ export function reduceControlStateV1(
         };
       }
       const status =
-        requirements.externalVerification === "pending"
-          ? "external_pending"
-          : "completed";
+        requirements.externalVerification === "pending" ? "external_pending" : "completed";
       return {
         state: { ...base, status, semanticReview },
         effects: [
@@ -430,9 +412,7 @@ export function reduceControlStateV1(
         prior.verificationProbe !== undefined ||
         prior.openRepairObligation !== undefined
       ) {
-        throw new Error(
-          "Verification probe may be recorded only once per ready candidate",
-        );
+        throw new Error("Verification probe may be recorded only once per ready candidate");
       }
       if (prior.readyCandidateId !== fact.candidateId) {
         throw new Error("Verification probe fact requires a ready candidate");
@@ -442,9 +422,7 @@ export function reduceControlStateV1(
         throw new Error("Verification probe fact was not requested");
       }
       if (requirements.externalVerification !== fact.externalVerification) {
-        throw new Error(
-          "Verification probe authority does not match readiness",
-        );
+        throw new Error("Verification probe authority does not match readiness");
       }
       if (requirements.semanticReview === "not_required") {
         if (fact.semanticReviewNotRequired !== true) {
@@ -458,9 +436,7 @@ export function reduceControlStateV1(
         prior.semanticReview?.verdict !== "pass" ||
         prior.semanticReview.reviewKey !== fact.semanticReviewKey
       ) {
-        throw new Error(
-          "Verification probe requires a passing semantic review",
-        );
+        throw new Error("Verification probe requires a passing semantic review");
       }
       const verificationProbe = {
         candidateId: fact.candidateId,
@@ -495,9 +471,7 @@ export function reduceControlStateV1(
         };
       }
       const status =
-        requirements.externalVerification === "pending"
-          ? "external_pending"
-          : "completed";
+        requirements.externalVerification === "pending" ? "external_pending" : "completed";
       return {
         state: { ...base, status, verificationProbe },
         effects: [
@@ -526,9 +500,7 @@ export function replayControlFactsV1(
   inputs: readonly ControlReducerInputV1[],
   checkpoint?: ControlStateV1,
 ): ControlReplayResultV1 {
-  let state = checkpoint
-    ? restoreControlStateV1(runId, checkpoint)
-    : createControlStateV1(runId);
+  let state = checkpoint ? restoreControlStateV1(runId, checkpoint) : createControlStateV1(runId);
   const steps: ControlReplayStepV1[] = [];
   for (const input of inputs) {
     const reduced = reduceControlStateV1(state, input);
@@ -543,19 +515,12 @@ export function replayControlFactsV1(
   return { state, stateHash: controlStateHashV1(state), steps };
 }
 
-export function restoreControlStateV1(
-  runId: string,
-  checkpoint: ControlStateV1,
-): ControlStateV1 {
+export function restoreControlStateV1(runId: string, checkpoint: ControlStateV1): ControlStateV1 {
   if (checkpoint.schemaVersion !== CONTROL_STATE_SCHEMA_VERSION) {
-    throw new Error(
-      `Unsupported control state schema: ${checkpoint.schemaVersion}`,
-    );
+    throw new Error(`Unsupported control state schema: ${checkpoint.schemaVersion}`);
   }
   if (checkpoint.runId !== runId) {
-    throw new Error(
-      `Control state run mismatch: ${checkpoint.runId} != ${runId}`,
-    );
+    throw new Error(`Control state run mismatch: ${checkpoint.runId} != ${runId}`);
   }
   return structuredClone(checkpoint);
 }
@@ -564,22 +529,13 @@ export function controlStateHashV1(state: ControlStateV1): string {
   return sha256Canonical(state);
 }
 
-export function formatRepairObligationV1(
-  obligation: RepairObligationV1,
-): string {
+export function formatRepairObligationV1(obligation: RepairObligationV1): string {
   if (obligation.kind === "direct_verification") {
-    const scope = obligation.scope.length
-      ? obligation.scope.join(", ")
-      : "the current candidate";
-    const runner =
-      obligation.runnerFamily === "any"
-        ? "authoritative"
-        : obligation.runnerFamily;
+    const scope = obligation.scope.length ? obligation.scope.join(", ") : "the current candidate";
+    const runner = obligation.runnerFamily === "any" ? "authoritative" : obligation.runnerFamily;
     return `[LoopControl:repair_required id=${obligation.id}] Run a direct ${runner} verification for revision ${obligation.revision}, covering ${scope}. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation.`;
   }
-  const scope = obligation.scope?.length
-    ? ` covering ${obligation.scope.join(", ")}`
-    : "";
+  const scope = obligation.scope?.length ? ` covering ${obligation.scope.join(", ")}` : "";
   return `[LoopControl:repair_required id=${obligation.id}] Commit a material source change after revision ${obligation.afterRevision}${scope}. Prose, repeated reads, unrelated tools, or another final_answer do not satisfy this durable obligation.`;
 }
 
@@ -673,10 +629,7 @@ export function controlInputFromLoopV2EnvelopeV1(
 function reduceVerification(
   base: ControlStateV1,
   prior: ControlStateV1,
-  verification: Extract<
-    ControlFactV1,
-    { type: "verification.observed" }
-  >["verification"],
+  verification: Extract<ControlFactV1, { type: "verification.observed" }>["verification"],
   seq: number,
 ): ControlReductionV1 {
   const obligation = prior.openRepairObligation;
@@ -684,8 +637,7 @@ function reduceVerification(
     !obligation ||
     obligation.kind !== "direct_verification" ||
     obligation.revision !== verification.revision ||
-    (obligation.runnerFamily !== "any" &&
-      obligation.runnerFamily !== verification.runnerFamily) ||
+    (obligation.runnerFamily !== "any" && obligation.runnerFamily !== verification.runnerFamily) ||
     !scopeCovered(obligation.scope, verification.scope)
   ) {
     return { state: base, effects: [] };
@@ -730,9 +682,7 @@ function reduceMutation(
   paths: readonly string[],
 ): ControlReductionV1 {
   if (!Number.isSafeInteger(revision) || revision <= prior.mutationRevision) {
-    throw new Error(
-      `Mutation revision must increase: ${revision} <= ${prior.mutationRevision}`,
-    );
+    throw new Error(`Mutation revision must increase: ${revision} <= ${prior.mutationRevision}`);
   }
   const obligation = prior.openRepairObligation;
   if (obligation?.kind === "direct_verification") {
@@ -784,25 +734,16 @@ function openRepairObligation(
   };
 }
 
-function assertControlInput(
-  prior: ControlStateV1,
-  input: ControlReducerInputV1,
-): void {
+function assertControlInput(prior: ControlStateV1, input: ControlReducerInputV1): void {
   if (input.runId !== prior.runId) {
-    throw new Error(
-      `Control fact run mismatch: ${input.runId} != ${prior.runId}`,
-    );
+    throw new Error(`Control fact run mismatch: ${input.runId} != ${prior.runId}`);
   }
   if (!Number.isSafeInteger(input.seq) || input.seq < 1) {
-    throw new Error(
-      `Control fact seq must be a positive integer: ${input.seq}`,
-    );
+    throw new Error(`Control fact seq must be a positive integer: ${input.seq}`);
   }
   if (input.seq === prior.lastSeq) return;
   if (input.seq < prior.lastSeq) {
-    throw new Error(
-      `Control fact seq must increase: ${input.seq} < ${prior.lastSeq}`,
-    );
+    throw new Error(`Control fact seq must increase: ${input.seq} < ${prior.lastSeq}`);
   }
 }
 

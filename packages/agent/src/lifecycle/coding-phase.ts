@@ -54,8 +54,7 @@ export function isCodingEditTool(tool: string): boolean {
 
 export function isCodingVerificationCall(call: AgentToolCallAction): boolean {
   if (call.tool !== "workspace.run_shell") return false;
-  const command =
-    typeof call.args.command === "string" ? call.args.command : "";
+  const command = typeof call.args.command === "string" ? call.args.command : "";
   return isVerificationCommand(command);
 }
 
@@ -64,10 +63,7 @@ export function codingPhaseBlockReason(
   state: CodingPhaseState,
 ): string | null {
   if (!isCodingNavigationTool(call.tool)) return null;
-  if (
-    state.successfulEdits === 0 &&
-    state.navigationCalls >= CODING_LOCATE_HARD_LIMIT
-  ) {
+  if (state.successfulEdits === 0 && state.navigationCalls >= CODING_LOCATE_HARD_LIMIT) {
     return `[CodingPhase:locate_limit] ${CODING_LOCATE_HARD_LIMIT} repository navigation calls were already used without a source edit. Stop searching. State the most likely cause and make the smallest candidate source edit now; run a narrow test afterward.`;
   }
   if (

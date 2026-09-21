@@ -5,12 +5,7 @@ import type {
 } from "./candidate-certification.js";
 
 export interface RunOutcomeV2 {
-  readonly executionStatus:
-    | "completed"
-    | "external_pending"
-    | "incomplete"
-    | "failed"
-    | "aborted";
+  readonly executionStatus: "completed" | "external_pending" | "incomplete" | "failed" | "aborted";
   readonly candidateStatus: "none" | "proposed" | "review_failed" | "certified";
   readonly localVerification:
     | "not_required"
@@ -18,11 +13,7 @@ export interface RunOutcomeV2 {
     | "passed"
     | "code_failed"
     | "harness_failed";
-  readonly externalVerification:
-    | "not_configured"
-    | "pending"
-    | "resolved"
-    | "rejected";
+  readonly externalVerification: "not_configured" | "pending" | "resolved" | "rejected";
   readonly artifactStatus: "none" | "valid" | "invalid";
   readonly reasonCode: string;
 }
@@ -39,9 +30,7 @@ export interface DeriveRunOutcomeInputV2 {
   readonly interruptionReason?: string;
 }
 
-export function deriveRunOutcomeV2(
-  input: DeriveRunOutcomeInputV2,
-): RunOutcomeV2 {
+export function deriveRunOutcomeV2(input: DeriveRunOutcomeInputV2): RunOutcomeV2 {
   const externalVerification = input.externalVerification ?? "not_configured";
   const artifactStatus = deriveArtifactStatus(input);
   const localVerification = deriveLocalVerification(input);
@@ -101,12 +90,9 @@ export function deriveRunOutcomeV2(
   };
 }
 
-function deriveArtifactStatus(
-  input: DeriveRunOutcomeInputV2,
-): RunOutcomeV2["artifactStatus"] {
+function deriveArtifactStatus(input: DeriveRunOutcomeInputV2): RunOutcomeV2["artifactStatus"] {
   if (!input.candidateProposed || !input.artifact) return "none";
-  return input.artifact.reconstructible &&
-    input.artifact.crossCheck !== "mismatch"
+  return input.artifact.reconstructible && input.artifact.crossCheck !== "mismatch"
     ? "valid"
     : "invalid";
 }

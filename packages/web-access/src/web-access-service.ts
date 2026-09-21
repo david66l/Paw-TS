@@ -1,8 +1,4 @@
-import type {
-  WebAccessServiceV1,
-  WebFetchPayloadV1,
-  WebSearchPayloadV1,
-} from "@paw/harness";
+import type { WebAccessServiceV1, WebFetchPayloadV1, WebSearchPayloadV1 } from "@paw/harness";
 
 import {
   DEFAULT_WEB_ACCESS_POLICY_V1,
@@ -26,36 +22,25 @@ export interface CreateWebAccessServiceOptionsV1 {
 export function createWebAccessServiceV1(
   options: CreateWebAccessServiceOptionsV1 = {},
 ): WebAccessServiceV1 {
-  const policy = freezeWebAccessPolicyV1(
-    options.policy ?? DEFAULT_WEB_ACCESS_POLICY_V1,
-  );
+  const policy = freezeWebAccessPolicyV1(options.policy ?? DEFAULT_WEB_ACCESS_POLICY_V1);
   const transport = options.transport ?? createPublicWebTransportV1({ policy });
   const service: WebAccessServiceV1 = {
     async fetch(input, signal) {
       try {
         const url = parsePublicWebUrlV1(input.url).toString();
         const maxLength = input.maxLength ?? policy.defaultFetchChars;
-        if (
-          !Number.isSafeInteger(maxLength) ||
-          maxLength < 1 ||
-          maxLength > policy.maxFetchChars
-        ) {
-          return failure(
-            `web_fetch max_length must be between 1 and ${policy.maxFetchChars}`,
-          );
+        if (!Number.isSafeInteger(maxLength) || maxLength < 1 || maxLength > policy.maxFetchChars) {
+          return failure(`web_fetch max_length must be between 1 and ${policy.maxFetchChars}`);
         }
         const response = await transport.getText(url, signal);
         if (response.status < 200 || response.status >= 300) {
           return failure(`web_fetch HTTP ${response.status}`);
         }
-        const contentType = normalizedContentType(
-          response.headers["content-type"] ?? "text/plain",
-        );
+        const contentType = normalizedContentType(response.headers["content-type"] ?? "text/plain");
         if (!isTextContentType(contentType)) {
           return failure(`web_fetch unsupported content type: ${contentType}`);
         }
-        const isMarkup =
-          contentType.includes("html") || contentType.includes("xml");
+        const isMarkup = contentType.includes("html") || contentType.includes("xml");
         const title = isMarkup ? extractTitle(response.body) : undefined;
         const extracted = isMarkup ? stripMarkup(response.body) : response.body;
         const charTruncated = extracted.length > maxLength;
@@ -79,9 +64,7 @@ export function createWebAccessServiceV1(
       const query = input.query.trim();
       if (!query) return failure("web_search query is required");
       if (query.length > policy.maxQueryChars) {
-        return failure(
-          `web_search query exceeds ${policy.maxQueryChars} characters`,
-        );
+        return failure(`web_search query exceeds ${policy.maxQueryChars} characters`);
       }
       const maxResults = input.maxResults ?? 5;
       if (
@@ -89,9 +72,7 @@ export function createWebAccessServiceV1(
         maxResults < 1 ||
         maxResults > policy.maxSearchResults
       ) {
-        return failure(
-          `web_search max_results must be between 1 and ${policy.maxSearchResults}`,
-        );
+        return failure(`web_search max_results must be between 1 and ${policy.maxSearchResults}`);
       }
       try {
         const searchUrl = new URL(BING_HTML_ENDPOINT);
@@ -133,9 +114,7 @@ export function parseBingSearchResultsV1(
     readonly snippet: string;
   }> = [];
   const blocks = [
-    ...html.matchAll(
-      /<li[^>]*class=["'][^"']*\bb_algo\b[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi,
-    ),
+    ...html.matchAll(/<li[^>]*class=["'][^"']*\bb_algo\b[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi),
   ];
   for (const match of blocks) {
     if (results.length >= maxResults) break;
@@ -193,10 +172,7 @@ function stripMarkup(markup: string): string {
         /<(p|div|h[1-6]|li|tr|pre|blockquote|article|section|main|header|footer)[^>]*>/gi,
         "\n",
       )
-      .replace(
-        /<\/(p|div|h[1-6]|li|tr|pre|blockquote|article|section|main|header|footer)>/gi,
-        "\n",
-      )
+      .replace(/<\/(p|div|h[1-6]|li|tr|pre|blockquote|article|section|main|header|footer)>/gi, "\n")
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, ""),
   )
@@ -208,12 +184,8 @@ function stripMarkup(markup: string): string {
 
 function decodeHtml(input: string): string {
   return input
-    .replace(/&#(\d+);/g, (match, digits: string) =>
-      decodeCodePoint(match, digits, 10),
-    )
-    .replace(/&#x([0-9a-f]+);/gi, (match, digits: string) =>
-      decodeCodePoint(match, digits, 16),
-    )
+    .replace(/&#(\d+);/g, (match, digits: string) => decodeCodePoint(match, digits, 10))
+    .replace(/&#x([0-9a-f]+);/gi, (match, digits: string) => decodeCodePoint(match, digits, 16))
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")

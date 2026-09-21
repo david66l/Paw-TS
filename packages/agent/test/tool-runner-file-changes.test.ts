@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  extractFilePatch,
-  fileChangesFromPayload,
-} from "../src/orchestrator/tool-runner.js";
+import { extractFilePatch, fileChangesFromPayload } from "../src/orchestrator/tool-runner.js";
 
 const ROOT = "/repo";
 
@@ -17,9 +14,7 @@ describe("fileChangesFromPayload", () => {
       },
       ROOT,
     );
-    expect(fc).toEqual([
-      { path: "src/a.ts", added: 5, removed: 2, diff: "@@ -1 +1 @@\n-x\n+y" },
-    ]);
+    expect(fc).toEqual([{ path: "src/a.ts", added: 5, removed: 2, diff: "@@ -1 +1 @@\n-x\n+y" }]);
   });
 
   test("edit_file 绝对路径归一化为工作区相对路径", () => {

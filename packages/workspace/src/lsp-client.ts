@@ -106,14 +106,9 @@ export class LspClient {
   private initTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly requestTimeoutMs: number;
 
-  constructor(
-    rootPathOrUri: string,
-    requestTimeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS,
-  ) {
+  constructor(rootPathOrUri: string, requestTimeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS) {
     if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
-      throw new TypeError(
-        "LSP request timeout must be a positive safe integer",
-      );
+      throw new TypeError("LSP request timeout must be a positive safe integer");
     }
     this._rootUri = rootPathOrUri.startsWith("file:")
       ? rootPathOrUri
@@ -175,9 +170,7 @@ export class LspClient {
       });
       proc.on("exit", (code) => {
         if (code !== 0 && code !== null) {
-          settle(() =>
-            reject(new Error(`LSP server exited with code ${code}`)),
-          );
+          settle(() => reject(new Error(`LSP server exited with code ${code}`)));
         }
       });
 
@@ -208,11 +201,7 @@ export class LspClient {
    * LSP 返回的 contents 可能是 string、MarkedString 数组、或 MarkupContent 对象，
    * 这里做了兼容处理，统一转为纯文本。
    */
-  async hover(
-    filePath: string,
-    line: number,
-    character: number,
-  ): Promise<LspHoverResult | null> {
+  async hover(filePath: string, line: number, character: number): Promise<LspHoverResult | null> {
     const result = await this.sendRequest("textDocument/hover", {
       textDocument: { uri: this.fileToUri(filePath) },
       position: { line, character },
@@ -241,11 +230,7 @@ export class LspClient {
   }
 
   /** 跳转到指定位置符号的定义 */
-  async definition(
-    filePath: string,
-    line: number,
-    character: number,
-  ): Promise<LspLocation[]> {
+  async definition(filePath: string, line: number, character: number): Promise<LspLocation[]> {
     const result = await this.sendRequest("textDocument/definition", {
       textDocument: { uri: this.fileToUri(filePath) },
       position: { line, character },
@@ -254,11 +239,7 @@ export class LspClient {
   }
 
   /** 查找指定位置符号的所有引用（包含声明本身） */
-  async references(
-    filePath: string,
-    line: number,
-    character: number,
-  ): Promise<LspLocation[]> {
+  async references(filePath: string, line: number, character: number): Promise<LspLocation[]> {
     const result = await this.sendRequest("textDocument/references", {
       textDocument: { uri: this.fileToUri(filePath) },
       position: { line, character },
@@ -287,23 +268,15 @@ export class LspClient {
     }
     const r = result as Record<string, unknown>;
     // 兼容两种返回格式
-    const items = Array.isArray(r.items)
-      ? r.items
-      : Array.isArray(result)
-        ? result
-        : [];
+    const items = Array.isArray(r.items) ? r.items : Array.isArray(result) ? result : [];
     return items
-      .filter(
-        (i): i is Record<string, unknown> =>
-          i !== null && typeof i === "object",
-      )
+      .filter((i): i is Record<string, unknown> => i !== null && typeof i === "object")
       .slice(0, MAX_LSP_COMPLETIONS)
       .map((i) => ({
         label: typeof i.label === "string" ? i.label : "",
         kind: typeof i.kind === "number" ? i.kind : undefined,
         detail: typeof i.detail === "string" ? i.detail : undefined,
-        documentation:
-          typeof i.documentation === "string" ? i.documentation : undefined,
+        documentation: typeof i.documentation === "string" ? i.documentation : undefined,
       }));
   }
 
@@ -419,10 +392,7 @@ export class LspClient {
       if (this.buffer.length < messageStart + contentLength) {
         return; // 数据尚未接收完整，等待更多数据
       }
-      const body = this.buffer.slice(
-        messageStart,
-        messageStart + contentLength,
-      );
+      const body = this.buffer.slice(messageStart, messageStart + contentLength);
       // 从缓冲区中移除已处理的消息
       this.buffer = this.buffer.slice(messageStart + contentLength);
       this.handleMessage(body);
@@ -465,9 +435,7 @@ export class LspClient {
       const id = this.nextId++;
       const timeout = setTimeout(() => {
         if (!this.pending.delete(id)) return;
-        reject(
-          new Error(`LSP ${method} timed out after ${this.requestTimeoutMs}ms`),
-        );
+        reject(new Error(`LSP ${method} timed out after ${this.requestTimeoutMs}ms`));
       }, this.requestTimeoutMs);
       this.pending.set(id, { resolve, reject, timeout });
       const msg = JSON.stringify({ jsonrpc: "2.0", id, method, params });
@@ -504,9 +472,7 @@ export class LspClient {
       return filePath;
     }
     const rootPath = fileURLToPath(this._rootUri);
-    const absolute = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(rootPath, filePath);
+    const absolute = path.isAbsolute(filePath) ? filePath : path.join(rootPath, filePath);
     return pathToFileURL(absolute).href;
   }
 
@@ -520,10 +486,7 @@ export class LspClient {
     }
     const items = Array.isArray(result) ? result : [result];
     return items
-      .filter(
-        (i): i is Record<string, unknown> =>
-          i !== null && typeof i === "object",
-      )
+      .filter((i): i is Record<string, unknown> => i !== null && typeof i === "object")
       .map((i) => ({
         uri: typeof i.uri === "string" ? i.uri : "",
         range: i.range as LspLocation["range"],
@@ -546,9 +509,7 @@ export class LspClient {
  *
  * @returns { command, args } 或 null（不支持该文件类型时）
  */
-export function detectLspCommand(
-  filePath: string,
-): { command: string; args: string[] } | null {
+export function detectLspCommand(filePath: string): { command: string; args: string[] } | null {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
     case ".ts":

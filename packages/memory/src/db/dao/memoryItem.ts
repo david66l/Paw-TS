@@ -2,12 +2,7 @@
  * MemoryItem DAO
  */
 import { getSql, parseJson } from "../connection.js";
-import type {
-  MemoryItem,
-  MemoryStatus,
-  MemoryType,
-  ScopeDescriptor,
-} from "../types.js";
+import type { MemoryItem, MemoryStatus, MemoryType, ScopeDescriptor } from "../types.js";
 
 function rowToItem(row: Record<string, unknown>): MemoryItem {
   return {
@@ -21,8 +16,7 @@ function rowToItem(row: Record<string, unknown>): MemoryItem {
     status: row.status as MemoryStatus,
     scope: parseJson(row.scope) as ScopeDescriptor,
     confidence: row.confidence as number,
-    verificationStatus:
-      row.verification_status as string as MemoryItem["verificationStatus"],
+    verificationStatus: row.verification_status as string as MemoryItem["verificationStatus"],
     payload: parseJson(row.payload) as Record<string, unknown>,
     tags: row.tags as string[],
     relatedFiles: row.related_files as string[],
@@ -62,9 +56,7 @@ const memoryItemColumns = [
   "updated_at",
 ];
 
-function snapshotFromRow(
-  row: Record<string, unknown>,
-): Record<string, unknown> {
+function snapshotFromRow(row: Record<string, unknown>): Record<string, unknown> {
   const snap: Record<string, unknown> = {};
   for (const col of memoryItemColumns) snap[col] = row[col];
   return snap;
@@ -118,18 +110,11 @@ export const memoryItemDao = {
 
   async findById(id: string): Promise<MemoryItem | null> {
     const sql = getSql();
-    const rows = await sql.unsafe("SELECT * FROM memory_items WHERE id = $1", [
-      id,
-    ]);
-    return rows.length > 0
-      ? rowToItem(rows[0] as Record<string, unknown>)
-      : null;
+    const rows = await sql.unsafe("SELECT * FROM memory_items WHERE id = $1", [id]);
+    return rows.length > 0 ? rowToItem(rows[0] as Record<string, unknown>) : null;
   },
 
-  async findBySubjectKey(
-    subjectKey: string,
-    status?: MemoryStatus,
-  ): Promise<MemoryItem[]> {
+  async findBySubjectKey(subjectKey: string, status?: MemoryStatus): Promise<MemoryItem[]> {
     const sql = getSql();
     const rows = status
       ? await sql.unsafe(
@@ -243,9 +228,7 @@ export const memoryItemDao = {
   },
 
   /** 查询某个记忆的所有历史版本 */
-  async listVersions(
-    memoryId: string,
-  ): Promise<
+  async listVersions(memoryId: string): Promise<
     {
       version: number;
       changeType: string;

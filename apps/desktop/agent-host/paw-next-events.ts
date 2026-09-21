@@ -23,10 +23,7 @@ export class DesktopNextEvents {
   private children = new Map<string, string>();
   private activities = new Map<string, string>();
   private planRevision = 0;
-  private controls = new Map<
-    string,
-    { goal: string; agentId: string; cancel?: () => void }
-  >();
+  private controls = new Map<string, { goal: string; agentId: string; cancel?: () => void }>();
   childControl(child: {
     id: string;
     goal: string;
@@ -34,8 +31,7 @@ export class DesktopNextEvents {
     cancel?: () => void;
   }) {
     this.controls.set(child.id, child);
-    if ([...this.activities.values()].includes(child.id))
-      this.publishChildControl(child.id);
+    if ([...this.activities.values()].includes(child.id)) this.publishChildControl(child.id);
   }
   private publishChildControl(id: string) {
     const child = this.controls.get(id);
@@ -66,9 +62,7 @@ export class DesktopNextEvents {
       phase,
       action: event.type,
       ...(operationId === undefined ? {} : { operationId }),
-      ...(event.reasonCode === undefined
-        ? {}
-        : { reasonCode: event.reasonCode }),
+      ...(event.reasonCode === undefined ? {} : { reasonCode: event.reasonCode }),
       durationMs: event.durationMs,
     });
   }
@@ -85,8 +79,7 @@ export class DesktopNextEvents {
     this.textDelta = this.thinkingDelta = "";
     // This lane is an ephemeral projection. Journal persistence remains strict.
     try {
-      if (thinking)
-        this.emit({ type: "model.thinking", text: thinking, mode: "delta" });
+      if (thinking) this.emit({ type: "model.thinking", text: thinking, mode: "delta" });
       if (text) this.emit({ type: "model.chunk", text, mode: "delta" });
     } catch {
       /* The final canonical response can restore a disconnected UI. */
@@ -167,11 +160,7 @@ export class DesktopNextEvents {
       this.monitor.committed(envelope);
       const fact = envelope.record.fact;
       const key = (id: string) => `${envelope.runId}:${id}`;
-      if (
-        fact.type === "input.accepted" &&
-        fact.delivery === "steer" &&
-        !childId
-      ) {
+      if (fact.type === "input.accepted" && fact.delivery === "steer" && !childId) {
         this.emit({
           type: "input.accepted",
           inputId: fact.inputId,
@@ -182,11 +171,7 @@ export class DesktopNextEvents {
             type: a.type,
           })),
         });
-      } else if (
-        fact.type === "input.promoted" &&
-        fact.delivery === "steer" &&
-        !childId
-      ) {
+      } else if (fact.type === "input.promoted" && fact.delivery === "steer" && !childId) {
         this.emit({ type: "input.promoted", inputId: fact.inputId });
       } else if (fact.type === "model.dispatch_recorded" && !childId) {
         this.flushStream();
@@ -197,11 +182,7 @@ export class DesktopNextEvents {
           label: "Paw Next",
           messageCount: 0,
         });
-      } else if (
-        fact.type === "model.settled" &&
-        !childId &&
-        fact.response?.kind === "inline"
-      ) {
+      } else if (fact.type === "model.settled" && !childId && fact.response?.kind === "inline") {
         const response = record(fact.response.value);
         if (typeof response.assistantContent === "string")
           this.emit({ type: "model.done", text: response.assistantContent });
@@ -224,18 +205,13 @@ export class DesktopNextEvents {
         const call = this.calls.get(key(fact.callId));
         if (!call) continue;
         const result = record(fact.result);
-        const ok =
-          fact.status === "completed" &&
-          result.ok !== false &&
-          !fact.observation?.isError;
+        const ok = fact.status === "completed" && result.ok !== false && !fact.observation?.isError;
         const payload =
           result.payload ??
           (fact.observation?.payload?.kind === "inline"
             ? fact.observation.payload.value
             : undefined);
-        const fileChanges = ok
-          ? desktopFileChanges(payload, call.args, this.workspaceRoot)
-          : [];
+        const fileChanges = ok ? desktopFileChanges(payload, call.args, this.workspaceRoot) : [];
         const carrier = fact.observation?.payload;
         if (
           ok &&
@@ -254,11 +230,7 @@ export class DesktopNextEvents {
                 originSeq: envelope.seq,
                 field: { kind: "tool_observation", callId: fact.callId },
               });
-              const changes = desktopFileChanges(
-                value,
-                call.args,
-                this.workspaceRoot,
-              );
+              const changes = desktopFileChanges(value, call.args, this.workspaceRoot);
               if (changes.length)
                 this.emit({
                   type: "workspace.changes",
@@ -285,15 +257,10 @@ export class DesktopNextEvents {
           tool: call.tool,
           callId: key(fact.callId),
           ...(fileChanges.length ? { fileChanges } : {}),
-          ok:
-            fact.status === "completed" &&
-            result.ok !== false &&
-            !fact.observation?.isError,
+          ok: fact.status === "completed" && result.ok !== false && !fact.observation?.isError,
           summary:
             fact.observation?.summary ??
-            (typeof result.summary === "string"
-              ? result.summary
-              : (fact.errorCode ?? fact.status)),
+            (typeof result.summary === "string" ? result.summary : (fact.errorCode ?? fact.status)),
         };
         if (childId)
           this.emit({
@@ -307,11 +274,7 @@ export class DesktopNextEvents {
           if (Array.isArray(todos)) {
             const items = todos
               .map(record)
-              .filter(
-                (item) =>
-                  typeof item.id === "string" &&
-                  typeof item.content === "string",
-              )
+              .filter((item) => typeof item.id === "string" && typeof item.content === "string")
               .map((item) => ({
                 id: item.id as string,
                 text: item.content as string,
@@ -339,10 +302,7 @@ export class DesktopNextEvents {
           selectedCount: fact.cards.length,
           scores: [],
           injectedTokens: Math.ceil(
-            fact.cards.reduce(
-              (total, card) => total + card.statement.length,
-              0,
-            ) / 3,
+            fact.cards.reduce((total, card) => total + card.statement.length, 0) / 3,
           ),
           selectedMemories: fact.cards.map((card) => ({
             id: card.id,
@@ -361,15 +321,12 @@ export class DesktopNextEvents {
         if (typeof meta.callId !== "string") continue;
         const id = key(meta.callId);
         const childKey = createHash("sha256")
-          .update(
-            JSON.stringify([envelope.sessionId, envelope.runId, meta.callId]),
-          )
+          .update(JSON.stringify([envelope.sessionId, envelope.runId, meta.callId]))
           .digest("hex")
           .slice(0, 32);
         this.children.set(`child-run-${childKey}`, id);
         this.activities.set(fact.activityId, id);
-        const agent =
-          typeof meta.agentId === "string" ? meta.agentId : "worker";
+        const agent = typeof meta.agentId === "string" ? meta.agentId : "worker";
         this.emit({
           type: "tool.call",
           tool: "workspace.run_agent",
@@ -387,8 +344,7 @@ export class DesktopNextEvents {
         const id = this.activities.get(fact.activityId);
         if (id)
           this.emit({
-            type:
-              fact.status === "completed" ? "child.completed" : "child.failed",
+            type: fact.status === "completed" ? "child.completed" : "child.failed",
             callId: id,
             originalEvent: { message: fact.summary, status: fact.status },
           });

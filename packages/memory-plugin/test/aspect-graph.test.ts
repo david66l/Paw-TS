@@ -44,12 +44,10 @@ describe("aspect graph v1", () => {
     });
 
     expect(
-      projectMemoryAspectStateV1({ snapshot, aspectId: film.id, asOf: mar })
-        .eventClaimIds,
+      projectMemoryAspectStateV1({ snapshot, aspectId: film.id, asOf: mar }).eventClaimIds,
     ).toEqual([episode.id]);
     expect(
-      projectMemoryAspectStateV1({ snapshot, aspectId: social.id, asOf: mar })
-        .causeClaimIds,
+      projectMemoryAspectStateV1({ snapshot, aspectId: social.id, asOf: mar }).causeClaimIds,
     ).toEqual([episode.id]);
     expect(measureMemoryAspectGraphV1(snapshot)).toEqual(
       expect.objectContaining({
@@ -62,10 +60,7 @@ describe("aspect graph v1", () => {
 
   test("keeps identity stable when labels and aliases evolve", () => {
     const original = aspect("stable-film-id", "Film interest", ["cinema"]);
-    const renamed = aspect("stable-film-id", "Cinema preferences", [
-      "film interest",
-      "movies",
-    ]);
+    const renamed = aspect("stable-film-id", "Cinema preferences", ["film interest", "movies"]);
     expect(renamed.id).toBe(original.id);
 
     const first = applyMemoryAspectGraphMutationV1({
@@ -106,9 +101,7 @@ describe("aspect graph v1", () => {
       ],
     });
 
-    expect(resolveMemoryAspectIdsV1(snapshot, filmPreference.id)).toEqual([
-      cinemaInterest.id,
-    ]);
+    expect(resolveMemoryAspectIdsV1(snapshot, filmPreference.id)).toEqual([cinemaInterest.id]);
     expect(
       projectMemoryAspectStateV1({
         snapshot,
@@ -116,9 +109,7 @@ describe("aspect graph v1", () => {
         asOf: mar,
       }).currentClaimIds,
     ).toEqual([prefersFilm.id, enjoysCinema.id]);
-    expect(
-      snapshot.aspects.find((item) => item.id === filmPreference.id),
-    ).toEqual(
+    expect(snapshot.aspects.find((item) => item.id === filmPreference.id)).toEqual(
       expect.objectContaining({
         status: "redirected",
         redirectToAspectIds: [cinemaInterest.id],
@@ -152,20 +143,15 @@ describe("aspect graph v1", () => {
       ],
     });
 
-    expect(resolveMemoryAspectIdsV1(snapshot, broad.id)).toEqual(
-      [film.id, sport.id].sort(),
-    );
+    expect(resolveMemoryAspectIdsV1(snapshot, broad.id)).toEqual([film.id, sport.id].sort());
     expect(
-      projectMemoryAspectStateV1({ snapshot, aspectId: broad.id, asOf: mar })
-        .eventClaimIds,
+      projectMemoryAspectStateV1({ snapshot, aspectId: broad.id, asOf: mar }).eventClaimIds,
     ).toEqual([]);
     expect(
-      projectMemoryAspectStateV1({ snapshot, aspectId: broad.id, asOf: mar })
-        .unresolvedClaimIds,
+      projectMemoryAspectStateV1({ snapshot, aspectId: broad.id, asOf: mar }).unresolvedClaimIds,
     ).toEqual([ambiguous.id]);
     expect(
-      projectMemoryAspectStateV1({ snapshot, aspectId: film.id, asOf: mar })
-        .eventClaimIds,
+      projectMemoryAspectStateV1({ snapshot, aspectId: film.id, asOf: mar }).eventClaimIds,
     ).toEqual([filmEvent.id]);
   });
 
@@ -174,13 +160,7 @@ describe("aspect graph v1", () => {
     const avoided = claim("avoided", "state", jan);
     const joined = claim("joined", "state", feb);
     const welcoming = claim("welcoming", "cause", feb);
-    const supersedes = edge(
-      joined.id,
-      avoided.id,
-      "supersedes",
-      mar,
-      participation.id,
-    );
+    const supersedes = edge(joined.id, avoided.id, "supersedes", mar, participation.id);
     const causedBy = edge(joined.id, welcoming.id, "caused_by", mar);
     const snapshot = applyMemoryAspectGraphMutationV1({
       snapshot: empty(),
@@ -215,10 +195,7 @@ describe("aspect graph v1", () => {
       snapshot: empty(),
       claims: [old, current],
       aspects: [preference],
-      memberships: [
-        membership(old.id, preference.id),
-        membership(current.id, preference.id),
-      ],
+      memberships: [membership(old.id, preference.id), membership(current.id, preference.id)],
     });
 
     expect(() =>
@@ -234,10 +211,7 @@ describe("aspect graph v1", () => {
       snapshot: empty(),
       claims: [left, right],
       aspects: [preference],
-      memberships: [
-        membership(left.id, preference.id),
-        membership(right.id, preference.id),
-      ],
+      memberships: [membership(left.id, preference.id), membership(right.id, preference.id)],
     });
     expect(() =>
       applyMemoryAspectGraphMutationV1({
@@ -254,13 +228,7 @@ describe("aspect graph v1", () => {
     const preference = aspect("append-only", "Append-only preference");
     const old = claim("append-old", "state", jan);
     const current = claim("append-current", "state", feb);
-    const activeEdge = edge(
-      current.id,
-      old.id,
-      "supersedes",
-      mar,
-      preference.id,
-    );
+    const activeEdge = edge(current.id, old.id, "supersedes", mar, preference.id);
     const oldMembership = membership(old.id, preference.id);
     const currentMembership = membership(current.id, preference.id);
     const base = applyMemoryAspectGraphMutationV1({
@@ -425,10 +393,7 @@ describe("aspect graph v1", () => {
       snapshot: empty(),
       claims: [old, current],
       aspects: [preference],
-      memberships: [
-        membership(old.id, preference.id),
-        membership(current.id, preference.id),
-      ],
+      memberships: [membership(old.id, preference.id), membership(current.id, preference.id)],
     });
 
     expect(() =>
@@ -516,9 +481,9 @@ describe("aspect graph v1", () => {
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(Object.isFrozen(snapshot.claims[0])).toBe(true);
     expect(Object.isFrozen(snapshot.claims[0]?.evidenceRefs)).toBe(true);
-    expect(() =>
-      measureMemoryAspectGraphV1({ ...snapshot, revision: "tampered" }),
-    ).toThrow("MemoryAspectGraphRevisionMismatch");
+    expect(() => measureMemoryAspectGraphV1({ ...snapshot, revision: "tampered" })).toThrow(
+      "MemoryAspectGraphRevisionMismatch",
+    );
   });
 
   test("is input-order invariant and emits content-free diagnostics", () => {
@@ -531,10 +496,7 @@ describe("aspect graph v1", () => {
         snapshot: empty(),
         claims: [firstClaim, secondClaim],
         aspects: [film],
-        memberships: [
-          membership(firstClaim.id, film.id),
-          membership(secondClaim.id, film.id),
-        ],
+        memberships: [membership(firstClaim.id, film.id), membership(secondClaim.id, film.id)],
       },
       { onEvent: (event) => events.push(event), now: () => 10 },
     );
@@ -542,10 +504,7 @@ describe("aspect graph v1", () => {
       snapshot: empty(),
       claims: [secondClaim, firstClaim],
       aspects: [film],
-      memberships: [
-        membership(secondClaim.id, film.id),
-        membership(firstClaim.id, film.id),
-      ],
+      memberships: [membership(secondClaim.id, film.id), membership(firstClaim.id, film.id)],
     });
 
     expect(first.revision).toBe(second.revision);
@@ -568,11 +527,7 @@ function empty(): MemoryAspectGraphSnapshotV1 {
   return createEmptyMemoryAspectGraphSnapshotV1(scope);
 }
 
-function aspect(
-  identitySeed: string,
-  displayName: string,
-  aliases: string[] = [],
-) {
+function aspect(identitySeed: string, displayName: string, aliases: string[] = []) {
   return createMemoryAspectV1({ scope, identitySeed, displayName, aliases });
 }
 
@@ -622,12 +577,7 @@ function edge(
   aspectId?: string,
   dimensions: Readonly<{ subjectKey?: string; contextKey?: string }> = {},
 ) {
-  const stateScoped = [
-    "same_state",
-    "supersedes",
-    "contradicts",
-    "qualifies",
-  ].includes(edgeType);
+  const stateScoped = ["same_state", "supersedes", "contradicts", "qualifies"].includes(edgeType);
   if (stateScoped && aspectId === undefined) {
     throw new Error("state-scoped test edge requires aspectId");
   }
@@ -636,9 +586,7 @@ function edge(
     fromClaimId,
     toClaimId,
     edgeType,
-    ...(aspectId === undefined
-      ? {}
-      : { stateScope: { aspectId, ...dimensions } }),
+    ...(aspectId === undefined ? {} : { stateScope: { aspectId, ...dimensions } }),
     confidence: 0.9,
     evidenceRefs: [`l0:${fromClaimId}`],
     createdAt,

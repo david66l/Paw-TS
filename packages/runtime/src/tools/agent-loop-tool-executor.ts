@@ -51,9 +51,7 @@ export class MonotonicCheckpointSequenceV1 implements CheckpointSequenceV1 {
 
   constructor(lastAllocated = 0) {
     if (!Number.isSafeInteger(lastAllocated) || lastAllocated < 0) {
-      throw new TypeError(
-        "lastAllocated checkpoint sequence must be non-negative",
-      );
+      throw new TypeError("lastAllocated checkpoint sequence must be non-negative");
     }
     this.current = lastAllocated;
   }
@@ -68,9 +66,7 @@ export class MonotonicCheckpointSequenceV1 implements CheckpointSequenceV1 {
 }
 
 /** Recover the last canonical allocation without reading checkpoint storage. */
-export function projectCheckpointSequenceHighWaterV1(
-  facts: readonly InputFactV1[],
-): number {
+export function projectCheckpointSequenceHighWaterV1(facts: readonly InputFactV1[]): number {
   let highWater = 0;
   const allocatedCallIds = new Set<string>();
   for (const fact of facts) {
@@ -139,8 +135,7 @@ export function createHarnessToolExecutorV1(
   const runId = options.runId;
   const sessionId = options.sessionId;
   if (!runId.trim()) throw new Error("Runtime tool executor requires runId");
-  if (!sessionId.trim())
-    throw new Error("Runtime tool executor requires sessionId");
+  if (!sessionId.trim()) throw new Error("Runtime tool executor requires sessionId");
   options.permissions.bindRun(runId);
   const workspaceRoot = options.context.workspaceRoot;
   options.registry.assertCompatibleShellSandbox(options.context.shellSandbox);
@@ -151,33 +146,19 @@ export function createHarnessToolExecutorV1(
       ? { mcpAllowedTools: options.context.mcpAllowedTools }
       : {}),
     ...(options.context.watcher ? { watcher: options.context.watcher } : {}),
-    ...(options.context.onShellChunk
-      ? { onShellChunk: options.context.onShellChunk }
-      : {}),
-    ...(options.context.managedJobs
-      ? { managedJobs: options.context.managedJobs }
-      : {}),
-    ...(options.context.payloadRecall
-      ? { payloadRecall: options.context.payloadRecall }
-      : {}),
-    ...(options.context.taskProgress
-      ? { taskProgress: options.context.taskProgress }
-      : {}),
+    ...(options.context.onShellChunk ? { onShellChunk: options.context.onShellChunk } : {}),
+    ...(options.context.managedJobs ? { managedJobs: options.context.managedJobs } : {}),
+    ...(options.context.payloadRecall ? { payloadRecall: options.context.payloadRecall } : {}),
+    ...(options.context.taskProgress ? { taskProgress: options.context.taskProgress } : {}),
     ...(options.context.acceptanceLedger
       ? { acceptanceLedger: options.context.acceptanceLedger }
       : {}),
-    ...(options.context.webAccess
-      ? { webAccess: options.context.webAccess }
-      : {}),
-    ...(options.context.browserCheck
-      ? { browserCheck: options.context.browserCheck }
-      : {}),
+    ...(options.context.webAccess ? { webAccess: options.context.webAccess } : {}),
+    ...(options.context.browserCheck ? { browserCheck: options.context.browserCheck } : {}),
     ...(options.context.subAgentLauncher
       ? { subAgentLauncher: options.context.subAgentLauncher }
       : {}),
-    ...(options.registry.shellSandbox
-      ? { shellSandbox: options.registry.shellSandbox }
-      : {}),
+    ...(options.registry.shellSandbox ? { shellSandbox: options.registry.shellSandbox } : {}),
   };
   const executionOptions: HarnessToolExecutorOptionsV1 = {
     ...options,
@@ -196,13 +177,12 @@ export function createHarnessToolExecutorV1(
   return {
     async executeSettled(callsInModelOrder, batchOptions) {
       if (batchOptions.signal.aborted) {
-        return callsInModelOrder.map((call) =>
-          cancelled(call, batchOptions.signal),
-        );
+        return callsInModelOrder.map((call) => cancelled(call, batchOptions.signal));
       }
 
-      const settlements: Array<ToolSettlement<ToolRunResult> | undefined> =
-        callsInModelOrder.map(() => undefined);
+      const settlements: Array<ToolSettlement<ToolRunResult> | undefined> = callsInModelOrder.map(
+        () => undefined,
+      );
       const prepared: PreparedCallV1[] = [];
       const authorizationFacts: ToolAuthorizationRecordedFactV1[] = [];
       const previousAuthorization = authorizationTail;
@@ -214,16 +194,11 @@ export function createHarnessToolExecutorV1(
 
       try {
         if (batchOptions.signal.aborted) {
-          return callsInModelOrder.map((call) =>
-            cancelled(call, batchOptions.signal),
-          );
+          return callsInModelOrder.map((call) => cancelled(call, batchOptions.signal));
         }
         // Resolve names and validate every call before any permission prompt or effect.
         for (const [sourceIndex, call] of callsInModelOrder.entries()) {
-          const validation = options.registry.validateAndClassify(
-            call,
-            workspaceRoot,
-          );
+          const validation = options.registry.validateAndClassify(call, workspaceRoot);
           if (!validation.ok) {
             settlements[sourceIndex] = failedWithEvidence(
               call.id,
@@ -264,12 +239,7 @@ export function createHarnessToolExecutorV1(
               };
             }
           }
-          const fact = permissionFact(
-            batchOptions.turn,
-            sourceIndex,
-            validation.value,
-            permission,
-          );
+          const fact = permissionFact(batchOptions.turn, sourceIndex, validation.value, permission);
           authorizationFacts.push(fact);
           let checkpointSeq: number | undefined;
           if (
@@ -332,10 +302,7 @@ export function createHarnessToolExecutorV1(
             );
           }
           for (const item of prepared) {
-            options.permissions.commitRecordedResolution(
-              item.value,
-              item.permission,
-            );
+            options.permissions.commitRecordedResolution(item.value, item.permission);
           }
         }
       } finally {
@@ -344,8 +311,7 @@ export function createHarnessToolExecutorV1(
 
       if (batchOptions.signal.aborted) {
         return callsInModelOrder.map(
-          (call, sourceIndex) =>
-            settlements[sourceIndex] ?? cancelled(call, batchOptions.signal),
+          (call, sourceIndex) => settlements[sourceIndex] ?? cancelled(call, batchOptions.signal),
         );
       }
 
@@ -354,10 +320,7 @@ export function createHarnessToolExecutorV1(
       await Promise.all(
         prepared.map(async (item) => {
           if (item.permission.resolution === "deny") {
-            settlements[item.sourceIndex] = deniedSettlement(
-              item.value,
-              item.permission,
-            );
+            settlements[item.sourceIndex] = deniedSettlement(item.value, item.permission);
             return;
           }
           try {
@@ -409,10 +372,7 @@ async function executePrepared(
   try {
     lease = await lock.acquire(value.classification, signal);
   } catch (error) {
-    if (
-      signal.aborted ||
-      (error instanceof Error && error.name === "AbortError")
-    ) {
+    if (signal.aborted || (error instanceof Error && error.name === "AbortError")) {
       return cancelled(value.call, signal);
     }
     const detail = describeError(error);
@@ -434,9 +394,7 @@ async function executePrepared(
       approval: { approved: true },
       signal,
       ...(checkpointSeq === undefined ? {} : { checkpointSeq }),
-      ...(options.executionPolicy
-        ? { executionPolicy: options.executionPolicy }
-        : {}),
+      ...(options.executionPolicy ? { executionPolicy: options.executionPolicy } : {}),
       ...(options.effectPolicy ? { effectPolicy: options.effectPolicy } : {}),
     });
     return mapTransactionOutcome(outcome);
@@ -491,12 +449,7 @@ function mapTransactionOutcome(
         originalResult: outcome.originalResult,
         ...(outcome.checkpoint ? { checkpoint: outcome.checkpoint } : {}),
       });
-      return failedWithEvidence(
-        outcome.callId,
-        "ToolEffectRejected",
-        outcome.message,
-        evidence,
-      );
+      return failedWithEvidence(outcome.callId, "ToolEffectRejected", outcome.message, evidence);
     }
     case "cancelled": {
       const evidence = toolEvidence(false, outcome.reason, {
@@ -530,9 +483,7 @@ function mapTransactionOutcome(
         code: "E_TOOL_RESULT_UNKNOWN",
         phase: outcome.phase,
         executed: true,
-        ...(outcome.originalResult
-          ? { originalResult: outcome.originalResult }
-          : {}),
+        ...(outcome.originalResult ? { originalResult: outcome.originalResult } : {}),
         ...(outcome.checkpoint ? { checkpoint: outcome.checkpoint } : {}),
       });
       return {
@@ -649,21 +600,12 @@ function normalizeToolRunResult(
   }
 }
 
-function normalizeJsonValue(
-  value: unknown,
-  path: string,
-  seen: Set<object>,
-): unknown {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+function normalizeJsonValue(value: unknown, path: string, seen: Set<object>): unknown {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
   if (typeof value === "number") {
-    if (!Number.isFinite(value))
-      throw new Error(`${path} contains a non-finite number`);
+    if (!Number.isFinite(value)) throw new Error(`${path} contains a non-finite number`);
     return value;
   }
   if (typeof value !== "object") {
@@ -685,9 +627,7 @@ function normalizeJsonValue(
       throw new Error(`${path} contains a non-plain object`);
     }
     const object: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(
-      value as Record<string, unknown>,
-    )) {
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
       // JSON.stringify omits undefined object properties. Normalize them away
       // once here so journal/context consumers see one deterministic payload.
       if (item === undefined) continue;

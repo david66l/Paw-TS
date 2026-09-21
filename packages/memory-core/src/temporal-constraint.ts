@@ -21,10 +21,7 @@ import {
  * compiler can prove the narrower binding.
  */
 const LEAF_TEMPORAL_COMPATIBILITY_V1: Readonly<
-  Record<
-    MemoryEvidenceTemporalModeV3,
-    ReadonlySet<MemoryEvidenceTemporalModeV3>
-  >
+  Record<MemoryEvidenceTemporalModeV3, ReadonlySet<MemoryEvidenceTemporalModeV3>>
 > = Object.freeze({
   any: modes("any", "latest", "as_of", "history", "range"),
   latest: modes("any", "latest", "as_of", "history", "range"),
@@ -47,9 +44,7 @@ export function memoryEvidenceLeafTemporalModeAllowedV1(
   queryEnvelopeMode: MemoryEvidenceTemporalModeV3,
   leafMode: MemoryEvidenceTemporalModeV3,
 ): boolean {
-  return (
-    LEAF_TEMPORAL_COMPATIBILITY_V1[queryEnvelopeMode]?.has(leafMode) === true
-  );
+  return LEAF_TEMPORAL_COMPATIBILITY_V1[queryEnvelopeMode]?.has(leafMode) === true;
 }
 
 export function compileMemoryEvidenceTemporalConstraintV1(input: {
@@ -58,12 +53,7 @@ export function compileMemoryEvidenceTemporalConstraintV1(input: {
   readonly leafMode: MemoryEvidenceTemporalModeV3;
 }): MemoryEvidenceTemporalConstraintV1 {
   const query = boundedQuery(input.query);
-  if (
-    !memoryEvidenceLeafTemporalModeAllowedV1(
-      input.queryEnvelopeMode,
-      input.leafMode,
-    )
-  ) {
+  if (!memoryEvidenceLeafTemporalModeAllowedV1(input.queryEnvelopeMode, input.leafMode)) {
     throw namedError("MemoryEvidenceTemporalConstraintIncompatible");
   }
   const policy = temporalPolicy(input.leafMode);
@@ -89,8 +79,7 @@ export function validateMemoryEvidenceTemporalConstraintV1(input: {
 }): void {
   const expected = compileMemoryEvidenceTemporalConstraintV1(input);
   if (
-    Object.keys(input.constraint).sort().join("\0") !==
-      TEMPORAL_CONSTRAINT_KEYS_V1.join("\0") ||
+    Object.keys(input.constraint).sort().join("\0") !== TEMPORAL_CONSTRAINT_KEYS_V1.join("\0") ||
     expected.constraintRevision !== input.constraint.constraintRevision ||
     expected.constraintVersion !== input.constraint.constraintVersion ||
     expected.compatibilityVersion !== input.constraint.compatibilityVersion ||
@@ -111,8 +100,7 @@ export function bindMemoryEvidenceTemporalConstraintV1(input: {
   readonly constraint?: MemoryEvidenceTemporalConstraintV1;
   readonly evidenceTimeUpperBound?: string;
 }): MemoryEvidenceBoundTemporalConstraintV1 {
-  const constraint =
-    input.constraint ?? compileMemoryEvidenceTemporalConstraintV1(input);
+  const constraint = input.constraint ?? compileMemoryEvidenceTemporalConstraintV1(input);
   validateMemoryEvidenceTemporalConstraintV1({
     ...input,
     constraint,
@@ -196,9 +184,7 @@ export function compileMemoryEvidenceDurationRequestV1(
     );
   if (
     !explicitEndpointPair &&
-    /\b(?:combined|in\s+total|altogether|total)\b|(?:总共|合计|一共|加起来|总计)/iu.test(
-      value,
-    )
+    /\b(?:combined|in\s+total|altogether|total)\b|(?:总共|合计|一共|加起来|总计)/iu.test(value)
   ) {
     return null;
   }
@@ -222,9 +208,7 @@ export function compileMemoryEvidenceDurationRequestV1(
     ? ("evidence_to_query_anchor" as const)
     : ("between_evidence" as const);
   const queryAnchor =
-    endpointPolicy === "evidence_to_query_anchor"
-      ? normalizeCutoff(evidenceTimeUpperBound)
-      : null;
+    endpointPolicy === "evidence_to_query_anchor" ? normalizeCutoff(evidenceTimeUpperBound) : null;
   const endpointContract =
     endpointPolicy === "evidence_to_query_anchor"
       ? Object.freeze({
@@ -257,9 +241,7 @@ export function compileMemoryEvidenceDurationRequestV1(
   });
 }
 
-function durationEndpointOrdering(
-  query: string,
-): "chronological" | "semantic_start_end_unbound" {
+function durationEndpointOrdering(query: string): "chronological" | "semantic_start_end_unbound" {
   return /\bfrom\b.{1,96}\bto\b/iu.test(query) ||
     /从.{1,64}到.{1,64}(?:多久|多长|多少(?:天|周|个月|月|年))/u.test(query)
     ? "semantic_start_end_unbound"
@@ -296,18 +278,11 @@ export function assertMemoryEvidenceTemporalConstraintIdentityV1(
     queryRevision: constraint.queryRevision,
   };
   if (
-    Object.keys(constraint).sort().join("\0") !==
-      TEMPORAL_CONSTRAINT_KEYS_V1.join("\0") ||
-    constraint.constraintVersion !==
-      PAW_MEMORY_EVIDENCE_TEMPORAL_CONSTRAINT_VERSION_V1 ||
-    constraint.compatibilityVersion !==
-      PAW_MEMORY_EVIDENCE_TEMPORAL_COMPATIBILITY_VERSION_V1 ||
-    !memoryEvidenceLeafTemporalModeAllowedV1(
-      constraint.queryEnvelopeMode,
-      constraint.mode,
-    ) ||
-    hashCanonicalJsonV1(identity as unknown as JsonValue) !==
-      constraint.constraintRevision
+    Object.keys(constraint).sort().join("\0") !== TEMPORAL_CONSTRAINT_KEYS_V1.join("\0") ||
+    constraint.constraintVersion !== PAW_MEMORY_EVIDENCE_TEMPORAL_CONSTRAINT_VERSION_V1 ||
+    constraint.compatibilityVersion !== PAW_MEMORY_EVIDENCE_TEMPORAL_COMPATIBILITY_VERSION_V1 ||
+    !memoryEvidenceLeafTemporalModeAllowedV1(constraint.queryEnvelopeMode, constraint.mode) ||
+    hashCanonicalJsonV1(identity as unknown as JsonValue) !== constraint.constraintRevision
   ) {
     throw namedError("MemoryEvidenceTemporalConstraintInvalid");
   }
@@ -357,25 +332,17 @@ function modes(
   return new Set(values);
 }
 
-function extractExplicitQueryIntervals(
-  query: string,
-): readonly MemoryEvidenceTemporalIntervalV2[] {
+function extractExplicitQueryIntervals(query: string): readonly MemoryEvidenceTemporalIntervalV2[] {
   const intervals: MemoryEvidenceTemporalIntervalV2[] = [];
   for (const match of query.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/gu)) {
-    const interval = strictUtcDay(
-      Number(match[1]),
-      Number(match[2]),
-      Number(match[3]),
-    );
+    const interval = strictUtcDay(Number(match[1]), Number(match[2]), Number(match[3]));
     if (interval) intervals.push(interval);
   }
   for (const match of query.matchAll(
     /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(\d{4})\b/giu,
   )) {
     const month = monthNumber(match[1] ?? "");
-    const interval = month
-      ? strictUtcDay(Number(match[3]), month, Number(match[2]))
-      : null;
+    const interval = month ? strictUtcDay(Number(match[3]), month, Number(match[2])) : null;
     if (interval) intervals.push(interval);
   }
   const yearCue =
@@ -385,10 +352,7 @@ function extractExplicitQueryIntervals(
     intervals.push(yearInterval(year));
   }
   const unique = new Map(
-    intervals.map((interval) => [
-      `${interval.lower}\0${interval.upper}`,
-      interval,
-    ]),
+    intervals.map((interval) => [`${interval.lower}\0${interval.upper}`, interval]),
   );
   return Object.freeze([...unique.values()]);
 }
@@ -419,11 +383,7 @@ function relativeQueryInterval(
 ): MemoryEvidenceTemporalIntervalV2 | null {
   const anchor = new Date(cutoff);
   const cutoffDay = new Date(
-    Date.UTC(
-      anchor.getUTCFullYear(),
-      anchor.getUTCMonth(),
-      anchor.getUTCDate(),
-    ),
+    Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate()),
   );
   if (/\blast\s+weekend\b|上个周末|上周末/iu.test(query)) {
     const day = cutoffDay.getUTCDay();
@@ -434,12 +394,8 @@ function relativeQueryInterval(
     return dayInterval(lower, upper);
   }
   if (/\blast\s+month\b|上个月/iu.test(query)) {
-    const upper = new Date(
-      Date.UTC(cutoffDay.getUTCFullYear(), cutoffDay.getUTCMonth(), 1),
-    );
-    const lower = new Date(
-      Date.UTC(upper.getUTCFullYear(), upper.getUTCMonth() - 1, 1),
-    );
+    const upper = new Date(Date.UTC(cutoffDay.getUTCFullYear(), cutoffDay.getUTCMonth(), 1));
+    const lower = new Date(Date.UTC(upper.getUTCFullYear(), upper.getUTCMonth() - 1, 1));
     return dayInterval(lower, upper);
   }
   if (/\blast\s+week\b|上周/iu.test(query)) {
@@ -457,8 +413,7 @@ function relativeQueryInterval(
     }
   }
   const ago =
-    /\b(\d{1,3})\s+(days?|weeks?)\s+ago\b/iu.exec(query) ??
-    /(\d{1,3})\s*(天|周)前/u.exec(query);
+    /\b(\d{1,3})\s+(days?|weeks?)\s+ago\b/iu.exec(query) ?? /(\d{1,3})\s*(天|周)前/u.exec(query);
   if (ago) {
     const count = Number(ago[1]);
     const unit = (ago[2] ?? "").toLocaleLowerCase("en-US");
@@ -508,10 +463,7 @@ function yearInterval(year: number): MemoryEvidenceTemporalIntervalV2 {
   });
 }
 
-function dayInterval(
-  lower: Date,
-  upper: Date,
-): MemoryEvidenceTemporalIntervalV2 {
+function dayInterval(lower: Date, upper: Date): MemoryEvidenceTemporalIntervalV2 {
   return Object.freeze({
     lower: lower.toISOString(),
     upper: upper.toISOString(),
@@ -553,19 +505,13 @@ function monthNumber(value: string): number | undefined {
 
 function normalizeCutoff(value: string | undefined): string | null {
   if (value === undefined) return null;
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/u.exec(
-      value,
-    );
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/u.exec(value);
   if (!match) {
     throw namedError("MemoryEvidenceTemporalCutoffInvalid");
   }
   const timestamp = Date.parse(value);
   const canonical = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.${(match[7] ?? "0").padEnd(3, "0")}Z`;
-  if (
-    !Number.isFinite(timestamp) ||
-    new Date(timestamp).toISOString() !== canonical
-  ) {
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== canonical) {
     throw namedError("MemoryEvidenceTemporalCutoffInvalid");
   }
   return new Date(timestamp).toISOString();

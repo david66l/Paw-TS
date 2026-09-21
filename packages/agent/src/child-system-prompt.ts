@@ -93,18 +93,11 @@ export function buildChildTaskMessage(opts: {
   if (ctx.parentConclusions && ctx.parentConclusions.length > 0) {
     parts.push("", "# Parent conclusions");
     for (const conclusion of ctx.parentConclusions) {
-      parts.push(
-        `- (${conclusion.confidence}) ${escapeTaskEnvelope(conclusion.conclusion)}`,
-      );
+      parts.push(`- (${conclusion.confidence}) ${escapeTaskEnvelope(conclusion.conclusion)}`);
     }
   }
 
-  parts.push(
-    "",
-    "# Output format",
-    escapeTaskEnvelope(ctx.outputFormat),
-    CHILD_TASK_CLOSE,
-  );
+  parts.push("", "# Output format", escapeTaskEnvelope(ctx.outputFormat), CHILD_TASK_CLOSE);
   return parts.join("\n");
 }
 

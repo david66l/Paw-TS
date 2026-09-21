@@ -17,10 +17,7 @@ export type LoopGuidanceReceiptV1 =
   | { readonly kind: "max_steps" };
 
 export interface LoopGuidanceCandidateV1 {
-  readonly control: Extract<
-    EphemeralControlV1,
-    { readonly kind: "status" | "progress" }
-  >;
+  readonly control: Extract<EphemeralControlV1, { readonly kind: "status" | "progress" }>;
   readonly receipt: LoopGuidanceReceiptV1;
 }
 
@@ -72,11 +69,7 @@ export function deriveLoopGuidanceCandidatesV1(
   }
 
   if (!input.flags._implementationWarned) {
-    const text = implementationGuidance(
-      input.state,
-      input.turn + 1,
-      input.maxSteps,
-    );
+    const text = implementationGuidance(input.state, input.turn + 1, input.maxSteps);
     if (text) {
       candidates.push({
         control: { kind: "progress", text },
@@ -85,10 +78,7 @@ export function deriveLoopGuidanceCandidatesV1(
     }
   }
 
-  if (
-    input.historyUsed > input.historyBudget &&
-    !input.flags._budgetGuardWarned
-  ) {
+  if (input.historyUsed > input.historyBudget && !input.flags._budgetGuardWarned) {
     candidates.push({
       control: {
         kind: "status",

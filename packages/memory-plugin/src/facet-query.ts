@@ -1,10 +1,7 @@
 import type { JsonValue } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
-import type {
-  MemoryFacetEvidenceStateV2,
-  MemoryFacetStateProjectionV2,
-} from "./facet-state.js";
+import type { MemoryFacetEvidenceStateV2, MemoryFacetStateProjectionV2 } from "./facet-state.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_FACET_QUERY_PLANNER_VERSION_V2 =
@@ -123,10 +120,9 @@ export function createJsonMemoryFacetQueryPlannerV2(
       let repaired = false;
       try {
         if (signal.aborted) throw abortError();
-        const first = await input.model.complete(
-          buildMemoryFacetQueryRequestV2(planning),
-          { signal },
-        );
+        const first = await input.model.complete(buildMemoryFacetQueryRequestV2(planning), {
+          signal,
+        });
         if (signal.aborted || first.status === "cancelled") throw abortError();
         if (first.status !== "completed") {
           throw namedError(`MemoryFacetQuery_${stableCode(first.errorCode)}`);
@@ -145,12 +141,9 @@ export function createJsonMemoryFacetQueryPlannerV2(
             ),
             { signal },
           );
-          if (signal.aborted || second.status === "cancelled")
-            throw abortError();
+          if (signal.aborted || second.status === "cancelled") throw abortError();
           if (second.status !== "completed") {
-            throw namedError(
-              `MemoryFacetQuery_${stableCode(second.errorCode)}`,
-            );
+            throw namedError(`MemoryFacetQuery_${stableCode(second.errorCode)}`);
           }
           plan = parseMemoryFacetQueryPlanV2(second.text, planning);
         }
@@ -248,21 +241,15 @@ export function parseMemoryFacetQueryPlanV2(
   input: MemoryFacetQueryPlanningInputV2,
 ): MemoryFacetQueryPlanV2 {
   validatePlanningInput(input);
-  const parsed = exactRecord(
-    jsonObject(text),
-    "MemoryFacetQueryPacketInvalid",
-    ["view", "facetIds", "confidence"],
-  );
+  const parsed = exactRecord(jsonObject(text), "MemoryFacetQueryPacketInvalid", [
+    "view",
+    "facetIds",
+    "confidence",
+  ]);
   const view = queryView(parsed.view);
   const allowed = new Set(input.facets.map((item) => item.facet.id));
-  const facetIds = uniqueStrings(
-    parsed.facetIds,
-    "MemoryFacetQueryFacetIdsInvalid",
-  );
-  if (
-    facetIds.length > input.maxSelectedFacets ||
-    facetIds.some((id) => !allowed.has(id))
-  ) {
+  const facetIds = uniqueStrings(parsed.facetIds, "MemoryFacetQueryFacetIdsInvalid");
+  if (facetIds.length > input.maxSelectedFacets || facetIds.some((id) => !allowed.has(id))) {
     throw namedError("MemoryFacetQueryFacetUnknown");
   }
   const body = {
@@ -331,9 +318,7 @@ export function selectMemoryFacetQueryEvidenceV2(
     });
     const view = input.plan.view;
     if (view === "recollection" || view === "decision") {
-      candidates.sort((left, right) =>
-        compareEvidenceRelevance(input.query, view, left, right),
-      );
+      candidates.sort((left, right) => compareEvidenceRelevance(input.query, view, left, right));
     }
     const evidence: MemoryFacetQueryEvidenceV2[] = [];
     const seen = new Set<string>();
@@ -343,10 +328,7 @@ export function selectMemoryFacetQueryEvidenceV2(
       seen.add(candidate.state.memoryId);
       const cost = candidate.state.statement.length;
       const separator = evidence.length > 0 ? 1 : 0;
-      if (
-        evidence.length >= maxEvidence ||
-        usedChars + separator + cost > maxChars
-      ) {
+      if (evidence.length >= maxEvidence || usedChars + separator + cost > maxChars) {
         continue;
       }
       evidence.push(candidate);
@@ -488,10 +470,8 @@ function compareEvidenceRelevance(
   right: MemoryFacetQueryEvidenceV2,
 ): number {
   return (
-    relevanceScore(query, right.state.statement) -
-      relevanceScore(query, left.state.statement) ||
-    evidenceBucketRank(view, left.bucket) -
-      evidenceBucketRank(view, right.bucket) ||
+    relevanceScore(query, right.state.statement) - relevanceScore(query, left.state.statement) ||
+    evidenceBucketRank(view, left.bucket) - evidenceBucketRank(view, right.bucket) ||
     Date.parse(right.state.validFrom) - Date.parse(left.state.validFrom) ||
     left.state.memoryId.localeCompare(right.state.memoryId)
   );
@@ -612,12 +592,7 @@ function queryView(value: unknown): MemoryFacetQueryViewV2 {
 }
 
 function confidence(value: unknown): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value < 0 ||
-    value > 1
-  ) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
     throw namedError("MemoryFacetQueryConfidenceInvalid");
   }
   return value;

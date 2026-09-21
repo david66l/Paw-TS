@@ -10,19 +10,13 @@ import {
 
 describe("canonical completion review protocol", () => {
   test("strictly parses the durable claim and settlement shapes", () => {
-    expect(parseRunJournalEnvelopeV1(envelope(2, claim()))).toEqual(
-      envelope(2, claim()),
-    );
-    expect(parseRunJournalEnvelopeV1(envelope(3, settlement()))).toEqual(
-      envelope(3, settlement()),
-    );
+    expect(parseRunJournalEnvelopeV1(envelope(2, claim()))).toEqual(envelope(2, claim()));
+    expect(parseRunJournalEnvelopeV1(envelope(3, settlement()))).toEqual(envelope(3, settlement()));
     const gateClaim = {
       ...claim(),
       triggers: ["fresh_verification_failed"] as const,
     };
-    expect(parseRunJournalEnvelopeV1(envelope(2, gateClaim))).toEqual(
-      envelope(2, gateClaim),
-    );
+    expect(parseRunJournalEnvelopeV1(envelope(2, gateClaim))).toEqual(envelope(2, gateClaim));
 
     for (const invalid of [
       { ...claim(), reviewId: "" },
@@ -44,15 +38,9 @@ describe("canonical completion review protocol", () => {
     const valid = [attempt(), envelope(2, claim()), envelope(3, settlement())];
     expect(parseRunJournalPrefixV1(valid)).toEqual(valid);
 
+    expect(() => parseRunJournalPrefixV1([attempt(), envelope(2, settlement())])).toThrow(/claim/i);
     expect(() =>
-      parseRunJournalPrefixV1([attempt(), envelope(2, settlement())]),
-    ).toThrow(/claim/i);
-    expect(() =>
-      parseRunJournalPrefixV1([
-        attempt(),
-        envelope(2, claim()),
-        envelope(3, claim()),
-      ]),
+      parseRunJournalPrefixV1([attempt(), envelope(2, claim()), envelope(3, claim())]),
     ).toThrow(/duplicate/i);
     expect(() =>
       parseRunJournalPrefixV1([

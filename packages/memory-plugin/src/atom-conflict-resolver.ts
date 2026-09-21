@@ -1,8 +1,4 @@
-import type {
-  JsonValue,
-  MemoryAtomActionV1,
-  MemoryAtomProposalV1,
-} from "@paw/protocol";
+import type { JsonValue, MemoryAtomActionV1, MemoryAtomProposalV1 } from "@paw/protocol";
 
 import type { MemoryConflictCandidateV1 } from "./atom-extractor.js";
 import type { MemoryAtomWriterStoreV1 } from "./atom-store.js";
@@ -61,17 +57,13 @@ export function createJsonMemoryAtomConflictResolverV1(input: {
   if (!input.model || typeof input.model.complete !== "function") {
     throw namedError("MemoryAtomConflictModelInvalid");
   }
-  const resolverVersion =
-    input.resolverVersion ?? PAW_MEMORY_ATOM_CONFLICT_RESOLVER_VERSION_V1;
+  const resolverVersion = input.resolverVersion ?? PAW_MEMORY_ATOM_CONFLICT_RESOLVER_VERSION_V1;
   if (!resolverVersion.trim()) {
     throw namedError("MemoryAtomConflictResolverVersionInvalid");
   }
   return Object.freeze({
     resolverVersion,
-    async resolve(
-      resolution: MemoryAtomConflictResolutionInputV1,
-      signal: AbortSignal,
-    ) {
+    async resolve(resolution: MemoryAtomConflictResolutionInputV1, signal: AbortSignal) {
       if (signal.aborted) throw abortError();
       const first = await input.model.complete(
         buildMemoryAtomConflictResolutionRequestV1(resolution),
@@ -94,15 +86,11 @@ export function createJsonMemoryAtomConflictResolverV1(input: {
           ),
           { signal },
         );
-        if (signal.aborted || repaired.status === "cancelled")
-          throw abortError();
+        if (signal.aborted || repaired.status === "cancelled") throw abortError();
         if (repaired.status !== "completed") {
           throw namedError(stableName(repaired.errorCode));
         }
-        decisions = parseMemoryAtomConflictResolutionV1(
-          repaired.text,
-          resolution,
-        );
+        decisions = parseMemoryAtomConflictResolutionV1(repaired.text, resolution);
       }
       return Object.freeze({
         resolverVersion,
@@ -156,15 +144,12 @@ export async function reconcileMemoryAtomsV1(
         }
         return Object.freeze({
           atomId: atom.atomId,
-          candidates: Object.freeze(
-            [...byId.values()].slice(0, candidateLimit),
-          ),
+          candidates: Object.freeze([...byId.values()].slice(0, candidateLimit)),
         });
       }),
     );
-    const candidateCount = new Set(
-      pools.flatMap((pool) => pool.candidates.map((item) => item.id)),
-    ).size;
+    const candidateCount = new Set(pools.flatMap((pool) => pool.candidates.map((item) => item.id)))
+      .size;
     if (candidateCount === 0) {
       return Object.freeze({
         atoms: input.atoms,
@@ -181,9 +166,7 @@ export async function reconcileMemoryAtomsV1(
       }),
       input.signal,
     );
-    const decisionById = new Map(
-      resolution.decisions.map((item) => [item.atomId, item] as const),
-    );
+    const decisionById = new Map(resolution.decisions.map((item) => [item.atomId, item] as const));
     let revisedDecisionCount = 0;
     const atoms = input.atoms.map((atom) => {
       const decision = decisionById.get(atom.atomId)!;
@@ -209,9 +192,7 @@ export async function reconcileMemoryAtomsV1(
       candidateCount: 0,
       revisedDecisionCount: 0,
       status: "fallback" as const,
-      reasonCode: stableName(
-        error instanceof Error ? error.name : "MemoryAtomConflictFailed",
-      ),
+      reasonCode: stableName(error instanceof Error ? error.name : "MemoryAtomConflictFailed"),
     });
   }
 }
@@ -287,10 +268,7 @@ export function parseMemoryAtomConflictResolutionV1(
 ): readonly MemoryAtomConflictDecisionV1[] {
   assertInput(input);
   const parsed = extractJsonObject(text);
-  if (
-    !Array.isArray(parsed.decisions) ||
-    parsed.decisions.length !== input.atoms.length
-  ) {
+  if (!Array.isArray(parsed.decisions) || parsed.decisions.length !== input.atoms.length) {
     throw namedError("MemoryAtomConflictDecisionCountInvalid");
   }
   const atomById = new Map(input.atoms.map((atom) => [atom.atomId, atom]));
@@ -302,19 +280,13 @@ export function parseMemoryAtomConflictResolutionV1(
       "action",
       "targetIds",
     ]);
-    const atomId = boundedText(
-      raw.atomId,
-      256,
-      "MemoryAtomConflictAtomIdInvalid",
-    );
+    const atomId = boundedText(raw.atomId, 256, "MemoryAtomConflictAtomIdInvalid");
     if (!atomById.has(atomId) || seen.has(atomId)) {
       throw namedError("MemoryAtomConflictUnknownAtom");
     }
     seen.add(atomId);
     const action = oneOfAction(raw.action);
-    const allowed = new Set(
-      (poolById.get(atomId)?.candidates ?? []).map((item) => item.id),
-    );
+    const allowed = new Set((poolById.get(atomId)?.candidates ?? []).map((item) => item.id));
     const targetIds = knownIds(raw.targetIds, allowed);
     if ((action === "store" || action === "skip") && targetIds.length > 0) {
       throw namedError("MemoryAtomConflictUnexpectedTargets");
@@ -369,10 +341,7 @@ function assertInput(input: MemoryAtomConflictResolutionInputV1): void {
   }
   const atomIds = new Set(input.atoms.map((atom) => atom.atomId));
   const poolIds = new Set(input.pools.map((pool) => pool.atomId));
-  if (
-    atomIds.size !== input.atoms.length ||
-    poolIds.size !== input.pools.length
-  ) {
+  if (atomIds.size !== input.atoms.length || poolIds.size !== input.pools.length) {
     throw namedError("MemoryAtomConflictIdentityDuplicate");
   }
   if ([...atomIds].some((id) => !poolIds.has(id))) {
@@ -386,13 +355,10 @@ function assertInput(input: MemoryAtomConflictResolutionInputV1): void {
 function extractJsonObject(text: string): Record<string, unknown> {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start)
-    throw namedError("MemoryAtomConflictOutputInvalid");
-  return exactRecord(
-    JSON.parse(text.slice(start, end + 1)),
-    "MemoryAtomConflictOutput",
-    ["decisions"],
-  );
+  if (start < 0 || end <= start) throw namedError("MemoryAtomConflictOutputInvalid");
+  return exactRecord(JSON.parse(text.slice(start, end + 1)), "MemoryAtomConflictOutput", [
+    "decisions",
+  ]);
 }
 
 function exactRecord(
@@ -410,10 +376,7 @@ function exactRecord(
   return record;
 }
 
-function knownIds(
-  value: unknown,
-  allowed: ReadonlySet<string>,
-): readonly string[] {
+function knownIds(value: unknown, allowed: ReadonlySet<string>): readonly string[] {
   if (!Array.isArray(value) || value.length > 16) {
     throw namedError("MemoryAtomConflictTargetIdsInvalid");
   }
@@ -428,22 +391,13 @@ function knownIds(
 }
 
 function oneOfAction(value: unknown): MemoryAtomActionV1 {
-  if (
-    value !== "store" &&
-    value !== "update" &&
-    value !== "merge" &&
-    value !== "skip"
-  ) {
+  if (value !== "store" && value !== "update" && value !== "merge" && value !== "skip") {
     throw namedError("MemoryAtomConflictActionInvalid");
   }
   return value;
 }
 
-function boundedText(
-  value: unknown,
-  maximum: number,
-  errorName: string,
-): string {
+function boundedText(value: unknown, maximum: number, errorName: string): string {
   if (typeof value !== "string") throw namedError(errorName);
   const normalized = value.trim();
   if (!normalized || normalized.length > maximum) throw namedError(errorName);
@@ -452,8 +406,7 @@ function boundedText(
 
 function normalizedIso(value: string): string {
   const time = Date.parse(value);
-  if (!Number.isFinite(time))
-    throw namedError("MemoryAtomConflictObservedAtInvalid");
+  if (!Number.isFinite(time)) throw namedError("MemoryAtomConflictObservedAtInvalid");
   return new Date(time).toISOString();
 }
 

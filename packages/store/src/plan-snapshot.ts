@@ -120,12 +120,9 @@ export function planToSnapshotPayload(
   }));
   const items_total = mapped.length;
   // 是否需要截断
-  const truncated =
-    Number.isFinite(maxItems) && items_total > maxItems && maxItems >= 1;
+  const truncated = Number.isFinite(maxItems) && items_total > maxItems && maxItems >= 1;
   const items =
-    truncated && Number.isFinite(maxItems)
-      ? mapped.slice(0, Math.floor(maxItems))
-      : mapped;
+    truncated && Number.isFinite(maxItems) ? mapped.slice(0, Math.floor(maxItems)) : mapped;
 
   return {
     workflow_id: plan.workflow_id,

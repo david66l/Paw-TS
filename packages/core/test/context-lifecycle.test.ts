@@ -73,10 +73,7 @@ describe("P4.2 生命周期驱逐 — computeSegments", () => {
 describe("P4.2 残差效用门控", () => {
   test("extractRecentToolCallPaths 提取最近工具调用引用的路径", () => {
     const messages = [
-      msg(
-        "assistant",
-        '{"tool":"workspace.read_file","args":{"path":"src/a.ts"}}',
-      ),
+      msg("assistant", '{"tool":"workspace.read_file","args":{"path":"src/a.ts"}}'),
       msg("user", "[Tool workspace.read_file completed]\nsrc/a.ts"),
       msg(
         "assistant",
@@ -94,10 +91,7 @@ describe("P4.2 残差效用门控", () => {
       msg("user", "goal"),
       msg("assistant", "read the config file"), // evictable，无路径引用
       msg("assistant", "src/hot.ts is the cause"), // evictable，被最近调用引用
-      msg(
-        "assistant",
-        '{"tool":"workspace.read_file","args":{"path":"src/hot.ts"}}',
-      ), // 最近引用（tail 保护）
+      msg("assistant", '{"tool":"workspace.read_file","args":{"path":"src/hot.ts"}}'), // 最近引用（tail 保护）
       msg("user", "final"),
     ];
     const truncated = truncateHistory([...messages], {
@@ -210,10 +204,7 @@ describe("P4.4 压缩版本化 — compaction commits", () => {
   test("save → list → load 快照往返", () => {
     const root = "C:/work/ver";
     const runId = "run-v1";
-    const before: ChatMessage[] = [
-      msg("user", "goal"),
-      msg("assistant", "old context"),
-    ];
+    const before: ChatMessage[] = [msg("user", "goal"), msg("assistant", "old context")];
     const after: ChatMessage[] = [
       msg("user", "goal"),
       msg("user", "[Context Summary]\ncompressed"),
@@ -249,10 +240,7 @@ describe("P4.4 压缩版本化 — compaction commits", () => {
     expect(commits.map((c) => c.n)).toEqual([1, 2]);
     // 回滚点：第 1 次压缩的压缩前快照
     const snap = loadCompactionSnapshot(root, runId, 1);
-    expect(snap?.beforeMessages.map((m) => m.content)).toEqual([
-      "goal",
-      "old context",
-    ]);
+    expect(snap?.beforeMessages.map((m) => m.content)).toEqual(["goal", "old context"]);
     // 无 commit 的 run → 空列表
     expect(listCompactionCommits(root, "nope")).toEqual([]);
   });

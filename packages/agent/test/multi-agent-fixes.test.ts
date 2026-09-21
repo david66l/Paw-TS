@@ -39,8 +39,7 @@ function makeFakeModel(sequence: string[] = []): LanguageModel {
     label: "fake",
     capabilities: { contextWindow: 128_000 },
     async complete() {
-      const text =
-        sequence[idx] ?? '{"action":"final_answer","summary":"done"}';
+      const text = sequence[idx] ?? '{"action":"final_answer","summary":"done"}';
       idx += 1;
       return { text, finishReason: "stop" };
     },
@@ -110,9 +109,7 @@ describe("断点2: trace.messages 恒空", () => {
     const dir = ws("paw-fix-trace-");
     const launcher = new DefaultSubAgentLauncher({
       workspaceRoot: dir,
-      model: makeFakeModel([
-        '{"action":"final_answer","summary":"child done"}',
-      ]),
+      model: makeFakeModel(['{"action":"final_answer","summary":"child done"}']),
       maxSteps: 3,
     });
 
@@ -129,11 +126,9 @@ describe("断点2: trace.messages 恒空", () => {
     expect(messages.length).toBeGreaterThanOrEqual(2);
     expect(messages[0]!.role).toBe("system");
     expect(messages[0]!.content.length).toBeGreaterThan(0);
-    expect(
-      messages.some(
-        (m) => m.role === "user" && m.content.includes("调查内存泄漏"),
-      ),
-    ).toBe(true);
+    expect(messages.some((m) => m.role === "user" && m.content.includes("调查内存泄漏"))).toBe(
+      true,
+    );
     // 最终答复经 result.summary 返回（final_answer 不落 messages）
     expect(result.summary).toBe("child done");
   });
@@ -193,9 +188,7 @@ describe("断点3: Spec 路径丢弃父级 constraints/state", () => {
     expect(firstUserMsg).toBeDefined();
     const sys = systemMsg?.content ?? "";
     const task = firstUserMsg?.content ?? "";
-    expect(task).toStartWith(
-      '<paw-subagent-task schema="paw.subagent-task.v1">',
-    );
+    expect(task).toStartWith('<paw-subagent-task schema="paw.subagent-task.v1">');
     // 父级约束合入（修复前会被 Spec 物化整体覆盖丢弃）
     expect(task).toContain("NEVER touch production DB");
     // Spec 自带安全约束仍在
@@ -250,8 +243,7 @@ describe("断点3: Spec 路径丢弃父级 constraints/state", () => {
         messages: [
           {
             role: "system",
-            content:
-              "old child system containing legacy-system-only-fact and task context",
+            content: "old child system containing legacy-system-only-fact and task context",
           },
           { role: "user", content: "legacy raw goal" },
           { role: "assistant", content: "partial investigation" },
@@ -263,9 +255,7 @@ describe("断点3: Spec 路径丢弃父级 constraints/state", () => {
     const system = providerMessages.find((m) => m.role === "system");
     const users = providerMessages.filter((m) => m.role === "user");
     expect(system?.content).not.toContain("legacy-system-only-fact");
-    expect(users[0]?.content).toStartWith(
-      '<paw-subagent-task schema="paw.subagent-task.v1">',
-    );
+    expect(users[0]?.content).toStartWith('<paw-subagent-task schema="paw.subagent-task.v1">');
     expect(users[0]?.content).toContain("legacy-system-only-fact");
     expect(users[0]?.content).toContain("NEVER lose the delegated constraint");
     expect(users[1]?.content).toBe("legacy raw goal");
@@ -373,14 +363,7 @@ describe("断点4: root maxSteps 不生效", () => {
 
 describe("断点5: 文档中的 registerFromPath", () => {
   it("文档不再引用 registerFromPath，真实 API 为 register/writeAgentFile/reload", () => {
-    const docPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "..",
-      "docs",
-      "agent-registry-note.md",
-    );
+    const docPath = path.join(__dirname, "..", "..", "..", "docs", "agent-registry-note.md");
     expect(fs.existsSync(docPath)).toBe(true);
     const content = fs.readFileSync(docPath, "utf8");
     expect(content).not.toContain("registerFromPath");
@@ -389,8 +372,6 @@ describe("断点5: 文档中的 registerFromPath", () => {
     expect(typeof reg.register).toBe("function");
     expect(typeof reg.reload).toBe("function");
     expect(typeof writeAgentFile).toBe("function");
-    expect(
-      (reg as unknown as Record<string, unknown>).registerFromPath,
-    ).toBeUndefined();
+    expect((reg as unknown as Record<string, unknown>).registerFromPath).toBeUndefined();
   });
 });

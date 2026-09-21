@@ -6,9 +6,8 @@ import { OpenAICompatibleModel } from "@paw/models";
 import { runDesktopNext } from "../agent-host/paw-next.js";
 
 test("desktop carries verification advice through failed checks, repair and reviewed completion", async () => {
-  const root = fs.mkdtempSync(
-    path.join(os.tmpdir(), "paw-verification-cadence-"),
-  );
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-verification-cadence-"));
+  let cleanupFailure: Error | undefined;
   const originalFetch = globalThis.fetch;
   const requests: Array<{
     messages: Array<{ role: string; content: string }>;
@@ -16,10 +15,7 @@ test("desktop carries verification advice through failed checks, repair and revi
   const shellResults: boolean[] = [];
   let reviews = 0;
   const actions = [
-    [
-      "workspace_write_file",
-      { path: "add.cjs", content: "module.exports = (a, b) => a - b;\n" },
-    ],
+    ["workspace_write_file", { path: "add.cjs", content: "module.exports = (a, b) => a - b;\n" }],
     [
       "workspace_write_file",
       {
@@ -38,10 +34,7 @@ test("desktop carries verification advice through failed checks, repair and revi
         }),
       },
     ],
-    [
-      "workspace_write_file",
-      { path: "README.md", content: "Run npm test to check addition.\n" },
-    ],
+    ["workspace_write_file", { path: "README.md", content: "Run npm test to check addition.\n" }],
     [
       "workspace_run_shell",
       {
@@ -50,10 +43,7 @@ test("desktop carries verification advice through failed checks, repair and revi
       },
     ],
     ["workspace_run_shell", { command: "npm test", timeout_sec: 15 }],
-    [
-      "workspace_edit_file",
-      { path: "add.cjs", old_string: "a - b", new_string: "a + b" },
-    ],
+    ["workspace_edit_file", { path: "add.cjs", old_string: "a - b", new_string: "a + b" }],
     ["workspace_run_shell", { command: "npm test", timeout_sec: 15 }],
   ] as const;
   globalThis.fetch = Object.assign(
@@ -121,10 +111,7 @@ test("desktop carries verification advice through failed checks, repair and revi
         resolveToolApproval: async () => true,
         onEvent(envelope) {
           const event = envelope.event;
-          if (
-            event.type === "tool.result" &&
-            event.tool === "workspace_run_shell"
-          )
+          if (event.type === "tool.result" && event.tool === "workspace_run_shell")
             shellResults.push(event.ok);
         },
       },
@@ -159,21 +146,16 @@ test("desktop carries verification advice through failed checks, repair and revi
       ),
     ).toBe(true);
     expect(
-      requests[7]!.messages.some((message) =>
-        message.content?.includes("4 model calls remain"),
-      ),
+      requests[7]!.messages.some((message) => message.content?.includes("4 model calls remain")),
     ).toBe(true);
-    expect(fs.readFileSync(path.join(root, "add.cjs"), "utf8")).toContain(
-      "a + b",
-    );
+    expect(fs.readFileSync(path.join(root, "add.cjs"), "utf8")).toContain("a + b");
   } finally {
     globalThis.fetch = originalFetch;
-    if (
-      !path
-        .resolve(root)
-        .startsWith(path.join(os.tmpdir(), "paw-verification-cadence-"))
-    )
-      throw new Error("Unsafe fixture cleanup path");
-    fs.rmSync(root, { recursive: true, force: true });
+    if (!path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-verification-cadence-"))) {
+      cleanupFailure = new Error("Unsafe fixture cleanup path");
+    } else {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   }
+  if (cleanupFailure) throw cleanupFailure;
 }, 30000);

@@ -6,22 +6,18 @@ export interface TaskProgressPolicyV1 {
   readonly maxItemContentChars: number;
 }
 
-export const DEFAULT_TASK_PROGRESS_POLICY_V1: TaskProgressPolicyV1 =
-  Object.freeze({
-    maxItems: 100,
-    maxItemIdChars: 100,
-    maxItemContentChars: 500,
-  });
+export const DEFAULT_TASK_PROGRESS_POLICY_V1: TaskProgressPolicyV1 = Object.freeze({
+  maxItems: 100,
+  maxItemIdChars: 100,
+  maxItemContentChars: 500,
+});
 
-export function freezeTaskProgressPolicyV1(
-  input: TaskProgressPolicyV1,
-): TaskProgressPolicyV1 {
+export function freezeTaskProgressPolicyV1(input: TaskProgressPolicyV1): TaskProgressPolicyV1 {
   if (
     !input ||
     typeof input !== "object" ||
     Array.isArray(input) ||
-    Object.keys(input).sort().join("\0") !==
-      "maxItemContentChars\0maxItemIdChars\0maxItems" ||
+    Object.keys(input).sort().join("\0") !== "maxItemContentChars\0maxItemIdChars\0maxItems" ||
     !Number.isSafeInteger(input.maxItems) ||
     input.maxItems < 1 ||
     input.maxItems > 1_000 ||
@@ -52,15 +48,11 @@ export function normalizeTaskProgressItemsV1(
     }
     const record = value as Record<string, unknown>;
     const keys = Object.keys(record).sort().join("\0");
-    if (
-      keys !== "content\0id\0status" &&
-      keys !== "content\0id\0priority\0status"
-    ) {
+    if (keys !== "content\0id\0status" && keys !== "content\0id\0priority\0status") {
       throw new Error(`todos[${index}] has unsupported fields`);
     }
     const id = typeof record.id === "string" ? record.id.trim() : "";
-    const content =
-      typeof record.content === "string" ? record.content.trim() : "";
+    const content = typeof record.content === "string" ? record.content.trim() : "";
     if (!id || id.length > policy.maxItemIdChars) {
       throw new Error(`todos[${index}].id is invalid`);
     }
@@ -94,8 +86,6 @@ export function normalizeTaskProgressItemsV1(
   return Object.freeze(items);
 }
 
-export function taskProgressPolicyIdentityV1(
-  policy: TaskProgressPolicyV1,
-): string {
+export function taskProgressPolicyIdentityV1(policy: TaskProgressPolicyV1): string {
   return `paw.task-progress.v1:i${policy.maxItems}:d${policy.maxItemIdChars}:c${policy.maxItemContentChars}`;
 }

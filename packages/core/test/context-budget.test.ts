@@ -48,9 +48,7 @@ describe("context-budget", () => {
       historyTokens: 300_000,
     });
     // 无 200K 封顶：1M 模型的阈值按 80% historyBudget 走（≈584K−10K）
-    expect(snapshot.compactThreshold).toBe(
-      Math.floor(1_000_000 * 0.73 * 0.8) - 10_000,
-    );
+    expect(snapshot.compactThreshold).toBe(Math.floor(1_000_000 * 0.73 * 0.8) - 10_000);
     // 300K 未到阈值（大窗口不频繁压缩是特性，由侧信道 monitor 兜底）
     expect(shouldCompactHistory(snapshot)).toBe(false);
     // 构造足够内容（>80% 预算）仍能触发——百分比与窗口无关

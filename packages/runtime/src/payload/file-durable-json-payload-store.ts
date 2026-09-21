@@ -33,8 +33,7 @@ export const DEFAULT_FILE_DURABLE_JSON_PAYLOAD_POLICY_V1 = Object.freeze({
   maxArtifactBytes: 16 * 1024 * 1024,
 });
 
-const ARTIFACT_SCHEMA_VERSION =
-  "paw.file-durable-json-payload-artifact.v1" as const;
+const ARTIFACT_SCHEMA_VERSION = "paw.file-durable-json-payload-artifact.v1" as const;
 const ARTIFACT_REF = /^paw-payload:v1:([0-9a-f]{64})$/;
 const ARTIFACT_FILE = /^([0-9a-f]{64})\.json$/;
 const TEMP_FILE = /^\.payload-publish-\d+-[0-9a-f-]{36}\.tmp$/;
@@ -70,8 +69,7 @@ export interface FileDurableJsonPayloadReaderV1 {
   hash(value: JsonValue): string;
 }
 
-export interface FileDurableJsonPayloadWriterV1
-  extends FileDurableJsonPayloadReaderV1 {
+export interface FileDurableJsonPayloadWriterV1 extends FileDurableJsonPayloadReaderV1 {
   prepare(
     value: JsonValue,
     binding: DurableJsonPayloadBindingV1,
@@ -126,11 +124,7 @@ export function createFileDurableJsonPayloadWriterV1(
   const read = reader(identity);
   return Object.freeze({
     ...read,
-    async prepare(
-      value: JsonValue,
-      binding: DurableJsonPayloadBindingV1,
-      signal?: AbortSignal,
-    ) {
+    async prepare(value: JsonValue, binding: DurableJsonPayloadBindingV1, signal?: AbortSignal) {
       throwIfAborted(signal);
       capability.assertHeld();
       const canonicalValue = canonicalJsonValue(value, "payload value");
@@ -164,14 +158,7 @@ export function createFileDurableJsonPayloadWriterV1(
       capability.assertHeld();
       throwIfAborted(signal);
       const finalPath = path.join(identity.storeDir, `${envelopeHash}.json`);
-      publishArtifact(
-        identity,
-        finalPath,
-        bytes,
-        envelopeHash,
-        capability.assertHeld,
-        signal,
-      );
+      publishArtifact(identity, finalPath, bytes, envelopeHash, capability.assertHeld, signal);
       capability.assertHeld();
       throwIfAborted(signal);
       readAndVerifyArtifact(identity, payload, canonicalBinding, signal);
@@ -204,15 +191,11 @@ function reader(identity: StoreIdentity): FileDurableJsonPayloadReaderV1 {
   });
 }
 
-function storeIdentity(
-  options: FileDurableJsonPayloadReaderOptionsV1,
-): StoreIdentity {
+function storeIdentity(options: FileDurableJsonPayloadReaderOptionsV1): StoreIdentity {
   assertStableId(options.sessionId, "sessionId");
   assertStableId(options.runId, "runId");
   const policy = freezeFileDurableJsonPayloadPolicyV1(options.policy);
-  const workspaceRoot = fs.realpathSync.native(
-    path.resolve(options.workspaceRoot),
-  );
+  const workspaceRoot = fs.realpathSync.native(path.resolve(options.workspaceRoot));
   const workspaceStat = fs.lstatSync(workspaceRoot);
   if (!workspaceStat.isDirectory() || workspaceStat.isSymbolicLink()) {
     throw new Error("Payload store workspace must be a real directory");
@@ -234,16 +217,8 @@ function storeIdentity(
       options.runId,
     ]),
   );
-  const payloadRoot = path.join(
-    workspaceRoot,
-    ".paw",
-    "paw-next",
-    "durable-json-payloads",
-  );
-  const versionRoot = path.join(
-    payloadRoot,
-    FILE_DURABLE_JSON_PAYLOAD_CODEC_V1.version,
-  );
+  const payloadRoot = path.join(workspaceRoot, ".paw", "paw-next", "durable-json-payloads");
+  const versionRoot = path.join(payloadRoot, FILE_DURABLE_JSON_PAYLOAD_CODEC_V1.version);
   const storeDir = path.join(versionRoot, storeKey);
   return Object.freeze({
     workspaceRoot,
@@ -266,8 +241,7 @@ export function freezeFileDurableJsonPayloadPolicyV1(
     !input ||
     typeof input !== "object" ||
     Array.isArray(input) ||
-    Object.keys(input).sort().join("\0") !==
-      "maxArtifactBytes\0policyVersion" ||
+    Object.keys(input).sort().join("\0") !== "maxArtifactBytes\0policyVersion" ||
     input.policyVersion !== FILE_DURABLE_JSON_PAYLOAD_POLICY_VERSION_V1 ||
     !Number.isSafeInteger(input.maxArtifactBytes) ||
     input.maxArtifactBytes <= 0 ||
@@ -301,10 +275,7 @@ function parseBinding(
   });
 }
 
-function parseField(
-  input: DurableJsonPayloadFieldV1,
-  label: string,
-): DurableJsonPayloadFieldV1 {
+function parseField(input: DurableJsonPayloadFieldV1, label: string): DurableJsonPayloadFieldV1 {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(`${label} is invalid`);
   }
@@ -365,11 +336,7 @@ function readAndVerifyArtifact(
   // readStableArtifactFile validates the live directory chain immediately before
   // opening. Keep the second check below after reading and verifying the bytes.
   const finalPath = path.join(identity.storeDir, `${envelopeHash}.json`);
-  const raw = readStableArtifactFile(
-    identity,
-    finalPath,
-    identity.policy.maxArtifactBytes,
-  );
+  const raw = readStableArtifactFile(identity, finalPath, identity.policy.maxArtifactBytes);
   throwIfAborted(signal);
   if (hashText(raw) !== envelopeHash) {
     throw new Error("Durable JSON payload envelope hash mismatch");
@@ -397,10 +364,7 @@ function readAndVerifyArtifact(
     throw new Error("Durable JSON payload artifact binding mismatch");
   }
   const actualValueHash = hashCanonicalValue(envelope.value);
-  if (
-    envelope.valueHash !== actualValueHash ||
-    payload.hash !== actualValueHash
-  ) {
+  if (envelope.valueHash !== actualValueHash || payload.hash !== actualValueHash) {
     throw new Error("Durable JSON payload value hash mismatch");
   }
   validateReaderDirectories(identity);
@@ -445,18 +409,13 @@ function parseEnvelope(value: unknown): PayloadArtifactEnvelopeV1 {
   assertStableId(record.runId, "payload artifact runId");
   const envelope = {
     schemaVersion: ARTIFACT_SCHEMA_VERSION,
-    policy: freezeFileDurableJsonPayloadPolicyV1(
-      record.policy as FileDurableJsonPayloadPolicyV1,
-    ),
+    policy: freezeFileDurableJsonPayloadPolicyV1(record.policy as FileDurableJsonPayloadPolicyV1),
     payloadType: "durable_json" as const,
     workspaceIdentityHash: record.workspaceIdentityHash as string,
     sessionId: record.sessionId as string,
     runId: record.runId as string,
     originSeq: record.originSeq as number,
-    field: parseField(
-      record.field as DurableJsonPayloadFieldV1,
-      "payload artifact field",
-    ),
+    field: parseField(record.field as DurableJsonPayloadFieldV1, "payload artifact field"),
     valueHash: record.valueHash as string,
     value: canonicalJsonValue(record.value, "payload artifact value"),
   };
@@ -524,13 +483,7 @@ function assertStablePublishedFile(
     validateWriterDirectories(identity);
     return;
   }
-  recoverWriterPublisherAlias(
-    identity,
-    finalPath,
-    stat,
-    expectedBytes,
-    expectedHash,
-  );
+  recoverWriterPublisherAlias(identity, finalPath, stat, expectedBytes, expectedHash);
 }
 
 function recoverWriterPublisherAlias(
@@ -540,11 +493,7 @@ function recoverWriterPublisherAlias(
   expectedBytes: string,
   expectedHash: string,
 ): void {
-  if (
-    !formalBefore.isFile() ||
-    formalBefore.isSymbolicLink() ||
-    formalBefore.nlink !== 2n
-  ) {
+  if (!formalBefore.isFile() || formalBefore.isSymbolicLink() || formalBefore.nlink !== 2n) {
     throw new Error("Durable JSON payload artifact has external hardlinks");
   }
   const directory = path.dirname(finalPath);
@@ -563,9 +512,7 @@ function recoverWriterPublisherAlias(
       );
     });
   if (aliases.length !== 1) {
-    throw new Error(
-      "Durable JSON payload artifact hardlink is not recoverable",
-    );
+    throw new Error("Durable JSON payload artifact hardlink is not recoverable");
   }
   const aliasPath = aliases[0] as string;
   const aliasBefore = fs.lstatSync(aliasPath, { bigint: true });
@@ -576,12 +523,7 @@ function recoverWriterPublisherAlias(
   // Do not mutate the namespace until the formal artifact and its only
   // reserved publisher alias have been proven to contain this prepare's exact
   // expected bytes. A collision must leave both links byte-for-byte intact.
-  const formalAfter = assertExpectedPublishedBytes(
-    finalPath,
-    expectedBytes,
-    expectedHash,
-    2n,
-  );
+  const formalAfter = assertExpectedPublishedBytes(finalPath, expectedBytes, expectedHash, 2n);
   const aliasAfter = fs.lstatSync(aliasPath, { bigint: true });
   if (!sameStableFile(formalAfter, aliasAfter, 2n)) {
     throw new Error("Durable JSON payload publisher alias changed");
@@ -660,10 +602,7 @@ function readStableArtifactFile(
     }
     const openedAfter = fs.fstatSync(descriptor, { bigint: true });
     const after = fs.lstatSync(filePath, { bigint: true });
-    if (
-      !sameStableFile(openedBefore, openedAfter, 1n) ||
-      !sameStableFile(openedAfter, after, 1n)
-    ) {
+    if (!sameStableFile(openedBefore, openedAfter, 1n) || !sameStableFile(openedAfter, after, 1n)) {
       throw new Error("Durable JSON payload artifact changed while reading");
     }
     return raw;
@@ -688,13 +627,8 @@ function sameStableFile(
   );
 }
 
-function isStableRegularFile(
-  stat: fs.BigIntStats,
-  expectedLinks: bigint,
-): boolean {
-  return (
-    stat.isFile() && !stat.isSymbolicLink() && stat.nlink === expectedLinks
-  );
+function isStableRegularFile(stat: fs.BigIntStats, expectedLinks: bigint): boolean {
+  return stat.isFile() && !stat.isSymbolicLink() && stat.nlink === expectedLinks;
 }
 
 function ensureWriterDirectories(identity: StoreIdentity): void {
@@ -704,10 +638,7 @@ function ensureWriterDirectories(identity: StoreIdentity): void {
     } catch (error) {
       if (!fsError(error, "EEXIST")) throw error;
     }
-    validateDirectoryChain(
-      identity.workspaceRoot,
-      identity.directoryChain.slice(0, index + 1),
-    );
+    validateDirectoryChain(identity.workspaceRoot, identity.directoryChain.slice(0, index + 1));
   }
 }
 
@@ -719,16 +650,9 @@ function validateReaderDirectories(identity: StoreIdentity): void {
   validateDirectoryChain(identity.workspaceRoot, identity.directoryChain);
 }
 
-function directoryChainWithinWorkspace(
-  workspaceRoot: string,
-  target: string,
-): readonly string[] {
+function directoryChainWithinWorkspace(workspaceRoot: string, target: string): readonly string[] {
   const relative = path.relative(workspaceRoot, target);
-  if (
-    relative === "" ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes("..")
-  ) {
+  if (relative === "" || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
     throw new Error("Durable JSON payload path escaped the workspace");
   }
   let current = workspaceRoot;
@@ -740,10 +664,7 @@ function directoryChainWithinWorkspace(
   return Object.freeze(directories);
 }
 
-function validateDirectoryChain(
-  workspaceRoot: string,
-  directories: readonly string[],
-): void {
+function validateDirectoryChain(workspaceRoot: string, directories: readonly string[]): void {
   for (const current of directories) {
     const stat = fs.lstatSync(current);
     if (!stat.isDirectory() || stat.isSymbolicLink()) {
@@ -769,16 +690,8 @@ function canonicalJsonValue(value: unknown, label: string): JsonValue {
   return immutableCanonicalJsonCloneV1(value as JsonValue);
 }
 
-function assertJsonValue(
-  value: unknown,
-  label: string,
-  ancestors: Set<object>,
-): void {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+function assertJsonValue(value: unknown, label: string, ancestors: Set<object>): void {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return;
   }
   if (typeof value === "number") {
@@ -788,11 +701,7 @@ function assertJsonValue(
   if (typeof value !== "object") throw new Error(`${label} is not JSON`);
   if (ancestors.has(value)) throw new Error(`${label} contains a JSON cycle`);
   const prototype = Object.getPrototypeOf(value);
-  if (
-    !Array.isArray(value) &&
-    prototype !== Object.prototype &&
-    prototype !== null
-  ) {
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
     throw new Error(`${label} has a non-JSON object prototype`);
   }
   if (Object.getOwnPropertySymbols(value).length > 0) {
@@ -820,31 +729,19 @@ function hashCanonicalValue(value: JsonValue): string {
   return hashCanonicalJsonV1(value);
 }
 
-function assertArtifactSize(
-  bytes: string,
-  policy: FileDurableJsonPayloadPolicyV1,
-): void {
+function assertArtifactSize(bytes: string, policy: FileDurableJsonPayloadPolicyV1): void {
   if (Buffer.byteLength(bytes, "utf8") > policy.maxArtifactBytes) {
     throw new Error("Durable JSON payload artifact exceeds policy size");
   }
 }
 
-function assertExactKeys(
-  value: object,
-  expected: readonly string[],
-  label: string,
-): void {
-  if (
-    Object.keys(value).sort().join("\0") !== [...expected].sort().join("\0")
-  ) {
+function assertExactKeys(value: object, expected: readonly string[], label: string): void {
+  if (Object.keys(value).sort().join("\0") !== [...expected].sort().join("\0")) {
     throw new Error(`${label} has unsupported fields`);
   }
 }
 
-function assertStableId(
-  value: unknown,
-  label: string,
-): asserts value is string {
+function assertStableId(value: unknown, label: string): asserts value is string {
   if (typeof value !== "string" || !STABLE_ID.test(value)) {
     throw new Error(`${label} must be a stable id`);
   }

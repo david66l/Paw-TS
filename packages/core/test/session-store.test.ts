@@ -179,9 +179,7 @@ describe("FileSystemSessionStore", () => {
     expect(loaded).not.toBeNull();
     expect(loaded?.length).toBe(1);
     expect(loaded?.[0]?.event.type).toBe("run.started");
-    expect(() => store.loadRunStrict("corrupt")).toThrow(
-      /line 2 is not valid JSON/,
-    );
+    expect(() => store.loadRunStrict("corrupt")).toThrow(/line 2 is not valid JSON/);
   });
 
   test("strict journal loading rejects reordered event identities", () => {
@@ -205,9 +203,7 @@ describe("FileSystemSessionStore", () => {
       ].join("\n"),
       "utf8",
     );
-    expect(() => store.loadRunStrict("reordered")).toThrow(
-      /sequence must increase/,
-    );
+    expect(() => store.loadRunStrict("reordered")).toThrow(/sequence must increase/);
   });
 
   test("getRunSummary counts tool calls", () => {
@@ -396,10 +392,7 @@ describe("sanitizeRunId", () => {
   test("toolResultsDir cannot be escaped with a dot id", () => {
     const isolated = mkdtempSync(path.join(tmpdir(), "paw-toolres-"));
     const dir = toolResultsDir(isolated, "..");
-    const relative = path.relative(
-      path.join(isolated, ".paw", "sessions"),
-      dir,
-    );
+    const relative = path.relative(path.join(isolated, ".paw", "sessions"), dir);
     expect(relative.startsWith("..")).toBe(false);
   });
 });

@@ -28,16 +28,13 @@ const MAX_LIST_FILES = 50;
  *
  * @returns 格式化的详情字符串，或 undefined（无需展示详情）
  */
-export function formatToolResultEventDetail(
-  tr: ToolRunResult,
-): string | undefined {
+export function formatToolResultEventDetail(tr: ToolRunResult): string | undefined {
   const p = tr.payload;
   if (p === null || typeof p !== "object") {
     return tr.ok ? undefined : tr.summary;
   }
 
-  const payloadError =
-    "error" in p ? String((p as { error: unknown }).error) : undefined;
+  const payloadError = "error" in p ? String((p as { error: unknown }).error) : undefined;
 
   // Shell 失败同样必须保留 exit/stdout/stderr，不能只显示概括性 summary。
   if (typeof (p as { exit_code?: unknown }).exit_code === "number") {
@@ -63,16 +60,9 @@ export function formatToolResultEventDetail(
   }
 
   // 文件内容结果（如 Read 工具）
-  if (
-    "content" in p &&
-    typeof (p as { content?: unknown }).content === "string"
-  ) {
+  if ("content" in p && typeof (p as { content?: unknown }).content === "string") {
     const c = (p as { content: string }).content;
-    return c
-      .split("\n")
-      .slice(0, MAX_FILE_LINES)
-      .join("\n")
-      .slice(0, MAX_DETAIL_CHARS);
+    return c.split("\n").slice(0, MAX_FILE_LINES).join("\n").slice(0, MAX_DETAIL_CHARS);
   }
 
   // 文件列表结果（如 Glob 工具）
@@ -102,9 +92,7 @@ export function formatToolResultEventDetail(
     (p as { bytes_written: number }).bytes_written >= 0
   ) {
     const path =
-      typeof (p as { path?: unknown }).path === "string"
-        ? (p as { path: string }).path
-        : "";
+      typeof (p as { path?: unknown }).path === "string" ? (p as { path: string }).path : "";
     const b = (p as { bytes_written: number }).bytes_written;
     const line = path ? `${path}\n${b} bytes written` : `${b} bytes written`;
     return line.slice(0, MAX_DETAIL_CHARS);

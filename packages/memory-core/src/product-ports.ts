@@ -56,10 +56,7 @@ export interface MemoryProductRawEvidenceV1 {
     | "outcome"
     | "source_document";
   readonly sourceSeq: number;
-  readonly authority:
-    | "user_asserted"
-    | "user_confirmed_dialogue"
-    | "context_only";
+  readonly authority: "user_asserted" | "user_confirmed_dialogue" | "context_only";
   readonly hitContent: string;
   readonly createdAt: string;
 }

@@ -164,16 +164,7 @@ const BUILTIN_DANGEROUS_COMMANDS = [
 ];
 
 /** 网络命令列表 — 可能泄露数据或下载恶意内容，需要确认 */
-const BUILTIN_NETWORK_COMMANDS = [
-  "curl",
-  "wget",
-  "nc",
-  "ncat",
-  "netcat",
-  "ssh",
-  "scp",
-  "sftp",
-];
+const BUILTIN_NETWORK_COMMANDS = ["curl", "wget", "nc", "ncat", "netcat", "ssh", "scp", "sftp"];
 
 /**
  * 构建完整的默认策略配置。
@@ -449,13 +440,11 @@ function builtinRules(): PolicyConfig {
   ];
 
   /** 危险命令规则 — 全部 deny */
-  const dangerousRules: PolicyRule[] = BUILTIN_DANGEROUS_COMMANDS.map(
-    (cmd) => ({
-      pattern: `${cmd}*`,
-      action: "deny" as const,
-      reason: "dangerous command",
-    }),
-  );
+  const dangerousRules: PolicyRule[] = BUILTIN_DANGEROUS_COMMANDS.map((cmd) => ({
+    pattern: `${cmd}*`,
+    action: "deny" as const,
+    reason: "dangerous command",
+  }));
 
   /** 网络命令规则 — 默认 ask + 上传数据的 deny 覆盖 */
   const networkRules: PolicyRule[] = [

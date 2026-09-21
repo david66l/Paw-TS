@@ -29,36 +29,25 @@ describe("E2E: Ollama qwen2.5-coder:14b", () => {
       writeFileSync(path.join(dir, "hello.txt"), "world\n", "utf8");
 
       const events: RunEventEnvelope[] = [];
-      const result = await runStubRun(
-        "List the files in the current directory",
-        {
-          workspaceRoot: dir,
-          maxSteps: 3,
-          onEvent: (e) => {
-            events.push(e);
-            // Real-time logging for debugging hangs
-            if (
-              e.event.type === "model.done" ||
-              e.event.type === "tool.call" ||
-              e.event.type === "tool.result"
-            ) {
-              console.log(
-                `[event ${e.seq}]`,
-                e.event.type,
-                JSON.stringify(e.event).slice(0, 200),
-              );
-            }
-          },
+      const result = await runStubRun("List the files in the current directory", {
+        workspaceRoot: dir,
+        maxSteps: 3,
+        onEvent: (e) => {
+          events.push(e);
+          // Real-time logging for debugging hangs
+          if (
+            e.event.type === "model.done" ||
+            e.event.type === "tool.call" ||
+            e.event.type === "tool.result"
+          ) {
+            console.log(`[event ${e.seq}]`, e.event.type, JSON.stringify(e.event).slice(0, 200));
+          }
         },
-      );
+      });
 
       const md = events.find((e) => e.event.type === "model.done");
       console.log("\n=== model.done text ===");
-      console.log(
-        md && "text" in md.event
-          ? (md.event as Record<string, unknown>).text
-          : "N/A",
-      );
+      console.log(md && "text" in md.event ? (md.event as Record<string, unknown>).text : "N/A");
       console.log("\n=== result ===");
       console.log(JSON.stringify(result, null, 2));
 

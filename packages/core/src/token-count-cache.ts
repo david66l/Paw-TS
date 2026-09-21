@@ -24,10 +24,7 @@ export function createBoundedTokenCounter(
     const tokens = encodeCount(text);
     // One oversized request must not evict the useful working set or defeat the bound.
     if (text.length > maxCharacters) return tokens;
-    while (
-      counts.size >= maxEntries ||
-      retainedCharacters + text.length > maxCharacters
-    ) {
+    while (counts.size >= maxEntries || retainedCharacters + text.length > maxCharacters) {
       const oldest = counts.keys().next();
       if (oldest.done) break;
       counts.delete(oldest.value);

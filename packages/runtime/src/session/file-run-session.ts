@@ -38,8 +38,7 @@ import {
 
 const SESSION_METADATA_SCHEMA_V2 = "paw.file-run-session.v2" as const;
 const ARTIFACT_SCHEMA_V2 = "paw.file-run-session.batch-artifact.v2" as const;
-const RECOVERY_SNAPSHOT_SCHEMA_V2 =
-  "paw.file-run-session.recovery-snapshot.v2" as const;
+const RECOVERY_SNAPSHOT_SCHEMA_V2 = "paw.file-run-session.recovery-snapshot.v2" as const;
 const SHA256 = /^[0-9a-f]{64}$/;
 const ARTIFACT_FILE = /^(\d{16})-(\d{16})-([0-9a-f]{64})\.json$/;
 const ARTIFACT_TEMP =
@@ -60,21 +59,13 @@ export interface FileRunSessionCommitAttemptV1 {
 
 export interface FileRunSessionCommitHooksV1 {
   /** @internal Crash/race seam after immutable artifact publication. */
-  readonly afterArtifactPublished?: (
-    attempt: FileRunSessionCommitAttemptV1,
-  ) => void;
+  readonly afterArtifactPublished?: (attempt: FileRunSessionCommitAttemptV1) => void;
   /** @internal Crash seam after authority commit but before memory publication. */
-  readonly afterJournalLinearized?: (
-    attempt: FileRunSessionCommitAttemptV1,
-  ) => void;
+  readonly afterJournalLinearized?: (attempt: FileRunSessionCommitAttemptV1) => void;
   /** @internal Crash/loss seam after immutable snapshot publication. */
-  readonly afterSnapshotArtifactPublished?: (
-    attempt: FileRunSessionSnapshotAttemptV1,
-  ) => void;
+  readonly afterSnapshotArtifactPublished?: (attempt: FileRunSessionSnapshotAttemptV1) => void;
   /** @internal Crash seam after snapshot authority commit, before return. */
-  readonly afterSnapshotLinearized?: (
-    attempt: FileRunSessionSnapshotAttemptV1,
-  ) => void;
+  readonly afterSnapshotLinearized?: (attempt: FileRunSessionSnapshotAttemptV1) => void;
 }
 
 export interface FileRunSessionSnapshotAttemptV1 {
@@ -132,8 +123,7 @@ export class CommittedFileRunPrefixStaleError extends Error {
   }
 }
 
-interface ReadCommittedFileRunPrefixTestOptionsV1
-  extends ReadCommittedFileRunPrefixOptionsV1 {
+interface ReadCommittedFileRunPrefixTestOptionsV1 extends ReadCommittedFileRunPrefixOptionsV1 {
   readonly afterAuthorityInventoryRead: () => void;
 }
 
@@ -159,15 +149,11 @@ export function readCommittedFileRunPrefixForTestV1(
 }
 
 function readCommittedFileRunPrefix(
-  options:
-    | ReadCommittedFileRunPrefixOptionsV1
-    | ReadCommittedFileRunPrefixTestOptionsV1,
+  options: ReadCommittedFileRunPrefixOptionsV1 | ReadCommittedFileRunPrefixTestOptionsV1,
 ): readonly RunJournalEnvelopeV1[] {
   assertStableIds(options.sessionId, options.runId);
   assertJournalHead(options.expectedHead, "expectedHead");
-  const workspaceRoot = fs.realpathSync.native(
-    path.resolve(options.workspaceRoot),
-  );
+  const workspaceRoot = fs.realpathSync.native(path.resolve(options.workspaceRoot));
   const workspaceStat = fs.lstatSync(workspaceRoot);
   if (!workspaceStat.isDirectory() || workspaceStat.isSymbolicLink()) {
     throw new Error("Paw Next workspace root must be a real directory");
@@ -258,9 +244,7 @@ interface RecoverySnapshotArtifactV2 {
  * decides which immutable artifact refs are committed. There is no unfenced
  * write mode and no directory scan may promote an orphan into journal truth.
  */
-export class FileRunSessionV1
-  implements Session<InputFactV1, DerivedDecisionV1>
-{
+export class FileRunSessionV1 implements Session<InputFactV1, DerivedDecisionV1> {
   private readonly sessionId: string;
   private readonly runId: string;
   private readonly workspaceRoot: string;
@@ -282,9 +266,7 @@ export class FileRunSessionV1
 
   constructor(options: FileRunSessionOptionsV1) {
     assertStableIds(options.sessionId, options.runId);
-    const workspaceRoot = fs.realpathSync.native(
-      path.resolve(options.workspaceRoot),
-    );
+    const workspaceRoot = fs.realpathSync.native(path.resolve(options.workspaceRoot));
     const leaseCapability = assertFileSessionExecutionLeaseCapabilityV1(
       options.executionLease,
       workspaceRoot,
@@ -301,27 +283,14 @@ export class FileRunSessionV1
     this.commitHooks = options.commitHooks;
     this.onCommitted = options.onCommitted;
 
-    const sessionsRoot = path.join(
-      workspaceRoot,
-      ".paw",
-      "paw-next",
-      "sessions",
-    );
-    this.runDir = path.join(
-      sessionsRoot,
-      stablePathKey(this.sessionId),
-      stablePathKey(this.runId),
-    );
+    const sessionsRoot = path.join(workspaceRoot, ".paw", "paw-next", "sessions");
+    this.runDir = path.join(sessionsRoot, stablePathKey(this.sessionId), stablePathKey(this.runId));
     this.artifactsDir = path.join(this.runDir, "journal-artifacts");
     this.snapshotsDir = path.join(this.runDir, "recovery-snapshots");
     this.metadataPath = path.join(this.runDir, "metadata.json");
-    this.coordinatorIdentity = hashText(
-      `${sessionsRoot}\u0000${this.sessionId}`,
-    );
+    this.coordinatorIdentity = hashText(`${sessionsRoot}\u0000${this.sessionId}`);
     if (liveOwners.has(this.runDir)) {
-      throw new Error(
-        "Paw Next run already has a live in-process Session owner",
-      );
+      throw new Error("Paw Next run already has a live in-process Session owner");
     }
     liveOwners.set(this.runDir, this.owner);
 
@@ -340,10 +309,7 @@ export class FileRunSessionV1
         this.sessionId,
         this.runId,
       );
-      if (
-        index.commits.length > 0 &&
-        (!existing.metadataExists || !existing.artifactsExists)
-      ) {
+      if (index.commits.length > 0 && (!existing.metadataExists || !existing.artifactsExists)) {
         throw new Error("Fenced File Session storage is incomplete");
       }
       const recovered = existing.artifactsExists
@@ -467,21 +433,14 @@ export class FileRunSessionV1
       // prefix hash. The artifact's own field order is fixed by this schema.
       const content = `${JSON.stringify(artifact)}\n`;
       const artifactHash = hashText(content);
-      const artifactFileName = recoverySnapshotArtifactFileName(
-        head.tailSeq,
-        artifactHash,
-      );
+      const artifactFileName = recoverySnapshotArtifactFileName(head.tailSeq, artifactHash);
       const attempt: FileRunSessionSnapshotAttemptV1 = {
         snapshotId: artifactHash,
         artifactFileName,
         throughSeq: head.tailSeq,
         prefixHash: head.prefixHash,
       };
-      publishContentAddressedSnapshot(
-        this.snapshotsDir,
-        artifactFileName,
-        content,
-      );
+      publishContentAddressedSnapshot(this.snapshotsDir, artifactFileName, content);
       this.commitHooks?.afterSnapshotArtifactPublished?.(attempt);
       this.assertActive();
       try {
@@ -507,8 +466,7 @@ export class FileRunSessionV1
         artifactFileName,
         artifactContentHash: artifactHash,
       };
-      const result =
-        await this.leaseCapability.linearizeRecoverySnapshot(input);
+      const result = await this.leaseCapability.linearizeRecoverySnapshot(input);
       if (result.status === "lost") {
         this.failClosed(
           new SessionExecutionLeaseLostError(
@@ -607,13 +565,9 @@ export class FileRunSessionV1
         if (sameDerivedDecision(latest.record.decision, immutableDecision)) {
           return "committed";
         }
-        throw new Error(
-          "Fenced File Session tail has a conflicting derived decision",
-        );
+        throw new Error("Fenced File Session tail has a conflicting derived decision");
       }
-      return this.commitRecords([
-        { kind: "derived_decision", decision: immutableDecision },
-      ]);
+      return this.commitRecords([{ kind: "derived_decision", decision: immutableDecision }]);
     });
   }
 
@@ -634,9 +588,7 @@ export class FileRunSessionV1
         );
       }
       if (immutableFacts.length === 0) {
-        throw new Error(
-          "Decision-and-input commit requires at least one input fact",
-        );
+        throw new Error("Decision-and-input commit requires at least one input fact");
       }
       return this.commitRecords([
         { kind: "derived_decision", decision: immutableDecision },
@@ -670,10 +622,9 @@ export class FileRunSessionV1
       assertRunJournalEnvelopeV1(envelope);
       return immutableEnvelopeClone(envelope);
     });
-    const nextPrefix = parseRunJournalPrefixV1([
-      ...this.envelopes,
-      ...envelopes,
-    ]).map(immutableEnvelopeClone);
+    const nextPrefix = parseRunJournalPrefixV1([...this.envelopes, ...envelopes]).map(
+      immutableEnvelopeClone,
+    );
     const endSeq = nextPrefix.at(-1)?.seq ?? 0;
     const nextHead = {
       tailSeq: endSeq,
@@ -691,18 +642,10 @@ export class FileRunSessionV1
     };
     const content = `${JSON.stringify(artifact)}\n`;
     const artifactHash = hashText(content);
-    const artifactFileName = journalArtifactFileName(
-      startSeq,
-      endSeq,
-      artifactHash,
-    );
+    const artifactFileName = journalArtifactFileName(startSeq, endSeq, artifactHash);
     const commitId = artifactHash;
     const attempt = { commitId, artifactFileName, startSeq, endSeq };
-    publishContentAddressedArtifact(
-      this.artifactsDir,
-      artifactFileName,
-      content,
-    );
+    publishContentAddressedArtifact(this.artifactsDir, artifactFileName, content);
     this.commitHooks?.afterArtifactPublished?.(attempt);
     this.assertActive();
     try {
@@ -749,8 +692,7 @@ export class FileRunSessionV1
         ? {
             mode: "snapshot_plus_tail",
             snapshotThroughSeq: this.recoveryInfoValue.snapshotThroughSeq,
-            tailEnvelopeCount:
-              this.envelopes.length - this.recoveryInfoValue.snapshotThroughSeq,
+            tailEnvelopeCount: this.envelopes.length - this.recoveryInfoValue.snapshotThroughSeq,
           }
         : {
             mode: "full_journal",
@@ -798,11 +740,7 @@ export class FileRunSessionV1
   private assertActive(): void {
     this.assertOpen();
     if (this.leaseCapability.signal.aborted) {
-      this.failClosed(
-        new SessionExecutionLeaseLostError(
-          "File Session execution lease aborted",
-        ),
-      );
+      this.failClosed(new SessionExecutionLeaseLostError("File Session execution lease aborted"));
     }
     try {
       this.leaseCapability.assertHeld();
@@ -815,9 +753,7 @@ export class FileRunSessionV1
     this.close();
     if (error instanceof SessionExecutionLeaseLostError) throw error;
     const detail = error instanceof Error ? `: ${error.message}` : "";
-    throw new SessionExecutionLeaseLostError(
-      `File Session failed closed${detail}`,
-    );
+    throw new SessionExecutionLeaseLostError(`File Session failed closed${detail}`);
   }
 
   private assertOpen(): void {
@@ -894,9 +830,7 @@ function loadCommittedArtifacts(
     if (commit.batchEndSeq <= head.tailSeq) {
       const coveredArtifactPath = artifacts.get(commit.artifactFileName);
       if (!coveredArtifactPath) {
-        throw new Error(
-          `Snapshot-covered journal artifact is missing: ${commit.artifactFileName}`,
-        );
+        throw new Error(`Snapshot-covered journal artifact is missing: ${commit.artifactFileName}`);
       }
       validateCoveredJournalArtifactBytes(
         coveredArtifactPath,
@@ -910,29 +844,15 @@ function loadCommittedArtifacts(
     }
     const artifactPath = artifacts.get(commit.artifactFileName);
     if (!artifactPath) {
-      throw new Error(
-        `Committed journal artifact is missing: ${commit.artifactFileName}`,
-      );
+      throw new Error(`Committed journal artifact is missing: ${commit.artifactFileName}`);
     }
-    const artifact = readArtifact(
-      artifactPath,
-      commit,
-      index.sessionId,
-      index.runId,
-      readOnly,
+    const artifact = readArtifact(artifactPath, commit, index.sessionId, index.runId, readOnly);
+    const nextPrefix = parseRunJournalPrefixV1([...envelopes, ...artifact.envelopes]).map(
+      immutableEnvelopeClone,
     );
-    const nextPrefix = parseRunJournalPrefixV1([
-      ...envelopes,
-      ...artifact.envelopes,
-    ]).map(immutableEnvelopeClone);
     for (const envelope of nextPrefix) {
-      if (
-        envelope.sessionId !== index.sessionId ||
-        envelope.runId !== index.runId
-      ) {
-        throw new Error(
-          "Journal artifact protocol metadata does not match its run",
-        );
+      if (envelope.sessionId !== index.sessionId || envelope.runId !== index.runId) {
+        throw new Error("Journal artifact protocol metadata does not match its run");
       }
     }
     const computedHead = {
@@ -956,15 +876,9 @@ function validateCoveredJournalArtifactBytes(
   expectedContentHash: string,
   readOnly: boolean,
 ): void {
-  assertStableArtifactFile(
-    artifactPath,
-    "snapshot-covered journal artifact",
-    readOnly,
-  );
+  assertStableArtifactFile(artifactPath, "snapshot-covered journal artifact", readOnly);
   if (hashText(fs.readFileSync(artifactPath, "utf8")) !== expectedContentHash) {
-    throw new Error(
-      "Snapshot-covered journal artifact content hash is invalid",
-    );
+    throw new Error("Snapshot-covered journal artifact content hash is invalid");
   }
   recoverArtifactPublisherAlias(artifactPath, readOnly);
 }
@@ -1004,9 +918,7 @@ function readRecoverySnapshotArtifact(
   const files = listRecoverySnapshotFiles(snapshotsDir, readOnly);
   const artifactPath = files.get(snapshot.artifactFileName);
   if (!artifactPath) {
-    throw new Error(
-      `Committed recovery snapshot is missing: ${snapshot.artifactFileName}`,
-    );
+    throw new Error(`Committed recovery snapshot is missing: ${snapshot.artifactFileName}`);
   }
   if (
     snapshot.snapshotId !== snapshot.artifactId ||
@@ -1018,11 +930,7 @@ function readRecoverySnapshotArtifact(
   ) {
     throw new Error("Committed recovery snapshot authority is invalid");
   }
-  assertStableSnapshotFile(
-    artifactPath,
-    "recovery snapshot artifact",
-    readOnly,
-  );
+  assertStableSnapshotFile(artifactPath, "recovery snapshot artifact", readOnly);
   const content = fs.readFileSync(artifactPath, "utf8");
   if (hashText(content) !== snapshot.artifactContentHash) {
     throw new Error("Committed recovery snapshot content hash is invalid");
@@ -1052,9 +960,7 @@ function readRecoverySnapshotArtifact(
   ) {
     throw new Error("Recovery snapshot schema is invalid");
   }
-  const prefix = parseRunJournalPrefixV1(parsed.envelopes).map(
-    immutableEnvelopeClone,
-  );
+  const prefix = parseRunJournalPrefixV1(parsed.envelopes).map(immutableEnvelopeClone);
   for (const [index, envelope] of prefix.entries()) {
     if (
       envelope.sessionId !== sessionId ||
@@ -1089,11 +995,7 @@ function listRecoverySnapshotFiles(
   for (const name of fs.readdirSync(directory).sort()) {
     const fullPath = path.join(directory, name);
     if (RECOVERY_SNAPSHOT_FILE.test(name)) {
-      assertStableSnapshotFile(
-        fullPath,
-        "recovery snapshot artifact",
-        readOnly,
-      );
+      assertStableSnapshotFile(fullPath, "recovery snapshot artifact", readOnly);
       result.set(name, fullPath);
     } else if (RECOVERY_SNAPSHOT_TEMP.test(name)) {
       assertSnapshotTemp(fullPath, readOnly);
@@ -1140,8 +1042,7 @@ function parseArtifactBytes(
     (parsed.startSeq as number) !== (parsed.previousTailSeq as number) + 1 ||
     (parsed.endSeq as number) < (parsed.startSeq as number) ||
     !Array.isArray(parsed.envelopes) ||
-    parsed.envelopes.length !==
-      (parsed.endSeq as number) - (parsed.startSeq as number) + 1
+    parsed.envelopes.length !== (parsed.endSeq as number) - (parsed.startSeq as number) + 1
   ) {
     throw new Error("Journal artifact schema is invalid");
   }
@@ -1159,10 +1060,7 @@ function parseArtifactBytes(
   return parsed as unknown as JournalBatchArtifactV2;
 }
 
-function listArtifactFiles(
-  directory: string,
-  readOnly: boolean,
-): ReadonlyMap<string, string> {
+function listArtifactFiles(directory: string, readOnly: boolean): ReadonlyMap<string, string> {
   const result = new Map<string, string>();
   for (const name of fs.readdirSync(directory).sort()) {
     const fullPath = path.join(directory, name);
@@ -1206,9 +1104,7 @@ function publishContentAddressedArtifact(
       if (!fsError(error, "EEXIST")) throw error;
       assertStableArtifactFile(finalPath, "journal artifact");
       if (fs.readFileSync(finalPath, "utf8") !== content) {
-        throw new Error(
-          "Journal artifact target was occupied by different bytes",
-        );
+        throw new Error("Journal artifact target was occupied by different bytes");
       }
     }
     fsyncDirectoryBestEffort(directory);
@@ -1249,9 +1145,7 @@ function publishContentAddressedSnapshot(
       if (!fsError(error, "EEXIST")) throw error;
       assertStableSnapshotFile(finalPath, "recovery snapshot artifact");
       if (fs.readFileSync(finalPath, "utf8") !== content) {
-        throw new Error(
-          "Recovery snapshot target was occupied by different bytes",
-        );
+        throw new Error("Recovery snapshot target was occupied by different bytes");
       }
     }
     fsyncDirectoryBestEffort(directory);
@@ -1292,10 +1186,7 @@ function assertPublishedSnapshotStable(
   throughSeq: number,
 ): void {
   validateExistingDirectoryTree(workspaceRoot, snapshotsDir);
-  const expectedName = recoverySnapshotArtifactFileName(
-    throughSeq,
-    expectedHash,
-  );
+  const expectedName = recoverySnapshotArtifactFileName(throughSeq, expectedHash);
   if (fileName !== expectedName || !RECOVERY_SNAPSHOT_FILE.test(fileName)) {
     throw new Error("Published recovery snapshot file name is invalid");
   }
@@ -1350,9 +1241,7 @@ function inspectExistingRunStorage(
   let snapshotsExists = false;
   for (const name of names) {
     if (name === "batches" || name === "snapshots") {
-      throw new Error(
-        "Legacy File Session storage requires explicit migration",
-      );
+      throw new Error("Legacy File Session storage requires explicit migration");
     }
     if (name === "metadata.json") {
       continue;
@@ -1410,9 +1299,7 @@ function inspectMetadataPublication(
   }
   if (!metadataExists) {
     if (tempStat && tempStat.nlink !== 1) {
-      throw new Error(
-        "Paw Next Session metadata temp has an external hardlink",
-      );
+      throw new Error("Paw Next Session metadata temp has an external hardlink");
     }
     return tempPath === undefined ? [] : [tempPath];
   }
@@ -1559,11 +1446,7 @@ function atomicPublishNewFile(finalPath: string, content: string): void {
   }
 }
 
-function assertStableArtifactFile(
-  filePath: string,
-  kind: string,
-  _readOnly = false,
-): void {
+function assertStableArtifactFile(filePath: string, kind: string, _readOnly = false): void {
   for (;;) {
     const stat = fs.lstatSync(filePath);
     if (!stat.isFile() || stat.isSymbolicLink()) {
@@ -1578,11 +1461,7 @@ function assertStableArtifactFile(
   }
 }
 
-function assertStableSnapshotFile(
-  filePath: string,
-  kind: string,
-  _readOnly = false,
-): void {
+function assertStableSnapshotFile(filePath: string, kind: string, _readOnly = false): void {
   for (;;) {
     const stat = fs.lstatSync(filePath);
     if (!stat.isFile() || stat.isSymbolicLink()) {
@@ -1597,11 +1476,7 @@ function assertStableSnapshotFile(
   }
 }
 
-function matchingArtifactTemps(
-  artifactPath: string,
-  device: number,
-  inode: number,
-): string[] {
+function matchingArtifactTemps(artifactPath: string, device: number, inode: number): string[] {
   const prefix = `${path.basename(artifactPath)}.tmp-`;
   return fs.readdirSync(path.dirname(artifactPath)).flatMap((name) => {
     if (!name.startsWith(prefix) || !ARTIFACT_TEMP.test(name)) return [];
@@ -1613,20 +1488,13 @@ function matchingArtifactTemps(
       if (fsError(error, "ENOENT")) return [];
       throw error;
     }
-    return stat.isFile() &&
-      !stat.isSymbolicLink() &&
-      stat.dev === device &&
-      stat.ino === inode
+    return stat.isFile() && !stat.isSymbolicLink() && stat.dev === device && stat.ino === inode
       ? [candidate]
       : [];
   });
 }
 
-function matchingSnapshotTemps(
-  artifactPath: string,
-  device: number,
-  inode: number,
-): string[] {
+function matchingSnapshotTemps(artifactPath: string, device: number, inode: number): string[] {
   const prefix = `${path.basename(artifactPath)}.tmp-`;
   return fs.readdirSync(path.dirname(artifactPath)).flatMap((name) => {
     if (!name.startsWith(prefix) || !RECOVERY_SNAPSHOT_TEMP.test(name)) {
@@ -1640,10 +1508,7 @@ function matchingSnapshotTemps(
       if (fsError(error, "ENOENT")) return [];
       throw error;
     }
-    return stat.isFile() &&
-      !stat.isSymbolicLink() &&
-      stat.dev === device &&
-      stat.ino === inode
+    return stat.isFile() && !stat.isSymbolicLink() && stat.dev === device && stat.ino === inode
       ? [candidate]
       : [];
   });
@@ -1666,17 +1531,12 @@ function assertArtifactTemp(filePath: string, _readOnly: boolean): void {
   }
 }
 
-function recoverArtifactPublisherAlias(
-  artifactPath: string,
-  readOnly: boolean,
-): void {
+function recoverArtifactPublisherAlias(artifactPath: string, readOnly: boolean): void {
   const stat = fs.lstatSync(artifactPath);
   if (stat.nlink === 1 || readOnly) return;
   const temps = matchingArtifactTemps(artifactPath, stat.dev, stat.ino);
   if (stat.nlink !== 2 || temps.length !== 1) {
-    throw new Error(
-      "Paw Next journal artifact must not have an external hardlink",
-    );
+    throw new Error("Paw Next journal artifact must not have an external hardlink");
   }
   try {
     fs.rmSync(temps[0] as string);
@@ -1704,17 +1564,12 @@ function assertSnapshotTemp(filePath: string, _readOnly: boolean): void {
   }
 }
 
-function recoverSnapshotPublisherAlias(
-  artifactPath: string,
-  readOnly: boolean,
-): void {
+function recoverSnapshotPublisherAlias(artifactPath: string, readOnly: boolean): void {
   const stat = fs.lstatSync(artifactPath);
   if (stat.nlink === 1 || readOnly) return;
   const temps = matchingSnapshotTemps(artifactPath, stat.dev, stat.ino);
   if (stat.nlink !== 2 || temps.length !== 1) {
-    throw new Error(
-      "Paw Next recovery snapshot must not have an external hardlink",
-    );
+    throw new Error("Paw Next recovery snapshot must not have an external hardlink");
   }
   try {
     fs.rmSync(temps[0] as string);
@@ -1725,10 +1580,7 @@ function recoverSnapshotPublisherAlias(
   fsyncDirectoryBestEffort(path.dirname(artifactPath));
 }
 
-function isOwnedSnapshotPublisherTemp(
-  tempPath: string,
-  tempStat: fs.Stats,
-): boolean {
+function isOwnedSnapshotPublisherTemp(tempPath: string, tempStat: fs.Stats): boolean {
   if (tempStat.nlink !== 2) return false;
   const name = path.basename(tempPath);
   const marker = name.indexOf(".json.tmp-");
@@ -1752,10 +1604,7 @@ function isOwnedSnapshotPublisherTemp(
   );
 }
 
-function isOwnedArtifactPublisherTemp(
-  tempPath: string,
-  tempStat: fs.Stats,
-): boolean {
+function isOwnedArtifactPublisherTemp(tempPath: string, tempStat: fs.Stats): boolean {
   if (tempStat.nlink !== 2) return false;
   const name = path.basename(tempPath);
   const marker = name.indexOf(".json.tmp-");
@@ -1786,31 +1635,18 @@ function assertRegularSingleLinkFile(filePath: string, kind: string): void {
   }
 }
 
-function journalArtifactFileName(
-  startSeq: number,
-  endSeq: number,
-  hash: string,
-): string {
-  return `${String(startSeq).padStart(16, "0")}-${String(endSeq).padStart(
-    16,
-    "0",
-  )}-${hash}.json`;
+function journalArtifactFileName(startSeq: number, endSeq: number, hash: string): string {
+  return `${String(startSeq).padStart(16, "0")}-${String(endSeq).padStart(16, "0")}-${hash}.json`;
 }
 
-function recoverySnapshotArtifactFileName(
-  throughSeq: number,
-  artifactHash: string,
-): string {
+function recoverySnapshotArtifactFileName(throughSeq: number, artifactHash: string): string {
   if (!Number.isSafeInteger(throughSeq) || throughSeq <= 0) {
     throw new Error("Recovery snapshot throughSeq is invalid");
   }
   if (!SHA256.test(artifactHash)) {
     throw new Error("Recovery snapshot artifact hash is invalid");
   }
-  const fileName = `snapshot-${String(throughSeq).padStart(
-    16,
-    "0",
-  )}-${artifactHash}.json`;
+  const fileName = `snapshot-${String(throughSeq).padStart(16, "0")}-${artifactHash}.json`;
   const match = RECOVERY_SNAPSHOT_FILE.exec(fileName);
   if (!match || Number(match[1]) !== throughSeq || match[2] !== artifactHash) {
     throw new Error("Recovery snapshot artifact filename is invalid");
@@ -1832,24 +1668,17 @@ function sameHead(left: JournalHeadV1, right: JournalHeadV1): boolean {
 
 function canonicalInputFactClone(fact: InputFactV1): InputFactV1 {
   assertProtocolRecord({ kind: "input_fact", fact });
-  return immutableCanonicalJsonCloneV1(
-    fact as unknown as JsonValue,
-  ) as InputFactV1;
+  return immutableCanonicalJsonCloneV1(fact as unknown as JsonValue) as InputFactV1;
 }
 
-function canonicalDerivedDecisionClone(
-  decision: DerivedDecisionV1,
-): DerivedDecisionV1 {
+function canonicalDerivedDecisionClone(decision: DerivedDecisionV1): DerivedDecisionV1 {
   assertProtocolRecord({ kind: "derived_decision", decision });
   return immutableCanonicalJsonCloneV1(
     decision as unknown as JsonValue,
   ) as unknown as DerivedDecisionV1;
 }
 
-function sameDerivedDecision(
-  left: DerivedDecisionV1,
-  right: DerivedDecisionV1,
-): boolean {
+function sameDerivedDecision(left: DerivedDecisionV1, right: DerivedDecisionV1): boolean {
   return (
     canonicalJsonStringifyV1(left as unknown as JsonValue) ===
     canonicalJsonStringifyV1(right as unknown as JsonValue)
@@ -1869,9 +1698,7 @@ function assertProtocolRecord(record: RunJournalEnvelopeV1["record"]): void {
 
 function assertExpectedTailSeq(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(
-      "Session expectedTailSeq must be a non-negative safe integer",
-    );
+    throw new Error("Session expectedTailSeq must be a non-negative safe integer");
   }
 }
 
@@ -1883,9 +1710,7 @@ function assertJournalHead(value: JournalHeadV1, label: string): void {
     typeof value.prefixHash !== "string" ||
     !SHA256.test(value.prefixHash)
   ) {
-    throw new Error(
-      `${label} must contain a non-negative tailSeq and lowercase sha256 prefixHash`,
-    );
+    throw new Error(`${label} must contain a non-negative tailSeq and lowercase sha256 prefixHash`);
   }
 }
 
@@ -1918,22 +1743,14 @@ function validateDirectoryPath(workspaceRoot: string, current: string): void {
   }
   const canonical = fs.realpathSync.native(current);
   const relative = path.relative(workspaceRoot, canonical);
-  if (
-    relative === "" ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes("..")
-  ) {
+  if (relative === "" || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
     throw new Error("Paw Next Session storage escaped the workspace root");
   }
 }
 
 function ensureSafeDirectoryTree(workspaceRoot: string, target: string): void {
   const relative = path.relative(workspaceRoot, target);
-  if (
-    relative === "" ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes("..")
-  ) {
+  if (relative === "" || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
     throw new Error("Paw Next Session storage escaped the workspace root");
   }
   let current = workspaceRoot;
@@ -1944,16 +1761,9 @@ function ensureSafeDirectoryTree(workspaceRoot: string, target: string): void {
   }
 }
 
-function validateExistingDirectoryTree(
-  workspaceRoot: string,
-  target: string,
-): void {
+function validateExistingDirectoryTree(workspaceRoot: string, target: string): void {
   const relative = path.relative(workspaceRoot, target);
-  if (
-    relative === "" ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes("..")
-  ) {
+  if (relative === "" || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
     throw new Error("Paw Next Session storage escaped the workspace root");
   }
   let current = workspaceRoot;
@@ -1997,9 +1807,7 @@ function plainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function immutableEnvelopeClone(
-  envelope: RunJournalEnvelopeV1,
-): RunJournalEnvelopeV1 {
+function immutableEnvelopeClone(envelope: RunJournalEnvelopeV1): RunJournalEnvelopeV1 {
   const value = JSON.parse(JSON.stringify(envelope)) as unknown;
   assertRunJournalEnvelopeV1(value);
   return deepFreeze(value);

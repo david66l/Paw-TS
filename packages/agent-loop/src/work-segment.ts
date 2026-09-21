@@ -12,10 +12,7 @@ import {
   parseRunJournalPrefixV1,
 } from "@paw/protocol";
 
-import {
-  type AgentLoopContinueCursorV1,
-  inspectAgentLoopContinueCursorV1,
-} from "./agent-loop.js";
+import { type AgentLoopContinueCursorV1, inspectAgentLoopContinueCursorV1 } from "./agent-loop.js";
 import {
   INTERACTIVE_CONTROL_REDUCER_VERSION_V2,
   type InteractiveControlConfigV2,
@@ -91,16 +88,13 @@ export function planWorkSegmentStartV1(
   }
   const latestMarkerSeq = prefix.reduce(
     (latest, envelope) =>
-      envelope.record.kind === "input_fact" &&
-      envelope.record.fact.type === "work.segment_started"
+      envelope.record.kind === "input_fact" && envelope.record.fact.type === "work.segment_started"
         ? envelope.seq
         : latest,
     0,
   );
   const currentSegmentDecisions = prefix.filter(
-    (envelope) =>
-      envelope.seq > latestMarkerSeq &&
-      envelope.record.kind === "derived_decision",
+    (envelope) => envelope.seq > latestMarkerSeq && envelope.record.kind === "derived_decision",
   );
   const latestCurrentSegmentDecision = currentSegmentDecisions.at(-1);
   if (
@@ -108,9 +102,7 @@ export function planWorkSegmentStartV1(
     latestCurrentSegmentDecision.record.kind !== "derived_decision" ||
     latestCurrentSegmentDecision.record.decision.reducerVersion !==
       INTERACTIVE_CONTROL_REDUCER_VERSION_V2 ||
-    !isEligibleTerminalAction(
-      latestCurrentSegmentDecision.record.decision.action,
-    )
+    !isEligibleTerminalAction(latestCurrentSegmentDecision.record.decision.action)
   ) {
     throw new Error(
       "A work segment requires the current segment's eligible interactive-v2 terminal decision",
@@ -120,8 +112,7 @@ export function planWorkSegmentStartV1(
   if (
     factsAfterTerminal.some(
       (envelope) =>
-        envelope.record.kind !== "input_fact" ||
-        envelope.record.fact.type !== "input.accepted",
+        envelope.record.kind !== "input_fact" || envelope.record.fact.type !== "input.accepted",
     )
   ) {
     throw new Error(
@@ -132,9 +123,7 @@ export function planWorkSegmentStartV1(
   exactPendingQueueInput(facts, options.inputId);
   const promotion = detachedPromotion(options.promotion);
   if (promotion.inputId !== options.inputId || promotion.delivery !== "queue") {
-    throw new Error(
-      "Work segment promotion identity mismatch with the pending queue input",
-    );
+    throw new Error("Work segment promotion identity mismatch with the pending queue input");
   }
 
   const stateHash = verification.stateHasher.hash(state);
@@ -147,12 +136,7 @@ export function planWorkSegmentStartV1(
       reducerVersion: INTERACTIVE_CONTROL_REDUCER_VERSION_V2,
     }),
   );
-  assertDecisionMatchesCurrentState(
-    currentDecision,
-    state,
-    snapshot.latestInputSeq,
-    stateHash,
-  );
+  assertDecisionMatchesCurrentState(currentDecision, state, snapshot.latestInputSeq, stateHash);
 
   const tail = prefix.at(-1) as RunJournalEnvelopeV1;
   let decisionToCommit: DerivedDecisionV1 | undefined;
@@ -179,10 +163,7 @@ export function planWorkSegmentStartV1(
     previousAction: cloneJson(currentDecision.action),
     policyVersion: WORK_SEGMENT_POLICY_VERSION_V1,
   });
-  const prospectivePrefix = appendProspective(prefix, decisionToCommit, [
-    marker,
-    promotion,
-  ]);
+  const prospectivePrefix = appendProspective(prefix, decisionToCommit, [marker, promotion]);
   const prospectiveSnapshot = projectSnapshot(prospectivePrefix);
   const prospectiveState = reducer.reduce(
     prospectiveSnapshot.entries.map((entry) => entry.fact),
@@ -192,13 +173,9 @@ export function planWorkSegmentStartV1(
     prospectiveState.segmentIndex !== segmentIndex ||
     prospectiveState.decision.kind !== "continue"
   ) {
-    throw new Error(
-      "Prospective work segment does not reduce to one continuing segment",
-    );
+    throw new Error("Prospective work segment does not reduce to one continuing segment");
   }
-  const cursor = deepFreeze(
-    inspectAgentLoopContinueCursorV1(prospectiveSnapshot),
-  );
+  const cursor = deepFreeze(inspectAgentLoopContinueCursorV1(prospectiveSnapshot));
   if (cursor.nextBoundary !== "before_first_model_request") {
     throw new Error("Prospective work segment has no initial safe cursor");
   }
@@ -236,12 +213,8 @@ function captureVerification(
       : {}),
     maxModelTurns: verification.runConfig.maxModelTurns,
     naturalStop: verification.runConfig.naturalStop,
-    ...(verification.runConfig.liveSteering
-      ? { liveSteering: true as const }
-      : {}),
-    ...(verification.runConfig.settleFinalToolBatch
-      ? { settleFinalToolBatch: true as const }
-      : {}),
+    ...(verification.runConfig.liveSteering ? { liveSteering: true as const } : {}),
+    ...(verification.runConfig.settleFinalToolBatch ? { settleFinalToolBatch: true as const } : {}),
     ...(verification.runConfig.softModelTurns === undefined
       ? {}
       : { softModelTurns: verification.runConfig.softModelTurns }),
@@ -268,21 +241,15 @@ function exactPendingQueueInput(
   inputId: string,
 ): InputAcceptedFactV1 {
   const promoted = new Set(
-    facts.flatMap((fact) =>
-      fact.type === "input.promoted" ? [fact.inputId] : [],
-    ),
+    facts.flatMap((fact) => (fact.type === "input.promoted" ? [fact.inputId] : [])),
   );
   const pendingQueues = facts.filter(
     (fact): fact is InputAcceptedFactV1 =>
-      fact.type === "input.accepted" &&
-      fact.delivery === "queue" &&
-      !promoted.has(fact.inputId),
+      fact.type === "input.accepted" && fact.delivery === "queue" && !promoted.has(fact.inputId),
   );
   const first = pendingQueues[0];
   if (!first || first.inputId !== inputId) {
-    throw new Error(
-      "Work segment inputId must be the exact first pending queue input",
-    );
+    throw new Error("Work segment inputId must be the exact first pending queue input");
   }
   return first;
 }
@@ -348,26 +315,19 @@ function assertDecisionMatchesCurrentState(
     decision.inputThroughSeq !== inputThroughSeq ||
     decision.stateHash !== stateHash
   ) {
-    throw new Error(
-      "Derived terminal decision changed canonical replay identity",
-    );
+    throw new Error("Derived terminal decision changed canonical replay identity");
   }
   const action = decision.action;
   const matches =
     (state.decision.kind === "completed" && action.kind === "complete") ||
-    (state.decision.kind === "await_user" &&
-      action.kind === "wait" &&
-      action.waitFor === "user") ||
-    (state.decision.kind === "incomplete" &&
-      isCrashRecoveryIncompleteActionV1(action));
+    (state.decision.kind === "await_user" && action.kind === "wait" && action.waitFor === "user") ||
+    (state.decision.kind === "incomplete" && isCrashRecoveryIncompleteActionV1(action));
   if (!matches || action.reasonCode !== state.decision.reason) {
     throw new Error("Derived terminal decision does not match reducer state");
   }
 }
 
-function isEligibleTerminalAction(
-  action: DerivedDecisionV1["action"],
-): boolean {
+function isEligibleTerminalAction(action: DerivedDecisionV1["action"]): boolean {
   return (
     action.kind === "complete" ||
     (action.kind === "wait" && action.waitFor === "user") ||
@@ -375,10 +335,7 @@ function isEligibleTerminalAction(
   );
 }
 
-function sameDecision(
-  left: DerivedDecisionV1,
-  right: DerivedDecisionV1,
-): boolean {
+function sameDecision(left: DerivedDecisionV1, right: DerivedDecisionV1): boolean {
   return (
     left.type === right.type &&
     left.reducerVersion === right.reducerVersion &&
@@ -395,8 +352,7 @@ function sameAction(
   return (
     left.kind === right.kind &&
     left.reasonCode === right.reasonCode &&
-    (left.kind !== "wait" ||
-      (right.kind === "wait" && left.waitFor === right.waitFor))
+    (left.kind !== "wait" || (right.kind === "wait" && left.waitFor === right.waitFor))
   );
 }
 
@@ -404,14 +360,10 @@ function detachedCanonicalPrefix(
   prefix: readonly RunJournalEnvelopeV1[],
 ): readonly RunJournalEnvelopeV1[] {
   const parsed = parseRunJournalPrefixV1(prefix);
-  return deepFreeze(
-    parseRunJournalPrefixV1(cloneJson(parsed)) as RunJournalEnvelopeV1[],
-  );
+  return deepFreeze(parseRunJournalPrefixV1(cloneJson(parsed)) as RunJournalEnvelopeV1[]);
 }
 
-function detachedPromotion(
-  promotion: InputPromotedFactV1,
-): InputPromotedFactV1 {
+function detachedPromotion(promotion: InputPromotedFactV1): InputPromotedFactV1 {
   return deepFreeze(cloneJson(promotion));
 }
 

@@ -1,12 +1,7 @@
 import path from "node:path";
 
 import type { ToolDefinition } from "@paw/core";
-import {
-  type ToolRunResult,
-  WEBFETCH,
-  WEBSEARCH,
-  validateToolArguments,
-} from "@paw/harness";
+import { type ToolRunResult, WEBFETCH, WEBSEARCH, validateToolArguments } from "@paw/harness";
 import {
   type RuntimeToolPluginEntryV1,
   type RuntimeToolPluginV1,
@@ -28,17 +23,12 @@ export const WEB_ACCESS_TOOL_PLUGIN_VERSION_V1 =
 export function createWebAccessToolPluginV1(input?: {
   readonly policy?: WebAccessPolicyV1;
 }): RuntimeToolPluginV1 {
-  const policy = freezeWebAccessPolicyV1(
-    input?.policy ?? DEFAULT_WEB_ACCESS_POLICY_V1,
-  );
+  const policy = freezeWebAccessPolicyV1(input?.policy ?? DEFAULT_WEB_ACCESS_POLICY_V1);
   const plugin: RuntimeToolPluginV1 = {
     schemaVersion: "paw.runtime-tool-plugin.v1",
     pluginId: WEB_ACCESS_TOOL_PLUGIN_ID_V1,
     pluginVersion: webAccessPolicyIdentityV1(policy),
-    entries: Object.freeze([
-      createFetchEntry(policy),
-      createSearchEntry(policy),
-    ]),
+    entries: Object.freeze([createFetchEntry(policy), createSearchEntry(policy)]),
   };
   return Object.freeze(plugin);
 }
@@ -96,10 +86,7 @@ function createFetchEntry(policy: WebAccessPolicyV1): RuntimeToolPluginEntryV1 {
         (maxLength as number) < 1 ||
         (maxLength as number) > policy.maxFetchChars
       ) {
-        return invalid(
-          WEBFETCH,
-          `max_length must be between 1 and ${policy.maxFetchChars}`,
-        );
+        return invalid(WEBFETCH, `max_length must be between 1 and ${policy.maxFetchChars}`);
       }
       return {
         ok: true as const,
@@ -129,9 +116,7 @@ function createFetchEntry(policy: WebAccessPolicyV1): RuntimeToolPluginEntryV1 {
   return Object.freeze(entry);
 }
 
-function createSearchEntry(
-  policy: WebAccessPolicyV1,
-): RuntimeToolPluginEntryV1 {
+function createSearchEntry(policy: WebAccessPolicyV1): RuntimeToolPluginEntryV1 {
   const definition: ToolDefinition = {
     type: "function",
     function: {
@@ -171,10 +156,7 @@ function createSearchEntry(
       if (!record) return invalid(WEBSEARCH, "arguments must be an object");
       const query = typeof record.query === "string" ? record.query.trim() : "";
       if (!query || query.length > policy.maxQueryChars) {
-        return invalid(
-          WEBSEARCH,
-          `query must be between 1 and ${policy.maxQueryChars} characters`,
-        );
+        return invalid(WEBSEARCH, `query must be between 1 and ${policy.maxQueryChars} characters`);
       }
       const maxResults = record.max_results ?? 5;
       if (
@@ -182,10 +164,7 @@ function createSearchEntry(
         (maxResults as number) < 1 ||
         (maxResults as number) > policy.maxSearchResults
       ) {
-        return invalid(
-          WEBSEARCH,
-          `max_results must be between 1 and ${policy.maxSearchResults}`,
-        );
+        return invalid(WEBSEARCH, `max_results must be between 1 and ${policy.maxSearchResults}`);
       }
       return {
         ok: true as const,
@@ -214,9 +193,7 @@ function createSearchEntry(
   return Object.freeze(entry);
 }
 
-function argumentRecord(
-  args: unknown,
-): Readonly<Record<string, unknown>> | undefined {
+function argumentRecord(args: unknown): Readonly<Record<string, unknown>> | undefined {
   return args && typeof args === "object" && !Array.isArray(args)
     ? (args as Readonly<Record<string, unknown>>)
     : undefined;

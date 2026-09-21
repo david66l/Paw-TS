@@ -28,13 +28,7 @@ export type ModelObservationEvent =
   | { type: "recovery_attempt"; attempt: number }
   | {
       type: "failure";
-      kind:
-        | "cancelled"
-        | "http"
-        | "network"
-        | "parse"
-        | "stream_incomplete"
-        | "unknown";
+      kind: "cancelled" | "http" | "network" | "parse" | "stream_incomplete" | "unknown";
     }
   | {
       type: "result";
@@ -58,19 +52,12 @@ export interface ModelObserver {
 type Scope = { observer: ModelObserver; runId?: string; phase?: string };
 const scope = new AsyncLocalStorage<Scope>();
 
-export function withModelObserver<T>(
-  observer: ModelObserver,
-  action: () => T,
-): T {
+export function withModelObserver<T>(observer: ModelObserver, action: () => T): T {
   return scope.run({ observer }, action);
 }
 
 /** Identity is observation-only and never changes a canonical model request. */
-export function withModelObservationScope<T>(
-  runId: string,
-  phase: string,
-  action: () => T,
-): T {
+export function withModelObservationScope<T>(runId: string, phase: string, action: () => T): T {
   const current = scope.getStore();
   return current ? scope.run({ ...current, runId, phase }, action) : action();
 }
@@ -116,10 +103,7 @@ function observedOptions(
     },
   };
 }
-function end(
-  observation: ModelObservation,
-  status: Parameters<ModelObservation["end"]>[0],
-): void {
+function end(observation: ModelObservation, status: Parameters<ModelObservation["end"]>[0]): void {
   try {
     observation.end(status);
   } catch {
@@ -137,14 +121,9 @@ function failureKind(
   if (/HTTP \d{3}/.test(error.message)) return "http";
   if (/without .*?(marker|reason)|missing response body/.test(error.message))
     return "stream_incomplete";
-  if (
-    /JSON|conflicting|duplicate|orphan|invalid.*(stream|tool)/i.test(
-      error.message,
-    )
-  )
+  if (/JSON|conflicting|duplicate|orphan|invalid.*(stream|tool)/i.test(error.message))
     return "parse";
-  if (error instanceof TypeError || error.name === "TimeoutError")
-    return "network";
+  if (error instanceof TypeError || error.name === "TimeoutError") return "network";
   return "unknown";
 }
 

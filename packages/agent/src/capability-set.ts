@@ -32,9 +32,7 @@ export function resolveCapabilitySetV1(input: {
   const entries = input.definitions.map((definition) => ({
     definition,
     sanitizedName: definition.function.name,
-    originalName:
-      input.toolNameMap.get(definition.function.name) ??
-      definition.function.name,
+    originalName: input.toolNameMap.get(definition.function.name) ?? definition.function.name,
   }));
   const available = new Set(entries.map((entry) => entry.originalName));
   const availableMcpTools = new Set(input.availableMcpToolNames ?? []);
@@ -43,28 +41,18 @@ export function resolveCapabilitySetV1(input: {
   const mcpToolNames = Object.freeze(
     proxyExplicitlyRequested
       ? [...availableMcpTools].sort()
-      : (input.configuredTools ?? [])
-          .filter((toolName) => availableMcpTools.has(toolName))
-          .sort(),
+      : (input.configuredTools ?? []).filter((toolName) => availableMcpTools.has(toolName)).sort(),
   );
   const requested =
     input.configuredTools === null
       ? available
       : new Set([
-          ...input.configuredTools.filter(
-            (toolName) => !toolName.startsWith("mcp:"),
-          ),
+          ...input.configuredTools.filter((toolName) => !toolName.startsWith("mcp:")),
           ...(mcpToolNames.length > 0 ? [MCP_PROXY] : []),
         ]);
-  const selected = new Set(
-    [...requested].filter((toolName) => available.has(toolName)),
-  );
-  const modelEntries = entries.filter((entry) =>
-    selected.has(entry.originalName),
-  );
-  const modelToolNames = Object.freeze(
-    modelEntries.map((entry) => entry.originalName),
-  );
+  const selected = new Set([...requested].filter((toolName) => available.has(toolName)));
+  const modelEntries = entries.filter((entry) => selected.has(entry.originalName));
+  const modelToolNames = Object.freeze(modelEntries.map((entry) => entry.originalName));
   const knownToolNames = new Set<string>();
   for (const entry of modelEntries) {
     knownToolNames.add(entry.originalName);
@@ -73,9 +61,7 @@ export function resolveCapabilitySetV1(input: {
 
   return Object.freeze({
     schemaVersion: CAPABILITY_SET_SCHEMA_V1,
-    modelToolDefinitions: Object.freeze(
-      modelEntries.map((entry) => entry.definition),
-    ),
+    modelToolDefinitions: Object.freeze(modelEntries.map((entry) => entry.definition)),
     modelToolNames,
     executableToolNames: modelToolNames,
     mcpToolNames,

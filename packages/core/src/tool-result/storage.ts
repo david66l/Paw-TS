@@ -57,10 +57,7 @@ export const DEFAULT_MAX_TOOL_OUTPUT_BYTES = 50_000;
  * 获取指定 workspace 和 runId 的工具结果存储目录路径。
  * 委托给 workspace-paths 模块确保路径一致性。
  */
-export function getToolResultsDir(
-  workspaceRoot: string,
-  runId: string,
-): string {
+export function getToolResultsDir(workspaceRoot: string, runId: string): string {
   return toolResultsDir(workspaceRoot, runId);
 }
 
@@ -93,8 +90,7 @@ export function generatePreview(
   const truncated = content.slice(0, maxBytes);
   const lastNewline = truncated.lastIndexOf("\n");
   // 只在换行符离末尾不太远时（>50% 位置）才在换行处截断
-  const preview =
-    lastNewline > maxBytes * 0.5 ? truncated.slice(0, lastNewline) : truncated;
+  const preview = lastNewline > maxBytes * 0.5 ? truncated.slice(0, lastNewline) : truncated;
   return { preview, hasMore: true };
 }
 

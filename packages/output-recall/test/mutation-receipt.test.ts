@@ -38,10 +38,7 @@ const observation: ToolObservationProjectionInputV1 = {
   value,
 };
 const project = (item = observation) =>
-  createOutputRecallProjectorV1({ compactMutationReceipts: true }).project(
-    item,
-    signal,
-  );
+  createOutputRecallProjectorV1({ compactMutationReceipts: true }).project(item, signal);
 
 test.each(["workspace_write_file", "workspace_edit_file"])(
   "%s keeps all non-diff metadata and recall identity without changing evidence",
@@ -55,10 +52,7 @@ test.each(["workspace_write_file", "workspace_edit_file"])(
         policyVersion: "paw.mutation-receipt.v1",
         chars: diff.length,
         tool: "context_recall",
-        id:
-          observation.payload.kind === "artifact_ref"
-            ? observation.payload.artifactRef
-            : "",
+        id: observation.payload.kind === "artifact_ref" ? observation.payload.artifactRef : "",
         part: "chunk",
         offset: 0,
         limit: 8000,
@@ -71,9 +65,7 @@ test.each(["workspace_write_file", "workspace_edit_file"])(
 );
 
 test("legacy projection stays exact and opt-in is captured at construction", async () => {
-  expect(
-    await createOutputRecallProjectorV1().project(observation, signal),
-  ).toBe(value);
+  expect(await createOutputRecallProjectorV1().project(observation, signal)).toBe(value);
   const options: { compactMutationReceipts?: true } = {
     compactMutationReceipts: true,
   };
@@ -94,9 +86,10 @@ test("failed, cancelled, no-op, inline, small and unrelated results remain intac
       ...observation,
       payload: { kind: "inline", value, hash: "b".repeat(64) },
     },
-    ...["workspace_read_file", "workspace_run_shell", "context_recall"].map(
-      (tool) => ({ ...observation, tool }),
-    ),
+    ...["workspace_read_file", "workspace_run_shell", "context_recall"].map((tool) => ({
+      ...observation,
+      tool,
+    })),
   ];
   for (const item of cases) expect(await project(item)).toBe(item.value);
 });

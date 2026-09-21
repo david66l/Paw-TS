@@ -74,46 +74,35 @@ describe("completion review evidence projector", () => {
     }
   });
   test("recognizes Django and Python test runners", () => {
-    expect(
-      classifyVerificationCommandV1(
-        "python tests/runtests.py i18n.tests.MiscTests",
-      ),
-    ).toBe("test");
-    expect(
-      classifyVerificationCommandV1(
-        "./tests/runtests.py --settings=test_sqlite i18n.tests",
-      ),
-    ).toBe("test");
-    expect(classifyVerificationCommandV1("python manage.py test i18n")).toBe(
+    expect(classifyVerificationCommandV1("python tests/runtests.py i18n.tests.MiscTests")).toBe(
       "test",
     );
     expect(
-      classifyVerificationCommandV1("python -m unittest tests.test_i18n"),
+      classifyVerificationCommandV1("./tests/runtests.py --settings=test_sqlite i18n.tests"),
     ).toBe("test");
+    expect(classifyVerificationCommandV1("python manage.py test i18n")).toBe("test");
+    expect(classifyVerificationCommandV1("python -m unittest tests.test_i18n")).toBe("test");
   });
 
   test("a direct rerun resolves the same target previously hidden by an output pipeline", () => {
     const evidence = projectCompletionReviewToolEvidenceV1({
       latestMutationSeq: 0,
-      calls: [
-        "node --test test/a.js 2>&1 | tail -10",
-        "node --test test/a.js",
-      ].map((command, index) => ({
-        seq: index + 1,
-        callId: `check-${index}`,
-        tool: "workspace_run_shell",
-        status: "completed" as const,
-        args: { command },
-        summary: "exit 0",
-        isError: false,
-        payload: { exit_code: 0 },
-      })),
+      calls: ["node --test test/a.js 2>&1 | tail -10", "node --test test/a.js"].map(
+        (command, index) => ({
+          seq: index + 1,
+          callId: `check-${index}`,
+          tool: "workspace_run_shell",
+          status: "completed" as const,
+          args: { command },
+          summary: "exit 0",
+          isError: false,
+          payload: { exit_code: 0 },
+        }),
+      ),
     });
     expect(evidence[0]?.outcome).toBe("indeterminate");
     expect(evidence[1]?.outcome).toBe("passed");
-    expect(evidence[0]?.verificationTarget).toBe(
-      evidence[1]?.verificationTarget,
-    );
+    expect(evidence[0]?.verificationTarget).toBe(evidence[1]?.verificationTarget);
   });
 
   test("separates shell execution from a failed test outcome", () => {
@@ -218,9 +207,7 @@ describe("completion review policy", () => {
       changedPaths: ["src/a.ts"],
       mutationCount: 1,
     });
-    expect(evaluateCompletionReviewTriggersV1(source)).toEqual([
-      "missing_fresh_verification",
-    ]);
+    expect(evaluateCompletionReviewTriggersV1(source)).toEqual(["missing_fresh_verification"]);
 
     const docs = candidate({
       goal: "Fix a typo",
@@ -247,22 +234,14 @@ describe("completion review policy", () => {
       mutationCount: 1,
     });
     // Default: an unverified source mutation alone forces a reviewer call.
-    expect(evaluateCompletionReviewTriggersV1(source)).toEqual([
-      "missing_fresh_verification",
-    ]);
+    expect(evaluateCompletionReviewTriggersV1(source)).toEqual(["missing_fresh_verification"]);
     // Tight accounting arm: same candidate is allowed through unless size,
     // explicit request, or failed verification evidence demands review.
     expect(
-      evaluateCompletionReviewTriggersV1(
-        source,
-        TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
-      ),
+      evaluateCompletionReviewTriggersV1(source, TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1),
     ).toEqual([]);
     expect(
-      evaluateCompletionReviewGateV1(
-        source,
-        TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
-      ),
+      evaluateCompletionReviewGateV1(source, TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1),
     ).toEqual({ action: "allow" });
 
     const nonTrivial = candidate({
@@ -271,10 +250,7 @@ describe("completion review policy", () => {
       mutationCount: 3,
     });
     expect(
-      evaluateCompletionReviewTriggersV1(
-        nonTrivial,
-        TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1,
-      ),
+      evaluateCompletionReviewTriggersV1(nonTrivial, TIGHT_COMPLETION_REVIEW_TRIGGER_POLICY_V1),
     ).toEqual(["non_trivial_change"]);
   });
 
@@ -332,14 +308,10 @@ describe("completion review policy", () => {
       goal: "Implement the fix",
       changedPaths: ["src/a.ts"],
       mutationCount: 1,
-      toolEvidence: [
-        evidence("workspace_job_wait", "job_wait: job-1 completed"),
-      ],
+      toolEvidence: [evidence("workspace_job_wait", "job_wait: job-1 completed")],
     });
 
-    expect(evaluateCompletionReviewTriggersV1(started)).toContain(
-      "missing_fresh_verification",
-    );
+    expect(evaluateCompletionReviewTriggersV1(started)).toContain("missing_fresh_verification");
     expect(evaluateCompletionReviewTriggersV1(completed)).toEqual([]);
   });
 });
@@ -487,8 +459,7 @@ describe("completion review evidence packet and deterministic routing", () => {
           tool: "workspace_run_shell",
           status: "completed",
           args: {
-            command:
-              "python tests/runtests.py i18n 2>&1 | tail -20; echo exit: $?",
+            command: "python tests/runtests.py i18n 2>&1 | tail -20; echo exit: $?",
           },
           summary: "shell exited through echo",
           isError: false,
@@ -514,8 +485,7 @@ describe("completion review evidence packet and deterministic routing", () => {
           tool: "workspace_run_shell",
           status: "completed",
           args: {
-            command:
-              "cd /testbed; source activate testbed; python tests/runtests.py i18n",
+            command: "cd /testbed; source activate testbed; python tests/runtests.py i18n",
           },
           summary: "tests passed",
           isError: false,
@@ -549,9 +519,7 @@ describe("completion reviewer", () => {
         },
       },
     });
-    expect(
-      await reviewer.review(candidate(), { signal: controller.signal }),
-    ).toEqual({
+    expect(await reviewer.review(candidate(), { signal: controller.signal })).toEqual({
       status: "cancelled",
       errorCode: "CompletionReviewCancelled",
     });
@@ -597,8 +565,7 @@ describe("completion reviewer", () => {
       reasonCode: "missing_verification",
     });
     expect(packet).toMatchObject({
-      policyVersion:
-        "paw.completion-review-evidence-packet.v3:observed-output:shared-shell-status",
+      policyVersion: "paw.completion-review-evidence-packet.v3:observed-output:shared-shell-status",
       verification: { state: "not_required", latestByTarget: [] },
     });
     expect(packet).not.toHaveProperty("toolEvidence");
@@ -613,8 +580,7 @@ describe("completion reviewer", () => {
             text: JSON.stringify({
               decision: "uncertain",
               reasonCode: "insufficient_evidence",
-              summary:
-                "The available test output does not identify the failure.",
+              summary: "The available test output does not identify the failure.",
             }),
           };
         },
@@ -696,9 +662,7 @@ describe("completion review controller", () => {
     await Promise.resolve();
     expect(await controller.review(value, ["user_requested"])).toEqual(first);
     expect(calls).toBe(1);
-    expect(
-      session.facts.filter((fact) => fact.type === "completion.review_settled"),
-    ).toEqual([
+    expect(session.facts.filter((fact) => fact.type === "completion.review_settled")).toEqual([
       expect.objectContaining({
         status: "unknown",
         reasonCode: "CompletionReviewTimeout",
@@ -852,9 +816,7 @@ describe("completion review continuation", () => {
 });
 
 function candidate(
-  overrides: Partial<
-    Parameters<typeof createCompletionReviewCandidateV1>[0]
-  > = {},
+  overrides: Partial<Parameters<typeof createCompletionReviewCandidateV1>[0]> = {},
 ) {
   return createCompletionReviewCandidateV1({
     sourceThroughSeq: 1,
@@ -872,9 +834,7 @@ function evidence(
   tool: string,
   summary: string,
   overrides: Partial<
-    Parameters<
-      typeof createCompletionReviewCandidateV1
-    >[0]["toolEvidence"][number]
+    Parameters<typeof createCompletionReviewCandidateV1>[0]["toolEvidence"][number]
   > = {},
 ) {
   return {
@@ -882,8 +842,7 @@ function evidence(
     tool,
     executionStatus: "completed" as const,
     outcome: "passed" as const,
-    verificationKind:
-      tool === "workspace_job_wait" ? ("test" as const) : ("none" as const),
+    verificationKind: tool === "workspace_job_wait" ? ("test" as const) : ("none" as const),
     args: {},
     summary,
     afterLatestMutation: true,

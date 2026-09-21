@@ -10,10 +10,7 @@ import {
   classifyMemoryEvidenceUseV1,
   renderMemoryEvidencePacketContractV1,
 } from "./evidence-origin.js";
-import {
-  memoryEvidenceSupportScoreV1,
-  projectMemoryEvidenceExcerptV1,
-} from "./evidence-text.js";
+import { memoryEvidenceSupportScoreV1, projectMemoryEvidenceExcerptV1 } from "./evidence-text.js";
 import {
   inferMemoryStateSemanticsV1,
   resolveMemoryStateObservationsV1,
@@ -79,10 +76,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
     Math.floor(input.maxChars / Math.max(1, input.requirements.length)),
   );
   const sourceHeader = `${renderMemoryEvidencePacketContractV1()}\n`;
-  for (const [
-    requirementIndex,
-    rawRequirement,
-  ] of input.requirements.entries()) {
+  for (const [requirementIndex, rawRequirement] of input.requirements.entries()) {
     const requirementId = rawRequirement.requirementId.trim();
     const label = rawRequirement.label.trim().replace(/\s+/gu, " ");
     const searchText = rawRequirement.searchText.trim().replace(/\s+/gu, " ");
@@ -98,11 +92,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
       throw namedError("MemoryEvidenceNotebookRequirementInvalid");
     }
     const minimumEvidence = rawRequirement.minimumEvidence ?? 1;
-    if (
-      !Number.isSafeInteger(minimumEvidence) ||
-      minimumEvidence < 1 ||
-      minimumEvidence > 3
-    ) {
+    if (!Number.isSafeInteger(minimumEvidence) || minimumEvidence < 1 || minimumEvidence > 3) {
       throw namedError("MemoryEvidenceNotebookRequirementInvalid");
     }
     // Divide the slot budget by evidence that actually reached this notebook,
@@ -112,24 +102,13 @@ export function buildMemoryEvidenceNotebookV1(input: {
       1,
       Math.min(
         input.maxHitsPerRequirement,
-        new Set(
-          rawRequirement.hits
-            .map((hit) => hit.evidenceRef.trim())
-            .filter(Boolean),
-        ).size,
+        new Set(rawRequirement.hits.map((hit) => hit.evidenceRef.trim()).filter(Boolean)).size,
       ),
     );
     const remainingRequirementReserve =
-      (input.requirements.length - requirementIndex - 1) *
-      minimumRequirementBudget;
-    const requirementBudget = Math.max(
-      0,
-      input.maxChars - chars - remainingRequirementReserve,
-    );
-    const hitBudget = Math.max(
-      192,
-      Math.floor(requirementBudget / Math.max(1, targetHits)),
-    );
+      (input.requirements.length - requirementIndex - 1) * minimumRequirementBudget;
+    const requirementBudget = Math.max(0, input.maxChars - chars - remainingRequirementReserve);
+    const hitBudget = Math.max(192, Math.floor(requirementBudget / Math.max(1, targetHits)));
     seenRequirementIds.add(requirementId);
     const selection = rawRequirement.selection ?? "ranked";
     if (selection !== "ranked" && selection !== "latest") {
@@ -141,8 +120,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
     let selectedForRequirement = 0;
     let independentForRequirement = 0;
     const requiresIndependentEpisodes =
-      rawRequirement.coverageMode === "convergent" ||
-      rawRequirement.coverageMode === "all";
+      rawRequirement.coverageMode === "convergent" || rawRequirement.coverageMode === "all";
     const supportText = `${label} ${searchText}`;
     const roleConstraint = rawRequirement.roleConstraint ?? "user";
     const certifiedDialogueEvidenceRefs = new Set(
@@ -155,9 +133,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
     const inWindow = new Set<string>();
     if (timeWindow) {
       for (const hit of rawRequirement.hits) {
-        const observed = hit.observedAt
-          ? Date.parse(hit.observedAt)
-          : undefined;
+        const observed = hit.observedAt ? Date.parse(hit.observedAt) : undefined;
         if (
           observed !== undefined &&
           Number.isFinite(observed) &&
@@ -209,11 +185,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
       const resolution = resolveMemoryStateObservationsV1({
         observations: eligible.map(({ hit }) => ({
           ...hit,
-          content: projectMemoryEvidenceExcerptV1(
-            hit.content,
-            searchText,
-            8_192,
-          ),
+          content: projectMemoryEvidenceExcerptV1(hit.content, searchText, 8_192),
           stateKey: requirementId,
           episodeOrder: hit.episodeOrder ?? hit.observedOrder,
           turnOrder: hit.turnOrder,
@@ -223,32 +195,24 @@ export function buildMemoryEvidenceNotebookV1(input: {
         allowContextOnly: input.allowContextOnly,
       });
       currentRefs = new Set(resolution.current.map((item) => item.evidenceRef));
-      ambiguousRefs = new Set(
-        resolution.ambiguous.map((item) => item.evidenceRef),
-      );
-      historicalRefs = new Set(
-        resolution.history.map((item) => item.evidenceRef),
-      );
+      ambiguousRefs = new Set(resolution.ambiguous.map((item) => item.evidenceRef));
+      historicalRefs = new Set(resolution.history.map((item) => item.evidenceRef));
       const resolutionOrder = new Map(
-        [
-          ...resolution.current,
-          ...resolution.ambiguous,
-          ...resolution.history,
-        ].map((item, index) => [item.evidenceRef, index] as const),
+        [...resolution.current, ...resolution.ambiguous, ...resolution.history].map(
+          (item, index) => [item.evidenceRef, index] as const,
+        ),
       );
       rankedHits.sort(
         (left, right) =>
-          (resolutionOrder.get(left.hit.evidenceRef) ??
-            Number.MAX_SAFE_INTEGER) -
-            (resolutionOrder.get(right.hit.evidenceRef) ??
-              Number.MAX_SAFE_INTEGER) || left.rank - right.rank,
+          (resolutionOrder.get(left.hit.evidenceRef) ?? Number.MAX_SAFE_INTEGER) -
+            (resolutionOrder.get(right.hit.evidenceRef) ?? Number.MAX_SAFE_INTEGER) ||
+          left.rank - right.rank,
       );
     }
     for (const { hit: rawHit } of rankedHits) {
       if (
-        (requiresIndependentEpisodes
-          ? independentForRequirement
-          : selectedForRequirement) >= targetHits
+        (requiresIndependentEpisodes ? independentForRequirement : selectedForRequirement) >=
+        targetHits
       ) {
         break;
       }
@@ -321,9 +285,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
             : timeline === "previous"
               ? "state=historical; relation=superseded_by_latest_statement"
               : "state=unspecified; relation=supporting_evidence";
-      const separatorChars = sourceParts.has(sourceId)
-        ? 2
-        : sourceHeader.length;
+      const separatorChars = sourceParts.has(sourceId) ? 2 : sourceHeader.length;
       const requirementLine = `[Requirement: ${label}]`;
       const metadataLine =
         selection === "latest"
@@ -342,11 +304,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
         budgetOmittedHitCount += 1;
         continue;
       }
-      const excerpt = projectMemoryEvidenceExcerptV1(
-        content,
-        searchText,
-        excerptBudget,
-      );
+      const excerpt = projectMemoryEvidenceExcerptV1(content, searchText, excerptBudget);
       const part = [requirementLine, metadataLine, excerpt].join("\n");
       if (chars + separatorChars + part.length > input.maxChars) {
         budgetOmittedHitCount += 1;
@@ -366,11 +324,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
       }
       state.evidenceBindings.set(evidenceRef, evidenceUse);
       state.answerRoles.add(
-        timeline === "latest"
-          ? "current"
-          : timeline === "ambiguous"
-            ? "ambiguous"
-            : "supporting",
+        timeline === "latest" ? "current" : timeline === "ambiguous" ? "ambiguous" : "supporting",
       );
       selectedRefs.push(evidenceRef);
       renderedEvidenceRefs.add(evidenceRef);
@@ -386,13 +340,10 @@ export function buildMemoryEvidenceNotebookV1(input: {
       status:
         selection === "latest" && ambiguousRefs.size > 0
           ? "partial"
-          : (requiresIndependentEpisodes
-                ? independentForRequirement
-                : selectedForRequirement) >= minimumEvidence
+          : (requiresIndependentEpisodes ? independentForRequirement : selectedForRequirement) >=
+              minimumEvidence
             ? "covered"
-            : (requiresIndependentEpisodes
-                  ? independentForRequirement
-                  : selectedForRequirement) > 0
+            : (requiresIndependentEpisodes ? independentForRequirement : selectedForRequirement) > 0
               ? "partial"
               : "missing",
       selectedHitCount: selectedForRequirement,
@@ -434,9 +385,7 @@ export function buildMemoryEvidenceNotebookV1(input: {
   });
 }
 
-function memoryEvidenceIndependentKey(
-  hit: MemoryEvidenceNotebookHitV1,
-): string {
+function memoryEvidenceIndependentKey(hit: MemoryEvidenceNotebookHitV1): string {
   const eventKey = hit.eventKey?.trim();
   if (eventKey) return `event:${eventKey}`;
   const sourceId = hit.sourceId.trim();
@@ -453,9 +402,7 @@ function inferEvidenceStateSemanticsV1(content: string, searchText: string) {
   // Raw L0 remains immutable and may be much larger than the state reducer's
   // bounded semantic input. Analyze the same query-focused projection that is
   // eligible for the notebook instead of failing the whole read path.
-  return inferMemoryStateSemanticsV1(
-    projectMemoryEvidenceExcerptV1(content, searchText, 8_192),
-  );
+  return inferMemoryStateSemanticsV1(projectMemoryEvidenceExcerptV1(content, searchText, 8_192));
 }
 
 function namedError(name: string): Error {
@@ -464,8 +411,6 @@ function namedError(name: string): Error {
   return error;
 }
 
-function singleAnswerRole<T extends string>(
-  roles: ReadonlySet<T>,
-): T | "mixed" {
+function singleAnswerRole<T extends string>(roles: ReadonlySet<T>): T | "mixed" {
   return roles.size === 1 ? (roles.values().next().value ?? "mixed") : "mixed";
 }

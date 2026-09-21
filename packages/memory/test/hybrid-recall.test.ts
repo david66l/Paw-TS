@@ -28,8 +28,7 @@ import type {
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -39,10 +38,7 @@ const it = dbOk ? test : test.skip;
 const NOW = new Date("2026-08-06T00:00:00Z");
 const OLD = new Date("2026-01-01T00:00:00Z"); // 超出 30 天窗口
 
-function baseEntry(
-  id: string,
-  overrides: Partial<MemoryEntry> = {},
-): SemanticFact {
+function baseEntry(id: string, overrides: Partial<MemoryEntry> = {}): SemanticFact {
   return {
     id,
     kind: "semantic",
@@ -168,14 +164,8 @@ describe("fuseRecall 融合打分（纯函数）", () => {
     });
 
     expect(scoreOf(items, "plain").score).toBeCloseTo(0.4, 5);
-    expect(scoreOf(items, "branched").score).toBeCloseTo(
-      0.4 + BONUS_SAME_BRANCH,
-      5,
-    );
-    expect(scoreOf(items, "userSaid").score).toBeCloseTo(
-      0.4 + BONUS_USER_STATEMENT,
-      5,
-    );
+    expect(scoreOf(items, "branched").score).toBeCloseTo(0.4 + BONUS_SAME_BRANCH, 5);
+    expect(scoreOf(items, "userSaid").score).toBeCloseTo(0.4 + BONUS_USER_STATEMENT, 5);
     expect(scoreOf(items, "recent").score).toBeCloseTo(0.4 + BONUS_RECENT, 5);
     expect(scoreOf(items, "branched").bonuses).toEqual(["same_branch"]);
   });
@@ -203,9 +193,7 @@ describe("fuseRecall 融合打分（纯函数）", () => {
 
 describe("hybridRecall 降级（stub 引擎）", () => {
   const stubEntry = baseEntry("s1");
-  const stubEngine = (
-    overrides: Partial<MemoryStoreEngine>,
-  ): MemoryStoreEngine => ({
+  const stubEngine = (overrides: Partial<MemoryStoreEngine>): MemoryStoreEngine => ({
     put: async () => {},
     get: async () => stubEntry,
     invalidate: async () => {},
@@ -284,10 +272,10 @@ describe("hybridRecall db 集成", () => {
   }
 
   it("两路召回融合：语义相近条目进入候选池", async () => {
-    const fact = makeFact(
-      "Postgres migrations run in lexical order by version prefix",
-      ["migration", "ordering"],
-    );
+    const fact = makeFact("Postgres migrations run in lexical order by version prefix", [
+      "migration",
+      "ordering",
+    ]);
     const id = deriveEntryId(fact);
     createdIds.push(id);
     await engine.put(fact);
@@ -332,10 +320,7 @@ describe("hybridRecall db 集成", () => {
   });
 
   it("召回默认排除软失效条目", async () => {
-    const fact = makeFact(
-      "Quixotic cache invalidation strategy for session tokens",
-      ["quixotic"],
-    );
+    const fact = makeFact("Quixotic cache invalidation strategy for session tokens", ["quixotic"]);
     const id = deriveEntryId(fact);
     createdIds.push(id);
     await engine.put(fact);
@@ -365,10 +350,7 @@ describe("hybridRecall db 集成", () => {
       embeddingKey: `${fact} sealed probe`,
     });
     const mine = make(REPO, "Sealed repo probe entry for isolated retrieval");
-    const other = make(
-      otherRepo,
-      "Sealed repo probe entry for isolated retrieval",
-    ); // 同内容
+    const other = make(otherRepo, "Sealed repo probe entry for isolated retrieval"); // 同内容
     const mineId = deriveEntryId(mine);
     const otherId = deriveEntryId(other);
     createdIds.push(mineId, otherId);
@@ -401,10 +383,7 @@ describe("hybridRecall db 集成", () => {
   });
 
   it("reindex 冒烟回归全部通过", async () => {
-    const fact = makeFact(
-      "Smoke queries verify rebuilt indexes recall their entries",
-      ["smoke"],
-    );
+    const fact = makeFact("Smoke queries verify rebuilt indexes recall their entries", ["smoke"]);
     const id = deriveEntryId(fact);
     createdIds.push(id);
     await engine.put(fact);

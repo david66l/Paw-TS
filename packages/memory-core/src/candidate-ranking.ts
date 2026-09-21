@@ -159,10 +159,7 @@ export function rankMemoryEvidenceCandidatesV2(input: {
         ? reconcileEvidenceCandidateV2(current.candidate, candidate)
         : candidate;
       if (!reconciledCandidate) {
-        throw evidenceCandidateIdentityConflictV2(
-          current?.candidate,
-          candidate,
-        );
+        throw evidenceCandidateIdentityConflictV2(current?.candidate, candidate);
       }
       const state = current ?? {
         candidate: reconciledCandidate,
@@ -179,10 +176,7 @@ export function rankMemoryEvidenceCandidatesV2(input: {
       candidates.set(candidate.candidateId, state);
       bestSourceRanks.set(
         candidate.sourceId,
-        Math.min(
-          bestSourceRanks.get(candidate.sourceId) ?? Number.POSITIVE_INFINITY,
-          distinctRank,
-        ),
+        Math.min(bestSourceRanks.get(candidate.sourceId) ?? Number.POSITIVE_INFINITY, distinctRank),
       );
       const source = sources.get(candidate.sourceId) ?? {
         score: 0,
@@ -258,14 +252,9 @@ export function rankMemoryEvidenceCandidatesV2(input: {
       l1CandidateCount: channelCandidates.l1.size,
       fusedCandidateCount: candidates.size,
       fusedSourceCount: rankedSources.length,
-      dualChannelSourceCount: rankedSources.filter(
-        (source) => source.channelHits > 1,
-      ).length,
+      dualChannelSourceCount: rankedSources.filter((source) => source.channelHits > 1).length,
       returnedSourceCount: selected.length,
-      returnedEvidenceCount: selected.reduce(
-        (total, source) => total + source.evidence.length,
-        0,
-      ),
+      returnedEvidenceCount: selected.reduce((total, source) => total + source.evidence.length, 0),
     }),
   });
 }
@@ -284,9 +273,7 @@ function normalizedEvidenceCandidateV2(
     candidateId,
     sourceId,
     evidenceRef,
-    ...(input.observedAt?.trim()
-      ? { observedAt: input.observedAt.trim() }
-      : {}),
+    ...(input.observedAt?.trim() ? { observedAt: input.observedAt.trim() } : {}),
   });
 }
 
@@ -315,10 +302,8 @@ function reconcileEvidenceCandidateV2(
         : undefined;
   if (
     baseAuthority &&
-    ((left.authority === baseAuthority &&
-      right.authority === "user_confirmed_dialogue") ||
-      (right.authority === baseAuthority &&
-        left.authority === "user_confirmed_dialogue"))
+    ((left.authority === baseAuthority && right.authority === "user_confirmed_dialogue") ||
+      (right.authority === baseAuthority && left.authority === "user_confirmed_dialogue"))
   ) {
     return left.authority === "user_confirmed_dialogue" ? left : right;
   }
@@ -334,12 +319,8 @@ function evidenceCandidateIdentityConflictV2(
     enumerable: true,
     value: Object.freeze({
       sourceId: left?.sourceId === right.sourceId ? "same" : "different",
-      evidenceRef:
-        left?.evidenceRef === right.evidenceRef ? "same" : "different",
-      sourceKind: Object.freeze([
-        left?.sourceKind ?? "missing",
-        right.sourceKind,
-      ]),
+      evidenceRef: left?.evidenceRef === right.evidenceRef ? "same" : "different",
+      sourceKind: Object.freeze([left?.sourceKind ?? "missing", right.sourceKind]),
       authority: Object.freeze([left?.authority ?? "missing", right.authority]),
       observedAt: left?.observedAt === right.observedAt ? "same" : "different",
     }),

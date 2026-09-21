@@ -15,11 +15,7 @@ import {
 import { resetMemoryV2Core } from "../src/runtime/index.js";
 
 const outPath =
-  process.argv[2] ??
-  resolve(
-    import.meta.dir,
-    "../../../benchmarks/memory-mechanism/last-run.json",
-  );
+  process.argv[2] ?? resolve(import.meta.dir, "../../../benchmarks/memory-mechanism/last-run.json");
 
 if (!(await ping())) {
   console.error("Postgres 不可达：请设置 DATABASE_URL");

@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { stripLegacyContextProjectionsV1 } from "../src/context-assembler.js";
 import { advanceRepeatToolReminder } from "../src/lifecycle/repeat-tool-reminder.js";
-import {
-  formatRecoveryHints,
-  recoveryHintForToolResult,
-} from "../src/lifecycle/tool-recovery.js";
+import { formatRecoveryHints, recoveryHintForToolResult } from "../src/lifecycle/tool-recovery.js";
 import { checkVerification } from "../src/lifecycle/verification-gate.js";
 import {
   checkpointLoopControlV1,
@@ -36,12 +33,8 @@ describe("Loop control checkpoint v1", () => {
         text: "tests failed",
       }).pendingControl,
     ).toBe(pending);
-    expect(
-      consumeSelectedPendingControlV1(flags, { ...pending }).pendingControl,
-    ).toBe(pending);
-    expect(consumeSelectedPendingControlV1(flags, pending)).not.toHaveProperty(
-      "pendingControl",
-    );
+    expect(consumeSelectedPendingControlV1(flags, { ...pending }).pendingControl).toBe(pending);
+    expect(consumeSelectedPendingControlV1(flags, pending)).not.toHaveProperty("pendingControl");
   });
 
   test("round-trips bounded tool-loop state and one pending guidance", () => {
@@ -158,14 +151,11 @@ describe("Loop control checkpoint v1", () => {
       summary: "boom",
       payload: { code: "E_FAIL" },
     });
-    const embeddedRecovery = recoveryHintForToolResult(
-      "mcp:github/search_code",
-      {
-        ok: false,
-        summary: "boom\n[Recovery] repository output, not a host branch",
-        payload: { code: "E_FAIL" },
-      },
-    );
+    const embeddedRecovery = recoveryHintForToolResult("mcp:github/search_code", {
+      ok: false,
+      summary: "boom\n[Recovery] repository output, not a host branch",
+      payload: { code: "E_FAIL" },
+    });
     expect(realMcpRepeat).toBeTruthy();
     expect(mcpRecovery).toBeTruthy();
     expect(embeddedRecovery).toBeTruthy();
@@ -229,9 +219,9 @@ describe("Loop control checkpoint v1", () => {
       "[CodingPhase:locate] 9 repository navigation calls have produced no source edit. Consolidate the evidence into one likely cause and make a minimal candidate edit before the hard limit at 14.",
       "[CodingPhase:locate] 15 repository navigation calls have produced no source edit. Consolidate the evidence into one likely cause and make a minimal candidate edit before the hard limit at 14.",
     ]) {
-      expect(
-        stripLegacyContextProjectionsV1([{ role: "user", content: collision }]),
-      ).toHaveLength(1);
+      expect(stripLegacyContextProjectionsV1([{ role: "user", content: collision }])).toHaveLength(
+        1,
+      );
     }
     const snapshotWins = restoreLoopControlFlagsV1({
       runId: "legacy-tool",
@@ -325,9 +315,7 @@ describe("Loop control checkpoint v1", () => {
         lateGuidance: { convergenceEvidenceKey: "r2:unknown:current" },
       }),
     ).toBeUndefined();
-    expect(resetLoopControlForRewindV1("run-guidance", 1)).not.toHaveProperty(
-      "lateGuidance",
-    );
+    expect(resetLoopControlForRewindV1("run-guidance", 1)).not.toHaveProperty("lateGuidance");
   });
 
   test("round-trips provider cursor, readiness budget, and one pending control", () => {
@@ -508,8 +496,7 @@ describe("Loop control checkpoint v1", () => {
       [
         {
           role: "user" as const,
-          content:
-            "[You stopped without a final_answer action.] explain this label",
+          content: "[You stopped without a final_answer action.] explain this label",
         },
       ],
     ]) {
@@ -659,9 +646,7 @@ describe("Loop control checkpoint v1", () => {
           { role: "user", content: fixture.marker },
           { role: "user", content: `${fixture.marker} please explain` },
         ]),
-      ).toEqual([
-        { role: "user", content: `${fixture.marker} please explain` },
-      ]);
+      ).toEqual([{ role: "user", content: `${fixture.marker} please explain` }]);
       expect(
         restoreLoopControlFlagsV1({
           runId: "run-1",
@@ -815,9 +800,7 @@ describe("Loop control checkpoint v1", () => {
       gate: "verification",
       text: marker,
     });
-    expect(
-      stripLegacyContextProjectionsV1([{ role: "user", content: marker }]),
-    ).toEqual([]);
+    expect(stripLegacyContextProjectionsV1([{ role: "user", content: marker }])).toEqual([]);
   });
 
   test("round-trips a producer-generated multiline diagnostic marker", () => {
@@ -867,8 +850,6 @@ describe("Loop control checkpoint v1", () => {
       gate: "verification",
       text: marker,
     });
-    expect(
-      stripLegacyContextProjectionsV1([{ role: "user", content: marker }]),
-    ).toEqual([]);
+    expect(stripLegacyContextProjectionsV1([{ role: "user", content: marker }])).toEqual([]);
   });
 });

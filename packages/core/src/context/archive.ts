@@ -237,9 +237,7 @@ export class ArtifactRegistry {
       turn: meta.turn,
       size: content.length,
       preview: sanitizePreview(content),
-      ...(meta.callerText
-        ? { callerText: meta.callerText.slice(0, CALLER_TEXT_CHARS) }
-        : {}),
+      ...(meta.callerText ? { callerText: meta.callerText.slice(0, CALLER_TEXT_CHARS) } : {}),
       cited: false,
       lastUsedTurn: meta.turn,
     };
@@ -323,10 +321,11 @@ export class ArtifactRegistry {
       `(?:${ARCHIVE_STUB_PATTERN.source})|(?:${ARCHIVE_BARE_STUB_PATTERN.source})`,
       "g",
     );
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null) {
+    let m: RegExpExecArray | null = re.exec(text);
+    while (m !== null) {
       n++;
       if (m.index + m[0].length >= text.length) break;
+      m = re.exec(text);
     }
     return n;
   }
@@ -362,8 +361,7 @@ export class ArtifactRegistry {
       // 无效 ID → 自动转关键词检索返回候选列表（不静默失败）；
       // 检索为空时回退最近归档条目，让模型有可选的 id
       const candidates = this.search(idOrHash);
-      const fallback =
-        candidates.length > 0 ? candidates : recentEntries(this.byId, 5);
+      const fallback = candidates.length > 0 ? candidates : recentEntries(this.byId, 5);
       return {
         ok: false,
         reason: `no archived artifact with id/hash "${idOrHash}"`,
@@ -446,16 +444,12 @@ export class ArtifactRegistry {
       .filter((e) => e.lastUsedTurn < this.turn && e.id !== skipId)
       .sort((a, b) => a.lastUsedTurn - b.lastUsedTurn);
     for (const e of sorted) {
-      if (
-        this.turnRecallChars + incoming - free <=
-        this.opts.recallPerTurnChars
-      ) {
+      if (this.turnRecallChars + incoming - free <= this.opts.recallPerTurnChars) {
         break;
       }
       // 回退：物化占用释放，条目保留（stub 仍在上下文中，id 仍可寻址）
       const charged = this.turnCharged.get(e.id) ?? 0;
-      free +=
-        charged > 0 ? charged : Math.min(e.size, this.opts.recallPerCallChars);
+      free += charged > 0 ? charged : Math.min(e.size, this.opts.recallPerCallChars);
       this.turnCharged.delete(e.id);
     }
     this.turnRecallChars = Math.max(0, this.turnRecallChars - free);
@@ -480,8 +474,8 @@ export class ArtifactRegistry {
     for (let i = 0; i < messages.length; i++) {
       const content = messages[i]?.content ?? "";
       const re = /\[archived id=\d+/g;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(content)) !== null) {
+      let m: RegExpExecArray | null = re.exec(content);
+      while (m !== null) {
         const parsed = parseArchiveStub(content.slice(m.index));
         if (parsed) {
           fullStubs.push({ msgIdx: i, id: parsed.id });
@@ -490,6 +484,7 @@ export class ArtifactRegistry {
           if (bareId) bareStubs.push({ msgIdx: i, id: bareId });
         }
         if (m.index + 12 >= content.length) break;
+        m = re.exec(content);
       }
     }
 
@@ -514,11 +509,12 @@ export class ArtifactRegistry {
       for (let i = 0; i < out.length; i++) {
         const content = out[i]?.content ?? "";
         const re = /\[archived id=\d+\]/g;
-        let m: RegExpExecArray | null;
-        while ((m = re.exec(content)) !== null) {
+        let m: RegExpExecArray | null = re.exec(content);
+        while (m !== null) {
           const bareId = parseBareArchiveStub(content.slice(m.index));
           if (bareId) allBare.push({ msgIdx: i, id: bareId });
           if (m.index + m[0].length >= content.length) break;
+          m = re.exec(content);
         }
       }
       let deleted = 0;

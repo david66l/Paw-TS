@@ -29,8 +29,7 @@ const sources = [
       {
         id: "a-change",
         kind: "semantic" as const,
-        statement:
-          "User stopped structured book clubs because deadlines removed the joy.",
+        statement: "User stopped structured book clubs because deadlines removed the joy.",
         sourceSeqs: [8],
       },
     ],
@@ -72,23 +71,17 @@ describe("memory scene navigation", () => {
   });
 
   test("routes ambiguous facts to L0/L1 and explicit reasons to L2", () => {
-    expect(routeMemoryQueryV1("What sport does the user enjoy?").route).toBe(
-      "l0_fallback",
+    expect(routeMemoryQueryV1("What sport does the user enjoy?").route).toBe("l0_fallback");
+    expect(routeMemoryQueryV1("Why did the user stop attending the book club?").route).toBe(
+      "scene_causal",
     );
     expect(
-      routeMemoryQueryV1("Why did the user stop attending the book club?")
-        .route,
-    ).toBe("scene_causal");
-    expect(
-      routeMemoryQueryV1(
-        "Recommend an activity that fits the user's preferences.",
-      ).route,
+      routeMemoryQueryV1("Recommend an activity that fits the user's preferences.").route,
     ).toBe("l0_fallback");
     expect(
-      routeMemoryQueryV1(
-        "Recommend an activity that fits the user's preferences.",
-        { allowExploratoryScenes: true },
-      ).route,
+      routeMemoryQueryV1("Recommend an activity that fits the user's preferences.", {
+        allowExploratoryScenes: true,
+      }).route,
     ).toBe("scene_exploratory");
     expect(
       routeMemoryQueryV1(

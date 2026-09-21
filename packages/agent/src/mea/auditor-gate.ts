@@ -12,10 +12,7 @@
 
 import type { RunEvent } from "@paw/core";
 import type { SubAgentLauncher } from "@paw/harness";
-import {
-  type CompletionDecision,
-  decideIncomplete,
-} from "../lifecycle/completion-policy.js";
+import { type CompletionDecision, decideIncomplete } from "../lifecycle/completion-policy.js";
 import type { TaskStateManager } from "../task-state.js";
 import type { MeaAuditReportV1 } from "./audit-report.js";
 import { runMeaAuditor } from "./auditor.js";
@@ -36,9 +33,7 @@ export function resolveMeaAuditorConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): { mode: MeaAuditorMode; maxSteps?: number; timeoutMs?: number } {
   const fromEnv = env.PAW_AGENT_MEA_AUDITOR?.trim().toLowerCase();
-  const mode =
-    config?.mode ??
-    (fromEnv === "shadow" || fromEnv === "enforce" ? fromEnv : "off");
+  const mode = config?.mode ?? (fromEnv === "shadow" || fromEnv === "enforce" ? fromEnv : "off");
   return {
     mode,
     ...(config?.maxSteps === undefined ? {} : { maxSteps: config.maxSteps }),
@@ -77,10 +72,7 @@ function auditFindingsText(report: MeaAuditReportV1): string {
     report.summary,
   ];
   if (report.unmetCriteria.length > 0) {
-    lines.push(
-      "未满足的验收标准：",
-      ...report.unmetCriteria.map((item) => `- ${item}`),
-    );
+    lines.push("未满足的验收标准：", ...report.unmetCriteria.map((item) => `- ${item}`));
   }
   lines.push(
     "请用工具实际修复上述缺口后，重新给出 final_answer。注意：你的完成声明不会作为完成依据，只有环境证据才算数。",
@@ -89,9 +81,7 @@ function auditFindingsText(report: MeaAuditReportV1): string {
 }
 
 /** 运行独立审计并给出门决策。审计通道任何故障都降级为"未通过"。 */
-export async function checkMeaAuditGate(
-  input: MeaAuditGateInput,
-): Promise<MeaAuditGateResult> {
+export async function checkMeaAuditGate(input: MeaAuditGateInput): Promise<MeaAuditGateResult> {
   const resolved = resolveMeaAuditorConfig(input.config);
   if (resolved.mode === "off") return { action: "allow" };
   if (!input.launcher) return { action: "allow" };
@@ -99,12 +89,10 @@ export async function checkMeaAuditGate(
   const snapshot = input.taskState.snapshot();
   if (snapshot.filesChanged.length === 0) return { action: "allow" };
 
-  const acceptanceCriteria = (snapshot.acceptanceCriteria ?? []).map(
-    (criterion) => ({
-      text: criterion.text,
-      status: criterion.status,
-    }),
-  );
+  const acceptanceCriteria = (snapshot.acceptanceCriteria ?? []).map((criterion) => ({
+    text: criterion.text,
+    status: criterion.status,
+  }));
   const outcome = await runMeaAuditor({
     launcher: input.launcher,
     parentRunId: input.parentRunId,
@@ -128,8 +116,7 @@ export async function checkMeaAuditGate(
   if (resolved.mode === "shadow") return { action: "allow" };
 
   const passed =
-    outcome.report.completion === "complete" &&
-    outcome.report.integrity !== "violation";
+    outcome.report.completion === "complete" && outcome.report.integrity !== "violation";
   if (passed) return { action: "allow" };
 
   const findings = auditFindingsText(outcome.report);

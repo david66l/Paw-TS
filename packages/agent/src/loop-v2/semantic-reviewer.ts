@@ -1,9 +1,6 @@
 import { parsePatch } from "diff";
 import { projectAuxiliaryGoalV1 } from "./auxiliary-goal.js";
-import type {
-  CandidateReviewPayloadV2,
-  SemanticReviewerV2,
-} from "./candidate-certification.js";
+import type { CandidateReviewPayloadV2, SemanticReviewerV2 } from "./candidate-certification.js";
 import { HOST_TASK_GOAL_REVIEW_CRITERION_ID } from "./candidate-certification.js";
 import { canonicalJson } from "./canonical.js";
 
@@ -44,10 +41,7 @@ export function createModelSemanticReviewerV2(
   options: ModelSemanticReviewerOptionsV2,
 ): SemanticReviewerV2 {
   return async (payload) => {
-    const messages = buildSemanticReviewMessagesV2(
-      payload,
-      options.maxInputChars,
-    );
+    const messages = buildSemanticReviewMessagesV2(payload, options.maxInputChars);
     const result = await options.model.complete(
       messages,
       options.signal ? { signal: options.signal } : undefined,
@@ -58,10 +52,7 @@ export function createModelSemanticReviewerV2(
     if (result.toolCalls && result.toolCalls.length > 0) {
       throw new Error("Semantic reviewer attempted to call a tool");
     }
-    if (
-      result.finishReason === "length" ||
-      result.finishReason === "max_tokens"
-    ) {
+    if (result.finishReason === "length" || result.finishReason === "max_tokens") {
       throw new Error("Semantic reviewer response was truncated");
     }
     return parseReviewerJson(result.text);
@@ -79,13 +70,9 @@ export function buildSemanticReviewMessagesV2(
     throw new Error("Semantic reviewer maxInputChars must be at least 1000");
   }
   if (
-    payload.input.criteria.some(
-      (criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID,
-    )
+    payload.input.criteria.some((criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID)
   ) {
-    throw new Error(
-      "Candidate criterion uses the reserved task-goal review id",
-    );
+    throw new Error("Candidate criterion uses the reserved task-goal review id");
   }
   const material = buildBoundedSemanticReviewMaterialV2(payload, maxInputChars);
   return [
@@ -160,9 +147,7 @@ function buildBoundedSemanticReviewMaterialV2(
     },
   };
   const goalFocus =
-    payload.goal.length > 6_000
-      ? projectAuxiliaryGoalV1(payload.goal, 6_000)
-      : undefined;
+    payload.goal.length > 6_000 ? projectAuxiliaryGoalV1(payload.goal, 6_000) : undefined;
   const mandatoryOnly = canonicalJson({
     ...mandatoryBase,
     sourceContext: { windows: [], omissions: [] },
@@ -190,9 +175,7 @@ function buildBoundedSemanticReviewMaterialV2(
     for (const window of [candidate.expanded, candidate.minimum]) {
       if (!window) continue;
       const nextWindows = [...windows, window];
-      const nextOmissions = omissions.filter(
-        (omission) => !sameSourceRangeV2(omission, candidate),
-      );
+      const nextOmissions = omissions.filter((omission) => !sameSourceRangeV2(omission, candidate));
       const next = canonicalJson({
         ...mandatoryBase,
         sourceContext: { windows: nextWindows, omissions: nextOmissions },
@@ -219,9 +202,7 @@ function buildBoundedSemanticReviewMaterialV2(
   return rendered;
 }
 
-function sourceWindowCandidatesV2(
-  payload: CandidateReviewPayloadV2,
-): readonly Readonly<{
+function sourceWindowCandidatesV2(payload: CandidateReviewPayloadV2): readonly Readonly<{
   path: string;
   contentHash: string | null;
   hunkStartLine: number;
@@ -230,27 +211,19 @@ function sourceWindowCandidatesV2(
   expanded?: ReviewSourceWindowV2;
   minimum?: ReviewSourceWindowV2;
 }>[] {
-  const snapshots = new Map(
-    payload.snapshots.map((snapshot) => [snapshot.path, snapshot]),
-  );
+  const snapshots = new Map(payload.snapshots.map((snapshot) => [snapshot.path, snapshot]));
   let files: ReturnType<typeof parsePatch>;
   try {
     files = parsePatch(payload.terminalPatch.patch);
   } catch {
     throw new Error("Candidate terminal patch is not parseable");
   }
-  const candidatesByPath = new Map<
-    string,
-    Array<ReturnType<typeof sourceWindowCandidateV2>>
-  >();
+  const candidatesByPath = new Map<string, Array<ReturnType<typeof sourceWindowCandidateV2>>>();
   for (const file of files) {
     const rawPath =
-      file.newFileName && file.newFileName !== "/dev/null"
-        ? file.newFileName
-        : file.oldFileName;
+      file.newFileName && file.newFileName !== "/dev/null" ? file.newFileName : file.oldFileName;
     const path = normalizePatchPathV2(rawPath);
-    if (!path)
-      throw new Error("Candidate terminal patch contains an invalid path");
+    if (!path) throw new Error("Candidate terminal patch contains an invalid path");
     const pathCandidates = candidatesByPath.get(path) ?? [];
     for (const hunk of file.hunks) {
       const start = Math.max(0, (hunk.newStart || 1) - 1);
@@ -258,18 +231,13 @@ function sourceWindowCandidatesV2(
         start,
         endExclusive: start + Math.max(1, hunk.newLines),
       };
-      pathCandidates.push(
-        sourceWindowCandidateV2(path, range, snapshots.get(path)),
-      );
+      pathCandidates.push(sourceWindowCandidateV2(path, range, snapshots.get(path)));
     }
     candidatesByPath.set(path, pathCandidates);
   }
   const paths = [...candidatesByPath.keys()].sort();
   const candidates: Array<ReturnType<typeof sourceWindowCandidateV2>> = [];
-  const maximumHunks = Math.max(
-    0,
-    ...paths.map((path) => candidatesByPath.get(path)?.length ?? 0),
-  );
+  const maximumHunks = Math.max(0, ...paths.map((path) => candidatesByPath.get(path)?.length ?? 0));
   // Round-robin prevents a many-hunk file from consuming the source-window
   // allowance before another changed file receives any final-state context.
   for (let index = 0; index < maximumHunks; index += 1) {
@@ -313,10 +281,7 @@ function sourceWindowCandidateV2(
   const lines = snapshot.content.replace(/\r\n?/g, "\n").split("\n");
   const minimumRange = {
     start: Math.min(range.start, Math.max(0, lines.length - 1)),
-    endExclusive: Math.min(
-      lines.length,
-      Math.max(range.start + 1, range.endExclusive),
-    ),
+    endExclusive: Math.min(lines.length, Math.max(range.start + 1, range.endExclusive)),
   };
   const expandedRange = {
     start: Math.max(0, minimumRange.start - 12),
@@ -334,10 +299,7 @@ function sourceWindowCandidateV2(
 }
 
 function renderSourceWindowV2(
-  base: Omit<
-    ReviewSourceWindowV2,
-    "windowStartLine" | "windowEndLine" | "excerpt"
-  >,
+  base: Omit<ReviewSourceWindowV2, "windowStartLine" | "windowEndLine" | "excerpt">,
   range: ReviewLineRangeV2,
   lines: readonly string[],
 ): ReviewSourceWindowV2 {

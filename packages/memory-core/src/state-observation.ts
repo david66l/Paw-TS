@@ -1,7 +1,4 @@
-import type {
-  MemoryEvidenceAuthorityV2,
-  MemoryEvidenceNotebookHitV1,
-} from "./evidence-first.js";
+import type { MemoryEvidenceAuthorityV2, MemoryEvidenceNotebookHitV1 } from "./evidence-first.js";
 
 export const PAW_MEMORY_STATE_REDUCER_VERSION_V1 =
   "paw.memory-state-reducer.v1:bitemporal-authority-aware" as const;
@@ -13,10 +10,7 @@ export type MemoryStateValueQualifierV1 =
   | "lower_bound"
   | "upper_bound"
   | "unspecified";
-export type MemoryStateEpistemicStatusV1 =
-  | "asserted"
-  | "uncertain"
-  | "hypothetical";
+export type MemoryStateEpistemicStatusV1 = "asserted" | "uncertain" | "hypothetical";
 export type MemoryStateKindV1 = "observed" | "goal" | "plan" | "forecast";
 
 export interface MemoryStateObservationV1 extends MemoryEvidenceNotebookHitV1 {
@@ -49,13 +43,9 @@ export function inferMemoryStateSemanticsV1(content: string): Readonly<{
   const valueQualifier: MemoryStateValueQualifierV1 =
     /\b(?:between|from)\b.{0,80}\b(?:and|to)\b|\d\s*[-–]\s*\d/iu.test(value)
       ? "range"
-      : /\b(?:at\s+least|no\s+less\s+than|more\s+than|over)\b|(?:至少|不少于|超过)/iu.test(
-            value,
-          )
+      : /\b(?:at\s+least|no\s+less\s+than|more\s+than|over)\b|(?:至少|不少于|超过)/iu.test(value)
         ? "lower_bound"
-        : /\b(?:at\s+most|no\s+more\s+than|less\s+than|under)\b|(?:至多|不超过|少于)/iu.test(
-              value,
-            )
+        : /\b(?:at\s+most|no\s+more\s+than|less\s+than|under)\b|(?:至多|不超过|少于)/iu.test(value)
           ? "upper_bound"
           : /\b(?:about|around|approximately|approx\.?|almost|close\s+to|nearly|roughly|circa)\b|(?:大约|约有|接近|将近|差不多|左右)/iu.test(
                 value,
@@ -65,9 +55,7 @@ export function inferMemoryStateSemanticsV1(content: string): Readonly<{
               ? "exact"
               : "unspecified";
   const epistemicStatus: MemoryStateEpistemicStatusV1 =
-    /\b(?:if|would|could\s+be|suppose|assuming|hypothetically)\b|(?:如果|假如|假设)/iu.test(
-      value,
-    )
+    /\b(?:if|would|could\s+be|suppose|assuming|hypothetically)\b|(?:如果|假如|假设)/iu.test(value)
       ? "hypothetical"
       : /\b(?:i\s+think|maybe|perhaps|probably|possibly|seems?|appears?)\b|(?:我想|可能|也许|似乎)/iu.test(
             value,
@@ -81,9 +69,7 @@ export function inferMemoryStateSemanticsV1(content: string): Readonly<{
             value,
           )
         ? "plan"
-        : /\b(?:forecast|predict|expected\s+to|will\s+probably)\b|(?:预测|预计)/iu.test(
-              value,
-            )
+        : /\b(?:forecast|predict|expected\s+to|will\s+probably)\b|(?:预测|预计)/iu.test(value)
           ? "forecast"
           : "observed";
   return Object.freeze({ valueQualifier, epistemicStatus, stateKind });
@@ -112,12 +98,7 @@ export function resolveMemoryStateObservationsV1(input: {
       continue;
     }
     const effectiveTime = observation.eventTime ?? observation.observedAt;
-    if (
-      input.mode === "as_of" &&
-      effectiveTime &&
-      asOf !== undefined &&
-      effectiveTime > asOf
-    ) {
+    if (input.mode === "as_of" && effectiveTime && asOf !== undefined && effectiveTime > asOf) {
       continue;
     }
     const key = `${observation.stateKey.trim().toLocaleLowerCase("en-US")}\0${
@@ -137,9 +118,7 @@ export function resolveMemoryStateObservationsV1(input: {
       continue;
     }
     const eligible = ordered.filter(
-      (item) =>
-        item.stateKind === "observed" &&
-        item.epistemicStatus !== "hypothetical",
+      (item) => item.stateKind === "observed" && item.epistemicStatus !== "hypothetical",
     );
     const winner = eligible[0];
     if (!winner) {
@@ -154,9 +133,7 @@ export function resolveMemoryStateObservationsV1(input: {
         item.content !== winner.content,
     );
     ambiguous.push(...tied);
-    history.push(
-      ...ordered.filter((item) => item !== winner && !tied.includes(item)),
-    );
+    history.push(...ordered.filter((item) => item !== winner && !tied.includes(item)));
   }
   current.sort(compareStateObservationV1);
   history.sort(compareStateObservationV1);
@@ -188,9 +165,7 @@ function compareStatePositionV1(
     right.eventTime ?? right.observedAt ?? "",
   );
   if (event !== 0) return event;
-  const observed = (left.observedAt ?? "").localeCompare(
-    right.observedAt ?? "",
-  );
+  const observed = (left.observedAt ?? "").localeCompare(right.observedAt ?? "");
   if (observed !== 0) return observed;
   return (
     (left.episodeOrder ?? Number.MIN_SAFE_INTEGER) -

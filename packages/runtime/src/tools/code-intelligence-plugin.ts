@@ -9,10 +9,8 @@ import {
   resolveWorkspaceRuntimePathV1,
 } from "./runtime-tool-plugin-support.js";
 
-export const CODE_INTELLIGENCE_TOOL_PLUGIN_ID_V1 =
-  "paw.code-intelligence" as const;
-export const CODE_INTELLIGENCE_TOOL_PLUGIN_VERSION_V1 =
-  "paw.code-intelligence.v1" as const;
+export const CODE_INTELLIGENCE_TOOL_PLUGIN_ID_V1 = "paw.code-intelligence" as const;
+export const CODE_INTELLIGENCE_TOOL_PLUGIN_VERSION_V1 = "paw.code-intelligence.v1" as const;
 
 /** AST symbol lookup and optional language-server navigation. */
 export function createCodeIntelligenceToolPluginV1(): RuntimeToolPluginV1 {
@@ -20,10 +18,7 @@ export function createCodeIntelligenceToolPluginV1(): RuntimeToolPluginV1 {
     schemaVersion: "paw.runtime-tool-plugin.v1",
     pluginId: CODE_INTELLIGENCE_TOOL_PLUGIN_ID_V1,
     pluginVersion: CODE_INTELLIGENCE_TOOL_PLUGIN_VERSION_V1,
-    entries: createHarnessPluginEntriesV1(
-      [SYMBOL_SEARCH, LSP],
-      classifyCodeIntelligenceTool,
-    ),
+    entries: createHarnessPluginEntriesV1([SYMBOL_SEARCH, LSP], classifyCodeIntelligenceTool),
   });
 }
 
@@ -57,11 +52,7 @@ function classifyCodeIntelligenceTool(
     }
     for (const field of ["line", "character"] as const) {
       const value = args[field] ?? 0;
-      if (
-        typeof value !== "number" ||
-        !Number.isSafeInteger(value) ||
-        value < 0
-      ) {
+      if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
         throw new Error(`lsp ${field} must be a non-negative safe integer`);
       }
     }

@@ -73,12 +73,7 @@ export const MCP_PROXY = "workspace.use_mcp" as const;
  * 桌面端传 allowedTools: null 可恢复全量工具 schema。
  */
 /** Model-originated executable tools in the slim coding loop. */
-export const CORE_MODEL_EXECUTABLE_TOOLS = [
-  SHELL,
-  READ,
-  EDIT,
-  UNDO_LAST_EDIT,
-] as const;
+export const CORE_MODEL_EXECUTABLE_TOOLS = [SHELL, READ, EDIT, UNDO_LAST_EDIT] as const;
 
 /** Structured control actions parsed by the agent, not MCP tool definitions. */
 export const CORE_MODEL_ACTIONS = [
@@ -95,10 +90,7 @@ export const CORE_MODEL_ACTIONS = [
  * final_answer/ask_user are agent control actions and never enter a tool
  * allowlist or provider tool schema.
  */
-export const CORE_MODEL_TOOLS = [
-  ...CORE_MODEL_EXECUTABLE_TOOLS,
-  ...CORE_MODEL_ACTIONS,
-] as const;
+export const CORE_MODEL_TOOLS = [...CORE_MODEL_EXECUTABLE_TOOLS, ...CORE_MODEL_ACTIONS] as const;
 
 const BUILTIN_TOOLS = [
   READ,
@@ -198,9 +190,7 @@ export function listToolNames(mcp?: McpClientManager): readonly ToolName[] {
 }
 
 /** Map from sanitized function names back to paw-ts tool names. */
-export function toolNameReverseMap(
-  mcp?: McpClientManager,
-): Map<string, string> {
+export function toolNameReverseMap(mcp?: McpClientManager): Map<string, string> {
   const map = new Map<string, string>();
   for (const t of listToolNames(mcp)) {
     map.set(t.replace(/\./g, "_"), t);
@@ -249,13 +239,11 @@ export function toolDefinitions(
         action: {
           type: "string",
           enum: ["search", "call"],
-          description:
-            "Search the MCP catalog or call one exact discovered tool",
+          description: "Search the MCP catalog or call one exact discovered tool",
         },
         query: {
           type: "string",
-          description:
-            "Search terms for action=search. Empty lists the first bounded page.",
+          description: "Search terms for action=search. Empty lists the first bounded page.",
         },
         tool: {
           type: "string",
@@ -282,8 +270,7 @@ export function toolDefinitions(
         path: { type: "string", description: "Relative path to the file" },
         offset: {
           type: "integer",
-          description:
-            "Zero-based line offset; default 0 starts at the first line",
+          description: "Zero-based line offset; default 0 starts at the first line",
         },
         limit: {
           type: "integer",
@@ -344,8 +331,7 @@ export function toolDefinitions(
         path: { type: "string", description: "Relative path to the file" },
         old_string: {
           type: "string",
-          description:
-            "Text to replace, or empty string only when creating a missing file",
+          description: "Text to replace, or empty string only when creating a missing file",
         },
         new_string: { type: "string", description: "Replacement text" },
         replace_all: {
@@ -424,11 +410,7 @@ export function toolDefinitions(
       },
       ["command"],
     ),
-    fn(
-      JOB_LIST,
-      "List this run's managed background jobs and lifecycle states.",
-      {},
-    ),
+    fn(JOB_LIST, "List this run's managed background jobs and lifecycle states.", {}),
     fn(
       JOB_READ,
       "Read and consume new output from one managed background job. Also returns its current lifecycle state.",
@@ -520,8 +502,7 @@ export function toolDefinitions(
             properties: {
               text: {
                 type: "string",
-                description:
-                  "Concise observable behavior or regression condition",
+                description: "Concise observable behavior or regression condition",
               },
               source: {
                 type: "string",
@@ -529,8 +510,7 @@ export function toolDefinitions(
               },
               ref: {
                 type: "string",
-                description:
-                  "Optional user message, file, test, or command reference",
+                description: "Optional user message, file, test, or command reference",
               },
             },
             required: ["text", "source"],
@@ -538,8 +518,7 @@ export function toolDefinitions(
         },
         updates: {
           type: "array",
-          description:
-            "Status changes for existing criterion ids from Current State.",
+          description: "Status changes for existing criterion ids from Current State.",
           items: {
             type: "object",
             additionalProperties: false,
@@ -551,8 +530,7 @@ export function toolDefinitions(
               },
               evidence: {
                 type: "string",
-                description:
-                  "Concrete current-revision evidence; required for satisfied",
+                description: "Concrete current-revision evidence; required for satisfied",
               },
             },
             required: ["id", "status"],
@@ -725,8 +703,7 @@ export function toolDefinitions(
       {
         name: {
           type: "string",
-          description:
-            "Unique name for this memory entry (e.g. 'api-auth-pattern')",
+          description: "Unique name for this memory entry (e.g. 'api-auth-pattern')",
         },
         content: {
           type: "string",

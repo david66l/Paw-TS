@@ -69,10 +69,7 @@ export interface ShellSessionRunResult {
 export interface ShellSession {
   readonly key: string;
   readonly backend: "local" | "docker";
-  run(
-    command: string,
-    options?: ShellSessionRunOptions,
-  ): Promise<ShellSessionRunResult>;
+  run(command: string, options?: ShellSessionRunOptions): Promise<ShellSessionRunResult>;
   dispose(): Promise<void>;
 }
 
@@ -102,10 +99,7 @@ abstract class PersistentShellSessionBase implements ShellSession {
     protected readonly initialCwd: string,
   ) {}
 
-  async run(
-    command: string,
-    options: ShellSessionRunOptions = {},
-  ): Promise<ShellSessionRunResult> {
+  async run(command: string, options: ShellSessionRunOptions = {}): Promise<ShellSessionRunResult> {
     const invocation = this.queue.then(
       () => this.runSerialized(command, options),
       () => this.runSerialized(command, options),
@@ -124,9 +118,7 @@ abstract class PersistentShellSessionBase implements ShellSession {
   }
 
   protected abstract spawnInternals(): LiveSessionInternals;
-  protected abstract killInternals(
-    internals: LiveSessionInternals,
-  ): Promise<void>;
+  protected abstract killInternals(internals: LiveSessionInternals): Promise<void>;
   protected abstract disposeBackendExtra(): Promise<void>;
   /** 后端专属的 cwd 前缀（local 直接 cd 宿主路径；docker 已是容器路径）。 */
   protected abstract cwdPrefix(cwd: string): string;
@@ -141,12 +133,16 @@ abstract class PersistentShellSessionBase implements ShellSession {
     const recycled = this.internals === undefined;
     let internals: LiveSessionInternals;
     try {
-      internals = this.internals ?? (this.internals = this.spawnInternals());
+      const existing = this.internals;
+      if (existing !== undefined) {
+        internals = existing;
+      } else {
+        internals = this.spawnInternals();
+        this.internals = internals;
+      }
     } catch (error) {
       this.internals = undefined;
-      return deadSessionResult(
-        error instanceof Error ? error.message : String(error),
-      );
+      return deadSessionResult(error instanceof Error ? error.message : String(error));
     }
 
     const token = randomBytes(9).toString("hex");
@@ -173,15 +169,11 @@ abstract class PersistentShellSessionBase implements ShellSession {
         resolve(result);
       };
 
-      const settleFromOutput = (
-        extra?: Partial<ShellSessionRunResult>,
-      ): void => {
+      const settleFromOutput = (extra?: Partial<ShellSessionRunResult>): void => {
         const text = stdoutText();
         const match = text.match(new RegExp(`${marker}(-?\\d+)__`));
         if (!match) return;
-        const stdout = text
-          .slice(0, Math.max(0, match.index ?? 0))
-          .replace(/\r?\n$/, "");
+        const stdout = text.slice(0, Math.max(0, match.index ?? 0)).replace(/\r?\n$/, "");
         finish({
           exitCode: Number(match[1]),
           stdout,
@@ -299,9 +291,7 @@ class LocalShellSession extends PersistentShellSessionBase {
     return { proc, stdout: [], stderr: [] };
   }
 
-  protected async killInternals(
-    internals: LiveSessionInternals,
-  ): Promise<void> {
+  protected async killInternals(internals: LiveSessionInternals): Promise<void> {
     killLocalProcessTree(internals.proc.pid ?? 0);
   }
 
@@ -342,9 +332,7 @@ class DockerShellSession extends PersistentShellSessionBase {
     return { proc, stdout: [], stderr: [] };
   }
 
-  protected async killInternals(
-    internals: LiveSessionInternals,
-  ): Promise<void> {
+  protected async killInternals(internals: LiveSessionInternals): Promise<void> {
     killLocalProcessTree(internals.proc.pid ?? 0);
     spawnSync(this.spec.runtime, ["rm", "-f", this.spec.containerName], {
       encoding: "utf8",
@@ -366,18 +354,12 @@ const liveSessions = new Map<string, Promise<ShellSession>>();
  * 按 key 获取（或创建）持久会话。同 key 并发调用只会创建一个会话。
  * 调用方负责在 run 生命周期结束时 {@link ShellSession.dispose}。
  */
-export function acquireShellSession(
-  config: ShellSessionFactoryConfig,
-): Promise<ShellSession> {
+export function acquireShellSession(config: ShellSessionFactoryConfig): Promise<ShellSession> {
   const existing = liveSessions.get(config.key);
   if (existing) return existing;
   const created = (async () => {
     if (config.sandbox) {
-      return new DockerShellSession(
-        config.key,
-        path.resolve(config.cwd),
-        config.sandbox,
-      );
+      return new DockerShellSession(config.key, path.resolve(config.cwd), config.sandbox);
     }
     return new LocalShellSession(config.key, path.resolve(config.cwd));
   })();
@@ -399,10 +381,7 @@ function clampTimeout(ms: number | undefined): number {
   if (ms === undefined || !Number.isFinite(ms)) {
     return DEFAULT_COMMAND_TIMEOUT_MS;
   }
-  return Math.min(
-    Math.max(Math.floor(ms), MIN_COMMAND_TIMEOUT_MS),
-    MAX_COMMAND_TIMEOUT_MS,
-  );
+  return Math.min(Math.max(Math.floor(ms), MIN_COMMAND_TIMEOUT_MS), MAX_COMMAND_TIMEOUT_MS);
 }
 
 function deadSessionResult(error: string): ShellSessionRunResult {
@@ -425,11 +404,11 @@ function posixSingleQuoted(value: string): string {
 function killLocalProcessTree(pid: number): void {
   if (!Number.isSafeInteger(pid) || pid <= 0) return;
   if (process.platform === "win32") {
-    spawnSync(
-      process.env.ComSpec ?? "cmd.exe",
-      ["/d", "/s", "/c", `taskkill /PID ${pid} /T /F`],
-      { windowsHide: true, stdio: "ignore", timeout: 5_000 },
-    );
+    spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `taskkill /PID ${pid} /T /F`], {
+      windowsHide: true,
+      stdio: "ignore",
+      timeout: 5_000,
+    });
     return;
   }
   try {

@@ -20,15 +20,12 @@ export function toDurableToolSettlementV1(
   settlement: ToolSettlement<ToolRunResult>,
   encoder: DurableJsonEncoderV1,
 ): Omit<ToolSettledFactV1, "type"> {
-  const evidence =
-    settlement.status === "success" ? settlement.result : settlement.evidence;
+  const evidence = settlement.status === "success" ? settlement.result : settlement.evidence;
   const summary = evidence?.summary ?? settlementSummary(settlement);
   const payload =
     evidence === undefined
       ? undefined
-      : encoder.encode(
-          toJsonValue(evidence.payload, "tool payload", new Set()),
-        );
+      : encoder.encode(toJsonValue(evidence.payload, "tool payload", new Set()));
   const status = canonicalStatus(settlement.status);
   const errorCode = canonicalErrorCode(settlement);
   return {
@@ -59,9 +56,7 @@ function canonicalStatus(
   }
 }
 
-function canonicalErrorCode(
-  settlement: ToolSettlement<ToolRunResult>,
-): string | undefined {
+function canonicalErrorCode(settlement: ToolSettlement<ToolRunResult>): string | undefined {
   switch (settlement.status) {
     case "success":
       return undefined;
@@ -91,21 +86,11 @@ function settlementSummary(settlement: ToolSettlement<ToolRunResult>): string {
 
 function normalizeErrorCode(value: string, fallback: string): string {
   const normalized = value.trim().replace(/[^A-Za-z0-9._:@/-]/g, "_");
-  return normalized && /^[A-Za-z0-9]/.test(normalized)
-    ? normalized.slice(0, 512)
-    : fallback;
+  return normalized && /^[A-Za-z0-9]/.test(normalized) ? normalized.slice(0, 512) : fallback;
 }
 
-function toJsonValue(
-  value: unknown,
-  field: string,
-  seen: Set<object>,
-): JsonValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+function toJsonValue(value: unknown, field: string, seen: Set<object>): JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
   if (typeof value === "number") {
@@ -119,9 +104,7 @@ function toJsonValue(
   seen.add(value);
   try {
     if (Array.isArray(value)) {
-      return value.map((item, index) =>
-        toJsonValue(item, `${field}[${index}]`, seen),
-      );
+      return value.map((item, index) => toJsonValue(item, `${field}[${index}]`, seen));
     }
     const out: Record<string, JsonValue> = {};
     for (const [key, item] of Object.entries(value)) {

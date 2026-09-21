@@ -1,17 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import {
-  type ToolRunResult,
-  toolDefinitions,
-  validateToolArguments,
-} from "@paw/harness";
+import { type ToolRunResult, toolDefinitions, validateToolArguments } from "@paw/harness";
 import { checkWorkspacePath } from "@paw/workspace";
 
-import type {
-  RuntimeToolPluginEntryV1,
-  ToolClassificationV1,
-} from "./registry.js";
+import type { RuntimeToolPluginEntryV1, ToolClassificationV1 } from "./registry.js";
 
 export function createHarnessPluginEntriesV1(
   internalNames: readonly string[],
@@ -22,19 +15,14 @@ export function createHarnessPluginEntriesV1(
   ) => ToolClassificationV1,
 ): readonly RuntimeToolPluginEntryV1[] {
   const definitions = new Map(
-    toolDefinitions().map((definition) => [
-      definition.function.name,
-      definition,
-    ]),
+    toolDefinitions().map((definition) => [definition.function.name, definition]),
   );
   return Object.freeze(
     internalNames.map((internalName) => {
       const providerName = internalName.replace(/\./g, "_");
       const definition = definitions.get(providerName);
       if (!definition) {
-        throw new Error(
-          `Harness schema is missing for plugin tool ${internalName}`,
-        );
+        throw new Error(`Harness schema is missing for plugin tool ${internalName}`);
       }
       return Object.freeze({
         internalName,
@@ -44,10 +32,8 @@ export function createHarnessPluginEntriesV1(
         resultPolicy: "bounded_json",
         executionKind: "harness",
         validate: (args: unknown) => validateHarnessArgs(internalName, args),
-        classify: (
-          args: Readonly<Record<string, unknown>>,
-          workspaceRoot: string,
-        ) => classify(internalName, args, workspaceRoot),
+        classify: (args: Readonly<Record<string, unknown>>, workspaceRoot: string) =>
+          classify(internalName, args, workspaceRoot),
       } satisfies RuntimeToolPluginEntryV1);
     }),
   );
@@ -61,8 +47,7 @@ export function canonicalRuntimeResourcePathV1(input: string): string {
   } catch {
     const parent = path.dirname(absolute);
     try {
-      const realParent =
-        fs.realpathSync.native?.(parent) ?? fs.realpathSync(parent);
+      const realParent = fs.realpathSync.native?.(parent) ?? fs.realpathSync(parent);
       canonical = path.join(realParent, path.basename(absolute));
     } catch {
       canonical = absolute;
@@ -72,10 +57,7 @@ export function canonicalRuntimeResourcePathV1(input: string): string {
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
-export function resolveWorkspaceRuntimePathV1(
-  workspaceRoot: string,
-  candidate: string,
-): string {
+export function resolveWorkspaceRuntimePathV1(workspaceRoot: string, candidate: string): string {
   const decision = checkWorkspacePath(workspaceRoot, candidate);
   if (!decision.allowed) throw new Error(decision.reason);
   return canonicalRuntimeResourcePathV1(decision.resolvedPath);

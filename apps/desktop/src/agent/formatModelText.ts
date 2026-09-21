@@ -66,12 +66,12 @@ function extractJsonObject(text: string): string | null {
   if (start < 0) return null;
   let depth = 0;
   let inString = false;
-  let escape = false;
+  let isEscaped = false;
   for (let i = start; i < text.length; i++) {
     const ch = text[i]!;
     if (inString) {
-      if (escape) escape = false;
-      else if (ch === "\\") escape = true;
+      if (isEscaped) isEscaped = false;
+      else if (ch === "\\") isEscaped = true;
       else if (ch === '"') inString = false;
       continue;
     }
@@ -95,18 +95,18 @@ function extractJsonObject(text: string): string | null {
 function repairJsonStringControlChars(input: string): string {
   let out = "";
   let inString = false;
-  let escape = false;
+  let isEscaped = false;
   for (let i = 0; i < input.length; i++) {
     const ch = input[i]!;
     if (inString) {
-      if (escape) {
+      if (isEscaped) {
         out += ch;
-        escape = false;
+        isEscaped = false;
         continue;
       }
       if (ch === "\\") {
         out += ch;
-        escape = true;
+        isEscaped = true;
         continue;
       }
       if (ch === '"') {
@@ -184,10 +184,7 @@ function parseActionLikeObject(blob: string): Record<string, unknown> | null {
     /* repair then retry */
   }
   try {
-    return JSON.parse(repairJsonStringControlChars(blob)) as Record<
-      string,
-      unknown
-    >;
+    return JSON.parse(repairJsonStringControlChars(blob)) as Record<string, unknown>;
   } catch {
     /* field-level fallback */
   }
@@ -263,11 +260,7 @@ export function formatModelOutputForUi(
         if (!summary && !preface) {
           return { content: null, thinking };
         }
-        const content = preface
-          ? summary
-            ? `${preface}\n\n${summary}`
-            : preface
-          : summary;
+        const content = preface ? (summary ? `${preface}\n\n${summary}` : preface) : summary;
         return { content, thinking };
       }
       if (typeof obj.tool === "string") {
@@ -289,10 +282,7 @@ export function formatModelOutputForUi(
   }
 
   // 兜底：整段看起来像泄漏的 write_file 载荷（格式化失败时）
-  if (
-    /"tool"\s*:\s*"workspace\.(write_file|edit_file)"/.test(text) &&
-    /"content"\s*:/.test(text)
-  ) {
+  if (/"tool"\s*:\s*"workspace\.(write_file|edit_file)"/.test(text) && /"content"\s*:/.test(text)) {
     const idx = text.indexOf("{");
     const preface = idx >= 0 ? text.slice(0, idx).trim() : "";
     return { content: preface.length > 0 ? preface : null, thinking };

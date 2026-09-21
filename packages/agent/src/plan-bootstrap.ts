@@ -82,10 +82,7 @@ export function planItemsFromStepTexts(steps: readonly string[]): PlanItem[] {
 /** 将全部未完成项标为 completed（任务结束 UI 用） */
 export function markPlanItemsCompleted(items: PlanItem[]): PlanItem[] {
   return items.map((item) => {
-    if (
-      item.status === PlanItemStatus.COMPLETED ||
-      item.status === PlanItemStatus.SKIPPED
-    ) {
+    if (item.status === PlanItemStatus.COMPLETED || item.status === PlanItemStatus.SKIPPED) {
       return item;
     }
     return { ...item, status: PlanItemStatus.COMPLETED };

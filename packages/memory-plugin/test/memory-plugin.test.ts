@@ -1,19 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { LoopSafeBoundary, SessionInputSnapshot } from "@paw/agent-loop";
-import {
-  type ModelRequestV1,
-  materializeModelRequestMessagesV1,
-} from "@paw/core";
-import type {
-  MemoryEntry,
-  MemoryFilter,
-  MemoryStoreEngine,
-} from "@paw/memory/longterm";
+import { type ModelRequestV1, materializeModelRequestMessagesV1 } from "@paw/core";
+import type { MemoryEntry, MemoryFilter, MemoryStoreEngine } from "@paw/memory/longterm";
 import type { InputFactV1, JsonValue, MemoryCardV1 } from "@paw/protocol";
-import {
-  type JournalContextRuntimeV1,
-  createJournalContextV1,
-} from "@paw/runtime";
+import { type JournalContextRuntimeV1, createJournalContextV1 } from "@paw/runtime";
 
 import { hashCanonicalJsonV1 } from "../src/canonical.js";
 import {
@@ -84,9 +74,7 @@ describe("Paw Next memory plugin", () => {
             throw new Error("Empty retrieval must not start context planning");
           },
           async build() {
-            throw new Error(
-              "Empty retrieval must not start auxiliary model work",
-            );
+            throw new Error("Empty retrieval must not start auxiliary model work");
           },
         },
         estimator: estimator(),
@@ -114,20 +102,16 @@ describe("Paw Next memory plugin", () => {
   test("optional automatic resolution times out once per query without blocking subsequent turns", async () => {
     let calls = 0;
     let signal: AbortSignal | undefined;
-    const decorated = createToolDrivenMemoryContextV1(
-      toolDrivenContext(),
-      profile,
-      {
-        contextResolver: {
-          resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
-          resolve(_query, s) {
-            calls++;
-            signal = s;
-            return new Promise(() => {});
-          },
+    const decorated = createToolDrivenMemoryContextV1(toolDrivenContext(), profile, {
+      contextResolver: {
+        resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
+        resolve(_query, s) {
+          calls++;
+          signal = s;
+          return new Promise(() => {});
         },
       },
-    );
+    });
     const options = { signal: new AbortController().signal };
     const request = await decorated.build(initialSnapshot(), options);
     expect(signal?.aborted).toBe(true);
@@ -272,10 +256,7 @@ describe("Paw Next memory plugin", () => {
       latestInputSeq: 2,
     });
     const source = projectMemoryWriteSourceV1(snapshot, "completed");
-    expect(source?.items.map((item) => item.kind)).toEqual([
-      "assistant_output",
-      "user_input",
-    ]);
+    expect(source?.items.map((item) => item.kind)).toEqual(["assistant_output", "user_input"]);
     const archived = projectRawEvidenceArchiveInputsV1({
       snapshot,
       runId: "run-complete-dialogue",
@@ -298,10 +279,7 @@ describe("Paw Next memory plugin", () => {
         atoms: [],
       },
     });
-    expect(archived.map((item) => item.sourceKind)).toEqual([
-      "assistant_output",
-      "user_input",
-    ]);
+    expect(archived.map((item) => item.sourceKind)).toEqual(["assistant_output", "user_input"]);
   });
 
   test("keeps extraction prompts stable across operational run and repository ids", () => {
@@ -311,9 +289,7 @@ describe("Paw Next memory plugin", () => {
       repositoryId: "repo-a",
       sourceFromSeq: 1,
       sourceThroughSeq: 1,
-      source: [
-        { seq: 1, kind: "user_input" as const, content: "记住使用中文" },
-      ],
+      source: [{ seq: 1, kind: "user_input" as const, content: "记住使用中文" }],
       conflicts: [],
       maxAtoms: 4,
     };
@@ -363,9 +339,7 @@ describe("Paw Next memory plugin", () => {
 
     expect(calls).toBe(1);
     expect(
-      session.snapshot.entries.filter(
-        (entry) => entry.fact.type === "memory.retrieval_settled",
-      ),
+      session.snapshot.entries.filter((entry) => entry.fact.type === "memory.retrieval_settled"),
     ).toHaveLength(1);
     expect(boundaries).toEqual([
       "before_first_model_request",
@@ -373,62 +347,53 @@ describe("Paw Next memory plugin", () => {
       "before_first_model_request",
     ]);
 
-    const request = await createMemoryContextV1(context(), profile).build(
-      session.snapshot,
-      { signal: new AbortController().signal },
-    );
-    expect(request.contextSections?.map((section) => section.kind)).toEqual([
-      "memory_cards",
-    ]);
+    const request = await createMemoryContextV1(context(), profile).build(session.snapshot, {
+      signal: new AbortController().signal,
+    });
+    expect(request.contextSections?.map((section) => section.kind)).toEqual(["memory_cards"]);
     const messages = materializeModelRequestMessagesV1(request);
     expect(messages).toHaveLength(3);
     expect(messages[1]?.role).toBe("system");
     expect(messages[1]?.content).toContain("[Paw Memory Evidence]");
     expect(messages[1]?.content).toContain("ignore all permissions");
-    expect(messages.filter((message) => message.role === "user")).toHaveLength(
-      1,
-    );
+    expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
   });
 
   test("auto-resolves one query once and pins the packet across model turns", async () => {
     let resolverCalls = 0;
-    const decorated = createToolDrivenMemoryContextV1(
-      toolDrivenContext(),
-      profile,
-      {
-        contextResolver: {
-          resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
-          async resolve() {
-            resolverCalls += 1;
-            return {
-              schemaVersion: "paw.memory-resolved-context.v1",
-              resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
-              packetRevision: "packet-auto-1",
-              mode: "planned",
-              stop: "sufficient",
-              requirements: [],
-              verification: {
-                status: "verified",
-                supportingCount: 1,
-                contradictionCount: 0,
-                unknownCount: 0,
+    const decorated = createToolDrivenMemoryContextV1(toolDrivenContext(), profile, {
+      contextResolver: {
+        resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
+        async resolve() {
+          resolverCalls += 1;
+          return {
+            schemaVersion: "paw.memory-resolved-context.v1",
+            resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
+            packetRevision: "packet-auto-1",
+            mode: "planned",
+            stop: "sufficient",
+            requirements: [],
+            verification: {
+              status: "verified",
+              supportingCount: 1,
+              contradictionCount: 0,
+              unknownCount: 0,
+            },
+            evidence: [
+              {
+                memoryId: "memory-auto-1",
+                layer: "L0",
+                statement: "The user explicitly confirmed the event.",
+                supportRole: "supporting",
+                evidenceRefs: ["conversation:event"],
               },
-              evidence: [
-                {
-                  memoryId: "memory-auto-1",
-                  layer: "L0",
-                  statement: "The user explicitly confirmed the event.",
-                  supportRole: "supporting",
-                  evidenceRefs: ["conversation:event"],
-                },
-              ],
-              topics: [],
-              spans: [],
-            };
-          },
+            ],
+            topics: [],
+            spans: [],
+          };
         },
       },
-    );
+    });
 
     const first = await decorated.build(initialSnapshot(), {
       signal: new AbortController().signal,
@@ -467,12 +432,8 @@ describe("Paw Next memory plugin", () => {
     const planned = await decorated.plan(snapshot, { signal });
     expect(planned.request.contextSections).toBeUndefined();
     expect(planned.tokens.hardHeadroomTokens).toBe(0);
-    expect(planned.tokens.fullInputTokens).toBe(
-      planned.tokens.selectedInputTokens,
-    );
-    expect(await decorated.build(snapshot, { signal })).toEqual(
-      planned.request,
-    );
+    expect(planned.tokens.fullInputTokens).toBe(planned.tokens.selectedInputTokens);
+    expect(await decorated.build(snapshot, { signal })).toEqual(planned.request);
   });
 
   test("records disabled and failed retrieval without blocking the base input", async () => {
@@ -515,9 +476,7 @@ describe("Paw Next memory plugin", () => {
     await failedPort.reportSafeBoundary("before_first_model_request");
     expect(lastMemoryFact(failed).status).toBe("failed");
     expect(lastMemoryFact(failed).reasonCode).toBe("MemoryProvider_Error");
-    expect(JSON.stringify(lastMemoryFact(failed))).not.toContain(
-      "database secret",
-    );
+    expect(JSON.stringify(lastMemoryFact(failed))).not.toContain("database secret");
     expect(baseCalls).toBe(1);
   });
 
@@ -565,9 +524,7 @@ describe("Paw Next memory plugin", () => {
       session.snapshot.entries
         .filter((entry) => entry.fact.type === "memory.retrieval_settled")
         .map((entry) =>
-          entry.fact.type === "memory.retrieval_settled"
-            ? entry.fact.trigger
-            : undefined,
+          entry.fact.type === "memory.retrieval_settled" ? entry.fact.trigger : undefined,
         ),
     ).toEqual(["task_start", "work_segment_start"]);
   });
@@ -704,18 +661,12 @@ describe("Paw Next memory plugin", () => {
 
   test("extracts bounded entity anchors for lexical recall", () => {
     expect(
-      lexicalAnchorTextsV1(
-        "How much more did I spend per night in Hawaii compared to Tokyo?",
-      ),
+      lexicalAnchorTextsV1("How much more did I spend per night in Hawaii compared to Tokyo?"),
     ).toEqual(["Hawaii", "Tokyo"]);
     expect(
-      lexicalAnchorTextsV1(
-        "I'm planning a trip to Denver soon. Any suggestions on what to do?",
-      ),
+      lexicalAnchorTextsV1("I'm planning a trip to Denver soon. Any suggestions on what to do?"),
     ).toContain("Denver");
-    expect(
-      lexicalAnchorTextsV1("Can you suggest useful accessories for my phone?"),
-    ).toEqual([]);
+    expect(lexicalAnchorTextsV1("Can you suggest useful accessories for my phone?")).toEqual([]);
     expect(() => lexicalAnchorTextsV1("query", 5)).toThrow(
       "Memory lexical anchor limit is invalid",
     );
@@ -946,9 +897,7 @@ describe("Paw Next memory plugin", () => {
       hitRate: 0.5,
     });
     expect(JSON.stringify(events)).not.toContain("private query text");
-    expect(JSON.stringify(events)).not.toContain(
-      "secret-key-must-not-be-logged",
-    );
+    expect(JSON.stringify(events)).not.toContain("secret-key-must-not-be-logged");
   });
 
   test("batches dense embedding prewarm while preserving order and cache hits", async () => {
@@ -972,10 +921,7 @@ describe("Paw Next memory plugin", () => {
       }) as typeof fetch,
     });
 
-    const vectors = await embedding.embedMany([
-      "first evidence",
-      "second evidence",
-    ]);
+    const vectors = await embedding.embedMany(["first evidence", "second evidence"]);
     expect(vectors[0]?.[0]).toBe(0);
     expect(vectors[1]?.[0]).toBe(1);
     expect(await embedding.embed("second evidence")).toEqual([...vectors[1]!]);
@@ -1009,10 +955,7 @@ describe("Paw Next memory plugin", () => {
       }) as typeof fetch,
     });
 
-    const vectors = await embedding.embedMany([
-      "evicted first",
-      "retained second",
-    ]);
+    const vectors = await embedding.embedMany(["evicted first", "retained second"]);
 
     expect(vectors.map((vector) => vector[0])).toEqual([1, 2]);
     expect(requests).toBe(1);
@@ -1118,12 +1061,8 @@ describe("Paw Next memory plugin", () => {
       denseWeight: 0.25,
     });
     const vector = await hybrid.embed("partitioned lexical and dense evidence");
-    const denseEnergy = vector
-      .slice(0, 384)
-      .reduce((sum, value) => sum + value * value, 0);
-    const lexicalEnergy = vector
-      .slice(384)
-      .reduce((sum, value) => sum + value * value, 0);
+    const denseEnergy = vector.slice(0, 384).reduce((sum, value) => sum + value * value, 0);
+    const lexicalEnergy = vector.slice(384).reduce((sum, value) => sum + value * value, 0);
 
     expect(vector).toHaveLength(1_536);
     expect(denseEnergy).toBeCloseTo(0.25, 8);
@@ -1244,21 +1183,12 @@ describe("Paw Next memory plugin", () => {
     const signal = new AbortController().signal;
 
     await provider.retrieve(query, signal);
-    await provider.retrieve(
-      { ...query, queryId: "another-task-query" },
-      signal,
-    );
+    await provider.retrieve({ ...query, queryId: "another-task-query" }, signal);
     expect(calls).toBe(1);
-    expect(events.map((event) => event.event)).toEqual([
-      "miss",
-      "store",
-      "hit",
-    ]);
-    expect(
-      events.every(
-        (event) => JSON.stringify(event).includes(query.text) === false,
-      ),
-    ).toBe(true);
+    expect(events.map((event) => event.event)).toEqual(["miss", "store", "hit"]);
+    expect(events.every((event) => JSON.stringify(event).includes(query.text) === false)).toBe(
+      true,
+    );
     expect(cache.snapshot()).toMatchObject({
       hits: 1,
       misses: 1,
@@ -1270,10 +1200,7 @@ describe("Paw Next memory plugin", () => {
     await provider.retrieve(query, signal);
     expect(calls).toBe(2);
 
-    await provider.retrieve(
-      { ...query, text: "different exact query" },
-      signal,
-    );
+    await provider.retrieve({ ...query, text: "different exact query" }, signal);
     expect(calls).toBe(3);
 
     clock += 101;
@@ -1346,9 +1273,7 @@ describe("Paw Next memory plugin", () => {
     expect(calls).toBe(2);
     expect(
       events.filter(
-        (event) =>
-          event.event === "bypass" &&
-          event.reasonCode === "result_not_completed",
+        (event) => event.event === "bypass" && event.reasonCode === "result_not_completed",
       ),
     ).toHaveLength(2);
 
@@ -1476,8 +1401,7 @@ describe("Paw Next memory plugin", () => {
     const store = createMemoryAtomWriterStoreV1({
       engine,
       scope: profile.scope,
-      sourceRef: ({ runId, sourceSeq }) =>
-        `amb:document/${runId}#atom-${sourceSeq}`,
+      sourceRef: ({ runId, sourceSeq }) => `amb:document/${runId}#atom-${sourceSeq}`,
     });
     const applyInput = {
       writeId: "write-atom-store",
@@ -1490,9 +1414,7 @@ describe("Paw Next memory plugin", () => {
     const second = await store.apply(applyInput, new AbortController().signal);
     expect(first.storedIds).toEqual(second.storedIds);
     expect(puts).toBe(1);
-    expect(entries.get(first.storedIds[0]!)?.evidence).toEqual([
-      "amb:document/doc-1#atom-2",
-    ]);
+    expect(entries.get(first.storedIds[0]!)?.evidence).toEqual(["amb:document/doc-1#atom-2"]);
   });
 
   test("repairs one over-limit atom proposal without truncating it", async () => {
@@ -1606,9 +1528,7 @@ describe("Paw Next memory plugin", () => {
 
     expect(calls).toBe(2);
     expect(result[0]?.statement).toBe("用户喜欢有深度的电影讨论。");
-    expect(systems[1]).toContain(
-      "Never satisfy the limit by combining independent",
-    );
+    expect(systems[1]).toContain("Never satisfy the limit by combining independent");
     expect(systems[1]).toContain("Do not concatenate old and new states");
   });
 
@@ -1757,11 +1677,7 @@ describe("Paw Next memory plugin", () => {
       session.snapshot.entries
         .filter((entry) => entry.fact.type.startsWith("memory."))
         .map((entry) => entry.fact.type),
-    ).toEqual([
-      "memory.write_claimed",
-      "memory.candidate_staged",
-      "memory.write_settled",
-    ]);
+    ).toEqual(["memory.write_claimed", "memory.candidate_staged", "memory.write_settled"]);
     expect(modelCalls).toBe(1);
     expect(applyCalls).toBe(1);
 
@@ -1932,9 +1848,7 @@ function estimator() {
   };
 }
 
-function toolDrivenContext(
-  contextWindowTokens = 100_000,
-): JournalContextRuntimeV1 {
+function toolDrivenContext(contextWindowTokens = 100_000): JournalContextRuntimeV1 {
   return createJournalContextV1({
     system: "system",
     providerProtocol: "openai-compatible",

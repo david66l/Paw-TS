@@ -8,10 +8,8 @@ import {
   resolveWorkspaceRuntimePathV1,
 } from "./runtime-tool-plugin-support.js";
 
-export const WORKSPACE_MUTATION_TOOL_PLUGIN_ID_V1 =
-  "paw.workspace-mutation" as const;
-export const WORKSPACE_MUTATION_TOOL_PLUGIN_VERSION_V1 =
-  "paw.workspace-mutation.v1" as const;
+export const WORKSPACE_MUTATION_TOOL_PLUGIN_ID_V1 = "paw.workspace-mutation" as const;
+export const WORKSPACE_MUTATION_TOOL_PLUGIN_VERSION_V1 = "paw.workspace-mutation.v1" as const;
 
 const MAX_PATCH_BYTES_V1 = 512 * 1024;
 const MAX_PATCH_TARGETS_V1 = 100;

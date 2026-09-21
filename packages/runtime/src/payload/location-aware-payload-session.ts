@@ -54,8 +54,7 @@ export interface LocationAwarePayloadSessionSourceV1
   readCoordinatorOwnershipIdentity?(): string;
 }
 
-export interface LocationAwarePayloadSessionV1
-  extends Session<InputFactV1, DerivedDecisionV1> {
+export interface LocationAwarePayloadSessionV1 extends Session<InputFactV1, DerivedDecisionV1> {
   readCanonicalPrefix(): Promise<readonly RunJournalEnvelopeV1[]>;
   readCoordinatorOwnershipIdentity?(): string;
 }
@@ -84,18 +83,12 @@ export function createLocationAwarePayloadSessionV1(
   const budget = freezeVerifiedCanonicalPayloadBudgetV1(options.budget);
   const source = captureSource(options.source);
   const materializer = captureMaterializer(options.materializer);
-  assertBoundOwnerIdentities(
-    source,
-    materializer,
-    options.sessionId,
-    options.runId,
-  );
+  assertBoundOwnerIdentities(source, materializer, options.sessionId, options.runId);
   const signal = options.signal ?? new AbortController().signal;
 
   const wrapper: LocationAwarePayloadSessionV1 = {
     readInputSnapshot: () => source.readInputSnapshot(),
-    readCanonicalPrefix: async () =>
-      freezePrefix(await readAndValidateSourcePrefix()),
+    readCanonicalPrefix: async () => freezePrefix(await readAndValidateSourcePrefix()),
     appendInputFacts(facts): Promise<void> {
       const frozenFacts = cloneFactsSynchronously(facts);
       if (frozenFacts.length === 0) return Promise.resolve();
@@ -123,9 +116,7 @@ export function createLocationAwarePayloadSessionV1(
       const frozenDecision = cloneDecisionSynchronously(decision);
       const frozenFacts = cloneFactsSynchronously(facts);
       if (frozenFacts.length === 0) {
-        throw new Error(
-          "Decision-and-input commit requires at least one input fact",
-        );
+        throw new Error("Decision-and-input commit requires at least one input fact");
       }
       return commitPreparedFacts({
         expectedTailSeq,
@@ -141,9 +132,7 @@ export function createLocationAwarePayloadSessionV1(
   }
   return Object.freeze(wrapper);
 
-  async function appendPreparedFacts(
-    facts: readonly InputFactV1[],
-  ): Promise<void> {
+  async function appendPreparedFacts(facts: readonly InputFactV1[]): Promise<void> {
     while (true) {
       const prefix = await readAndValidateSourcePrefix();
       const status = await prepareAndCommit(prefix, prefix.length, facts);
@@ -158,12 +147,7 @@ export function createLocationAwarePayloadSessionV1(
   }): Promise<"committed" | "conflict"> {
     const prefix = await readAndValidateSourcePrefix();
     if (prefix.length !== input.expectedTailSeq) return "conflict";
-    return prepareAndCommit(
-      prefix,
-      input.expectedTailSeq,
-      input.facts,
-      input.decision,
-    );
+    return prepareAndCommit(prefix, input.expectedTailSeq, input.facts, input.decision);
   }
 
   async function prepareAndCommit(
@@ -174,13 +158,7 @@ export function createLocationAwarePayloadSessionV1(
   ): Promise<"committed" | "conflict"> {
     throwIfAborted(signal);
     const candidate = freezePrefix(
-      appendCandidateEnvelopes(
-        existingPrefix,
-        options.sessionId,
-        options.runId,
-        facts,
-        decision,
-      ),
+      appendCandidateEnvelopes(existingPrefix, options.sessionId, options.runId, facts, decision),
     );
 
     // Hard gate: all existing artifacts and all inline draft semantics are
@@ -199,9 +177,7 @@ export function createLocationAwarePayloadSessionV1(
       materializer,
       signal,
     );
-    const canonicalMaterialized = freezePrefix(
-      parseRunJournalPrefixV1(materialized),
-    );
+    const canonicalMaterialized = freezePrefix(parseRunJournalPrefixV1(materialized));
     await validateCanonicalDurableJsonPayloadPrefixV1({
       fullPrefix: canonicalMaterialized,
       materializer,
@@ -211,11 +187,7 @@ export function createLocationAwarePayloadSessionV1(
     throwIfAborted(signal);
 
     const committedFacts = canonicalMaterialized
-      .filter(
-        (envelope) =>
-          envelope.seq > expectedTailSeq &&
-          envelope.record.kind === "input_fact",
-      )
+      .filter((envelope) => envelope.seq > expectedTailSeq && envelope.record.kind === "input_fact")
       .map((envelope) => {
         if (envelope.record.kind !== "input_fact") {
           throw new Error("Materialized candidate fact projection is invalid");
@@ -225,30 +197,14 @@ export function createLocationAwarePayloadSessionV1(
     if (decision === undefined) {
       return source.commitInputFacts(expectedTailSeq, committedFacts);
     }
-    return source.commitDecisionAndInputFacts(
-      expectedTailSeq,
-      decision,
-      committedFacts,
-    );
+    return source.commitDecisionAndInputFacts(expectedTailSeq, decision, committedFacts);
   }
 
-  async function readAndValidateSourcePrefix(): Promise<
-    readonly RunJournalEnvelopeV1[]
-  > {
-    const prefix = freezePrefix(
-      parseRunJournalPrefixV1(await source.readCanonicalPrefix()),
-    );
-    assertBoundOwnerIdentities(
-      source,
-      materializer,
-      options.sessionId,
-      options.runId,
-    );
+  async function readAndValidateSourcePrefix(): Promise<readonly RunJournalEnvelopeV1[]> {
+    const prefix = freezePrefix(parseRunJournalPrefixV1(await source.readCanonicalPrefix()));
+    assertBoundOwnerIdentities(source, materializer, options.sessionId, options.runId);
     const first = prefix[0];
-    if (
-      first &&
-      (first.sessionId !== options.sessionId || first.runId !== options.runId)
-    ) {
+    if (first && (first.sessionId !== options.sessionId || first.runId !== options.runId)) {
       throw new Error("Location-aware payload Session identity mismatch");
     }
     return prefix;
@@ -261,10 +217,7 @@ function assertBoundOwnerIdentities(
   sessionId: string,
   runId: string,
 ): void {
-  const sourceIdentity = parseCanonicalIdentity(
-    source.readCanonicalJournalIdentity(),
-    "Session",
-  );
+  const sourceIdentity = parseCanonicalIdentity(source.readCanonicalJournalIdentity(), "Session");
   const payloadIdentity = parseCanonicalIdentity(
     materializer.readCanonicalPayloadIdentity(),
     "payload materializer",
@@ -288,17 +241,13 @@ function parseCanonicalIdentity(
     !identity ||
     typeof identity !== "object" ||
     Array.isArray(identity) ||
-    Object.keys(identity).sort().join("\0") !==
-      "runId\0sessionId\0workspaceRoot"
+    Object.keys(identity).sort().join("\0") !== "runId\0sessionId\0workspaceRoot"
   ) {
     throw new Error(`${label} canonical identity is invalid`);
   }
   assertStableId(identity.sessionId, `${label} sessionId`);
   assertStableId(identity.runId, `${label} runId`);
-  if (
-    typeof identity.workspaceRoot !== "string" ||
-    identity.workspaceRoot.length === 0
-  ) {
+  if (typeof identity.workspaceRoot !== "string" || identity.workspaceRoot.length === 0) {
     throw new Error(`${label} canonical workspace identity is invalid`);
   }
   return Object.freeze({ ...identity });
@@ -340,9 +289,7 @@ function appendCandidateEnvelopes(
   }
   for (const fact of facts) {
     seq += 1;
-    appended.push(
-      envelope(sessionId, runId, seq, ts, { kind: "input_fact", fact }),
-    );
+    appended.push(envelope(sessionId, runId, seq, ts, { kind: "input_fact", fact }));
   }
   return parseRunJournalPrefixV1(appended);
 }
@@ -375,10 +322,7 @@ async function materializeNewInlineOccurrences(
   ) as unknown as RunJournalEnvelopeV1[];
   const occurrences = projectCanonicalDurableJsonPayloadBindingsV1(candidate);
   for (const occurrence of occurrences) {
-    if (
-      occurrence.location.carrierSeq <= previousTailSeq ||
-      occurrence.payload.kind !== "inline"
-    ) {
+    if (occurrence.location.carrierSeq <= previousTailSeq || occurrence.payload.kind !== "inline") {
       continue;
     }
     throwIfAborted(signal);
@@ -446,11 +390,7 @@ function replacePayloadAtLocation(
   payload: DurableJsonPayloadV1,
 ): void {
   const envelope = prefix[location.carrierSeq - 1];
-  if (
-    !envelope ||
-    envelope.seq !== location.carrierSeq ||
-    envelope.record.kind !== "input_fact"
-  ) {
+  if (!envelope || envelope.seq !== location.carrierSeq || envelope.record.kind !== "input_fact") {
     throw new Error("Payload occurrence carrier is missing");
   }
   const fact = envelope.record.fact;
@@ -470,22 +410,14 @@ function replacePayloadAtLocation(
       return;
     }
     case "model.settled":
-      if (
-        fact.type === "model.settled" &&
-        fact.modelCallId === location.modelCallId
-      ) {
+      if (fact.type === "model.settled" && fact.modelCallId === location.modelCallId) {
         (fact as { response?: DurableJsonPayloadV1 }).response = payload;
         return;
       }
       break;
     case "tool.settled":
-      if (
-        fact.type === "tool.settled" &&
-        fact.callId === location.callId &&
-        fact.observation
-      ) {
-        (fact.observation as { payload?: DurableJsonPayloadV1 }).payload =
-          payload;
+      if (fact.type === "tool.settled" && fact.callId === location.callId && fact.observation) {
+        (fact.observation as { payload?: DurableJsonPayloadV1 }).payload = payload;
         return;
       }
       break;
@@ -511,44 +443,26 @@ function replacePayloadAtLocation(
   throw new Error("Payload occurrence location does not match its carrier");
 }
 
-function cloneFactsSynchronously(
-  facts: readonly InputFactV1[],
-): readonly InputFactV1[] {
+function cloneFactsSynchronously(facts: readonly InputFactV1[]): readonly InputFactV1[] {
   return Object.freeze(facts.map(cloneFactSynchronously));
 }
 
 function cloneFactSynchronously(fact: InputFactV1): InputFactV1 {
   assertRunJournalEnvelopeV1(
-    envelope(
-      "validation-session",
-      "validation-run",
-      Number.MAX_SAFE_INTEGER,
-      0,
-      {
-        kind: "input_fact",
-        fact,
-      },
-    ),
+    envelope("validation-session", "validation-run", Number.MAX_SAFE_INTEGER, 0, {
+      kind: "input_fact",
+      fact,
+    }),
   );
-  return immutableCanonicalJsonCloneV1(
-    fact as unknown as JsonValue,
-  ) as InputFactV1;
+  return immutableCanonicalJsonCloneV1(fact as unknown as JsonValue) as InputFactV1;
 }
 
-function cloneDecisionSynchronously(
-  decision: DerivedDecisionV1,
-): DerivedDecisionV1 {
+function cloneDecisionSynchronously(decision: DerivedDecisionV1): DerivedDecisionV1 {
   assertRunJournalEnvelopeV1(
-    envelope(
-      "validation-session",
-      "validation-run",
-      Number.MAX_SAFE_INTEGER,
-      0,
-      {
-        kind: "derived_decision",
-        decision,
-      },
-    ),
+    envelope("validation-session", "validation-run", Number.MAX_SAFE_INTEGER, 0, {
+      kind: "derived_decision",
+      decision,
+    }),
   );
   return immutableCanonicalJsonCloneV1(
     decision as unknown as JsonValue,
@@ -571,8 +485,7 @@ function captureMaterializer(
     resolve: value.resolve.bind(value),
     prepare: value.prepare.bind(value),
     hash: value.hash.bind(value),
-    readCanonicalPayloadIdentity:
-      value.readCanonicalPayloadIdentity.bind(value),
+    readCanonicalPayloadIdentity: value.readCanonicalPayloadIdentity.bind(value),
   });
 }
 
@@ -598,20 +511,16 @@ function captureSource(
     commitDerivedDecision: value.commitDerivedDecision.bind(value),
     commitDecisionAndInputFacts: value.commitDecisionAndInputFacts.bind(value),
     readCanonicalPrefix: value.readCanonicalPrefix.bind(value),
-    readCanonicalJournalIdentity:
-      value.readCanonicalJournalIdentity.bind(value),
+    readCanonicalJournalIdentity: value.readCanonicalJournalIdentity.bind(value),
     ...(typeof value.readCoordinatorOwnershipIdentity === "function"
       ? {
-          readCoordinatorOwnershipIdentity:
-            value.readCoordinatorOwnershipIdentity.bind(value),
+          readCoordinatorOwnershipIdentity: value.readCoordinatorOwnershipIdentity.bind(value),
         }
       : {}),
   });
 }
 
-function freezePrefix(
-  prefix: readonly RunJournalEnvelopeV1[],
-): readonly RunJournalEnvelopeV1[] {
+function freezePrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
   return immutableCanonicalJsonCloneV1(
     prefix as unknown as JsonValue,
   ) as unknown as readonly RunJournalEnvelopeV1[];
@@ -619,9 +528,7 @@ function freezePrefix(
 
 function assertExpectedTailSeq(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(
-      "Session expectedTailSeq must be a non-negative safe integer",
-    );
+    throw new Error("Session expectedTailSeq must be a non-negative safe integer");
   }
 }
 

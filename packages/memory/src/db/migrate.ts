@@ -38,9 +38,7 @@ async function runMigrations(dryRun = false): Promise<void> {
 
   // 查询已应用的迁移
   const applied = await sql`SELECT version FROM _migrations ORDER BY version`;
-  const appliedSet = new Set(
-    applied.map((r) => (r as { version: string }).version),
-  );
+  const appliedSet = new Set(applied.map((r) => (r as { version: string }).version));
 
   const pending = migrations.filter((m) => !appliedSet.has(m.name));
   if (pending.length === 0) {

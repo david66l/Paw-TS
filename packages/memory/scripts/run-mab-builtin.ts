@@ -15,10 +15,7 @@ import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine
 
 const outPath =
   process.argv[2] ??
-  resolve(
-    import.meta.dir,
-    "../../../benchmarks/memory-agent-bench/last-run.json",
-  );
+  resolve(import.meta.dir, "../../../benchmarks/memory-agent-bench/last-run.json");
 
 const stats: LlmStats = {
   calls: 0,

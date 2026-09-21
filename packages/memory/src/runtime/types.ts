@@ -3,12 +3,7 @@
  * Agent / harness 只依赖这些类型，不直接依赖 db 内部实体。
  */
 
-import type {
-  CompletionOutcome,
-  RunEvent,
-  RunEvidence,
-  RunStatus,
-} from "@paw/core";
+import type { CompletionOutcome, RunEvent, RunEvidence, RunStatus } from "@paw/core";
 
 /** completeTask 可选 enricher 产出的候选草稿（仍须经 Governance） */
 export type MemoryCandidateEnrichmentDraft = {
@@ -155,10 +150,7 @@ export type MemoryVerificationAuthority = "local" | "external" | "not_required";
 
 export interface MemoryOutcomeContractV1 {
   readonly schemaVersion: 1;
-  readonly runStatus: Extract<
-    RunStatus,
-    "completed" | "failed" | "aborted" | "incomplete"
-  >;
+  readonly runStatus: Extract<RunStatus, "completed" | "failed" | "aborted" | "incomplete">;
   readonly completionOutcome: CompletionOutcome;
   readonly completionReason: string;
   readonly verificationAuthority: MemoryVerificationAuthority;
@@ -216,9 +208,7 @@ export interface MemoryRuntime {
    * v2 在工具失败且检索命中时返回 { injected }（T2 action_failed 注入段，
    * 调用方追加为用户消息）；v1 恒返回 undefined。
    */
-  onToolResult(
-    input: OnToolResultInput,
-  ): Promise<{ injected?: string } | undefined>;
+  onToolResult(input: OnToolResultInput): Promise<{ injected?: string } | undefined>;
   /**
    * v2：T3 post_compact 检索（上下文压缩后触发）。
    * 命中时返回注入段（调用方追加为用户消息）；v1 无此方法。

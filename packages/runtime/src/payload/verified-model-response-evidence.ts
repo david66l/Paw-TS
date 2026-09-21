@@ -1,7 +1,4 @@
-import type {
-  SessionInputSnapshot,
-  VerifiedModelResponseEvidenceV1,
-} from "@paw/agent-loop";
+import type { SessionInputSnapshot, VerifiedModelResponseEvidenceV1 } from "@paw/agent-loop";
 import type {
   DurableJsonPayloadV1,
   InputFactV1,
@@ -32,8 +29,7 @@ export interface CreateVerifiedModelResponseEvidenceOptionsV1 {
 export type CreateVerifiedCanonicalPayloadEvidenceOptionsV1 =
   CreateVerifiedModelResponseEvidenceOptionsV1;
 
-export interface VerifiedCanonicalPayloadEvidenceV1
-  extends VerifiedModelResponseEvidenceV1 {
+export interface VerifiedCanonicalPayloadEvidenceV1 extends VerifiedModelResponseEvidenceV1 {
   requirePayload(input: {
     readonly snapshot: SessionInputSnapshot<InputFactV1>;
     readonly location: CanonicalDurableJsonPayloadLocationV1;
@@ -54,17 +50,11 @@ export function createVerifiedCanonicalPayloadEvidenceV1(
     budget: options.budget,
   });
   const expectedSnapshot = projectCanonicalSessionInputSnapshotV1(prefix);
-  const expectedSnapshotJson = canonicalJsonStringifyV1(
-    expectedSnapshot as unknown as JsonValue,
-  );
-  const requireModelResponse = options.index.requireModelResponse.bind(
-    options.index,
-  );
+  const expectedSnapshotJson = canonicalJsonStringifyV1(expectedSnapshot as unknown as JsonValue);
+  const requireModelResponse = options.index.requireModelResponse.bind(options.index);
   const requireOccurrence = options.index.requireOccurrence.bind(options.index);
 
-  const assertSnapshot = (
-    snapshot: SessionInputSnapshot<InputFactV1>,
-  ): void => {
+  const assertSnapshot = (snapshot: SessionInputSnapshot<InputFactV1>): void => {
     let actual: JsonValue;
     try {
       actual = immutableCanonicalJsonCloneV1(snapshot as unknown as JsonValue);
@@ -79,9 +69,7 @@ export function createVerifiedCanonicalPayloadEvidenceV1(
   return Object.freeze({
     assertSnapshot,
     requireModelResponse(
-      input: Parameters<
-        VerifiedModelResponseEvidenceV1["requireModelResponse"]
-      >[0],
+      input: Parameters<VerifiedModelResponseEvidenceV1["requireModelResponse"]>[0],
     ) {
       assertSnapshot(input.snapshot);
       return requireModelResponse({
@@ -90,11 +78,7 @@ export function createVerifiedCanonicalPayloadEvidenceV1(
         payload: input.payload,
       });
     },
-    requirePayload(
-      input: Parameters<
-        VerifiedCanonicalPayloadEvidenceV1["requirePayload"]
-      >[0],
-    ) {
+    requirePayload(input: Parameters<VerifiedCanonicalPayloadEvidenceV1["requirePayload"]>[0]) {
       assertSnapshot(input.snapshot);
       return requireOccurrence({
         location: input.location,

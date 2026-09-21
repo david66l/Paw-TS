@@ -62,9 +62,7 @@ function probeRuntime(runtime: "docker" | "podman"): boolean {
  * @param preferred - 可选的偏好运行时（"docker" 或 "podman"），优先探测
  * @returns 第一个可用的运行时名称，不可用时返回 undefined
  */
-export function detectContainerRuntime(
-  preferred?: "docker" | "podman",
-): string | undefined {
+export function detectContainerRuntime(preferred?: "docker" | "podman"): string | undefined {
   if (cachedRuntime) return cachedRuntime;
   // 构建探测顺序：偏好优先，未指定则 Docker 优先
   const order: ("docker" | "podman")[] = preferred

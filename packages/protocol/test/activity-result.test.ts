@@ -37,12 +37,8 @@ test("activity results are optional bounded durable JSON and retain their activi
   };
   const parsed = parseRunJournalPrefixV1(prefix(evidence));
   expect(parsed[2]?.record).toMatchObject({ fact: { result: evidence } });
-  expect(() =>
-    parseRunJournalPrefixV1(prefix({ invalid: () => undefined })),
-  ).toThrow();
-  expect(() =>
-    parseRunJournalPrefixV1(prefix({ text: "x".repeat(32001) })),
-  ).toThrow("too large");
+  expect(() => parseRunJournalPrefixV1(prefix({ invalid: () => undefined }))).toThrow();
+  expect(() => parseRunJournalPrefixV1(prefix({ text: "x".repeat(32001) }))).toThrow("too large");
   const missing = prefix(evidence);
   missing.splice(1, 1);
   const settlement = missing[1];

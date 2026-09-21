@@ -64,9 +64,7 @@ export function createPawNextPostgresMemoryAtomWriterStoreV1(
     scope: frozen.scope,
     temporalGraph: createPostgresMemoryTemporalGraphStoreV1({
       scope: frozen.scope,
-      ...(options.onTemporalGraphEvent
-        ? { onEvent: options.onTemporalGraphEvent }
-        : {}),
+      ...(options.onTemporalGraphEvent ? { onEvent: options.onTemporalGraphEvent } : {}),
     }),
   });
 }
@@ -99,15 +97,9 @@ export function createMemoryAtomWriterStoreV1(input: {
           .catch(() => []),
       ]);
       const fused = new Map<string, number>();
-      for (const [weight, ranked] of [
-        [1, lexical] as const,
-        [1, vector] as const,
-      ]) {
+      for (const [weight, ranked] of [[1, lexical] as const, [1, vector] as const]) {
         ranked.forEach((item, index) => {
-          fused.set(
-            item.id,
-            (fused.get(item.id) ?? 0) + weight / (60 + index + 1),
-          );
+          fused.set(item.id, (fused.get(item.id) ?? 0) + weight / (60 + index + 1));
         });
       }
       const ids = [...fused.entries()]
@@ -118,16 +110,12 @@ export function createMemoryAtomWriterStoreV1(input: {
         .slice(0, boundedLimit)
         .map(([id, score]) => ({ id, score }));
       if (signal.aborted) throw abortError();
-      const rows = await Promise.all(
-        ids.map((item) => input.engine.get(item.id)),
-      );
+      const rows = await Promise.all(ids.map((item) => input.engine.get(item.id)));
       const candidates = rows.flatMap((entry) => {
         if (
           !entry ||
           entry.tInvalid !== null ||
-          (entry.kind !== "semantic" &&
-            entry.kind !== "episodic" &&
-            entry.kind !== "profile")
+          (entry.kind !== "semantic" && entry.kind !== "episodic" && entry.kind !== "profile")
         ) {
           return [];
         }
@@ -184,9 +172,7 @@ export function createMemoryAtomWriterStoreV1(input: {
           const target = await input.engine.get(targetId);
           signal.throwIfAborted();
           if (!target) {
-            throw new Error(
-              "Memory atom target is missing from the scoped store",
-            );
+            throw new Error("Memory atom target is missing from the scoped store");
           }
           await input.engine.invalidate(targetId, writtenAt);
           signal.throwIfAborted();
@@ -294,9 +280,7 @@ function atomToEntry(
   }) as MemoryEntry;
 }
 
-function authorityToSource(
-  authority: MemoryAtomProposalV1["authority"],
-): MemorySource {
+function authorityToSource(authority: MemoryAtomProposalV1["authority"]): MemorySource {
   if (authority === "user_asserted") return "user_statement";
   if (authority === "agent_verified") return "agent_verified";
   return "agent_inferred";
@@ -310,28 +294,19 @@ function renderEntry(
   return [entry.whenToUse, entry.perspective, ...entry.modification].join("\n");
 }
 
-function assertScopedEngine(
-  engine: MemoryStoreEngine,
-  scope: PawNextMemoryScopeV1,
-): void {
+function assertScopedEngine(engine: MemoryStoreEngine, scope: PawNextMemoryScopeV1): void {
   if (!engine.scope || !sameScope(engine.scope, scope)) {
     throw new Error("Memory atom writer requires an exactly scoped engine");
   }
 }
 
-function assertExactScope(
-  actual: PawNextMemoryScopeV1,
-  expected: PawNextMemoryScopeV1,
-): void {
+function assertExactScope(actual: PawNextMemoryScopeV1, expected: PawNextMemoryScopeV1): void {
   if (!sameScope(actual, expected)) {
     throw new Error("Memory temporal graph requires an exactly scoped store");
   }
 }
 
-function sameScope(
-  left: PawNextMemoryScopeV1,
-  right: PawNextMemoryScopeV1,
-): boolean {
+function sameScope(left: PawNextMemoryScopeV1, right: PawNextMemoryScopeV1): boolean {
   return (
     left.tenantId === right.tenantId &&
     left.userId === right.userId &&

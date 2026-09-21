@@ -59,9 +59,7 @@ export interface MemoryQueryAnswerOriginAuthorizationV1 {
  * a jointly present second-person/prior/recall trace can open the unowned
  * dialogue-artifact state.
  */
-export function compileMemoryQueryAnswerOriginV1(
-  query: string,
-): MemoryQueryAnswerOriginV1 {
+export function compileMemoryQueryAnswerOriginV1(query: string): MemoryQueryAnswerOriginV1 {
   const intent = classifyMemoryEvidenceQueryV3(query);
   const boundary = classifyMemoryEvidenceIntentBoundaryV1(query, intent);
   const features = classifyMemoryQueryAnswerProvenanceFeaturesV1(query);
@@ -71,23 +69,19 @@ export function compileMemoryQueryAnswerOriginV1(
     !features.explicitSharedAnswerAuthor &&
     (features.certifiedAssistantDialogueCandidate ||
       features.dialogueRoleResolutionCandidate ||
-      (features.secondPersonCue &&
-        features.priorDialogueCue &&
-        features.recallActionCue));
+      (features.secondPersonCue && features.priorDialogueCue && features.recallActionCue));
   const originKind: MemoryQueryAnswerOriginKindV1 =
     features.explicitSharedAnswerAuthor ||
     (boundary.roleConstraint === "fixed" && intent.roleConstraint === "any")
       ? "explicit_shared"
       : features.explicitAssistantAnswerAuthor ||
-          (boundary.roleConstraint === "fixed" &&
-            intent.roleConstraint === "assistant")
+          (boundary.roleConstraint === "fixed" && intent.roleConstraint === "assistant")
         ? "explicit_assistant"
         : features.explicitUserAnswerAuthor
           ? "explicit_user"
           : unownedDialogueArtifact
             ? "dialogue_artifact_unowned"
-            : boundary.roleConstraint === "fixed" &&
-                intent.roleConstraint === "user"
+            : boundary.roleConstraint === "fixed" && intent.roleConstraint === "user"
               ? "explicit_user"
               : "ordinary_semantic";
   const identity = {
@@ -115,13 +109,10 @@ export function validateMemoryEvidenceQueryPlanOriginV1(input: {
   assertMemoryQueryAnswerOriginV1(input.origin);
   const proposesAssistantAperture =
     input.plan.roleConstraint !== "user" ||
-    input.plan.requirements.some(
-      (requirement) => requirement.roleConstraint !== "user",
-    );
+    input.plan.requirements.some((requirement) => requirement.roleConstraint !== "user");
   if (
     proposesAssistantAperture &&
-    (input.origin.originKind === "ordinary_semantic" ||
-      input.origin.originKind === "explicit_user")
+    (input.origin.originKind === "ordinary_semantic" || input.origin.originKind === "explicit_user")
   ) {
     throw namedError("MemoryEvidenceQueryPlanOriginInvalid");
   }
@@ -137,24 +128,19 @@ export function authorizeMemoryQueryAnswerOriginMaterializationV1(input: {
   assertMemoryQueryAnswerOriginV1(input.origin);
   if (!materializationCombinationAllowed(input)) return undefined;
   const identity = {
-    authorizationVersion:
-      PAW_MEMORY_QUERY_ANSWER_ORIGIN_AUTHORIZATION_VERSION_V1,
+    authorizationVersion: PAW_MEMORY_QUERY_ANSWER_ORIGIN_AUTHORIZATION_VERSION_V1,
     originVersion: input.origin.originVersion,
     originKind: input.origin.originKind,
     originRevision: input.origin.originRevision,
     requirementId: input.requirement.requirementId,
-    requirementRevision: hashCanonicalJsonV1(
-      input.requirement as unknown as JsonValue,
-    ),
+    requirementRevision: hashCanonicalJsonV1(input.requirement as unknown as JsonValue),
     originalRequirementRole: input.requirement.roleConstraint,
     effectiveRequirementRole: input.effectiveRequirementRole,
     mode: input.mode,
   } as const;
   return Object.freeze({
     ...identity,
-    authorizationRevision: hashCanonicalJsonV1(
-      identity as unknown as JsonValue,
-    ),
+    authorizationRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
   });
 }
 
@@ -178,10 +164,8 @@ export function validateMemoryQueryAnswerOriginAuthorizationV1(input: {
     authorization.originKind !== origin.originKind ||
     authorization.originRevision !== origin.originRevision ||
     authorization.requirementId !== input.requirement.requirementId ||
-    authorization.effectiveRequirementRole !==
-      input.requirement.roleConstraint ||
-    ((authorization.mode === "late_binding" ||
-      authorization.mode === "shared_envelope") &&
+    authorization.effectiveRequirementRole !== input.requirement.roleConstraint ||
+    ((authorization.mode === "late_binding" || authorization.mode === "shared_envelope") &&
       !input.assistantDialogueCandidate)
   ) {
     throw namedError("MemorySourceLocalEvidenceAnswerOriginInvalid");
@@ -196,10 +180,7 @@ export function validateMemoryQueryAnswerOriginAuthorizationV1(input: {
     effectiveRequirementRole: input.requirement.roleConstraint,
     mode: authorization.mode,
   });
-  if (
-    !expected ||
-    expected.authorizationRevision !== authorization.authorizationRevision
-  ) {
+  if (!expected || expected.authorizationRevision !== authorization.authorizationRevision) {
     throw namedError("MemorySourceLocalEvidenceAnswerOriginInvalid");
   }
 }
@@ -246,9 +227,7 @@ function materializationCombinationAllowed(input: {
   }
 }
 
-function assertMemoryQueryAnswerOriginV1(
-  origin: MemoryQueryAnswerOriginV1,
-): void {
+function assertMemoryQueryAnswerOriginV1(origin: MemoryQueryAnswerOriginV1): void {
   const identity = {
     originVersion: origin.originVersion,
     originKind: origin.originKind,
@@ -265,8 +244,7 @@ function assertMemoryQueryAnswerOriginV1(
       "explicit_shared",
       "dialogue_artifact_unowned",
     ]).has(origin.originKind) ||
-    hashCanonicalJsonV1(identity as unknown as JsonValue) !==
-      origin.originRevision
+    hashCanonicalJsonV1(identity as unknown as JsonValue) !== origin.originRevision
   ) {
     throw namedError("MemoryQueryAnswerOriginInvalid");
   }

@@ -1,7 +1,4 @@
-import type {
-  AgentAcceptanceUpdateAction,
-  AgentToolCallAction,
-} from "@paw/core";
+import type { AgentAcceptanceUpdateAction, AgentToolCallAction } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
 import type { VerificationFailureRecordV2 } from "./loop-v2/failure-records.js";
@@ -104,11 +101,7 @@ export interface ConstraintRecord {
   readonly status: "active" | "superseded" | "expired";
 }
 
-export type AcceptanceCriterionStatus =
-  | "pending"
-  | "satisfied"
-  | "blocked"
-  | "superseded";
+export type AcceptanceCriterionStatus = "pending" | "satisfied" | "blocked" | "superseded";
 
 export interface AcceptanceCriterion {
   /** Stable within one task snapshot and across resume. */
@@ -198,9 +191,7 @@ export class TaskStateManager {
           ? restored.fileLockConflicts
           : [],
         taskGraphEvents: parseTaskGraphEventsV1(restored.taskGraphEvents),
-        meaRecords: Array.isArray(restored.meaRecords)
-          ? restored.meaRecords
-          : [],
+        meaRecords: Array.isArray(restored.meaRecords) ? restored.meaRecords : [],
       };
     } else {
       this.state = {
@@ -239,14 +230,11 @@ export class TaskStateManager {
   }
 
   recordExecutionEnvironmentChange(issues: readonly string[]): void {
-    const normalized = [...new Set(issues.map((issue) => issue.trim()))].filter(
-      Boolean,
-    );
+    const normalized = [...new Set(issues.map((issue) => issue.trim()))].filter(Boolean);
     if (normalized.length === 0) return;
     this.state = {
       ...this.state,
-      executionEnvironmentRevision:
-        (this.state.executionEnvironmentRevision ?? 0) + 1,
+      executionEnvironmentRevision: (this.state.executionEnvironmentRevision ?? 0) + 1,
       executionEnvironmentIssues: normalized,
       updatedAt: Date.now(),
     };
@@ -259,10 +247,7 @@ export class TaskStateManager {
     this.state = {
       ...this.state,
       fileLockConflicts: [...this.state.fileLockConflicts, p].slice(-20),
-      pinnedFacts: [
-        ...this.state.pinnedFacts,
-        `file_lock_conflict: ${p}`,
-      ].slice(-20),
+      pinnedFacts: [...this.state.pinnedFacts, `file_lock_conflict: ${p}`].slice(-20),
       updatedAt: Date.now(),
     };
   }
@@ -283,9 +268,7 @@ export class TaskStateManager {
   ):
     | { readonly ok: true; readonly state: unknown }
     | { readonly ok: false; readonly error: string } {
-    const knownIds = new Set(
-      this.acceptanceCriteria().map((criterion) => criterion.id),
-    );
+    const knownIds = new Set(this.acceptanceCriteria().map((criterion) => criterion.id));
     const unknown = input.updates.find((update) => !knownIds.has(update.id));
     if (unknown) {
       return {
@@ -295,9 +278,7 @@ export class TaskStateManager {
     }
     const external = input.updates.find((update) =>
       this.acceptanceCriteria().some(
-        (criterion) =>
-          criterion.id === update.id &&
-          criterion.verificationAuthority === "external",
+        (criterion) => criterion.id === update.id && criterion.verificationAuthority === "external",
       ),
     );
     if (external) {
@@ -317,11 +298,7 @@ export class TaskStateManager {
     }
     this.registerAcceptanceCriteria(input.add, currentTurn);
     for (const update of input.updates) {
-      this.setAcceptanceCriterionStatus(
-        update.id,
-        update.status,
-        update.evidence,
-      );
+      this.setAcceptanceCriterionStatus(update.id, update.status, update.evidence);
     }
     return {
       ok: true,
@@ -347,8 +324,7 @@ export class TaskStateManager {
       const duplicate = criteria.some(
         (criterion) =>
           criterion.status !== "superseded" &&
-          normalizeAcceptanceText(criterion.text).toLocaleLowerCase() ===
-            text.toLocaleLowerCase(),
+          normalizeAcceptanceText(criterion.text).toLocaleLowerCase() === text.toLocaleLowerCase(),
       );
       if (duplicate) continue;
       const ref = normalizeAcceptanceEvidence(item.ref);
@@ -384,9 +360,7 @@ export class TaskStateManager {
     const normalizedId = id.trim();
     const normalizedEvidence = normalizeAcceptanceEvidence(evidence);
     if (status === "satisfied" && !normalizedEvidence) {
-      throw new Error(
-        `satisfied acceptance criterion requires evidence: ${id}`,
-      );
+      throw new Error(`satisfied acceptance criterion requires evidence: ${id}`);
     }
     let found = false;
     const criteria = this.acceptanceCriteria().map((criterion) => {
@@ -428,15 +402,13 @@ export class TaskStateManager {
     currentTurn: number,
   ): void {
     const keepSet = new Set(result.keep);
-    const constraints: ConstraintRecord[] = this.state.constraints.map(
-      (c, i) => {
-        if (keepSet.has(i)) return { ...c, status: "active" as const };
-        if (result.drop.includes(i)) {
-          return { ...c, status: "superseded" as const };
-        }
-        return c;
-      },
-    );
+    const constraints: ConstraintRecord[] = this.state.constraints.map((c, i) => {
+      if (keepSet.has(i)) return { ...c, status: "active" as const };
+      if (result.drop.includes(i)) {
+        return { ...c, status: "superseded" as const };
+      }
+      return c;
+    });
     for (const a of result.add) {
       const text = a.text.trim();
       if (!text) continue;
@@ -489,9 +461,7 @@ export class TaskStateManager {
     };
   }
 
-  recordCandidateReview(
-    review: Omit<CandidateReviewRecord, "reviewedAt">,
-  ): void {
+  recordCandidateReview(review: Omit<CandidateReviewRecord, "reviewedAt">): void {
     this.state = {
       ...this.state,
       candidateReview: { ...review, reviewedAt: Date.now() },
@@ -511,25 +481,20 @@ export class TaskStateManager {
     const commandsRun = [...this.state.commandsRun];
     const testResults = [...this.state.testResults];
     const pinnedFacts = [...this.state.pinnedFacts];
-    let shellCommandRevision =
-      this.state.shellCommandRevision ?? this.state.commandsRun.length;
+    let shellCommandRevision = this.state.shellCommandRevision ?? this.state.commandsRun.length;
     let mutationRevision = this.state.mutationRevision ?? 0;
     let mutationShellCommandRevision =
       this.state.mutationShellCommandRevision ?? shellCommandRevision;
     let editRecoveryPath = this.state.editRecoveryPath;
     let diffInspectedRevision = this.state.diffInspectedRevision ?? 0;
-    let executionEnvironmentIssues = [
-      ...(this.state.executionEnvironmentIssues ?? []),
-    ];
+    let executionEnvironmentIssues = [...(this.state.executionEnvironmentIssues ?? [])];
     let postEditDiagnostics = this.state.postEditDiagnostics;
 
     if (result.ok && call.tool === "workspace.read_file") {
       const readPath = stringArg(args.path);
       pushUnique(filesRead, readPath);
-      if (readPath)
-        fileReadCounts[readPath] = (fileReadCounts[readPath] ?? 0) + 1;
-      if (readPath && readPath === editRecoveryPath)
-        editRecoveryPath = undefined;
+      if (readPath) fileReadCounts[readPath] = (fileReadCounts[readPath] ?? 0) + 1;
+      if (readPath && readPath === editRecoveryPath) editRecoveryPath = undefined;
     }
 
     if (
@@ -553,11 +518,7 @@ export class TaskStateManager {
       editRecoveryPath = undefined;
     }
 
-    if (
-      result.ok &&
-      call.tool === "workspace.apply_patch" &&
-      hasMaterialFileChange(result)
-    ) {
+    if (result.ok && call.tool === "workspace.apply_patch" && hasMaterialFileChange(result)) {
       for (const path of extractPatchPaths(stringArg(args.patch))) {
         pushUnique(filesChanged, path);
       }
@@ -568,9 +529,7 @@ export class TaskStateManager {
 
     if (result.ok && call.tool === "workspace.undo_last_edit") {
       const payload = isRecord(result.payload) ? result.payload : {};
-      const effect = isRecord(payload.workspaceEffect)
-        ? payload.workspaceEffect
-        : {};
+      const effect = isRecord(payload.workspaceEffect) ? payload.workspaceEffect : {};
       const restoredPaths = Array.isArray(effect.paths)
         ? effect.paths.filter(
             (restoredPath): restoredPath is string =>
@@ -610,14 +569,11 @@ export class TaskStateManager {
       const cwd = stringArg(args.cwd);
       if (command) {
         shellCommandRevision += 1;
-        const effect = isRecord(result.payload)
-          ? result.payload.workspaceEffect
-          : undefined;
+        const effect = isRecord(result.payload) ? result.payload.workspaceEffect : undefined;
         if (isRecord(effect) && effect.changed === true) {
           const paths = Array.isArray(effect.paths) ? effect.paths : [];
           for (const changedPath of paths) {
-            if (typeof changedPath === "string")
-              pushUnique(filesChanged, changedPath);
+            if (typeof changedPath === "string") pushUnique(filesChanged, changedPath);
           }
           mutationRevision += 1;
           mutationShellCommandRevision = shellCommandRevision;
@@ -642,15 +598,11 @@ export class TaskStateManager {
             classification.outcome === "code_failed"
               ? decomposeVerificationFailuresV2({
                   output: [
-                    (isRecord(result.payload) ? result.payload.stdout : "") ??
-                      "",
-                    (isRecord(result.payload) ? result.payload.stderr : "") ??
-                      "",
+                    (isRecord(result.payload) ? result.payload.stdout : "") ?? "",
+                    (isRecord(result.payload) ? result.payload.stderr : "") ?? "",
                     result.summary,
                   ]
-                    .filter(
-                      (value): value is string => typeof value === "string",
-                    )
+                    .filter((value): value is string => typeof value === "string")
                     .join("\n"),
                   filesChanged,
                 })
@@ -670,27 +622,20 @@ export class TaskStateManager {
             family: verificationIntent.family,
             passed: refined.outcome === "passed",
             outcome: refined.outcome,
-            ...(refined.failureKind
-              ? { failureKind: refined.failureKind }
-              : {}),
-            ...(refined.retryability
-              ? { retryability: refined.retryability }
-              : {}),
+            ...(refined.failureKind ? { failureKind: refined.failureKind } : {}),
+            ...(refined.retryability ? { retryability: refined.retryability } : {}),
             summary: refined.summary ?? result.summary,
             ...(evidence ? { evidence } : {}),
             ...(failureRecords.length > 0 ? { failureRecords } : {}),
             shellCommandRevision,
             mutationRevision,
-            executionEnvironmentRevision:
-              this.state.executionEnvironmentRevision ?? 0,
+            executionEnvironmentRevision: this.state.executionEnvironmentRevision ?? 0,
           });
           if (refined.outcome !== "harness_failed") {
             executionEnvironmentIssues = [];
           }
         }
-        const shellStdout = isRecord(result.payload)
-          ? result.payload.stdout
-          : undefined;
+        const shellStdout = isRecord(result.payload) ? result.payload.stdout : undefined;
         if (
           result.ok &&
           containsExecutedGitDiffCommand(command) &&
@@ -727,9 +672,7 @@ export class TaskStateManager {
       shellCommandRevision,
       mutationRevision,
       mutationShellCommandRevision,
-      ...(editRecoveryPath
-        ? { editRecoveryPath }
-        : { editRecoveryPath: undefined }),
+      ...(editRecoveryPath ? { editRecoveryPath } : { editRecoveryPath: undefined }),
       diffInspectedRevision,
       executionEnvironmentIssues,
       pinnedFacts: pinnedFacts.slice(-20),
@@ -766,9 +709,7 @@ function parsePostEditDiagnostics(
     .flatMap((file) => {
       if (
         typeof file.path !== "string" ||
-        !["clean", "issues", "unavailable", "skipped"].includes(
-          String(file.status),
-        ) ||
+        !["clean", "issues", "unavailable", "skipped"].includes(String(file.status)) ||
         !Array.isArray(file.issues)
       ) {
         return [];
@@ -776,14 +717,11 @@ function parsePostEditDiagnostics(
       return [
         Object.freeze({
           path: file.path,
-          status:
-            file.status as PostEditDiagnosticStateV1["files"][number]["status"],
+          status: file.status as PostEditDiagnosticStateV1["files"][number]["status"],
           issues: Object.freeze(
             file.issues
               .filter(isRecord)
-              .map((item) =>
-                typeof item.message === "string" ? item.message : "",
-              )
+              .map((item) => (typeof item.message === "string" ? item.message : ""))
               .filter(Boolean)
               .slice(0, 20),
           ),
@@ -817,8 +755,7 @@ function hasMaterialFileChange(result: ToolRunResult): boolean {
       if (!isRecord(item) || item.ok === false) return false;
       if (item.changed === true) return true;
       const added = typeof item.linesAdded === "number" ? item.linesAdded : 0;
-      const removed =
-        typeof item.linesRemoved === "number" ? item.linesRemoved : 0;
+      const removed = typeof item.linesRemoved === "number" ? item.linesRemoved : 0;
       return added + removed > 0;
     });
   }
@@ -875,9 +812,7 @@ function formatTaskStateBlock(
   );
   if (state.postEditDiagnostics) {
     const freshness =
-      state.postEditDiagnostics.mutationRevision === state.mutationRevision
-        ? "current"
-        : "stale";
+      state.postEditDiagnostics.mutationRevision === state.mutationRevision ? "current" : "stale";
     lines.push(
       `Post-edit syntax diagnostics: ${state.postEditDiagnostics.status} (${state.postEditDiagnostics.issueCount} errors, ${freshness} for r${state.postEditDiagnostics.mutationRevision}; not verification)`,
     );
@@ -889,9 +824,7 @@ function formatTaskStateBlock(
     lines.push(...formatCompletionReadiness(state));
     if (state.candidateReview) {
       const freshness =
-        state.candidateReview.mutationRevision === state.mutationRevision
-          ? "current"
-          : "stale";
+        state.candidateReview.mutationRevision === state.mutationRevision ? "current" : "stale";
       lines.push(
         `Independent review: ${state.candidateReview.verdict}/${state.candidateReview.reportGrounding ?? "legacy-report-unknown"} (${freshness} for r${state.candidateReview.mutationRevision}) — ${state.candidateReview.summary}`,
       );
@@ -905,17 +838,10 @@ function formatTaskStateBlock(
 
 export interface AcceptanceReadinessItem {
   readonly criterion: AcceptanceCriterion;
-  readonly readiness:
-    | "pending"
-    | "satisfied"
-    | "stale"
-    | "blocked"
-    | "external";
+  readonly readiness: "pending" | "satisfied" | "stale" | "blocked" | "external";
 }
 
-export function acceptanceReadiness(
-  state: TaskState,
-): AcceptanceReadinessItem[] {
+export function acceptanceReadiness(state: TaskState): AcceptanceReadinessItem[] {
   const revision = state.mutationRevision ?? 0;
   const items: AcceptanceReadinessItem[] = [];
   for (const criterion of state.acceptanceCriteria ?? []) {
@@ -927,10 +853,7 @@ export function acceptanceReadiness(
     if (criterion.status === "satisfied") {
       items.push({
         criterion,
-        readiness:
-          criterion.evidenceMutationRevision === revision
-            ? "satisfied"
-            : "stale",
+        readiness: criterion.evidenceMutationRevision === revision ? "satisfied" : "stale",
       });
       continue;
     }
@@ -946,11 +869,9 @@ export function formatCompletionReadiness(state: TaskState): string[] {
   const substantive = latestSubstantiveVerification(state);
   const verification = !latest
     ? "missing"
-    : substantive?.mutationRevision !== revision &&
-        latest.mutationRevision !== revision
+    : substantive?.mutationRevision !== revision && latest.mutationRevision !== revision
       ? `stale (verified r${latest.mutationRevision ?? 0})`
-      : substantive?.mutationRevision === revision &&
-          verificationOutcome(substantive) === "passed"
+      : substantive?.mutationRevision === revision && verificationOutcome(substantive) === "passed"
         ? `passed for r${revision}`
         : substantive?.mutationRevision === revision &&
             verificationOutcome(substantive) === "code_failed"
@@ -965,11 +886,7 @@ export function formatCompletionReadiness(state: TaskState): string[] {
       : diffRevision > 0
         ? `stale (inspected r${diffRevision})`
         : "not inspected";
-  return [
-    "Completion readiness:",
-    `- Verification: ${verification}`,
-    `- Final diff: ${diff}`,
-  ];
+  return ["Completion readiness:", `- Verification: ${verification}`, `- Final diff: ${diff}`];
 }
 
 export function verificationOutcome(
@@ -979,9 +896,7 @@ export function verificationOutcome(
 }
 
 /** Latest code verdict for the current source revision; harness failures are diagnostic. */
-export function latestSubstantiveVerification(
-  state: TaskState,
-): TestResultSummary | undefined {
+export function latestSubstantiveVerification(state: TaskState): TestResultSummary | undefined {
   const revision = state.mutationRevision ?? 0;
   const environmentRevision = state.executionEnvironmentRevision ?? 0;
   for (let index = state.testResults.length - 1; index >= 0; index -= 1) {
@@ -1013,8 +928,7 @@ export function hasVerificationRetryAvailable(state: TaskState): boolean {
     verificationOutcome(latest) === "harness_failed" &&
     current.filter(
       (result) =>
-        verificationOutcome(result) === "harness_failed" &&
-        result.retryability === "retryable",
+        verificationOutcome(result) === "harness_failed" && result.retryability === "retryable",
     ).length === 1
   );
 }
@@ -1050,16 +964,13 @@ export function classifyVerificationOutcome(
     output.match(
       /['"]([^'"\r\n]+)['"] is not recognized as an internal or external command/i,
     )?.[1] ??
-    output.match(
-      /(?:^|\n)(?:[^:\n]+:\s*\d+:\s*)?([a-zA-Z0-9_.-]+): (?:command )?not found/i,
-    )?.[1];
+    output.match(/(?:^|\n)(?:[^:\n]+:\s*\d+:\s*)?([a-zA-Z0-9_.-]+): (?:command )?not found/i)?.[1];
   const mentionsChangedFile = filesChanged.some((path) => {
     const normalized = path.replaceAll("\\", "/").toLowerCase();
     const basename = normalized.split("/").at(-1);
     const normalizedOutput = output.replaceAll("\\", "/").toLowerCase();
     return (
-      normalizedOutput.includes(normalized) ||
-      (!!basename && normalizedOutput.includes(basename))
+      normalizedOutput.includes(normalized) || (!!basename && normalizedOutput.includes(basename))
     );
   });
 
@@ -1106,9 +1017,7 @@ export function classifyVerificationOutcome(
   }
   if (
     !mentionsChangedFile &&
-    /(?:modulenotfounderror|importerror):[^\n]*(?:no module named|cannot import)/i.test(
-      output,
-    )
+    /(?:modulenotfounderror|importerror):[^\n]*(?:no module named|cannot import)/i.test(output)
   ) {
     return {
       outcome: "harness_failed",
@@ -1149,27 +1058,18 @@ function verificationEvidence(result: ToolRunResult): string | undefined {
   if (!raw) return result.summary.slice(0, 300);
   const redacted = raw
     .replace(/\bBearer\s+[^\s]+/gi, "Bearer [REDACTED]")
-    .replace(
-      /\b(api[_-]?key|token|password)\s*[:=]\s*[^\s]+/gi,
-      "$1=[REDACTED]",
-    )
+    .replace(/\b(api[_-]?key|token|password)\s*[:=]\s*[^\s]+/gi, "$1=[REDACTED]")
     .replace(/\s+/g, " ");
   return redacted.slice(-600);
 }
 
-function appendList(
-  lines: string[],
-  label: string,
-  values: readonly string[],
-): void {
+function appendList(lines: string[], label: string, values: readonly string[]): void {
   if (values.length === 0) return;
   lines.push(`${label}:`);
   for (const value of values.slice(-10)) lines.push(`- ${value}`);
 }
 
-function nextAcceptanceCriterionId(
-  criteria: readonly AcceptanceCriterion[],
-): number {
+function nextAcceptanceCriterionId(criteria: readonly AcceptanceCriterion[]): number {
   let max = 0;
   for (const criterion of criteria) {
     const match = criterion.id.match(/^acceptance-(\d+)$/);
@@ -1189,8 +1089,7 @@ function normalizeAcceptanceEvidence(value: unknown): string | undefined {
 }
 
 /** 约束关键词（行级识别，仅作候选——语义判定由 LLM 调和负责） */
-const CONSTRAINT_LINE_PATTERN =
-  /\b(?:must|only|never|do not|don't)\b|必须|只能|不要|不能|禁止/;
+const CONSTRAINT_LINE_PATTERN = /\b(?:must|only|never|do not|don't)\b|必须|只能|不要|不能|禁止/;
 
 /**
  * 输出格式类指令排除（e2e 实测修复）："不要多写/两行回答/简洁"这类
@@ -1203,11 +1102,7 @@ function extractConstraints(text: string): string[] {
   return text
     .split(/\n+/)
     .map((line) => line.trim())
-    .filter(
-      (line) =>
-        CONSTRAINT_LINE_PATTERN.test(line) &&
-        !OUTPUT_FORMAT_EXCLUSION.test(line),
-    );
+    .filter((line) => CONSTRAINT_LINE_PATTERN.test(line) && !OUTPUT_FORMAT_EXCLUSION.test(line));
 }
 
 function extractPatchPaths(patch: string): string[] {
@@ -1244,9 +1139,7 @@ function isTaskState(value: unknown): value is TaskState {
   // 兼容旧格式：constraints 是 string[]（resume 恢复旧快照）→ 升级为记录
   if (Array.isArray(value.constraints)) {
     const records = (value.constraints as unknown[]).map((c) =>
-      typeof c === "string"
-        ? ({ text: c, sourceTurn: 0, status: "active" } as const)
-        : c,
+      typeof c === "string" ? ({ text: c, sourceTurn: 0, status: "active" } as const) : c,
     );
     (value as { constraints: unknown }).constraints = records;
   }
@@ -1260,7 +1153,5 @@ function summarizePlanItem(item: unknown): string {
   if (typeof text !== "string") return JSON.stringify(item);
   const status = typeof item.status === "string" ? item.status : undefined;
   const taskId = typeof item.task_id === "string" ? item.task_id : undefined;
-  return [status ? `[${status}]` : "", taskId ?? text]
-    .filter(Boolean)
-    .join(" ");
+  return [status ? `[${status}]` : "", taskId ?? text].filter(Boolean).join(" ");
 }

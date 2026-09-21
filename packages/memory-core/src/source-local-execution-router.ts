@@ -8,10 +8,7 @@ import type {
 export const PAW_MEMORY_SOURCE_LOCAL_EXECUTION_ROUTER_VERSION_V1 =
   "paw.memory-source-local-execution-router.v1:mutually-exclusive-dual-executor" as const;
 
-export type MemorySourceLocalExecutorV1 =
-  | "per_leaf_v25"
-  | "plan_scoped_v24"
-  | "none";
+export type MemorySourceLocalExecutorV1 = "per_leaf_v25" | "plan_scoped_v24" | "none";
 
 export type MemorySourceLocalExecutionRouteReasonV1 =
   | "dialogue_or_origin_authorized"
@@ -50,9 +47,7 @@ export function routeMemorySourceLocalExecutionV1(input: {
     input.answerShape === "recommend" && input.roleConstraint === "user";
   const ordinaryUserPlan =
     input.roleConstraint === "user" &&
-    input.requirements.every(
-      (requirement) => requirement.roleConstraint === "user",
-    );
+    input.requirements.every((requirement) => requirement.roleConstraint === "user");
 
   const decision = dialogueOrOriginAuthorized
     ? {
@@ -85,8 +80,7 @@ export function routeMemorySourceLocalExecutionV1(input: {
     routerVersion: PAW_MEMORY_SOURCE_LOCAL_EXECUTION_ROUTER_VERSION_V1,
     answerShape: input.answerShape,
     roleConstraint: input.roleConstraint,
-    certifiedAssistantDialogueCandidate:
-      input.certifiedAssistantDialogueCandidate,
+    certifiedAssistantDialogueCandidate: input.certifiedAssistantDialogueCandidate,
     legacyPlanEligible: input.legacyPlanEligible,
     requirements: input.requirements.map((requirement) => ({
       requirementId: requirement.requirementId,
@@ -94,8 +88,7 @@ export function routeMemorySourceLocalExecutionV1(input: {
       roleConstraint: requirement.roleConstraint,
       relation: requirement.relation ?? "direct",
       coverageMode:
-        requirement.coverageMode ??
-        (requirement.temporalMode === "latest" ? "latest" : "any"),
+        requirement.coverageMode ?? (requirement.temporalMode === "latest" ? "latest" : "any"),
       minimumEvidence: requirement.minimumEvidence ?? 1,
     })),
     ...decision,

@@ -51,30 +51,18 @@ describe("location-aware payload Session memory contract", () => {
 
     const allowedSource = new MemorySource();
     const allowedMaterializer = new MemoryMaterializer();
-    const allowed = wrapWithBudget(
-      allowedSource,
-      allowedMaterializer,
-      exactBytes,
-    );
+    const allowed = wrapWithBudget(allowedSource, allowedMaterializer, exactBytes);
     expect(
-      await allowed.commitInputFacts(0, [
-        promotedWithAttachment("budget-allowed", value),
-      ]),
+      await allowed.commitInputFacts(0, [promotedWithAttachment("budget-allowed", value)]),
     ).toBe("committed");
     expect(allowedMaterializer.prepareCalls).toBe(1);
     expect(allowedSource.inputCommitCalls).toBe(1);
 
     const deniedSource = new MemorySource();
     const deniedMaterializer = new MemoryMaterializer();
-    const denied = wrapWithBudget(
-      deniedSource,
-      deniedMaterializer,
-      exactBytes - 1,
-    );
+    const denied = wrapWithBudget(deniedSource, deniedMaterializer, exactBytes - 1);
     await expect(
-      denied.commitInputFacts(0, [
-        promotedWithAttachment("budget-denied", value),
-      ]),
+      denied.commitInputFacts(0, [promotedWithAttachment("budget-denied", value)]),
     ).rejects.toThrow("total byte budget exceeded");
     expect(deniedMaterializer.prepareCalls).toBe(0);
     expect(deniedSource.inputCommitCalls).toBe(0);
@@ -96,11 +84,7 @@ describe("location-aware payload Session memory contract", () => {
 
     const distinctSource = new MemorySource();
     const distinctMaterializer = new MemoryMaterializer();
-    const distinct = wrapWithBudget(
-      distinctSource,
-      distinctMaterializer,
-      exactBytes,
-    );
+    const distinct = wrapWithBudget(distinctSource, distinctMaterializer, exactBytes);
     await expect(
       distinct.commitInputFacts(0, [
         promotedWithAttachment("binding-a", value),
@@ -112,11 +96,7 @@ describe("location-aware payload Session memory contract", () => {
 
     const twiceSource = new MemorySource();
     const twiceMaterializer = new MemoryMaterializer();
-    const twice = wrapWithBudget(
-      twiceSource,
-      twiceMaterializer,
-      exactBytes * 2,
-    );
+    const twice = wrapWithBudget(twiceSource, twiceMaterializer, exactBytes * 2);
     expect(
       await twice.commitInputFacts(0, [
         promotedWithAttachment("binding-a", value),
@@ -135,9 +115,7 @@ describe("location-aware payload Session memory contract", () => {
     const session = wrapWithBudget(source, materializer, payloadBytes(value));
 
     await expect(
-      session.commitInputFacts(0, [
-        promotedWithAttachment("post-materialize-budget", value),
-      ]),
+      session.commitInputFacts(0, [promotedWithAttachment("post-materialize-budget", value)]),
     ).rejects.toThrow("total byte budget exceeded");
     expect(materializer.prepareCalls).toBe(1);
     expect(materializer.prepared).toHaveLength(1);
@@ -156,9 +134,7 @@ describe("location-aware payload Session memory contract", () => {
     const session = wrapWithBudget(source, materializer, payloadBytes(value));
 
     await expect(
-      session.appendInputFacts([
-        promotedWithAttachment("retried-input", value),
-      ]),
+      session.appendInputFacts([promotedWithAttachment("retried-input", value)]),
     ).rejects.toThrow("total byte budget exceeded");
     expect(source.inputCommitCalls).toBe(1);
     expect(materializer.prepareCalls).toBe(1);
@@ -171,12 +147,8 @@ describe("location-aware payload Session memory contract", () => {
 
   test("requires, validates, and freezes one explicit budget before touching ports", async () => {
     let externalGetterReads = 0;
-    const hostileSource = Object.create(
-      null,
-    ) as LocationAwarePayloadSessionSourceV1;
-    const hostileMaterializer = Object.create(
-      null,
-    ) as LocationAwarePayloadMaterializerV1;
+    const hostileSource = Object.create(null) as LocationAwarePayloadSessionSourceV1;
+    const hostileMaterializer = Object.create(null) as LocationAwarePayloadMaterializerV1;
     for (const [target, names] of [
       [
         hostileSource,
@@ -190,10 +162,7 @@ describe("location-aware payload Session memory contract", () => {
           "commitDecisionAndInputFacts",
         ],
       ],
-      [
-        hostileMaterializer,
-        ["readCanonicalPayloadIdentity", "prepare", "resolve", "hash"],
-      ],
+      [hostileMaterializer, ["readCanonicalPayloadIdentity", "prepare", "resolve", "hash"]],
     ] as const) {
       for (const name of names) {
         Object.defineProperty(target, name, {
@@ -235,14 +204,10 @@ describe("location-aware payload Session memory contract", () => {
     });
     mutableBudget.maxTotalBytes = 1;
     expect(
-      await session.commitInputFacts(0, [
-        promotedWithAttachment("frozen-budget", value),
-      ]),
+      await session.commitInputFacts(0, [promotedWithAttachment("frozen-budget", value)]),
     ).toBe("committed");
 
-    const prefix = [
-      inputEnvelope(1, promotedWithAttachment("validator-budget", value)),
-    ];
+    const prefix = [inputEnvelope(1, promotedWithAttachment("validator-budget", value))];
     await expect(
       validateCanonicalDurableJsonPayloadPrefixV1({
         fullPrefix: prefix,
@@ -286,9 +251,7 @@ describe("location-aware payload Session memory contract", () => {
     const emptyMaterializer = new MemoryMaterializer();
     const emptySession = wrap(empty, emptyMaterializer);
 
-    await emptySession.appendInputFacts([
-      promotedWithAttachment("input-empty", "empty"),
-    ]);
+    await emptySession.appendInputFacts([promotedWithAttachment("input-empty", "empty")]);
     expect(emptyMaterializer.prepared.map((item) => item.binding)).toEqual([
       {
         originSeq: 1,
@@ -324,10 +287,7 @@ describe("location-aware payload Session memory contract", () => {
     const settled = modelSettled(response, true);
     const observed = observedCall(call);
 
-    const commit = session.commitInputFacts(source.tailSeq, [
-      settled,
-      observed,
-    ]);
+    const commit = session.commitInputFacts(source.tailSeq, [settled, observed]);
     args.path = "after.ts";
     args.nested.line = 999;
     (response.toolCalls[0] as { name: string }).name = "mutated.tool";
@@ -353,11 +313,7 @@ describe("location-aware payload Session memory contract", () => {
       message: "before message",
       retryable: false,
     };
-    const decisionCommit = decisionSession.commitDecisionAndInputFacts(
-      3,
-      decision,
-      [failure],
-    );
+    const decisionCommit = decisionSession.commitDecisionAndInputFacts(3, decision, [failure]);
     (decision.action as { reasonCode: string }).reasonCode = "after_reason";
     (failure as { message: string }).message = "after message";
     expect(await decisionCommit).toBe("committed");
@@ -397,20 +353,13 @@ describe("location-aware payload Session memory contract", () => {
       value: { not: "text" },
       hash: hashJson({ not: "text" }),
     });
-    expect(() =>
-      attachmentSession.commitInputFacts(0, [badAttachment]),
-    ).toThrow("inline attachment content must be a string");
+    expect(() => attachmentSession.commitInputFacts(0, [badAttachment])).toThrow(
+      "inline attachment content must be a string",
+    );
     expect(attachmentMaterializer.prepared).toHaveLength(0);
     expect(attachmentSource.inputCommitCalls).toBe(0);
 
-    for (const drift of [
-      "count",
-      "id",
-      "name",
-      "order",
-      "args",
-      "argumentsValid",
-    ] as const) {
+    for (const drift of ["count", "id", "name", "order", "args", "argumentsValid"] as const) {
       const source = new MemorySource(modelDispatchPrefix());
       const materializer = new MemoryMaterializer();
       const session = wrap(source, materializer);
@@ -489,9 +438,7 @@ describe("location-aware payload Session memory contract", () => {
     const session = wrap(source, materializer);
 
     await expect(
-      session.commitInputFacts(0, [
-        promotedWithAttachment("input-honest", "honest attachment"),
-      ]),
+      session.commitInputFacts(0, [promotedWithAttachment("input-honest", "honest attachment")]),
     ).rejects.toThrow();
     expect(materializer.prepareCalls).toBe(1);
     expect(source.inputCommitCalls).toBe(0);
@@ -503,22 +450,12 @@ describe("location-aware payload Session memory contract", () => {
     const inputMaterializer = new MemoryMaterializer();
     const inputSession = wrap(inputSource, inputMaterializer);
     const accepted = acceptedWithAttachment("input-1", "same attachment");
-    const promoted = promotedWithAttachment(
-      "input-1",
-      "same attachment",
-      "steer",
-    );
+    const promoted = promotedWithAttachment("input-1", "same attachment", "steer");
 
-    expect(await inputSession.commitInputFacts(0, [accepted, promoted])).toBe(
-      "committed",
-    );
+    expect(await inputSession.commitInputFacts(0, [accepted, promoted])).toBe("committed");
     expect(inputMaterializer.prepared).toHaveLength(2);
-    expect(inputMaterializer.prepared[0]?.binding).toEqual(
-      inputMaterializer.prepared[1]?.binding,
-    );
-    expect(attachmentRef(lastFacts(inputSource)[0])).toBe(
-      attachmentRef(lastFacts(inputSource)[1]),
-    );
+    expect(inputMaterializer.prepared[0]?.binding).toEqual(inputMaterializer.prepared[1]?.binding);
+    expect(attachmentRef(lastFacts(inputSource)[0])).toBe(attachmentRef(lastFacts(inputSource)[1]));
 
     const claim = checkpointClaim("claim-1", "checkpoint-1", 1, 1);
     const checkpointSource = new MemorySource([
@@ -546,9 +483,7 @@ describe("location-aware payload Session memory contract", () => {
       checkpointMaterializer.prepared[1]?.binding,
     );
     const checkpointFacts = lastFacts(checkpointSource);
-    expect(checkpointRef(checkpointFacts[0])).toBe(
-      checkpointRef(checkpointFacts[1]),
-    );
+    expect(checkpointRef(checkpointFacts[0])).toBe(checkpointRef(checkpointFacts[1]));
   });
 
   test("explicit CAS conflicts do not prepare or retry", async () => {
@@ -556,27 +491,21 @@ describe("location-aware payload Session memory contract", () => {
     const materializer = new MemoryMaterializer();
     const session = wrap(source, materializer);
     expect(
-      await session.commitInputFacts(0, [
-        promotedWithAttachment("input-stale", "stale"),
-      ]),
+      await session.commitInputFacts(0, [promotedWithAttachment("input-stale", "stale")]),
     ).toBe("conflict");
     expect(
-      await session.commitDecisionAndInputFacts(
-        0,
-        controlDecision(1, "stale"),
-        [promotedWithAttachment("input-stale-2", "stale")],
-      ),
+      await session.commitDecisionAndInputFacts(0, controlDecision(1, "stale"), [
+        promotedWithAttachment("input-stale-2", "stale"),
+      ]),
     ).toBe("conflict");
     expect(materializer.prepared).toHaveLength(0);
     expect(source.inputCommitCalls).toBe(0);
     expect(source.decisionAndFactsCommitCalls).toBe(0);
 
     source.inputResults.push("conflict");
-    expect(
-      await session.commitInputFacts(1, [
-        promotedWithAttachment("input-race", "race"),
-      ]),
-    ).toBe("conflict");
+    expect(await session.commitInputFacts(1, [promotedWithAttachment("input-race", "race")])).toBe(
+      "conflict",
+    );
     expect(materializer.prepared).toHaveLength(1);
     expect(source.inputCommitCalls).toBe(1);
   });
@@ -588,24 +517,16 @@ describe("location-aware payload Session memory contract", () => {
     const materializer = new MemoryMaterializer();
     const session = wrap(source, materializer);
 
-    await session.appendInputFacts([
-      promotedWithAttachment("input-retry", "retry"),
-    ]);
+    await session.appendInputFacts([promotedWithAttachment("input-retry", "retry")]);
     expect(source.inputCommitCalls).toBe(2);
     expect(source.readPrefixCalls).toBe(2);
-    expect(materializer.prepared.map((item) => item.binding.originSeq)).toEqual(
-      [1, 2],
-    );
+    expect(materializer.prepared.map((item) => item.binding.originSeq)).toEqual([1, 2]);
     const [oldPreparation, newPreparation] = materializer.prepared;
     if (!oldPreparation || !newPreparation) {
       throw new Error("expected both conflict preparations");
     }
-    expect(oldPreparation.payload.artifactRef).not.toBe(
-      newPreparation.payload.artifactRef,
-    );
-    expect(attachmentRef(lastFacts(source)[0])).toBe(
-      newPreparation.payload.artifactRef,
-    );
+    expect(oldPreparation.payload.artifactRef).not.toBe(newPreparation.payload.artifactRef);
+    expect(attachmentRef(lastFacts(source)[0])).toBe(newPreparation.payload.artifactRef);
     expect(JSON.stringify(source.prefix)).not.toContain(
       oldPreparation?.payload.artifactRef ?? "missing-old-ref",
     );
@@ -651,10 +572,7 @@ describe("location-aware payload Session memory contract", () => {
     const modelSource = new MemorySource(modelDispatchPrefix());
     const modelMaterializer = new MemoryMaterializer();
     const modelSession = wrap(modelSource, modelMaterializer);
-    const calls = [
-      nativeCall("call-1", 0, { path: "a" }),
-      nativeCall("call-2", 1, { path: "b" }),
-    ];
+    const calls = [nativeCall("call-1", 0, { path: "a" }), nativeCall("call-2", 1, { path: "b" })];
     expect(
       await modelSession.commitInputFacts(modelSource.tailSeq, [
         modelSettled(modelResponse(calls), true),
@@ -673,24 +591,19 @@ describe("location-aware payload Session memory contract", () => {
       ]),
     ).toBe("committed");
     expect(toolSource.committedInputBatches.at(-1)).toHaveLength(2);
-    expect(toolMaterializer.prepared.map((item) => item.binding.field)).toEqual(
-      [
-        { kind: "tool_observation", callId: "call-1" },
-        { kind: "tool_observation", callId: "call-2" },
-      ],
-    );
+    expect(toolMaterializer.prepared.map((item) => item.binding.field)).toEqual([
+      { kind: "tool_observation", callId: "call-1" },
+      { kind: "tool_observation", callId: "call-2" },
+    ]);
 
     const failingSource = new MemorySource(dispatchedToolPrefix(calls));
     const failingMaterializer = new MemoryMaterializer();
     failingMaterializer.prepareErrorAt = 2;
     await expect(
-      wrap(failingSource, failingMaterializer).commitInputFacts(
-        failingSource.tailSeq,
-        [
-          toolSettled("call-1", { result: "a" }),
-          toolSettled("call-2", { result: "b" }),
-        ],
-      ),
+      wrap(failingSource, failingMaterializer).commitInputFacts(failingSource.tailSeq, [
+        toolSettled("call-1", { result: "a" }),
+        toolSettled("call-2", { result: "b" }),
+      ]),
     ).rejects.toThrow("prepare failed");
     expect(failingSource.inputCommitCalls).toBe(0);
   });
@@ -702,9 +615,9 @@ describe("location-aware payload Session memory contract", () => {
     const decision = controlDecision(1, "same");
     expect(await session.commitDerivedDecision(1, decision)).toBe("committed");
     expect(await session.commitDerivedDecision(2, decision)).toBe("committed");
-    await expect(
-      session.commitDerivedDecision(2, controlDecision(1, "drift")),
-    ).rejects.toThrow("conflicting derived decision");
+    await expect(session.commitDerivedDecision(2, controlDecision(1, "drift"))).rejects.toThrow(
+      "conflicting derived decision",
+    );
     await expect(
       session.commitDecisionAndInputFacts(2, decision, [
         promotedWithAttachment("after-derived", "blocked"),
@@ -717,20 +630,14 @@ describe("location-aware payload Session memory contract", () => {
   test("binds identity, captures source methods, validates reads, and hides the raw source", async () => {
     const emptyMismatch = new MemorySource([], "other-session", "run-1");
     const emptyMaterializer = new MemoryMaterializer();
-    expect(() => wrap(emptyMismatch, emptyMaterializer)).toThrow(
-      "identity mismatch",
-    );
+    expect(() => wrap(emptyMismatch, emptyMaterializer)).toThrow("identity mismatch");
     expect(emptyMismatch.identityReads).toBe(1);
     expect(emptyMaterializer.prepareCalls).toBe(0);
     expect(emptyMismatch.inputCommitCalls).toBe(0);
 
-    const nonempty = new MemorySource([
-      inputEnvelope(1, attempt(), "other-session", "run-1"),
-    ]);
+    const nonempty = new MemorySource([inputEnvelope(1, attempt(), "other-session", "run-1")]);
     const nonemptySession = wrap(nonempty, new MemoryMaterializer());
-    await expect(nonemptySession.readCanonicalPrefix()).rejects.toThrow(
-      "identity mismatch",
-    );
+    await expect(nonemptySession.readCanonicalPrefix()).rejects.toThrow("identity mismatch");
 
     const source = new MemorySource();
     const materializer = new MemoryMaterializer();
@@ -764,9 +671,7 @@ describe("location-aware payload Session memory contract", () => {
       };
     };
     expect(
-      await session.commitInputFacts(0, [
-        promotedWithAttachment("captured", "captured"),
-      ]),
+      await session.commitInputFacts(0, [promotedWithAttachment("captured", "captured")]),
     ).toBe("committed");
     expect(shadowReads).toBe(0);
     expect(shadowCommits).toBe(0);
@@ -791,9 +696,7 @@ describe("location-aware payload Session memory contract", () => {
     materializer.mutatePreparedDuringResolve = true;
     const session = wrap(source, materializer);
     expect(
-      await session.commitInputFacts(0, [
-        promotedWithAttachment("toctou-prepared", "stable"),
-      ]),
+      await session.commitInputFacts(0, [promotedWithAttachment("toctou-prepared", "stable")]),
     ).toBe("committed");
     const committedRef = attachmentRef(lastFacts(source)[0]);
     if (!materializer.originalPreparedRef) {
@@ -811,9 +714,7 @@ describe("location-aware payload Session memory contract", () => {
     prefixSource.returnMutableView = true;
     prefixMaterializer.onResolve = () => prefixSource.mutateLastReadView();
     const prefixSession = wrap(prefixSource, prefixMaterializer);
-    expect(
-      await prefixSession.commitInputFacts(1, [runtimeFailure("new fact")]),
-    ).toBe("committed");
+    expect(await prefixSession.commitInputFacts(1, [runtimeFailure("new fact")])).toBe("committed");
     expect(prefixSource.inputCommitCalls).toBe(1);
     expect(prefixSource.prefix[0]?.record).toMatchObject({
       kind: "input_fact",
@@ -899,9 +800,7 @@ describe("location-aware payload Session with FileRunSession", () => {
       ).toThrow("owner identity mismatch");
       expect(await source.readCanonicalPrefix(), fixture.label).toEqual([]);
       expect(
-        fs.existsSync(
-          path.join(payloadRoot, ".paw", "paw-next", "durable-json-payloads"),
-        ),
+        fs.existsSync(path.join(payloadRoot, ".paw", "paw-next", "durable-json-payloads")),
         fixture.label,
       ).toBeFalse();
 
@@ -935,9 +834,7 @@ describe("location-aware payload Session with FileRunSession", () => {
     });
     const publicIdentity = writer.readCanonicalPayloadIdentity();
     expect(Object.isFrozen(publicIdentity)).toBeTrue();
-    expect(
-      Reflect.set(publicIdentity as object, "runId", "shadow-run"),
-    ).toBeFalse();
+    expect(Reflect.set(publicIdentity as object, "runId", "shadow-run")).toBeFalse();
 
     const mutableFacade: LocationAwarePayloadMaterializerV1 = {
       readCanonicalPayloadIdentity: writer.readCanonicalPayloadIdentity,
@@ -963,9 +860,7 @@ describe("location-aware payload Session with FileRunSession", () => {
     };
 
     expect(
-      await session.commitInputFacts(0, [
-        promotedWithAttachment("identity-shadow", "stable"),
-      ]),
+      await session.commitInputFacts(0, [promotedWithAttachment("identity-shadow", "stable")]),
     ).toBe("committed");
     expect(shadowIdentityReads).toBe(0);
     expect((await source.readCanonicalPrefix()).at(-1)?.seq).toBe(1);
@@ -1003,9 +898,7 @@ describe("location-aware payload Session with FileRunSession", () => {
       budget: TEST_PAYLOAD_BUDGET,
     });
     await expect(
-      crashed.appendInputFacts([
-        promotedWithAttachment("input-crash", "durable"),
-      ]),
+      crashed.appendInputFacts([promotedWithAttachment("input-crash", "durable")]),
     ).rejects.toBeInstanceOf(SessionExecutionLeaseLostError);
 
     const recoveredSource = new FileRunSessionV1({
@@ -1028,9 +921,7 @@ describe("location-aware payload Session with FileRunSession", () => {
       kind: "input_fact",
       fact: { type: "input.promoted", inputId: "input-crash" },
     });
-    expect(attachmentRef(lastFactsFromPrefix(prefix)[0])).toMatch(
-      /^paw-payload:v1:[0-9a-f]{64}$/,
-    );
+    expect(attachmentRef(lastFactsFromPrefix(prefix)[0])).toMatch(/^paw-payload:v1:[0-9a-f]{64}$/);
     recoveredSource.close();
   });
 });
@@ -1082,20 +973,14 @@ class MemorySource implements LocationAwarePayloadSessionSourceV1 {
 
   mutateLastReadView(): void {
     const envelope = this.lastReadView?.[0];
-    if (
-      envelope?.record.kind === "input_fact" &&
-      envelope.record.fact.type === "input.promoted"
-    ) {
-      (envelope.record.fact as { content: string }).content =
-        "hostile mutation";
+    if (envelope?.record.kind === "input_fact" && envelope.record.fact.type === "input.promoted") {
+      (envelope.record.fact as { content: string }).content = "hostile mutation";
     }
   }
 
   async readInputSnapshot(): Promise<SessionInputSnapshot<InputFactV1>> {
     const entries = this.prefix.flatMap((item) =>
-      item.record.kind === "input_fact"
-        ? [{ seq: item.seq, fact: item.record.fact }]
-        : [],
+      item.record.kind === "input_fact" ? [{ seq: item.seq, fact: item.record.fact }] : [],
     );
     return {
       entries,
@@ -1160,33 +1045,19 @@ class MemorySource implements LocationAwarePayloadSessionSourceV1 {
   }
 
   insertFacts(facts: readonly InputFactV1[]): void {
-    this.insertRecords(
-      facts.map((fact) => ({ kind: "input_fact" as const, fact })),
-    );
+    this.insertRecords(facts.map((fact) => ({ kind: "input_fact" as const, fact })));
   }
 
-  private insertRecords(
-    records: readonly RunJournalEnvelopeV1["record"][],
-  ): void {
+  private insertRecords(records: readonly RunJournalEnvelopeV1["record"][]): void {
     const appended = records.map((record, index) =>
-      journalEnvelope(
-        this.tailSeq + index + 1,
-        record,
-        this.sessionId,
-        this.runId,
-      ),
+      journalEnvelope(this.tailSeq + index + 1, record, this.sessionId, this.runId),
     );
-    this.prefix = [
-      ...clone(parseRunJournalPrefixV1([...this.prefix, ...appended])),
-    ];
+    this.prefix = [...clone(parseRunJournalPrefixV1([...this.prefix, ...appended]))];
   }
 }
 
 class MemoryMaterializer implements LocationAwarePayloadMaterializerV1 {
-  readonly stored = new Map<
-    string,
-    { value: JsonValue; binding: DurableJsonPayloadBindingV1 }
-  >();
+  readonly stored = new Map<string, { value: JsonValue; binding: DurableJsonPayloadBindingV1 }>();
   readonly prepared: Array<{
     value: JsonValue;
     binding: DurableJsonPayloadBindingV1;
@@ -1225,8 +1096,7 @@ class MemoryMaterializer implements LocationAwarePayloadMaterializerV1 {
     this.prepareCalls += 1;
     if (
       this.prepareError ||
-      (this.prepareErrorAt !== undefined &&
-        this.prepareCalls === this.prepareErrorAt)
+      (this.prepareErrorAt !== undefined && this.prepareCalls === this.prepareErrorAt)
     ) {
       throw this.prepareError ?? new Error("prepare failed");
     }
@@ -1296,11 +1166,7 @@ class MemoryMaterializer implements LocationAwarePayloadMaterializerV1 {
   }
 }
 
-function wrap(
-  source: MemorySource,
-  materializer: MemoryMaterializer,
-  signal?: AbortSignal,
-) {
+function wrap(source: MemorySource, materializer: MemoryMaterializer, signal?: AbortSignal) {
   return createLocationAwarePayloadSessionV1({
     source,
     sessionId: "session-1",
@@ -1460,10 +1326,7 @@ function promotedWithAttachment(
   };
 }
 
-function promotedWithPayload(
-  inputId: string,
-  payload: DurableJsonPayloadV1,
-): InputFactV1 {
+function promotedWithPayload(inputId: string, payload: DurableJsonPayloadV1): InputFactV1 {
   return {
     type: "input.promoted",
     inputId,
@@ -1608,10 +1471,7 @@ function inline(value: JsonValue): DurableJsonPayloadV1 {
   return { kind: "inline", value, hash: hashJson(value) };
 }
 
-function controlDecision(
-  inputThroughSeq: number,
-  reasonCode: string,
-): DerivedDecisionV1 {
+function controlDecision(inputThroughSeq: number, reasonCode: string): DerivedDecisionV1 {
   return {
     type: "control.decided",
     reducerVersion: "test-reducer-v1",
@@ -1625,19 +1485,12 @@ function lastFacts(source: MemorySource): readonly InputFactV1[] {
   return source.committedInputBatches.at(-1) ?? [];
 }
 
-function lastFactsFromPrefix(
-  prefix: readonly RunJournalEnvelopeV1[],
-): readonly InputFactV1[] {
-  return prefix.flatMap((item) =>
-    item.record.kind === "input_fact" ? [item.record.fact] : [],
-  );
+function lastFactsFromPrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly InputFactV1[] {
+  return prefix.flatMap((item) => (item.record.kind === "input_fact" ? [item.record.fact] : []));
 }
 
 function attachmentRef(fact: InputFactV1 | undefined): string {
-  if (
-    !fact ||
-    (fact.type !== "input.promoted" && fact.type !== "input.accepted")
-  ) {
+  if (!fact || (fact.type !== "input.promoted" && fact.type !== "input.accepted")) {
     throw new Error("expected input attachment fact");
   }
   const payload = fact.attachments?.[0]?.content;
@@ -1676,10 +1529,7 @@ function canonicalJson(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`)
     .join(",")}}`;
 }
 

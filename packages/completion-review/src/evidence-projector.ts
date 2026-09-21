@@ -27,10 +27,7 @@ export function projectCompletionReviewToolEvidenceV1(input: {
     input.calls.map((call) => {
       const command = commandFor(call, jobCommands);
       const verificationKind = classifyVerificationCommandV1(command);
-      const verificationTarget = projectVerificationTargetV1(
-        command,
-        verificationKind,
-      );
+      const verificationTarget = projectVerificationTargetV1(command, verificationKind);
       const exitCode = projectExitCode(call);
       const timedOut = projectTimedOut(call);
       const outcome = projectOutcome(call, timedOut);
@@ -40,16 +37,14 @@ export function projectCompletionReviewToolEvidenceV1(input: {
         tool: call.tool,
         executionStatus: call.status,
         outcome:
-          (outcome === "passed" || outcome === "failed") &&
-          masksVerificationExitV1(command)
+          (outcome === "passed" || outcome === "failed") && masksVerificationExitV1(command)
             ? "indeterminate"
             : outcome,
         verificationKind,
         ...(verificationTarget === undefined ? {} : { verificationTarget }),
         args: call.args,
         summary: call.summary,
-        afterLatestMutation:
-          input.latestMutationSeq === 0 || call.seq > input.latestMutationSeq,
+        afterLatestMutation: input.latestMutationSeq === 0 || call.seq > input.latestMutationSeq,
         ...(observedOutput ? { observedOutput } : {}),
         ...(call.isError === undefined ? {} : { isError: call.isError }),
         ...(exitCode === undefined ? {} : { exitCode }),
@@ -71,9 +66,7 @@ function projectObservedOutput(
     return Object.freeze({
       kind: "file_read",
       text: content.slice(0, 4_000),
-      truncated:
-        content.length > 4_000 ||
-        booleanField(call.payload, "truncated") === true,
+      truncated: content.length > 4_000 || booleanField(call.payload, "truncated") === true,
       partial:
         booleanField(call.payload, "partial") === true ||
         (numberField(call.args, "offset") ?? 0) > 0 ||
@@ -112,10 +105,7 @@ function projectVerificationTargetV1(
     parseCommandChain(command)?.find(
       (segment) => classifyVerificationCommandV1(segment.text) === kind,
     )?.text ?? command;
-  const invocation = verificationInvocationV1(runner, kind).replace(
-    /\s+2>&1\s*$/u,
-    "",
-  );
+  const invocation = verificationInvocationV1(runner, kind).replace(/\s+2>&1\s*$/u, "");
   const withoutTrailingCommand = invocation.replace(/;\s*\S[\s\S]*$/u, "");
   const withoutOutputFilter = withoutTrailingCommand.replace(
     /\s+(?:\d?>&\d+\s*)?\|\s*(?:tail|head|grep|tee)\b[\s\S]*$/iu,
@@ -134,9 +124,7 @@ function masksVerificationExitV1(command: string | undefined): boolean {
   if (kind === "none") return false;
   const chain = parseCommandChain(command);
   if (!chain) return true;
-  const index = chain.findIndex(
-    (segment) => classifyVerificationCommandV1(segment.text) === kind,
-  );
+  const index = chain.findIndex((segment) => classifyVerificationCommandV1(segment.text) === kind);
   return index < 0 || !exitStatusProvesVerification(chain, index);
 }
 
@@ -168,9 +156,7 @@ export function classifyVerificationCommandV1(
     /(?:^|[\s;&|])(go|cargo|dotnet|mvn|gradle|gradlew)(?:\.\w+)?\s+test(?:[\s;&|]|$)/u.test(
       value,
     ) ||
-    /(?:^|[\s;&|])(npm|pnpm|yarn|bun)\s+(?:run\s+)?test(?::[\w.-]+)?(?:[\s;&|]|$)/u.test(
-      value,
-    ) ||
+    /(?:^|[\s;&|])(npm|pnpm|yarn|bun)\s+(?:run\s+)?test(?::[\w.-]+)?(?:[\s;&|]|$)/u.test(value) ||
     /(?:^|[\s;&|])(?:python(?:\d+(?:\.\d+)*)?(?:\.exe)?|py)\s+-m\s+(?:unittest|pytest)(?:[\s;&|]|$)/u.test(
       value,
     ) ||
@@ -180,9 +166,7 @@ export function classifyVerificationCommandV1(
     /(?:^|[\s;&|])(?:python(?:\d+(?:\.\d+)*)?(?:\.exe)?|py)\s+(?:[^\s;&|]*[\\/])?manage\.py\s+test(?:[\s;&|]|$)/u.test(
       value,
     ) ||
-    /(?:^|[\s;&|])(?:\.\.?[\\/])?[^\s;&|]*runtests\.py(?:[\s;&|]|$)/u.test(
-      value,
-    ) ||
+    /(?:^|[\s;&|])(?:\.\.?[\\/])?[^\s;&|]*runtests\.py(?:[\s;&|]|$)/u.test(value) ||
     /(?:^|[\s;&|])node\s+--test(?:[\s;&|]|$)/u.test(value) ||
     /(?:^|[\s;&|])make\s+(?:test|check)(?:[\s;&|]|$)/u.test(value)
   ) {
@@ -192,9 +176,7 @@ export function classifyVerificationCommandV1(
     /(?:^|[\s;&|])(eslint|stylelint|ruff|flake8|pylint|golangci-lint|clippy)(?:[\s;&|]|$)/u.test(
       value,
     ) ||
-    /(?:^|[\s;&|])(npm|pnpm|yarn|bun)\s+(?:run\s+)?lint(?:[\s;&|]|$)/u.test(
-      value,
-    )
+    /(?:^|[\s;&|])(npm|pnpm|yarn|bun)\s+(?:run\s+)?lint(?:[\s;&|]|$)/u.test(value)
   ) {
     return "lint";
   }
@@ -207,9 +189,7 @@ export function classifyVerificationCommandV1(
     return "typecheck";
   }
   if (
-    /(?:^|[\s;&|])(npm|pnpm|yarn|bun)\s+(?:run\s+)?build(?:[\s;&|]|$)/u.test(
-      value,
-    ) ||
+    /(?:^|[\s;&|])(npm|pnpm|yarn|bun)\s+(?:run\s+)?build(?:[\s;&|]|$)/u.test(value) ||
     /(?:^|[\s;&|])(cargo\s+build|go\s+build|dotnet\s+build|mvn\s+package|gradle(?:w)?\s+build)(?:[\s;&|]|$)/u.test(
       value,
     )
@@ -257,16 +237,10 @@ function projectOutcome(
     if (status === "failed" || status === "killed") return "failed";
     return "indeterminate";
   }
-  return call.isError === false
-    ? "passed"
-    : call.isError === true
-      ? "failed"
-      : "indeterminate";
+  return call.isError === false ? "passed" : call.isError === true ? "failed" : "indeterminate";
 }
 
-function projectExitCode(
-  call: CompletionReviewRawToolEvidenceV1,
-): number | undefined {
+function projectExitCode(call: CompletionReviewRawToolEvidenceV1): number | undefined {
   const direct = numberField(call.payload, "exit_code");
   if (direct !== undefined) return direct;
   if (!isTool(call.tool, "job_wait")) return undefined;
@@ -285,37 +259,24 @@ function isTool(tool: string, suffix: string): boolean {
   return tool === `workspace_${suffix}` || tool === `workspace.${suffix}`;
 }
 
-function record(
-  value: JsonValue | undefined,
-): Readonly<Record<string, JsonValue>> | undefined {
+function record(value: JsonValue | undefined): Readonly<Record<string, JsonValue>> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
   return value as Readonly<Record<string, JsonValue>>;
 }
 
-function stringField(
-  value: JsonValue | undefined,
-  field: string,
-): string | undefined {
+function stringField(value: JsonValue | undefined, field: string): string | undefined {
   const item = record(value)?.[field];
   return typeof item === "string" ? item : undefined;
 }
 
-function numberField(
-  value: JsonValue | undefined,
-  field: string,
-): number | undefined {
+function numberField(value: JsonValue | undefined, field: string): number | undefined {
   const item = record(value)?.[field];
-  return typeof item === "number" && Number.isSafeInteger(item) && item >= 0
-    ? item
-    : undefined;
+  return typeof item === "number" && Number.isSafeInteger(item) && item >= 0 ? item : undefined;
 }
 
-function booleanField(
-  value: JsonValue | undefined,
-  field: string,
-): boolean | undefined {
+function booleanField(value: JsonValue | undefined, field: string): boolean | undefined {
   const item = record(value)?.[field];
   return typeof item === "boolean" ? item : undefined;
 }

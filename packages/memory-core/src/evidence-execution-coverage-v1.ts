@@ -52,11 +52,7 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
   readonly requirements: readonly MemoryEvidenceRequirementV3[];
   readonly selectorSnapshot: MemorySelectorExecutionSnapshotV1;
   readonly notebook: MemoryEvidenceNotebookV1;
-  readonly closureAuditStatus:
-    | "not_needed"
-    | "not_configured"
-    | "completed"
-    | "fallback";
+  readonly closureAuditStatus: "not_needed" | "not_configured" | "completed" | "fallback";
   readonly closureVerdict?: "pass" | "repair" | "insufficient";
   readonly closureAuditRevision?: string;
 }): MemoryEvidenceExecutionCoverageCertificateV1 {
@@ -64,18 +60,12 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
     input.selectorSnapshot.groups.flatMap((group) =>
       group.requirements.map(
         (requirement) =>
-          [
-            requirement.requirementId,
-            { groupStatus: group.status, requirement },
-          ] as const,
+          [requirement.requirementId, { groupStatus: group.status, requirement }] as const,
       ),
     ),
   );
   const notebookByRequirement = new Map(
-    input.notebook.coverage.map((coverage) => [
-      coverage.requirementId,
-      coverage,
-    ]),
+    input.notebook.coverage.map((coverage) => [coverage.requirementId, coverage]),
   );
   if (
     input.requirements.length < 1 ||
@@ -101,12 +91,9 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       if (!execution || !coverage) {
         throw namedError("MemoryEvidenceExecutionCoverageInputInvalid");
       }
-      const supporting = new Set(
-        execution.requirement.assessment?.supportingEvidenceRefs ?? [],
-      );
+      const supporting = new Set(execution.requirement.assessment?.supportingEvidenceRefs ?? []);
       const minimumIndependentEvidence = requirement.minimumEvidence ?? 1;
-      const reasons: MemoryEvidenceExecutionRequirementCoverageV1["reasonCodes"][number][] =
-        [];
+      const reasons: MemoryEvidenceExecutionRequirementCoverageV1["reasonCodes"][number][] = [];
       if (execution.groupStatus !== "committed") {
         reasons.push("selector_group_uncommitted");
       }
@@ -114,19 +101,14 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
         reasons.push("selector_requirement_unassessed");
       }
       if (supporting.size === 0) reasons.push("supporting_evidence_missing");
-      if (coverage.status !== "covered")
-        reasons.push("notebook_requirement_open");
+      if (coverage.status !== "covered") reasons.push("notebook_requirement_open");
       if (coverage.unresolvedEvidenceRefs.length > 0) {
         reasons.push("notebook_unresolved_peer");
       }
       if (coverage.independentEvidenceCount < minimumIndependentEvidence) {
         reasons.push("minimum_evidence_unsatisfied");
       }
-      if (
-        coverage.selectedEvidenceRefs.some(
-          (evidenceRef) => !supporting.has(evidenceRef),
-        )
-      ) {
+      if (coverage.selectedEvidenceRefs.some((evidenceRef) => !supporting.has(evidenceRef))) {
         reasons.push("selected_evidence_not_supported");
       }
       if (!closurePassed) reasons.push("closure_audit_not_passed");
@@ -153,8 +135,7 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
         requirementRevision: execution.requirement.requirementRevision,
         temporalBindingRevision: execution.requirement.temporalBindingRevision,
         windowRevision,
-        status:
-          reasonCodes.length === 0 ? ("closed" as const) : ("open" as const),
+        status: reasonCodes.length === 0 ? ("closed" as const) : ("open" as const),
         selectedEvidenceCount: coverage.selectedEvidenceRefs.length,
         independentEvidenceCount: coverage.independentEvidenceCount,
         closureEvidenceCount: coverage.closureEvidenceCount,
@@ -177,9 +158,7 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       : ("open" as const),
     selectorSnapshotRevision: input.selectorSnapshot.snapshotRevision,
     notebookPolicyVersion: input.notebook.policyVersion,
-    closureAuditRevision: closurePassed
-      ? (input.closureAuditRevision as string)
-      : null,
+    closureAuditRevision: closurePassed ? (input.closureAuditRevision as string) : null,
     requirements,
   };
   return Object.freeze({
@@ -192,8 +171,7 @@ export function validateMemoryEvidenceExecutionCoverageCertificateV1(
   certificate: MemoryEvidenceExecutionCoverageCertificateV1,
 ): void {
   if (
-    certificate.policyVersion !==
-      PAW_MEMORY_EVIDENCE_EXECUTION_COVERAGE_POLICY_V1 ||
+    certificate.policyVersion !== PAW_MEMORY_EVIDENCE_EXECUTION_COVERAGE_POLICY_V1 ||
     !certificate.selectorSnapshotRevision.trim() ||
     certificate.requirements.length < 1 ||
     certificate.requirements.length > 4 ||
@@ -220,10 +198,8 @@ export function validateMemoryEvidenceExecutionCoverageCertificateV1(
       requirement.closureEvidenceCount < 0 ||
       !Number.isInteger(requirement.minimumIndependentEvidence) ||
       requirement.minimumIndependentEvidence < 1 ||
-      new Set(requirement.reasonCodes).size !==
-        requirement.reasonCodes.length ||
-      requirement.status !==
-        (requirement.reasonCodes.length === 0 ? "closed" : "open") ||
+      new Set(requirement.reasonCodes).size !== requirement.reasonCodes.length ||
+      requirement.status !== (requirement.reasonCodes.length === 0 ? "closed" : "open") ||
       hashCanonicalJsonV1({
         schemaVersion: "paw.memory-requirement-window.v1",
         requirementId: requirement.requirementId,
@@ -237,9 +213,7 @@ export function validateMemoryEvidenceExecutionCoverageCertificateV1(
   const { certificateRevision, ...identity } = certificate;
   if (
     certificate.status !==
-      (certificate.requirements.every(
-        (requirement) => requirement.status === "closed",
-      )
+      (certificate.requirements.every((requirement) => requirement.status === "closed")
         ? "closed"
         : "open") ||
     hashCanonicalJsonV1(identity as never) !== certificateRevision

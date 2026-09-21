@@ -17,12 +17,7 @@ export function GlassPanel({
   variant = "default",
   padding = "md",
 }: GlassPanelProps) {
-  const cls = [
-    styles.panel,
-    styles[`variant_${variant}`],
-    styles[`pad_${padding}`],
-    className,
-  ]
+  const cls = [styles.panel, styles[`variant_${variant}`], styles[`pad_${padding}`], className]
     .filter(Boolean)
     .join(" ");
 

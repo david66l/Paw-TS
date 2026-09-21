@@ -51,8 +51,7 @@ export function createMemoryEvidenceAnswerPolicyV1(input: {
     input.requirementCount > 1 ||
     input.evidenceStatus !== "sufficient" ||
     operations.some(
-      (operation) =>
-        operation !== "bind_requirements" && operation !== "enforce_role",
+      (operation) => operation !== "bind_requirements" && operation !== "enforce_role",
     );
   return Object.freeze({
     policyVersion: PAW_MEMORY_EVIDENCE_ANSWER_POLICY_VERSION_V1,

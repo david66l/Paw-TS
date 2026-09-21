@@ -48,9 +48,7 @@ export function createMemoryRawEvidenceInputPortV1(
   options: MemoryRawEvidenceInputPortOptionsV1,
 ): LoopInputPort {
   const report = options.baseInput.reportSafeBoundary.bind(options.baseInput);
-  const consume = options.baseInput.consumePromotedInputIds.bind(
-    options.baseInput,
-  );
+  const consume = options.baseInput.consumePromotedInputIds.bind(options.baseInput);
   const readSnapshot = options.session.readInputSnapshot.bind(options.session);
   const commitFacts = options.session.commitInputFacts.bind(options.session);
   const now = options.now ?? Date.now;
@@ -86,10 +84,7 @@ export function createMemoryRawEvidenceInputPortV1(
                 queryId: fact.queryId,
                 resolutionRevision: fact.resolutionRevision,
                 spanCount: fact.spans.length,
-                contentChars: fact.spans.reduce(
-                  (total, span) => total + span.content.length,
-                  0,
-                ),
+                contentChars: fact.spans.reduce((total, span) => total + span.content.length, 0),
                 status: fact.status,
                 durationMs: Math.max(0, now() - started),
               });
@@ -146,10 +141,7 @@ async function settleResolution(
       queryId: input.queryId,
       resolutionRevision: fact.resolutionRevision,
       spanCount: fact.spans.length,
-      contentChars: fact.spans.reduce(
-        (total, span) => total + span.content.length,
-        0,
-      ),
+      contentChars: fact.spans.reduce((total, span) => total + span.content.length, 0),
       status: fact.status,
       durationMs: Math.max(0, input.now() - started),
     });
@@ -180,9 +172,7 @@ async function commitUniqueResolution(
   let snapshot = input.initialSnapshot;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     if (hasResolution(snapshot, input.fact.queryId)) return;
-    if (
-      (await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed"
-    ) {
+    if ((await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed") {
       return;
     }
     snapshot = await input.readSnapshot();
@@ -190,25 +180,15 @@ async function commitUniqueResolution(
   throw new Error("Memory raw evidence journal commit conflict");
 }
 
-function hasRetrieval(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasRetrieval(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   return snapshot.entries.some(
-    (entry) =>
-      entry.fact.type === "memory.retrieval_settled" &&
-      entry.fact.queryId === queryId,
+    (entry) => entry.fact.type === "memory.retrieval_settled" && entry.fact.queryId === queryId,
   );
 }
 
-function hasResolution(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasResolution(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   return snapshot.entries.some(
-    (entry) =>
-      entry.fact.type === "memory.raw_evidence_settled" &&
-      entry.fact.queryId === queryId,
+    (entry) => entry.fact.type === "memory.raw_evidence_settled" && entry.fact.queryId === queryId,
   );
 }
 
@@ -229,9 +209,8 @@ function assertExactScope(
 function stableReasonCode(error: unknown): string {
   const name = error instanceof Error ? error.name : "Unknown";
   return (
-    `MemoryRawEvidence_${name}`
-      .replace(/[^A-Za-z0-9_.:-]/g, "_")
-      .slice(0, 160) || "MemoryRawEvidence_Unknown"
+    `MemoryRawEvidence_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160) ||
+    "MemoryRawEvidence_Unknown"
   );
 }
 

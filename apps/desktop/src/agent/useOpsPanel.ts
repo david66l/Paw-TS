@@ -95,13 +95,7 @@ export function useOpsPanel(opts: {
     } finally {
       setBusy(false);
     }
-  }, [
-    checkpointRunId,
-    lastRunId,
-    hostReady,
-    workspaceRoot,
-    refreshCheckpoints,
-  ]);
+  }, [checkpointRunId, lastRunId, hostReady, workspaceRoot, refreshCheckpoints]);
 
   const refreshRuns = useCallback(async () => {
     if (!hostReady) return;

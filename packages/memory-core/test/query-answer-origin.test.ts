@@ -8,9 +8,7 @@ import {
 
 describe("typed immutable query answer origin v1", () => {
   test("classifies explicit and ordinary origins without using semantic as permission", () => {
-    const ordinary = compileMemoryQueryAnswerOriginV1(
-      "What color is the bicycle?",
-    );
+    const ordinary = compileMemoryQueryAnswerOriginV1("What color is the bicycle?");
     expect(ordinary).toMatchObject({
       originKind: "ordinary_semantic",
       roleBoundary: "semantic",
@@ -18,22 +16,19 @@ describe("typed immutable query answer origin v1", () => {
     expect(Object.isFrozen(ordinary)).toBe(true);
     expect(Object.isFrozen(ordinary.features)).toBe(true);
 
-    expect(
-      compileMemoryQueryAnswerOriginV1("Which city did I visit?").originKind,
-    ).toBe("explicit_user");
-    expect(
-      compileMemoryQueryAnswerOriginV1("What did you recommend last time?")
-        .originKind,
-    ).toBe("explicit_assistant");
-    expect(
-      compileMemoryQueryAnswerOriginV1("What did we decide on?").originKind,
-    ).toBe("explicit_shared");
+    expect(compileMemoryQueryAnswerOriginV1("Which city did I visit?").originKind).toBe(
+      "explicit_user",
+    );
+    expect(compileMemoryQueryAnswerOriginV1("What did you recommend last time?").originKind).toBe(
+      "explicit_assistant",
+    );
+    expect(compileMemoryQueryAnswerOriginV1("What did we decide on?").originKind).toBe(
+      "explicit_shared",
+    );
   });
 
   test("opens an unowned dialogue artifact from joint structural cues", () => {
-    const origin = compileMemoryQueryAnswerOriginV1(
-      "Can you remember the earlier label for me?",
-    );
+    const origin = compileMemoryQueryAnswerOriginV1("Can you remember the earlier label for me?");
     expect(origin).toMatchObject({
       originKind: "dialogue_artifact_unowned",
       features: {
@@ -49,13 +44,10 @@ describe("typed immutable query answer origin v1", () => {
 
   test("answer-clause authors override coarse participant mentions", () => {
     expect(
-      compileMemoryQueryAnswerOriginV1("Can you remember what I said earlier?")
-        .originKind,
+      compileMemoryQueryAnswerOriginV1("Can you remember what I said earlier?").originKind,
     ).toBe("explicit_user");
     expect(
-      compileMemoryQueryAnswerOriginV1(
-        "Can you remember what you recommended earlier?",
-      ).originKind,
+      compileMemoryQueryAnswerOriginV1("Can you remember what you recommended earlier?").originKind,
     ).toBe("explicit_assistant");
   });
 
@@ -84,9 +76,7 @@ describe("typed immutable query answer origin v1", () => {
     ).toThrow("MemoryEvidenceQueryPlanOriginInvalid");
     expect(() =>
       validateMemoryEvidenceQueryPlanOriginV1({
-        origin: compileMemoryQueryAnswerOriginV1(
-          "Can you remember the earlier label for me?",
-        ),
+        origin: compileMemoryQueryAnswerOriginV1("Can you remember the earlier label for me?"),
         plan: assistantPlan,
       }),
     ).not.toThrow();

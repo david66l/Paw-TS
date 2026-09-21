@@ -72,9 +72,7 @@ describe("DefaultContextSummarizer", () => {
     expect(shared.role).toContain("coding sub-agent");
     expect(shared.childPolicy).toBe("read_write");
     expect(shared.facts.some((f) => f.includes("Parent goal"))).toBe(true);
-    expect(
-      shared.parentConclusions?.some((c) => c.conclusion.includes("JWT")),
-    ).toBe(true);
+    expect(shared.parentConclusions?.some((c) => c.conclusion.includes("JWT"))).toBe(true);
   });
 
   it("blanks role/outputFormat when agent_id targets a registry Spec", () => {
@@ -94,15 +92,9 @@ describe("DefaultContextSummarizer", () => {
 
   it("extracts file artifacts from inline XML", () => {
     const ctx = new ContextManager();
-    ctx.addUser(
-      'Review this:\n<file path="src/auth.ts">\nexport function login() {}\n</file>',
-    );
+    ctx.addUser('Review this:\n<file path="src/auth.ts">\nexport function login() {}\n</file>');
 
-    const shared = new DefaultContextSummarizer().summarize(
-      ctx,
-      "Refactor auth.ts",
-      "coding",
-    );
+    const shared = new DefaultContextSummarizer().summarize(ctx, "Refactor auth.ts", "coding");
 
     expect(shared.artifacts.length).toBe(1);
     expect(shared.artifacts[0]?.path).toBe("src/auth.ts");
@@ -115,11 +107,7 @@ describe("DefaultContextSummarizer", () => {
     ctx.addUser("Run the full test suite and report failures");
     ctx.addToolResult("workspace.run_shell", true, "ok");
 
-    const shared = new DefaultContextSummarizer().summarize(
-      ctx,
-      "Analyze test output",
-      "simple",
-    );
+    const shared = new DefaultContextSummarizer().summarize(ctx, "Analyze test output", "simple");
 
     expect(shared.facts.some((f) => f.includes("[Tool "))).toBe(false);
     expect(shared.facts.some((f) => f.includes("Parent goal"))).toBe(true);
@@ -129,11 +117,7 @@ describe("DefaultContextSummarizer", () => {
     const ctx = new ContextManager();
     ctx.addUser(`${CONTEXT_SUMMARY_PREFIX}\nPrior work: migrated DB schema`);
 
-    const shared = new DefaultContextSummarizer().summarize(
-      ctx,
-      "Continue migration",
-      "relay",
-    );
+    const shared = new DefaultContextSummarizer().summarize(ctx, "Continue migration", "relay");
 
     expect(shared.facts.some((f) => f.includes("Session summary"))).toBe(true);
     expect(shared.role).toContain("relay sub-agent");

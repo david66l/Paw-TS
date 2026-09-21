@@ -37,9 +37,7 @@ describe("Phase 2 E2E — Retry", () => {
       maxSteps: 3,
     });
     expect(r.status).toBe("completed");
-    const waitEvent = events.find(
-      (e) => e.event.type === "model.retry.waiting",
-    );
+    const waitEvent = events.find((e) => e.event.type === "model.retry.waiting");
     expect(waitEvent).toBeDefined();
     if (waitEvent?.event.type === "model.retry.waiting") {
       expect(waitEvent.event.errorType).toBe("rate_limit");
@@ -85,9 +83,7 @@ describe("Phase 2 E2E — Circuit Breaker", () => {
     });
 
     // Inject a breaker with low threshold so it opens within one run
-    const { CircuitBreaker } = await import(
-      "../src/resilience/circuit-breaker.js"
-    );
+    const { CircuitBreaker } = await import("../src/resilience/circuit-breaker.js");
     const breaker = new CircuitBreaker("fake", { failureThreshold: 2 });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (o as any).circuitBreakers.set("fake", breaker);
@@ -101,15 +97,11 @@ describe("Phase 2 E2E — Circuit Breaker", () => {
     expect(r.status).toBe("failed");
 
     // Should see retry events (3 attempts = 2 retries)
-    const retries = events.filter(
-      (e) => e.event.type === "model.retry.waiting",
-    );
+    const retries = events.filter((e) => e.event.type === "model.retry.waiting");
     expect(retries.length).toBe(2);
 
     // After 2 failures the breaker should have opened
-    const cbEvent = events.find(
-      (e) => e.event.type === "model.circuit_breaker.open",
-    );
+    const cbEvent = events.find((e) => e.event.type === "model.circuit_breaker.open");
     expect(cbEvent).toBeDefined();
     if (cbEvent?.event.type === "model.circuit_breaker.open") {
       expect(cbEvent.event.label).toBe("fake");
@@ -126,9 +118,7 @@ describe("Phase 2 E2E — Circuit Breaker", () => {
     const o = new AgentOrchestrator({ model, retrySleep: async () => {} });
 
     // Manually open the breaker
-    const { CircuitBreaker } = await import(
-      "../src/resilience/circuit-breaker.js"
-    );
+    const { CircuitBreaker } = await import("../src/resilience/circuit-breaker.js");
     const breaker = new CircuitBreaker("fake", { failureThreshold: 1 });
     breaker.recordFailure();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,9 +145,7 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
       statesDir: path.join(dir, ".paw", "states"),
     });
     const model = new FakeLanguageModel({
-      responses: [
-        { text: '{"action":"final_answer","summary":"First run done."}' },
-      ],
+      responses: [{ text: '{"action":"final_answer","summary":"First run done."}' }],
     });
     const o = new AgentOrchestrator({
       model,
@@ -182,9 +170,7 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
 
     // Resume from saved state
     const model2 = new FakeLanguageModel({
-      responses: [
-        { text: '{"action":"final_answer","summary":"Resumed run done."}' },
-      ],
+      responses: [{ text: '{"action":"final_answer","summary":"Resumed run done."}' }],
     });
     const o2 = new AgentOrchestrator({
       model: model2,
@@ -267,9 +253,7 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
       workspaceRoot: dir,
       turn: 0,
       maxSteps: 3,
-      messages: [
-        { role: "user", content: "Update a.txt. [allow_skip_verify]" },
-      ],
+      messages: [{ role: "user", content: "Update a.txt. [allow_skip_verify]" }],
       savedAt: Date.now(),
     });
     sessionStore.saveEvent(runId, {
@@ -314,9 +298,7 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
     expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("after");
     expect(resumedEvents.length).toBeGreaterThan(0);
     expect(resumedEvents.every((event) => event.seq > 40)).toBe(true);
-    expect(listCheckpoints(dir, runId).some((entry) => entry.seq === 3)).toBe(
-      true,
-    );
+    expect(listCheckpoints(dir, runId).some((entry) => entry.seq === 3)).toBe(true);
   });
 
   test("restoreCheckpoint rolls back file changes", async () => {
@@ -337,9 +319,7 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
     });
     writeFileSync(path.join(dir, "a.txt"), "modified-again", "utf8");
 
-    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe(
-      "modified-again",
-    );
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("modified-again");
 
     // Restore to seq 1
     const restored = restoreCheckpoint(dir, "run-cp", 1);
@@ -361,14 +341,7 @@ describe("Phase 2 E2E — Checkpoint + Resume", () => {
       command: "echo hello > out.txt",
     });
 
-    const metaPath = path.join(
-      dir,
-      ".paw",
-      "checkpoints",
-      "run-sh",
-      "1",
-      ".shell-meta.json",
-    );
+    const metaPath = path.join(dir, ".paw", "checkpoints", "run-sh", "1", ".shell-meta.json");
     expect(existsSync(metaPath)).toBe(true);
     const meta = JSON.parse(readFileSync(metaPath, "utf8"));
     expect(meta.tool).toBe("workspace.run_shell");

@@ -1,7 +1,6 @@
 import type { ToolDefinition } from "@paw/models";
 
-export const CAPABILITY_EXPOSURE_SCHEMA_V1 =
-  "paw.capability-exposure.v1" as const;
+export const CAPABILITY_EXPOSURE_SCHEMA_V1 = "paw.capability-exposure.v1" as const;
 
 export type CapabilityCategoryV1 =
   | "workspace_read"
@@ -50,9 +49,7 @@ export interface CapabilityTaskPhaseFactsV1 {
 }
 
 /** Add temporal tools without turning them into permanently exposed core. */
-export function capabilityPhaseToolsV1(
-  state: CapabilityTaskPhaseFactsV1,
-): readonly string[] {
+export function capabilityPhaseToolsV1(state: CapabilityTaskPhaseFactsV1): readonly string[] {
   const revision = state.mutationRevision ?? 0;
   if (revision === 0 || (state.diffInspectedRevision ?? 0) >= revision) {
     return Object.freeze(["workspace.git_status"]);
@@ -118,11 +115,7 @@ function originalName(
 }
 
 function categoryForTool(name: string): CapabilityCategoryV1 {
-  if (
-    name.startsWith("mcp:") ||
-    name === "workspace.use_mcp" ||
-    name.includes("web_")
-  )
+  if (name.startsWith("mcp:") || name === "workspace.use_mcp" || name.includes("web_"))
     return "external";
   if (name.startsWith("memory.") || name === "context.recall") {
     return "context";
@@ -139,11 +132,7 @@ function categoryForTool(name: string): CapabilityCategoryV1 {
   ) {
     return "workspace_write";
   }
-  if (
-    name.includes("git_diff") ||
-    name.includes("lsp") ||
-    name.includes("acceptance")
-  ) {
+  if (name.includes("git_diff") || name.includes("lsp") || name.includes("acceptance")) {
     return "verification";
   }
   if (name.startsWith("workspace.")) return "workspace_read";
@@ -211,9 +200,7 @@ export function searchCapabilitiesV1(
     inventory
       .map((entry) => ({ entry, score: scoreEntry(entry, query) }))
       .filter((candidate) => candidate.score > 0)
-      .sort(
-        (a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name),
-      )
+      .sort((a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name))
       .slice(0, boundedMax)
       .map((candidate) => candidate.entry),
   );
@@ -223,19 +210,14 @@ export class CapabilityExposureShadowV1 {
   readonly inventory: readonly CapabilityInventoryEntryV1[];
   private readonly definitionsByName: ReadonlyMap<string, ToolDefinition>;
   private readonly fullToolTokens: number;
-  private readonly countTokens: (
-    definitions: readonly ToolDefinition[],
-  ) => number;
+  private readonly countTokens: (definitions: readonly ToolDefinition[]) => number;
 
   constructor(input: {
     readonly definitions: readonly ToolDefinition[];
     readonly toolNameMap: ReadonlyMap<string, string>;
     readonly countTokens: (definitions: readonly ToolDefinition[]) => number;
   }) {
-    this.inventory = inventoryCapabilitiesV1(
-      input.definitions,
-      input.toolNameMap,
-    );
+    this.inventory = inventoryCapabilitiesV1(input.definitions, input.toolNameMap);
     this.definitionsByName = new Map(
       input.definitions.map((definition) => [
         originalName(definition, input.toolNameMap),
@@ -246,10 +228,7 @@ export class CapabilityExposureShadowV1 {
     this.fullToolTokens = input.countTokens(input.definitions);
   }
 
-  suggestedTools(
-    query: string,
-    phaseTools: readonly string[] = [],
-  ): readonly string[] {
+  suggestedTools(query: string, phaseTools: readonly string[] = []): readonly string[] {
     const selected = new Set(
       this.inventory.filter((entry) => entry.core).map((entry) => entry.name),
     );
@@ -262,16 +241,11 @@ export class CapabilityExposureShadowV1 {
     return Object.freeze([...selected].sort());
   }
 
-  snapshot(
-    query: string,
-    phaseTools: readonly string[] = [],
-  ): CapabilityExposureSnapshotV1 {
+  snapshot(query: string, phaseTools: readonly string[] = []): CapabilityExposureSnapshotV1 {
     const suggestedTools = this.suggestedTools(query, phaseTools);
     const suggestedDefinitions = suggestedTools
       .map((name) => this.definitionsByName.get(name))
-      .filter((definition): definition is ToolDefinition =>
-        Boolean(definition),
-      );
+      .filter((definition): definition is ToolDefinition => Boolean(definition));
     const suggestedToolTokens = this.countTokens(suggestedDefinitions);
     const suggestedSet = new Set(suggestedTools);
     return Object.freeze({
@@ -281,15 +255,10 @@ export class CapabilityExposureShadowV1 {
       fullToolTokens: this.fullToolTokens,
       suggestedToolCount: suggestedTools.length,
       suggestedToolTokens,
-      estimatedSavingsTokens: Math.max(
-        0,
-        this.fullToolTokens - suggestedToolTokens,
-      ),
+      estimatedSavingsTokens: Math.max(0, this.fullToolTokens - suggestedToolTokens),
       suggestedTools,
       deferredTools: Object.freeze(
-        this.inventory
-          .map((entry) => entry.name)
-          .filter((name) => !suggestedSet.has(name)),
+        this.inventory.map((entry) => entry.name).filter((name) => !suggestedSet.has(name)),
       ),
     });
   }
@@ -303,9 +272,7 @@ export class CapabilityExposureShadowV1 {
     const suggestedTools = this.suggestedTools(query, phaseTools);
     const suggestedSet = new Set(suggestedTools);
     const uniqueActual = Object.freeze([...new Set(actualTools)].sort());
-    const outsideSuggestion = Object.freeze(
-      uniqueActual.filter((name) => !suggestedSet.has(name)),
-    );
+    const outsideSuggestion = Object.freeze(uniqueActual.filter((name) => !suggestedSet.has(name)));
     return Object.freeze({
       schemaVersion: CAPABILITY_EXPOSURE_SCHEMA_V1,
       mode: "shadow",
@@ -314,11 +281,7 @@ export class CapabilityExposureShadowV1 {
       suggestedTools,
       outsideSuggestion,
       outcome:
-        uniqueActual.length === 0
-          ? "no_tool"
-          : outsideSuggestion.length === 0
-            ? "hit"
-            : "fallback",
+        uniqueActual.length === 0 ? "no_tool" : outsideSuggestion.length === 0 ? "hit" : "fallback",
       exposedToolCount: this.inventory.length,
     });
   }

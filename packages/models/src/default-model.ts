@@ -52,10 +52,7 @@ function loadSettingsForWorkspace(workspaceRoot: string): {
   settings: PawSettingsLocal;
   path: string;
 } {
-  const candidates = [
-    defaultSettingsPath(workspaceRoot),
-    defaultSettingsPath(process.cwd()),
-  ];
+  const candidates = [defaultSettingsPath(workspaceRoot), defaultSettingsPath(process.cwd())];
   // de-dupe when workspaceRoot === cwd
   const seen = new Set<string>();
   const errors: string[] = [];
@@ -81,85 +78,84 @@ function loadSettingsForWorkspace(workspaceRoot: string): {
  * 按模式匹配优先级排列：更具体的正则放前面，更通用的放后面。
  * 例如 deepseek-v4 必须在 /deepseek/i 之前匹配，避免被通用规则误判。
  */
-const KNOWN_CAPABILITIES: Array<{ pattern: RegExp; caps: ModelCapabilities }> =
-  [
-    // ── Anthropic 系列 ──
-    {
-      pattern: /claude-3[.-]5-sonnet|claude-sonnet-4/i,
-      caps: { contextWindow: 200_000, maxOutputTokens: 8_192 },
-    },
-    {
-      pattern: /claude-3[.-]5-haiku|claude-haiku/i,
-      caps: { contextWindow: 200_000, maxOutputTokens: 8_192 },
-    },
-    {
-      pattern: /claude-opus/i,
-      caps: { contextWindow: 200_000, maxOutputTokens: 32_768 },
-    },
-    // 通用 Claude 兜底匹配
-    { pattern: /claude/i, caps: { contextWindow: 200_000 } },
-    // ── OpenAI 系列 ──
-    {
-      pattern: /gpt-4o|gpt-4[.]1/i,
-      caps: { contextWindow: 128_000, maxOutputTokens: 16_384 },
-    },
-    {
-      pattern: /gpt-4[.-]turbo/i,
-      caps: { contextWindow: 128_000, maxOutputTokens: 4_096 },
-    },
-    {
-      // o1/o3/o4 推理模型，输出上限更高
-      pattern: /o1|o3|o4/i,
-      caps: { contextWindow: 200_000, maxOutputTokens: 100_000 },
-    },
-    {
-      pattern: /gpt-3[.]5/i,
-      caps: { contextWindow: 16_385, maxOutputTokens: 4_096 },
-    },
-    // GLM-5.3-Flash: official 1M context / 128K output.
-    {
-      pattern: /^glm-5[.]3-flash$/i,
-      caps: { contextWindow: 1_000_000, maxOutputTokens: 128_000 },
-    },
-    // ── DeepSeek 系列 ──
-    // V4 模型：1M 上下文（必须在通用 /deepseek/i 之前匹配）
-    {
-      pattern: /deepseek-v4|deepseek\/v4/i,
-      caps: { contextWindow: 1_000_000, maxOutputTokens: 384_000 },
-    },
-    // 通用 DeepSeek 兜底
-    { pattern: /deepseek/i, caps: { contextWindow: 64_000 } },
-    // ── Qwen（通义千问）系列 ──
-    {
-      pattern: /qwen-max|qwen-turbo|qwen-plus|qwen2\.5/i,
-      caps: { contextWindow: 128_000, maxOutputTokens: 8_192 },
-    },
-    // ── Ollama 常用模型 ──
-    {
-      pattern: /llama3/i,
-      caps: { contextWindow: 128_000, maxOutputTokens: 8_192 },
-    },
-    {
-      pattern: /qwen2\.5/i,
-      caps: { contextWindow: 128_000, maxOutputTokens: 8_192 },
-    },
-    {
-      pattern: /deepseek-r1/i,
-      caps: { contextWindow: 128_000, maxOutputTokens: 8_192 },
-    },
-    {
-      pattern: /codellama/i,
-      caps: { contextWindow: 16_384, maxOutputTokens: 4_096 },
-    },
-    {
-      pattern: /mistral/i,
-      caps: { contextWindow: 32_768, maxOutputTokens: 4_096 },
-    },
-    {
-      pattern: /phi[34]/i,
-      caps: { contextWindow: 128_000, maxOutputTokens: 4_096 },
-    },
-  ];
+const KNOWN_CAPABILITIES: Array<{ pattern: RegExp; caps: ModelCapabilities }> = [
+  // ── Anthropic 系列 ──
+  {
+    pattern: /claude-3[.-]5-sonnet|claude-sonnet-4/i,
+    caps: { contextWindow: 200_000, maxOutputTokens: 8_192 },
+  },
+  {
+    pattern: /claude-3[.-]5-haiku|claude-haiku/i,
+    caps: { contextWindow: 200_000, maxOutputTokens: 8_192 },
+  },
+  {
+    pattern: /claude-opus/i,
+    caps: { contextWindow: 200_000, maxOutputTokens: 32_768 },
+  },
+  // 通用 Claude 兜底匹配
+  { pattern: /claude/i, caps: { contextWindow: 200_000 } },
+  // ── OpenAI 系列 ──
+  {
+    pattern: /gpt-4o|gpt-4[.]1/i,
+    caps: { contextWindow: 128_000, maxOutputTokens: 16_384 },
+  },
+  {
+    pattern: /gpt-4[.-]turbo/i,
+    caps: { contextWindow: 128_000, maxOutputTokens: 4_096 },
+  },
+  {
+    // o1/o3/o4 推理模型，输出上限更高
+    pattern: /o1|o3|o4/i,
+    caps: { contextWindow: 200_000, maxOutputTokens: 100_000 },
+  },
+  {
+    pattern: /gpt-3[.]5/i,
+    caps: { contextWindow: 16_385, maxOutputTokens: 4_096 },
+  },
+  // GLM-5.3-Flash: official 1M context / 128K output.
+  {
+    pattern: /^glm-5[.]3-flash$/i,
+    caps: { contextWindow: 1_000_000, maxOutputTokens: 128_000 },
+  },
+  // ── DeepSeek 系列 ──
+  // V4 模型：1M 上下文（必须在通用 /deepseek/i 之前匹配）
+  {
+    pattern: /deepseek-v4|deepseek\/v4/i,
+    caps: { contextWindow: 1_000_000, maxOutputTokens: 384_000 },
+  },
+  // 通用 DeepSeek 兜底
+  { pattern: /deepseek/i, caps: { contextWindow: 64_000 } },
+  // ── Qwen（通义千问）系列 ──
+  {
+    pattern: /qwen-max|qwen-turbo|qwen-plus|qwen2\.5/i,
+    caps: { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  },
+  // ── Ollama 常用模型 ──
+  {
+    pattern: /llama3/i,
+    caps: { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  },
+  {
+    pattern: /qwen2\.5/i,
+    caps: { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  },
+  {
+    pattern: /deepseek-r1/i,
+    caps: { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  },
+  {
+    pattern: /codellama/i,
+    caps: { contextWindow: 16_384, maxOutputTokens: 4_096 },
+  },
+  {
+    pattern: /mistral/i,
+    caps: { contextWindow: 32_768, maxOutputTokens: 4_096 },
+  },
+  {
+    pattern: /phi[34]/i,
+    caps: { contextWindow: 128_000, maxOutputTokens: 4_096 },
+  },
+];
 
 /**
  * 根据模型 ID 字符串，通过正则匹配推断其上下文窗口和最大输出 token 数。
@@ -261,10 +257,7 @@ function detectProvider(
 /** 按 key 大小写不敏感查 models 预设条目（provider 已 toLowerCase）。 */
 function findModelsEntry(models: PawSettingsLocal["models"], name: string) {
   if (!models) return undefined;
-  return (
-    models[name] ??
-    Object.entries(models).find(([k]) => k.toLowerCase() === name)?.[1]
-  );
+  return models[name] ?? Object.entries(models).find(([k]) => k.toLowerCase() === name)?.[1];
 }
 
 /**
@@ -279,16 +272,10 @@ function findModelsEntry(models: PawSettingsLocal["models"], name: string) {
  * @param workspaceRoot - 工作区根目录，用于定位配置文件
  * @returns LanguageModel 实例（永远不会返回 undefined/抛出异常）
  */
-export function createDefaultLanguageModel(
-  workspaceRoot: string,
-): LanguageModel {
+export function createDefaultLanguageModel(workspaceRoot: string): LanguageModel {
   try {
-    const { settings: s, path: loadedFrom } =
-      loadSettingsForWorkspace(workspaceRoot);
-    if (
-      path.resolve(loadedFrom) !==
-      path.resolve(defaultSettingsPath(workspaceRoot))
-    ) {
+    const { settings: s, path: loadedFrom } = loadSettingsForWorkspace(workspaceRoot);
+    if (path.resolve(loadedFrom) !== path.resolve(defaultSettingsPath(workspaceRoot))) {
       console.warn(`[paw] Settings not in workspace; using ${loadedFrom}`);
     }
 
@@ -298,25 +285,18 @@ export function createDefaultLanguageModel(
     // ── Ollama 本地部署分支 ──
     if (provider === "ollama") {
       const ollamaHost = s.ollama_host?.trim();
-      const ollamaModel =
-        (s.ollama_model as string | undefined)?.trim() || s.model?.trim();
+      const ollamaModel = (s.ollama_model as string | undefined)?.trim() || s.model?.trim();
       if (!ollamaModel) {
-        console.warn(
-          "[paw] provider=ollama but no model configured. Using fake model.",
-        );
+        console.warn("[paw] provider=ollama but no model configured. Using fake model.");
         return new FakeLanguageModel();
       }
       return new OpenAICompatibleModel({
         apiKey: "ollama", // Ollama 不需要真实 API key，占位即可
-        baseUrl: ollamaHost
-          ? `${ollamaHost.replace(/\/$/, "")}/v1`
-          : "http://localhost:11434/v1",
+        baseUrl: ollamaHost ? `${ollamaHost.replace(/\/$/, "")}/v1` : "http://localhost:11434/v1",
         model: ollamaModel,
         capabilities: {
           ...resolveCapabilities(ollamaModel),
-          ...(s.models?.ollama?.imageInput
-            ? { imageInput: true as const }
-            : {}),
+          ...(s.models?.ollama?.imageInput ? { imageInput: true as const } : {}),
         },
       });
     }
@@ -334,10 +314,7 @@ export function createDefaultLanguageModel(
         const opts = {
           apiKey: entry.apiKey?.trim() || "",
           baseUrl:
-            baseUrl ||
-            (anthropic
-              ? "https://api.anthropic.com/v1"
-              : "https://api.openai.com/v1"),
+            baseUrl || (anthropic ? "https://api.anthropic.com/v1" : "https://api.openai.com/v1"),
           model: modelName,
           capabilities: {
             ...resolveCapabilities(modelName),
@@ -346,9 +323,7 @@ export function createDefaultLanguageModel(
           thinkingEnabled: entry.thinkingEnabled,
           reasoningEffort: entry.reasoningEffort,
         };
-        return anthropic
-          ? new AnthropicCompatibleModel(opts)
-          : new OpenAICompatibleModel(opts);
+        return anthropic ? new AnthropicCompatibleModel(opts) : new OpenAICompatibleModel(opts);
       }
       console.warn(
         `[paw] provider="${provider}" 非内置 provider 且无匹配 models 预设，回退自动检测。`,
@@ -356,8 +331,7 @@ export function createDefaultLanguageModel(
     }
 
     // ── 云服务提供商分支 ──
-    const activeProvider =
-      (provider as CredentialProvider | undefined) || detectProvider(s);
+    const activeProvider = (provider as CredentialProvider | undefined) || detectProvider(s);
     if (activeProvider && activeProvider in PROVIDERS) {
       const entry = PROVIDERS[activeProvider];
       const apiKey = resolveApiKey(s, activeProvider) || "";
@@ -370,9 +344,7 @@ export function createDefaultLanguageModel(
           model,
           capabilities: {
             ...resolveCapabilities(model),
-            ...(s.models?.[activeProvider]?.imageInput
-              ? { imageInput: true as const }
-              : {}),
+            ...(s.models?.[activeProvider]?.imageInput ? { imageInput: true as const } : {}),
           },
           reasoningEffort: s.models?.[activeProvider]?.reasoningEffort,
         });
@@ -383,9 +355,7 @@ export function createDefaultLanguageModel(
         model,
         capabilities: {
           ...resolveCapabilities(model),
-          ...(s.models?.[activeProvider]?.imageInput
-            ? { imageInput: true as const }
-            : {}),
+          ...(s.models?.[activeProvider]?.imageInput ? { imageInput: true as const } : {}),
         },
         thinkingEnabled: s.models?.[activeProvider]?.thinkingEnabled,
         reasoningEffort: s.models?.[activeProvider]?.reasoningEffort,
@@ -393,9 +363,7 @@ export function createDefaultLanguageModel(
     }
 
     // 配置文件已加载但没有配置 API key
-    console.warn(
-      "[paw] Settings loaded but no API keys found. Using fake model.",
-    );
+    console.warn("[paw] Settings loaded but no API keys found. Using fake model.");
   } catch (e) {
     // 配置文件读取失败（文件不存在、权限问题、JSON 格式错误等）
     const msg = e instanceof Error ? e.message : String(e);

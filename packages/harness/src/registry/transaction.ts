@@ -1,8 +1,4 @@
-import {
-  finalizeCheckpoint,
-  requiresToolCheckpointV1,
-  saveCheckpoint,
-} from "@paw/core";
+import { finalizeCheckpoint, requiresToolCheckpointV1, saveCheckpoint } from "@paw/core";
 
 import type { HarnessContext } from "../context.js";
 import type { ToolRunResult } from "./definitions.js";
@@ -47,9 +43,7 @@ export type ToolEffectPolicyDecision =
  */
 export interface ToolEffectPolicy {
   readonly appliesTo?: (input: ToolExecutionPolicyInput) => boolean;
-  readonly prepare: (
-    input: ToolExecutionPolicyInput,
-  ) => unknown | Promise<unknown>;
+  readonly prepare: (input: ToolExecutionPolicyInput) => unknown | Promise<unknown>;
   readonly settle: (
     input: ToolEffectPolicyInput,
     prepared: unknown,
@@ -130,10 +124,7 @@ export type ToolExecutionTransactionOutcome =
       readonly status: "failed";
       readonly callId: string;
       readonly executed: false;
-      readonly phase:
-        | "execution_policy"
-        | "checkpoint_prepare"
-        | "effect_prepare";
+      readonly phase: "execution_policy" | "checkpoint_prepare" | "effect_prepare";
       readonly error: ToolTransactionError;
       readonly checkpoint?: ToolTransactionCheckpointEvidence;
     }
@@ -260,8 +251,7 @@ export async function executeToolTransaction(
         phase: "checkpoint_prepare",
         error: {
           name: "TypeError",
-          message:
-            "mutating tool transaction requires a positive checkpointSeq",
+          message: "mutating tool transaction requires a positive checkpointSeq",
         },
       };
     }
@@ -330,9 +320,7 @@ export async function executeToolTransaction(
         currentToolCallId: input.callId,
         checkpointNamespaceId: input.checkpointNamespaceId,
         abortSignal: input.signal,
-        ...(input.tool === "workspace.run_shell"
-          ? { shellCommandPreApproved: true }
-          : {}),
+        ...(input.tool === "workspace.run_shell" ? { shellCommandPreApproved: true } : {}),
       },
       input.tool,
       input.args,

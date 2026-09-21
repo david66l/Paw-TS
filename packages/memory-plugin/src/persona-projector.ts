@@ -2,14 +2,10 @@ import type { ModelContextSectionV1, ModelRequestV1 } from "@paw/core";
 import type { JournalContextRuntimeV1 } from "@paw/runtime";
 
 import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
-import type {
-  MemorySceneIndexEntryV1,
-  MemorySceneSnapshotV1,
-} from "./scene-navigation.js";
+import type { MemorySceneIndexEntryV1, MemorySceneSnapshotV1 } from "./scene-navigation.js";
 import type { SourceGroundedMemoryAtomV1 } from "./scene-projector.js";
 
-export const PAW_MEMORY_PERSONA_PROJECTOR_VERSION_V1 =
-  "paw.memory-persona-projector.v1" as const;
+export const PAW_MEMORY_PERSONA_PROJECTOR_VERSION_V1 = "paw.memory-persona-projector.v1" as const;
 
 export interface SourceGroundedPersonaClaimV1 {
   readonly path: string;
@@ -63,29 +59,14 @@ export function projectSourceGroundedPersonaV1(input: {
     16_000,
     "MemoryPersonaBudgetInvalid",
   );
-  const maxClaims = boundedInteger(
-    input.maxClaims ?? 24,
-    1,
-    64,
-    "MemoryPersonaClaimBudgetInvalid",
-  );
+  const maxClaims = boundedInteger(input.maxClaims ?? 24, 1, 64, "MemoryPersonaClaimBudgetInvalid");
   const minimumConfidence = input.minimumConfidence ?? 0.55;
-  if (
-    !Number.isFinite(minimumConfidence) ||
-    minimumConfidence < 0 ||
-    minimumConfidence > 1
-  ) {
+  if (!Number.isFinite(minimumConfidence) || minimumConfidence < 0 || minimumConfidence > 1) {
     throw namedError("MemoryPersonaConfidenceInvalid");
   }
-  const entries = new Map(
-    input.snapshot.indexEntries.map((entry) => [entry.path, entry] as const),
-  );
+  const entries = new Map(input.snapshot.indexEntries.map((entry) => [entry.path, entry] as const));
   const queues = input.snapshot.indexEntries.map((entry) =>
-    personaCandidates(
-      entry,
-      input.snapshot.bodies[entry.path]?.atoms ?? [],
-      minimumConfidence,
-    ),
+    personaCandidates(entry, input.snapshot.bodies[entry.path]?.atoms ?? [], minimumConfidence),
   );
   const claims: SourceGroundedPersonaClaimV1[] = [];
   const normalizedStatements = new Set<string>();
@@ -190,10 +171,7 @@ export function createMemoryPersonaContextV1(
       }
       return Object.freeze({
         ...request,
-        contextSections: Object.freeze([
-          section,
-          ...(request.contextSections ?? []),
-        ]),
+        contextSections: Object.freeze([section, ...(request.contextSections ?? [])]),
       });
     },
   });
@@ -226,9 +204,7 @@ function personaCandidates(
         confidence: atom.confidence ?? 1,
       }),
       order,
-      preference: PREFERENCE_SIGNALS.some((pattern) =>
-        pattern.test(atom.statement),
-      ),
+      preference: PREFERENCE_SIGNALS.some((pattern) => pattern.test(atom.statement)),
     }))
     .sort((left, right) => {
       if (left.preference !== right.preference) return left.preference ? -1 : 1;
@@ -252,12 +228,7 @@ function normalizeStatement(value: string): string {
     .trim();
 }
 
-function boundedInteger(
-  value: number,
-  min: number,
-  max: number,
-  errorName: string,
-): number {
+function boundedInteger(value: number, min: number, max: number, errorName: string): number {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
     throw namedError(errorName);
   }

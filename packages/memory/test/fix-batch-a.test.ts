@@ -18,14 +18,10 @@ import { TriggeredRetriever } from "../src/longterm/retrieval/triggered.js";
 import type { SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import {
-  type DistillerLlm,
-  MemoryDistiller,
-} from "../src/longterm/write/distiller.js";
+import { type DistillerLlm, MemoryDistiller } from "../src/longterm/write/distiller.js";
 import { MemoryWritePipeline } from "../src/longterm/write/pipeline.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -48,9 +44,7 @@ describe("#1b detectAdoption（§10.3 规则初筛）", () => {
       [
         {
           id: "b",
-          modifications: [
-            "check the exports field in package configuration first",
-          ],
+          modifications: ["check the exports field in package configuration first"],
         },
       ],
       "we decided to check the exports field in package configuration before anything else",
@@ -59,18 +53,11 @@ describe("#1b detectAdoption（§10.3 规则初筛）", () => {
   });
 
   test("无命中 → 不采纳；短关键词不参与", () => {
-    expect(
-      detectAdoption([{ id: "c", keywords: ["use"] }], "the user story"),
-    ).toEqual([]);
-    expect(
-      detectAdoption(
-        [{ id: "d", keywords: ["kubernetes"] }],
-        "plain sqlite storage",
-      ),
-    ).toEqual([]);
-    expect(detectAdoption([{ id: "e", keywords: ["anything"] }], "")).toEqual(
+    expect(detectAdoption([{ id: "c", keywords: ["use"] }], "the user story")).toEqual([]);
+    expect(detectAdoption([{ id: "d", keywords: ["kubernetes"] }], "plain sqlite storage")).toEqual(
       [],
     );
+    expect(detectAdoption([{ id: "e", keywords: ["anything"] }], "")).toEqual([]);
   });
 });
 
@@ -125,9 +112,7 @@ describe("修复批次 A db 集成", () => {
   });
 
   it("#1a/#1b 任务成功结算：注入条目 utility+1，轨迹引用的记采纳", async () => {
-    const entry = makeSemantic("Zephyr deploys need rotation window checks", [
-      "zephyr",
-    ]);
+    const entry = makeSemantic("Zephyr deploys need rotation window checks", ["zephyr"]);
     await engine.put(entry);
     const id = deriveEntryId(entry);
     createdIds.push(id);
@@ -188,9 +173,7 @@ describe("修复批次 A db 集成", () => {
     // 构造无采纳环境：清空全库 read.adopted（各测试文件自带数据，互不影响）
     await sql`DELETE FROM memory_op_log WHERE op = 'read.adopted'`;
 
-    const entry = makeSemantic(
-      "Marble entry with eight injections and zero adoptions",
-    );
+    const entry = makeSemantic("Marble entry with eight injections and zero adoptions");
     await engine.put(entry);
     const id = deriveEntryId(entry);
     createdIds.push(id);
@@ -290,11 +273,7 @@ describe("修复批次 A db 集成", () => {
       repo: REPO,
     });
     // 20 个并发入队
-    await Promise.all(
-      Array.from({ length: 20 }, (_, i) =>
-        (i % 2 === 0 ? p1 : p2).enqueue(mk(i)),
-      ),
-    );
+    await Promise.all(Array.from({ length: 20 }, (_, i) => (i % 2 === 0 ? p1 : p2).enqueue(mk(i))));
 
     const sql = getSql();
     const [cnt] = await sql`
@@ -308,8 +287,7 @@ describe("修复批次 A db 集成", () => {
 
   it("#5 单条超预算条目被截断到预算硬顶内 + 记 read.truncated", async () => {
     const big = makeSemantic(
-      "Obsidian oversized entry: " +
-        "detailed step by step explanation. ".repeat(150),
+      "Obsidian oversized entry: " + "detailed step by step explanation. ".repeat(150),
       ["obsidian"],
     );
     await engine.put(big);

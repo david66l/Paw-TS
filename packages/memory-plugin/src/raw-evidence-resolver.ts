@@ -1,9 +1,5 @@
 import type { SessionInputSnapshot } from "@paw/agent-loop";
-import type {
-  InputFactV1,
-  JsonValue,
-  MemoryRawEvidenceSpanV1,
-} from "@paw/protocol";
+import type { InputFactV1, JsonValue, MemoryRawEvidenceSpanV1 } from "@paw/protocol";
 
 import { canonicalJsonStringifyV1, hashTextV1 } from "./canonical.js";
 import type {
@@ -27,10 +23,7 @@ export async function resolveMemoryRawEvidenceV1(
   }>,
 ): Promise<MemoryRawEvidenceResolutionV1> {
   assertBudget(input.maxSpans, input.maxChars);
-  const requests = collectRequests(input.snapshot, input.queryId).slice(
-    0,
-    input.maxSpans,
-  );
+  const requests = collectRequests(input.snapshot, input.queryId).slice(0, input.maxSpans);
   const resolved = await input.archive.resolve(requests, input.signal);
   return boundMemoryRawEvidenceSpansV1({
     requests,
@@ -50,9 +43,7 @@ export function boundMemoryRawEvidenceSpansV1(
 ): MemoryRawEvidenceResolutionV1 {
   assertBudget(input.maxSpans, input.maxChars);
   const requests = input.requests.slice(0, input.maxSpans);
-  const requested = new Map(
-    requests.map((request) => [request.evidenceRef, request] as const),
-  );
+  const requested = new Map(requests.map((request) => [request.evidenceRef, request] as const));
   const spans: MemoryRawEvidenceSpanV1[] = [];
   const seen = new Set<string>();
   let chars = 0;
@@ -109,9 +100,7 @@ function collectRequests(
   const retrieval = [...snapshot.entries]
     .reverse()
     .find(
-      (entry) =>
-        entry.fact.type === "memory.retrieval_settled" &&
-        entry.fact.queryId === queryId,
+      (entry) => entry.fact.type === "memory.retrieval_settled" && entry.fact.queryId === queryId,
     );
   if (retrieval?.fact.type === "memory.retrieval_settled") {
     for (const card of retrieval.fact.cards) {
@@ -124,8 +113,7 @@ function collectRequests(
     .reverse()
     .find(
       (entry) =>
-        entry.fact.type === "memory.topic_evidence_settled" &&
-        entry.fact.queryId === queryId,
+        entry.fact.type === "memory.topic_evidence_settled" && entry.fact.queryId === queryId,
     );
   if (topic?.fact.type === "memory.topic_evidence_settled") {
     for (const state of topic.fact.evidenceStates) {

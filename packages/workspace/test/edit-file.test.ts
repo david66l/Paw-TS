@@ -16,8 +16,7 @@ describe("editWorkspaceFile — string mode", () => {
     );
     const r = editWorkspaceFile(root, "a.py", {
       oldString: "    return get_type_hints(self.parent)\n",
-      newString:
-        "    return get_type_hints(self.parent, None, self.config.autodoc_type_aliases)\n",
+      newString: "    return get_type_hints(self.parent, None, self.config.autodoc_type_aliases)\n",
     });
     expect(r.error).toBeUndefined();
     expect(r.replacements).toBe(1);
@@ -39,9 +38,7 @@ describe("editWorkspaceFile — string mode", () => {
     });
     expect(r.error).toBeUndefined();
     expect(r.replacements).toBe(2);
-    expect(fs.readFileSync(path.join(root, "a.txt"), "utf8")).toBe(
-      "qux bar\nqux baz\n",
-    );
+    expect(fs.readFileSync(path.join(root, "a.txt"), "utf8")).toBe("qux bar\nqux baz\n");
   });
 
   test("replaces unique match", () => {
@@ -62,11 +59,7 @@ describe("editWorkspaceFile — string mode", () => {
 
   test("treats JavaScript replacement tokens as literal source text", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(
-      path.join(root, "tokens.txt"),
-      "before TARGET after\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "tokens.txt"), "before TARGET after\n", "utf8");
     const literal = "$&|$`|$'|$$";
     const r = editWorkspaceFile(root, "tokens.txt", {
       oldString: "TARGET",
@@ -80,14 +73,12 @@ describe("editWorkspaceFile — string mode", () => {
 
   test("does not duplicate a file suffix for matplotlib-style Python source", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    const suffix = Array.from(
-      { length: 1_300 },
-      (_, index) => `line_${index} = ${index}`,
-    ).join("\n");
+    const suffix = Array.from({ length: 1_300 }, (_, index) => `line_${index} = ${index}`).join(
+      "\n",
+    );
     const before = `def _wrap_in_tex(s):\n    return '$' + s.replace('-', '{-}') + '}$'\n${suffix}\n`;
     const oldString = "    return '$' + s.replace('-', '{-}') + '}$'";
-    const newString =
-      "    return '$' + s.replace('-', '{-}').replace(':', '{:}') + '}$'";
+    const newString = "    return '$' + s.replace('-', '{-}').replace(':', '{:}') + '}$'";
     writeFileSync(path.join(root, "dates.py"), before, "utf8");
 
     const r = editWorkspaceFile(root, "dates.py", { oldString, newString });
@@ -160,9 +151,7 @@ describe("editWorkspaceFile — string mode", () => {
 
     expect(r.error).toBeUndefined();
     expect(r.replacements).toBe(2);
-    expect(fs.readFileSync(path.join(root, "overlap.txt"), "utf8")).toBe(
-      "$'$'\n",
-    );
+    expect(fs.readFileSync(path.join(root, "overlap.txt"), "utf8")).toBe("$'$'\n");
   });
 
   test("rejects when old_string not found", () => {
@@ -221,11 +210,7 @@ describe("editWorkspaceFile — string mode", () => {
 
   test("multiline replacement works", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-edit-"));
-    writeFileSync(
-      path.join(root, "a.ts"),
-      "function old() {\n  return 1;\n}\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "a.ts"), "function old() {\n  return 1;\n}\n", "utf8");
     const r = editWorkspaceFile(root, "a.ts", {
       oldString: "function old() {\n  return 1;\n}",
       newString: "function newFn() {\n  return 2;\n}",

@@ -37,17 +37,8 @@ export interface CompactionCommit {
   readonly afterTokens: number;
 }
 
-export function compactionCommitsDir(
-  workspaceRoot: string,
-  runId: string,
-): string {
-  return path.join(
-    workspaceRoot,
-    ".paw",
-    "sessions",
-    sanitizeRunId(runId),
-    "compaction-commits",
-  );
+export function compactionCommitsDir(workspaceRoot: string, runId: string): string {
+  return path.join(workspaceRoot, ".paw", "sessions", sanitizeRunId(runId), "compaction-commits");
 }
 
 /** 保存一次压缩 commit；返回快照文件路径 */
@@ -96,9 +87,7 @@ export function loadCompactionSnapshot(
   runId: string,
   n: number,
 ): CompactionCommit | null {
-  const commit = listCompactionCommits(workspaceRoot, runId).find(
-    (c) => c.n === n,
-  );
+  const commit = listCompactionCommits(workspaceRoot, runId).find((c) => c.n === n);
   return commit ?? null;
 }
 

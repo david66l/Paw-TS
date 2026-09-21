@@ -53,10 +53,7 @@ export interface OpLogFilter {
 
 function newOpLogId(ts: string, op: string): string {
   const rand = randomBytes(4).toString("hex");
-  const hash = createHash("sha256")
-    .update(`${ts}${op}${rand}`)
-    .digest("hex")
-    .slice(0, 8);
+  const hash = createHash("sha256").update(`${ts}${op}${rand}`).digest("hex").slice(0, 8);
   return `opl_${hash}${rand}`;
 }
 
@@ -89,9 +86,7 @@ export async function appendOpLog(
 }
 
 /** 按 runId/条目/操作/时间窗口查询，默认按时间倒序 */
-export async function queryOpLog(
-  filter: OpLogFilter = {},
-): Promise<OpLogEntry[]> {
+export async function queryOpLog(filter: OpLogFilter = {}): Promise<OpLogEntry[]> {
   const sql = getSql();
   const conds: string[] = ["1=1"];
   const params: unknown[] = [];

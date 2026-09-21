@@ -171,9 +171,7 @@ describe("journal-backed memory topic organizer", () => {
       now: () => 1_750_000_000_600,
     });
 
-    expect(
-      await controller.settleSourceWrite(sourceWriteSettlement()),
-    ).toMatchObject({
+    expect(await controller.settleSourceWrite(sourceWriteSettlement())).toMatchObject({
       organizationId: "organization-crashed",
       status: "completed",
       topicIds: ["topic-recovered"],
@@ -224,9 +222,7 @@ describe("journal-backed memory topic organizer", () => {
       now: () => 1_750_000_000_700,
     });
 
-    expect(
-      await controller.settleSourceWrite(sourceWriteSettlement()),
-    ).toMatchObject({
+    expect(await controller.settleSourceWrite(sourceWriteSettlement())).toMatchObject({
       organizationId: "organization-pre-stage-crash",
       status: "interrupted",
       reasonCode: "memory_topic_claim_interrupted_before_stage",

@@ -61,11 +61,9 @@ describe("isWorthWritingLongTermMemory", () => {
         executedTools: [],
       }),
     ).toBe(false);
-    expect(
-      hasDurableMemorySignal(
-        "不要调用工具。请记住一个暗号词：蓝鲸。只回复：已记下",
-      ),
-    ).toBe(false);
+    expect(hasDurableMemorySignal("不要调用工具。请记住一个暗号词：蓝鲸。只回复：已记下")).toBe(
+      false,
+    );
   });
 
   it("writes when files modified", () => {
@@ -196,8 +194,7 @@ describe("buildConversationAwareQuery", () => {
 
 describe("cleanMemoryTitle / finalize markers", () => {
   it("cleans multi-turn goal for title", () => {
-    const goal =
-      "User: a\nAssistant: b\n\n[Current user request]\nPrefer ioredis for Redis";
+    const goal = "User: a\nAssistant: b\n\n[Current user request]\nPrefer ioredis for Redis";
     expect(cleanMemoryTitle(goal)).toBe("Prefer ioredis for Redis");
   });
 
@@ -226,9 +223,7 @@ describe("extractExplicitRememberText", () => {
     expect(extractExplicitRememberText("记住暗号词蓝鲸")).toBeNull();
     expect(extractExplicitRememberText("hello")).toBeNull();
     expect(
-      extractExplicitRememberText(
-        "不要调用工具。请记住一个暗号词：蓝鲸。只回复：已记下",
-      ),
+      extractExplicitRememberText("不要调用工具。请记住一个暗号词：蓝鲸。只回复：已记下"),
     ).toBeNull();
   });
 });
@@ -251,9 +246,7 @@ describe("applyTypeQuotas", () => {
     ];
     const out = applyTypeQuotas(ranked, 6);
     expect(out.filter((x) => x.memory.type === "task_summary")).toHaveLength(1);
-    expect(
-      out.filter((x) => x.memory.type === "user_preference").length,
-    ).toBeLessThanOrEqual(3);
+    expect(out.filter((x) => x.memory.type === "user_preference").length).toBeLessThanOrEqual(3);
     expect(out.length).toBeLessThanOrEqual(6);
   });
 });

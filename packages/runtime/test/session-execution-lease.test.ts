@@ -35,12 +35,8 @@ describe("cross-process Session execution lease", () => {
     try {
       lease.assertHeld();
       for (const file of files) {
-        expect(stat.mock.calls.filter((args) => args[0] === file)).toHaveLength(
-          1,
-        );
-        expect(read.mock.calls.filter((args) => args[0] === file)).toHaveLength(
-          1,
-        );
+        expect(stat.mock.calls.filter((args) => args[0] === file)).toHaveLength(1);
+        expect(read.mock.calls.filter((args) => args[0] === file)).toHaveLength(1);
       }
     } finally {
       stat.mockRestore();
@@ -62,30 +58,14 @@ describe("cross-process Session execution lease", () => {
     const childScript = fixture("session-lease-claim-child.ts");
     const readyOne = path.join(root, "ready-1");
     const readyTwo = path.join(root, "ready-2");
-    const first = runChild([
-      childScript,
-      root,
-      "shared",
-      "run-a",
-      readyOne,
-      barrier,
-    ]);
-    const second = runChild([
-      childScript,
-      root,
-      "shared",
-      "run-b",
-      readyTwo,
-      barrier,
-    ]);
+    const first = runChild([childScript, root, "shared", "run-a", readyOne, barrier]);
+    const second = runChild([childScript, root, "shared", "run-b", readyTwo, barrier]);
     await waitFor(() => fs.existsSync(readyOne) && fs.existsSync(readyTwo));
     fs.writeFileSync(barrier, "go\n");
     const results = (await Promise.all([first, second])).map(
       (value) => JSON.parse(value) as ChildClaimResult,
     );
-    expect(results.filter(({ status }) => status === "acquired")).toHaveLength(
-      1,
-    );
+    expect(results.filter(({ status }) => status === "acquired")).toHaveLength(1);
     expect(results.filter(({ status }) => status === "busy")).toHaveLength(1);
     expect(results.map(({ token }) => token)).toEqual([1, 1]);
     expect(new Set(results.map(({ ownerId }) => ownerId)).size).toBe(1);
@@ -112,24 +92,15 @@ describe("cross-process Session execution lease", () => {
     expect(second.fencingToken).toBe(2);
     const files = eventFiles(root, "timeline");
     const events = files.map(readJson);
-    expect(events.map(({ type }) => type)).toEqual([
-      "claim",
-      "heartbeat",
-      "release",
-      "claim",
-    ]);
+    expect(events.map(({ type }) => type)).toEqual(["claim", "heartbeat", "release", "claim"]);
     expect(events.map(({ eventSeq }) => eventSeq)).toEqual([1, 2, 3, 4]);
-    expect(events.map(({ fencingToken }) => fencingToken)).toEqual([
-      1, 1, 1, 2,
-    ]);
+    expect(events.map(({ fencingToken }) => fencingToken)).toEqual([1, 1, 1, 2]);
     expect(events[0]).toMatchObject({
       baseTailSeq: 0,
       basePrefixHash: EMPTY_RUN_JOURNAL_PREFIX_HASH_V1,
     });
     for (let index = 1; index < files.length; index += 1) {
-      expect(events[index]?.previousEventHash).toBe(
-        hashFile(files[index - 1] as string),
-      );
+      expect(events[index]?.previousEventHash).toBe(hashFile(files[index - 1] as string));
     }
   });
 
@@ -154,9 +125,10 @@ describe("cross-process Session execution lease", () => {
         nextHead: { ...input.nextHead, prefixHash: "e".repeat(64) },
       }),
     ).rejects.toThrow("commitId was reused");
-    expect(
-      await lease.linearizeJournalBatch(linearizeInput("commit-2")),
-    ).toEqual({ status: "conflict", head: input.nextHead });
+    expect(await lease.linearizeJournalBatch(linearizeInput("commit-2"))).toEqual({
+      status: "conflict",
+      head: input.nextHead,
+    });
     const next = nextLinearizeInput(input.nextHead, "commit-next");
     expect(await lease.linearizeJournalBatch(next)).toMatchObject({
       status: "committed",
@@ -227,9 +199,7 @@ describe("cross-process Session execution lease", () => {
     const root = tempRoot();
     let now = 0;
     const lease = acquired(
-      acquire(
-        options(root, "stale-anchor", "run-1", now, { clock: () => now }),
-      ),
+      acquire(options(root, "stale-anchor", "run-1", now, { clock: () => now })),
     );
     const input = linearizeInput("commit-anchor");
     await lease.linearizeJournalBatch(input);
@@ -339,9 +309,7 @@ describe("cross-process Session execution lease", () => {
     const root = tempRoot();
     let now = 0;
     const lease = acquired(
-      acquire(
-        options(root, "expired-commit", "run-1", now, { clock: () => now }),
-      ),
+      acquire(options(root, "expired-commit", "run-1", now, { clock: () => now })),
     );
     const committed = linearizeInput("expired");
     await lease.linearizeJournalBatch(committed);
@@ -401,31 +369,20 @@ describe("cross-process Session execution lease", () => {
       const root = tempRoot();
       let now = 0;
       const lease = acquired(
-        acquire(
-          options(root, `local-${first}`, "run-1", now, { clock: () => now }),
-        ),
+        acquire(options(root, `local-${first}`, "run-1", now, { clock: () => now })),
       );
       now = 1;
-      const commit = () =>
-        lease.linearizeJournalBatch(linearizeInput(`commit-${first}`));
+      const commit = () => lease.linearizeJournalBatch(linearizeInput(`commit-${first}`));
       if (first === "heartbeat") {
-        const [renewed, committed] = await Promise.all([
-          lease.renew(),
-          commit(),
-        ]);
+        const [renewed, committed] = await Promise.all([lease.renew(), commit()]);
         expect(renewed).toBeUndefined();
         expect(committed.status).toBe("committed");
       } else {
-        const [committed, renewed] = await Promise.all([
-          commit(),
-          lease.renew(),
-        ]);
+        const [committed, renewed] = await Promise.all([commit(), lease.renew()]);
         expect(committed.status).toBe("committed");
         expect(renewed).toBeUndefined();
       }
-      expect(
-        readEvents(root, `local-${first}`).map(({ type }) => type),
-      ).toEqual(
+      expect(readEvents(root, `local-${first}`).map(({ type }) => type)).toEqual(
         first === "heartbeat"
           ? ["claim", "heartbeat", "journal_commit"]
           : ["claim", "journal_commit", "heartbeat"],
@@ -435,23 +392,20 @@ describe("cross-process Session execution lease", () => {
 
   test("local release and commit are serialized in either call order", async () => {
     const releaseFirstRoot = tempRoot();
-    const releaseFirst = acquired(
-      acquire(options(releaseFirstRoot, "release-first", "run-1", 0)),
-    );
+    const releaseFirst = acquired(acquire(options(releaseFirstRoot, "release-first", "run-1", 0)));
     const [released, lostCommit] = await Promise.all([
       releaseFirst.release(),
       releaseFirst.linearizeJournalBatch(linearizeInput("after-release")),
     ]);
     expect(released).toBe("released");
     expect(lostCommit).toEqual({ status: "lost" });
-    expect(
-      readEvents(releaseFirstRoot, "release-first").map(({ type }) => type),
-    ).toEqual(["claim", "release"]);
+    expect(readEvents(releaseFirstRoot, "release-first").map(({ type }) => type)).toEqual([
+      "claim",
+      "release",
+    ]);
 
     const commitFirstRoot = tempRoot();
-    const commitFirst = acquired(
-      acquire(options(commitFirstRoot, "commit-first", "run-1", 0)),
-    );
+    const commitFirst = acquired(acquire(options(commitFirstRoot, "commit-first", "run-1", 0)));
     const input = linearizeInput("before-release");
     const [committed, releasedAfter] = await Promise.all([
       commitFirst.linearizeJournalBatch(input),
@@ -463,9 +417,11 @@ describe("cross-process Session execution lease", () => {
       status: "lost",
     });
     expect(commitFirst.signal.aborted).toBe(true);
-    expect(
-      readEvents(commitFirstRoot, "commit-first").map(({ type }) => type),
-    ).toEqual(["claim", "journal_commit", "release"]);
+    expect(readEvents(commitFirstRoot, "commit-first").map(({ type }) => type)).toEqual([
+      "claim",
+      "journal_commit",
+      "release",
+    ]);
   });
 
   test("expired and superseded owners cannot write", async () => {
@@ -525,9 +481,9 @@ describe("cross-process Session execution lease", () => {
       ),
     );
     commitNow = 99;
-    expect(
-      await committing.linearizeJournalBatch(linearizeInput("clock-rollback")),
-    ).toEqual({ status: "lost" });
+    expect(await committing.linearizeJournalBatch(linearizeInput("clock-rollback"))).toEqual({
+      status: "lost",
+    });
     expect(committing.signal.aborted).toBe(true);
     expect(eventFiles(commitRoot, "commit-clock")).toHaveLength(1);
 
@@ -543,9 +499,7 @@ describe("cross-process Session execution lease", () => {
     expect(await released.release()).toBe("released");
     afterReleaseNow = 99;
     expect(() =>
-      acquire(
-        options(afterReleaseRoot, "released-clock", "run-2", afterReleaseNow),
-      ),
+      acquire(options(afterReleaseRoot, "released-clock", "run-2", afterReleaseNow)),
     ).toThrow("clock moved");
     expect(eventFiles(afterReleaseRoot, "released-clock")).toHaveLength(2);
   });
@@ -555,54 +509,35 @@ describe("cross-process Session execution lease", () => {
     expect(result.owner.status).toBe("lost");
     expect(result.takeover.status).toBe("acquired");
     expect(result.events.map(({ type }) => type)).toEqual(["claim", "claim"]);
-    expect(result.events.map(({ fencingToken }) => fencingToken)).toEqual([
-      1, 2,
-    ]);
-    expect(acquire(options(result.root, "race", "probe", 100)).status).toBe(
-      "busy",
-    );
+    expect(result.events.map(({ fencingToken }) => fencingToken)).toEqual([1, 2]);
+    expect(acquire(options(result.root, "race", "probe", 100)).status).toBe("busy");
   });
 
   test("takeover and journal commit linearize correctly in either order", async () => {
     const takeoverFirst = await runTransitionRace("commit", "takeover");
     expect(takeoverFirst.owner.status).toBe("lost");
     expect(takeoverFirst.takeover.status).toBe("acquired");
-    expect(takeoverFirst.events.map(({ type }) => type)).toEqual([
-      "claim",
-      "claim",
-    ]);
+    expect(takeoverFirst.events.map(({ type }) => type)).toEqual(["claim", "claim"]);
 
     const commitFirst = await runTransitionRace("commit", "owner");
     expect(commitFirst.owner.status).toBe("committed");
     expect(commitFirst.takeover.status).toBe("anchor_conflict");
-    expect(commitFirst.events.map(({ type }) => type)).toEqual([
-      "claim",
-      "journal_commit",
-    ]);
+    expect(commitFirst.events.map(({ type }) => type)).toEqual(["claim", "journal_commit"]);
   });
 
   test("a winning heartbeat makes the losing takeover return busy", async () => {
     const result = await runTransitionRace("renew", "owner");
     expect(result.owner.status).toBe("renewed");
     expect(result.takeover.status).toBe("busy");
-    expect(result.events.map(({ type }) => type)).toEqual([
-      "claim",
-      "heartbeat",
-    ]);
-    expect(result.events.map(({ fencingToken }) => fencingToken)).toEqual([
-      1, 1,
-    ]);
+    expect(result.events.map(({ type }) => type)).toEqual(["claim", "heartbeat"]);
+    expect(result.events.map(({ fencingToken }) => fencingToken)).toEqual([1, 1]);
   });
 
   test("release wins S+1 and takeover retries as valid S+2", async () => {
     const result = await runTransitionRace("release", "owner");
     expect(result.owner.status).toBe("released");
     expect(result.takeover.status).toBe("acquired");
-    expect(result.events.map(({ type }) => type)).toEqual([
-      "claim",
-      "release",
-      "claim",
-    ]);
+    expect(result.events.map(({ type }) => type)).toEqual(["claim", "release", "claim"]);
     expect(result.events.map(({ eventSeq }) => eventSeq)).toEqual([1, 2, 3]);
   });
 
@@ -640,19 +575,13 @@ describe("cross-process Session execution lease", () => {
   test("a reader recovers the publisher temp after an after-link crash", async () => {
     const root = tempRoot();
     const crashed = runChildExpectExit(
-      [
-        fixture("session-lease-crash-after-link-child.ts"),
-        root,
-        "crash-window",
-      ],
+      [fixture("session-lease-crash-after-link-child.ts"), root, "crash-window"],
       23,
     );
     await crashed;
     const eventPath = eventFiles(root, "crash-window")[0] as string;
     expect(fs.lstatSync(eventPath).nlink).toBe(2);
-    const successor = acquired(
-      acquire(options(root, "crash-window", "successor", 100)),
-    );
+    const successor = acquired(acquire(options(root, "crash-window", "successor", 100)));
     expect(successor.fencingToken).toBe(2);
     expect(fs.lstatSync(eventPath).nlink).toBe(1);
     expect(eventFiles(root, "crash-window")).toHaveLength(2);
@@ -727,25 +656,19 @@ describe("cross-process Session execution lease", () => {
     const root = tempRoot();
     const sessionId = "inventory-multi-run";
     let now = 0;
-    const runZ = acquired(
-      acquire(options(root, sessionId, "run-z", now, { clock: () => now })),
-    );
+    const runZ = acquired(acquire(options(root, sessionId, "run-z", now, { clock: () => now })));
     const zCommit = linearizeInput("z-commit");
     await runZ.linearizeJournalBatch(zCommit);
     await runZ.release();
     now = 1;
-    const runA = acquired(
-      acquire(options(root, sessionId, "run-a", now, { clock: () => now })),
-    );
+    const runA = acquired(acquire(options(root, sessionId, "run-a", now, { clock: () => now })));
     const aCommit = linearizeInput("a-commit", {
       nextHead: { tailSeq: 1, prefixHash: "e".repeat(64) },
     });
     await runA.linearizeJournalBatch(aCommit);
     await runA.release();
     now = 2;
-    acquired(
-      acquire(options(root, sessionId, "run-empty", now, { clock: () => now })),
-    );
+    acquired(acquire(options(root, sessionId, "run-empty", now, { clock: () => now })));
 
     const first = readFileSessionAuthorityInventoryV1({
       workspaceRoot: root,
@@ -757,9 +680,10 @@ describe("cross-process Session execution lease", () => {
     });
     expect(first).toEqual(second);
     expect(first.runs.map(({ runId }) => runId)).toEqual(["run-a", "run-z"]);
-    expect(
-      first.runs.map(({ commits }) => commits.map(({ commitId }) => commitId)),
-    ).toEqual([["a-commit"], ["z-commit"]]);
+    expect(first.runs.map(({ commits }) => commits.map(({ commitId }) => commitId))).toEqual([
+      ["a-commit"],
+      ["z-commit"],
+    ]);
     expect(isRecursivelyFrozen(first)).toBe(true);
     expect(first.inventoryHash).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -790,9 +714,7 @@ describe("cross-process Session execution lease", () => {
     expect(rawTreeSnapshot(missingRoot)).toEqual(missingBefore);
 
     const danglingRoot = tempRoot();
-    const danglingSessionDir = path.dirname(
-      ownershipDir(danglingRoot, "dangling-session"),
-    );
+    const danglingSessionDir = path.dirname(ownershipDir(danglingRoot, "dangling-session"));
     fs.mkdirSync(path.dirname(danglingSessionDir), { recursive: true });
     const removedTarget = tempRoot();
     fs.symlinkSync(
@@ -812,10 +734,7 @@ describe("cross-process Session execution lease", () => {
 
     const corruptRoot = tempRoot();
     acquired(acquire(options(corruptRoot, "inventory-corrupt", "run-1", 0)));
-    fs.writeFileSync(
-      eventFiles(corruptRoot, "inventory-corrupt")[0] as string,
-      "{bad\n",
-    );
+    fs.writeFileSync(eventFiles(corruptRoot, "inventory-corrupt")[0] as string, "{bad\n");
     expect(() =>
       readFileSessionAuthorityInventoryV1({
         workspaceRoot: corruptRoot,
@@ -828,20 +747,13 @@ describe("cross-process Session execution lease", () => {
     const corruptRoot = tempRoot();
     acquired(acquire(options(corruptRoot, "corrupt", "run-1", 0)));
     fs.writeFileSync(eventFiles(corruptRoot, "corrupt")[0] as string, "{bad\n");
-    expect(() =>
-      acquire(options(corruptRoot, "corrupt", "run-2", 100)),
-    ).toThrow("valid JSON");
+    expect(() => acquire(options(corruptRoot, "corrupt", "run-2", 100))).toThrow("valid JSON");
 
     const gapRoot = tempRoot();
     acquired(acquire(options(gapRoot, "gap", "run-1", 0)));
     const first = eventFiles(gapRoot, "gap")[0] as string;
-    fs.renameSync(
-      first,
-      path.join(path.dirname(first), "0000000000000002.json"),
-    );
-    expect(() => acquire(options(gapRoot, "gap", "run-2", 100))).toThrow(
-      "contiguous",
-    );
+    fs.renameSync(first, path.join(path.dirname(first), "0000000000000002.json"));
+    expect(() => acquire(options(gapRoot, "gap", "run-2", 100))).toThrow("contiguous");
 
     const hashRoot = tempRoot();
     let now = 0;
@@ -854,32 +766,20 @@ describe("cross-process Session execution lease", () => {
     const damaged = readJson(second);
     damaged.previousEventHash = "f".repeat(64);
     fs.writeFileSync(second, `${JSON.stringify(damaged)}\n`);
-    expect(() => acquire(options(hashRoot, "hash", "run-2", 100))).toThrow(
-      "previousEventHash",
-    );
+    expect(() => acquire(options(hashRoot, "hash", "run-2", 100))).toThrow("previousEventHash");
 
     const unknownRoot = tempRoot();
     acquired(acquire(options(unknownRoot, "unknown", "run-1", 0)));
-    fs.writeFileSync(
-      path.join(eventsDir(unknownRoot, "unknown"), "foreign.tmp"),
-      "x",
-    );
-    expect(() =>
-      acquire(options(unknownRoot, "unknown", "run-2", 100)),
-    ).toThrow("Unrecognized");
+    fs.writeFileSync(path.join(eventsDir(unknownRoot, "unknown"), "foreign.tmp"), "x");
+    expect(() => acquire(options(unknownRoot, "unknown", "run-2", 100))).toThrow("Unrecognized");
 
     const staleTempRoot = tempRoot();
     acquired(acquire(options(staleTempRoot, "temp", "run-1", 0)));
     fs.writeFileSync(
-      path.join(
-        eventsDir(staleTempRoot, "temp"),
-        `0000000000000002.json.tmp-1-${randomUUID()}`,
-      ),
+      path.join(eventsDir(staleTempRoot, "temp"), `0000000000000002.json.tmp-1-${randomUUID()}`),
       "stale",
     );
-    expect(acquire(options(staleTempRoot, "temp", "run-2", 1)).status).toBe(
-      "busy",
-    );
+    expect(acquire(options(staleTempRoot, "temp", "run-2", 1)).status).toBe("busy");
 
     const linkedTempRoot = tempRoot();
     acquired(acquire(options(linkedTempRoot, "linked-temp", "run-1", 0)));
@@ -892,9 +792,9 @@ describe("cross-process Session execution lease", () => {
       ),
       process.platform === "win32" ? "junction" : "dir",
     );
-    expect(() =>
-      acquire(options(linkedTempRoot, "linked-temp", "run-2", 1)),
-    ).toThrow("temporary event is invalid");
+    expect(() => acquire(options(linkedTempRoot, "linked-temp", "run-2", 1))).toThrow(
+      "temporary event is invalid",
+    );
     expect(() =>
       acquire(
         options(tempRoot(), "bad-base", "run-1", 0, {
@@ -906,16 +806,12 @@ describe("cross-process Session execution lease", () => {
 
   test("formal identity and event hardlink aliases fail closed", async () => {
     const eventRoot = tempRoot();
-    const eventLease = acquired(
-      acquire(options(eventRoot, "event-link", "run-1", 0)),
-    );
+    const eventLease = acquired(acquire(options(eventRoot, "event-link", "run-1", 0)));
     fs.linkSync(
       eventFiles(eventRoot, "event-link")[0] as string,
       path.join(eventRoot, "alias.json"),
     );
-    expect(() => eventLease.assertHeld()).toThrow(
-      SessionExecutionLeaseLostError,
-    );
+    expect(() => eventLease.assertHeld()).toThrow(SessionExecutionLeaseLostError);
 
     const identityRoot = tempRoot();
     acquired(acquire(options(identityRoot, "identity-link", "run-1", 0)));
@@ -923,23 +819,18 @@ describe("cross-process Session execution lease", () => {
       identityPath(identityRoot, "identity-link"),
       path.join(identityRoot, "identity-alias.json"),
     );
-    expect(() =>
-      acquire(options(identityRoot, "identity-link", "run-2", 100)),
-    ).toThrow("external hardlink");
+    expect(() => acquire(options(identityRoot, "identity-link", "run-2", 100))).toThrow(
+      "external hardlink",
+    );
 
     const slotRoot = tempRoot();
     let now = 0;
     const slotLease = acquired(
-      acquire(
-        options(slotRoot, "slot-link", "run-1", now, { clock: () => now }),
-      ),
+      acquire(options(slotRoot, "slot-link", "run-1", now, { clock: () => now })),
     );
     const outside = path.join(slotRoot, "outside.json");
     fs.writeFileSync(outside, "{}\n");
-    fs.linkSync(
-      outside,
-      path.join(eventsDir(slotRoot, "slot-link"), "0000000000000002.json"),
-    );
+    fs.linkSync(outside, path.join(eventsDir(slotRoot, "slot-link"), "0000000000000002.json"));
     now = 1;
     await expect(slotLease.renew()).rejects.toThrow("hardlink");
   });
@@ -949,32 +840,19 @@ describe("cross-process Session execution lease", () => {
       const root = tempRoot();
       const sessionId = `swap-${operation}`;
       let now = 0;
-      const lease = acquired(
-        acquire(options(root, sessionId, "run-1", now, { clock: () => now })),
-      );
+      const lease = acquired(acquire(options(root, sessionId, "run-1", now, { clock: () => now })));
       const originalEvents = eventsDir(root, sessionId);
       fs.renameSync(originalEvents, `${originalEvents}.saved`);
       const outside = tempRoot();
-      fs.symlinkSync(
-        outside,
-        originalEvents,
-        process.platform === "win32" ? "junction" : "dir",
-      );
+      fs.symlinkSync(outside, originalEvents, process.platform === "win32" ? "junction" : "dir");
       now = 1;
       if (operation === "assert")
-        expect(() => lease.assertHeld()).toThrow(
-          SessionExecutionLeaseLostError,
-        );
+        expect(() => lease.assertHeld()).toThrow(SessionExecutionLeaseLostError);
       else if (operation === "renew")
-        await expect(lease.renew()).rejects.toThrow(
-          SessionExecutionLeaseLostError,
-        );
+        await expect(lease.renew()).rejects.toThrow(SessionExecutionLeaseLostError);
       else if (operation === "release")
         await expect(lease.release()).rejects.toThrow("symbolic link");
-      else
-        expect(() => acquire(options(root, sessionId, "run-2", now))).toThrow(
-          "symbolic link",
-        );
+      else expect(() => acquire(options(root, sessionId, "run-2", now))).toThrow("symbolic link");
       expect(fs.readdirSync(outside)).toEqual([]);
     }
   });
@@ -985,15 +863,9 @@ describe("cross-process Session execution lease", () => {
     const originalOwnership = ownershipDir(root, "parent-swap");
     fs.renameSync(originalOwnership, `${originalOwnership}.saved`);
     const outside = tempRoot();
-    fs.symlinkSync(
-      outside,
-      originalOwnership,
-      process.platform === "win32" ? "junction" : "dir",
-    );
+    fs.symlinkSync(outside, originalOwnership, process.platform === "win32" ? "junction" : "dir");
     expect(() => lease.assertHeld()).toThrow(SessionExecutionLeaseLostError);
-    expect(() => acquire(options(root, "parent-swap", "run-2", 100))).toThrow(
-      "symbolic link",
-    );
+    expect(() => acquire(options(root, "parent-swap", "run-2", 100))).toThrow("symbolic link");
     expect(fs.readdirSync(outside)).toEqual([]);
   });
 
@@ -1001,9 +873,7 @@ describe("cross-process Session execution lease", () => {
     const root = tempRoot();
     acquired(acquire(options(root, "deleted-events", "run-1", 0)));
     fs.rmSync(eventsDir(root, "deleted-events"), { recursive: true });
-    expect(() =>
-      acquire(options(root, "deleted-events", "run-2", 100)),
-    ).toThrow();
+    expect(() => acquire(options(root, "deleted-events", "run-2", 100))).toThrow();
     expect(fs.existsSync(eventsDir(root, "deleted-events"))).toBe(false);
   });
 });
@@ -1072,9 +942,10 @@ function nextLinearizeInput(
     batchStartSeq: startSeq,
     batchEndSeq: endSeq,
     artifactId: artifactHash,
-    artifactFileName: `${String(startSeq).padStart(16, "0")}-${String(
-      endSeq,
-    ).padStart(16, "0")}-${artifactHash}.json`,
+    artifactFileName: `${String(startSeq).padStart(16, "0")}-${String(endSeq).padStart(
+      16,
+      "0",
+    )}-${artifactHash}.json`,
     artifactContentHash: artifactHash,
   };
 }
@@ -1175,18 +1046,12 @@ function eventFiles(root: string, sessionId: string): string[] {
     .map((name) => path.join(eventsDir(root, sessionId), name));
 }
 
-function readEvents(
-  root: string,
-  sessionId: string,
-): Record<string, unknown>[] {
+function readEvents(root: string, sessionId: string): Record<string, unknown>[] {
   return eventFiles(root, sessionId).map(readJson);
 }
 
 function readJson(filePath: string): Record<string, unknown> {
-  return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<
-    string,
-    unknown
-  >;
+  return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
 }
 
 function hashFile(filePath: string): string {
@@ -1254,10 +1119,7 @@ function runChild(args: readonly string[]): Promise<string> {
   });
 }
 
-function runChildExpectExit(
-  args: readonly string[],
-  expectedCode: number,
-): Promise<void> {
+function runChildExpectExit(args: readonly string[], expectedCode: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [...args], {
       cwd: path.resolve(import.meta.dir, ".."),

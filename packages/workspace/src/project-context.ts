@@ -212,11 +212,7 @@ function extractKeywords(goal: string): string[] {
   return out.slice(0, 8); // cap at 8 keywords
 }
 
-function scoreFile(
-  filePath: string,
-  matchCount: number,
-  modifiedFiles: Set<string>,
-): number {
+function scoreFile(filePath: string, matchCount: number, modifiedFiles: Set<string>): number {
   let score = matchCount * 10;
   // Boost recently modified files
   if (modifiedFiles.has(filePath)) {
@@ -228,9 +224,7 @@ function scoreFile(
     score -= 20;
   }
   // Boost source code files
-  if (
-    [".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java"].includes(ext)
-  ) {
+  if ([".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java"].includes(ext)) {
     score += 15;
   }
   return score;
@@ -251,10 +245,7 @@ export function discoverContext(
 
   // Gather recently modified files from git
   const git = gitStatus(workspaceRoot);
-  const modifiedFiles = new Set<string>([
-    ...(git.modified ?? []),
-    ...(git.staged ?? []),
-  ]);
+  const modifiedFiles = new Set<string>([...(git.modified ?? []), ...(git.staged ?? [])]);
 
   // Grep for each keyword
   const fileScores = new Map<string, number>();
@@ -483,27 +474,15 @@ function detectProjectType(files: FileInfo[]): string {
     ) {
       return "Next.js";
     }
-    if (
-      files.some(
-        (f) => f.name === "vite.config.ts" || f.name === "vite.config.js",
-      )
-    ) {
+    if (files.some((f) => f.name === "vite.config.ts" || f.name === "vite.config.js")) {
       return "Vite";
     }
-    if (
-      files.some(
-        (f) => f.relPath.includes("src/app") || f.relPath.includes("app/"),
-      )
-    ) {
+    if (files.some((f) => f.relPath.includes("src/app") || f.relPath.includes("app/"))) {
       return "Next.js App Router";
     }
     return "Node.js / JavaScript";
   }
-  if (
-    names.has("pyproject.toml") ||
-    names.has("setup.py") ||
-    names.has("requirements.txt")
-  ) {
+  if (names.has("pyproject.toml") || names.has("setup.py") || names.has("requirements.txt")) {
     return "Python";
   }
   if (names.has("cargo.toml")) {
@@ -518,11 +497,7 @@ function detectProjectType(files: FileInfo[]): string {
   if (names.has("gemfile")) {
     return "Ruby";
   }
-  if (
-    names.has("pom.xml") ||
-    names.has("build.gradle") ||
-    names.has("build.gradle.kts")
-  ) {
+  if (names.has("pom.xml") || names.has("build.gradle") || names.has("build.gradle.kts")) {
     return "Java / JVM";
   }
   if (
@@ -541,11 +516,7 @@ function detectProjectType(files: FileInfo[]): string {
  *
  * @returns 文件内容片段，或 null（读取失败时）
  */
-function readFileSnippet(
-  workspaceRoot: string,
-  relPath: string,
-  maxBytes: number,
-): string | null {
+function readFileSnippet(workspaceRoot: string, relPath: string, maxBytes: number): string | null {
   try {
     const p = path.join(workspaceRoot, relPath);
     const fd = fs.openSync(p, "r");
@@ -578,10 +549,7 @@ function readFileSnippet(
  * @param opts 可选配置：目标子路径和最大文件数
  * @returns 包含 summary 文本和 filesScanned 计数的结果
  */
-export function generateBrief(
-  workspaceRoot: string,
-  opts?: BriefOptions,
-): BriefResult {
+export function generateBrief(workspaceRoot: string, opts?: BriefOptions): BriefResult {
   const targetPath = opts?.path?.trim() ? opts.path : ".";
   // 安全检查：确保目标路径在工作区范围内
   const guard = checkWorkspacePath(workspaceRoot, targetPath);
@@ -675,12 +643,7 @@ export function generateBrief(
  * @param depth 当前递归深度
  * @returns 收集到的文件信息列表
  */
-function collectFiles(
-  baseDir: string,
-  dir: string,
-  maxFiles: number,
-  depth = 0,
-): FileInfo[] {
+function collectFiles(baseDir: string, dir: string, maxFiles: number, depth = 0): FileInfo[] {
   if (depth > 4) {
     return [];
   }

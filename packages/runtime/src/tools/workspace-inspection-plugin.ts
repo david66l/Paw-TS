@@ -1,13 +1,6 @@
 import path from "node:path";
 
-import {
-  GIT_DIFF,
-  GIT_LOG,
-  GIT_STATUS,
-  GLOB,
-  LIST,
-  SEARCH,
-} from "@paw/harness";
+import { GIT_DIFF, GIT_LOG, GIT_STATUS, GLOB, LIST, SEARCH } from "@paw/harness";
 
 import type { RuntimeToolPluginV1, ToolClassificationV1 } from "./registry.js";
 import {
@@ -16,24 +9,12 @@ import {
   resolveWorkspaceRuntimePathV1,
 } from "./runtime-tool-plugin-support.js";
 
-export const WORKSPACE_INSPECTION_TOOL_PLUGIN_ID_V1 =
-  "paw.workspace-inspection" as const;
-export const WORKSPACE_INSPECTION_TOOL_PLUGIN_VERSION_V1 =
-  "paw.workspace-inspection.v1" as const;
-export const WORKSPACE_INSPECTION_TOOL_PLUGIN_VERSION_V2 =
-  "paw.workspace-inspection.v2" as const;
+export const WORKSPACE_INSPECTION_TOOL_PLUGIN_ID_V1 = "paw.workspace-inspection" as const;
+export const WORKSPACE_INSPECTION_TOOL_PLUGIN_VERSION_V1 = "paw.workspace-inspection.v1" as const;
+export const WORKSPACE_INSPECTION_TOOL_PLUGIN_VERSION_V2 = "paw.workspace-inspection.v2" as const;
 
-const WORKSPACE_INSPECTION_TOOLS_V1 = [
-  LIST,
-  SEARCH,
-  GLOB,
-  GIT_STATUS,
-  GIT_DIFF,
-] as const;
-const WORKSPACE_INSPECTION_TOOLS_V2 = [
-  ...WORKSPACE_INSPECTION_TOOLS_V1,
-  GIT_LOG,
-] as const;
+const WORKSPACE_INSPECTION_TOOLS_V1 = [LIST, SEARCH, GLOB, GIT_STATUS, GIT_DIFF] as const;
+const WORKSPACE_INSPECTION_TOOLS_V2 = [...WORKSPACE_INSPECTION_TOOLS_V1, GIT_LOG] as const;
 
 /** Read-only coding tools installed explicitly by the Paw Next composition. */
 export function createWorkspaceInspectionToolPluginV1(): RuntimeToolPluginV1 {
@@ -41,10 +22,7 @@ export function createWorkspaceInspectionToolPluginV1(): RuntimeToolPluginV1 {
     schemaVersion: "paw.runtime-tool-plugin.v1",
     pluginId: WORKSPACE_INSPECTION_TOOL_PLUGIN_ID_V1,
     pluginVersion: WORKSPACE_INSPECTION_TOOL_PLUGIN_VERSION_V1,
-    entries: createHarnessPluginEntriesV1(
-      WORKSPACE_INSPECTION_TOOLS_V1,
-      classifyInspectionTool,
-    ),
+    entries: createHarnessPluginEntriesV1(WORKSPACE_INSPECTION_TOOLS_V1, classifyInspectionTool),
   });
 }
 
@@ -54,10 +32,7 @@ export function createWorkspaceInspectionToolPluginV2(): RuntimeToolPluginV1 {
     schemaVersion: "paw.runtime-tool-plugin.v1",
     pluginId: WORKSPACE_INSPECTION_TOOL_PLUGIN_ID_V1,
     pluginVersion: WORKSPACE_INSPECTION_TOOL_PLUGIN_VERSION_V2,
-    entries: createHarnessPluginEntriesV1(
-      WORKSPACE_INSPECTION_TOOLS_V2,
-      classifyInspectionTool,
-    ),
+    entries: createHarnessPluginEntriesV1(WORKSPACE_INSPECTION_TOOLS_V2, classifyInspectionTool),
   });
 }
 
@@ -87,10 +62,7 @@ function classifyInspectionTool(
   throw new Error(`Workspace inspection plugin cannot classify ${tool}`);
 }
 
-function readClassification(
-  lockDomain: string,
-  resource: string,
-): ToolClassificationV1 {
+function readClassification(lockDomain: string, resource: string): ToolClassificationV1 {
   return {
     lockDomain,
     effectClass: "read",

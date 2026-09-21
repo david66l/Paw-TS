@@ -45,10 +45,9 @@ function sink() {
   return { calls, observer };
 }
 function mockFetch(fn: (init?: RequestInit) => Promise<Response>) {
-  globalThis.fetch = Object.assign(
-    (_url: unknown, init?: RequestInit) => fn(init),
-    { preconnect: originalFetch.preconnect },
-  ) as typeof fetch;
+  globalThis.fetch = Object.assign((_url: unknown, init?: RequestInit) => fn(init), {
+    preconnect: originalFetch.preconnect,
+  }) as typeof fetch;
 }
 const sse = (delta: unknown, finish = "stop") =>
   `data: ${JSON.stringify({ choices: [{ delta }] })}\n\ndata: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finish }] })}\n\ndata: [DONE]\n\n`;
@@ -58,8 +57,7 @@ test("GLM retry, partial tools and final assembly are observed without capturing
   const requests: Record<string, unknown>[] = [];
   mockFetch(async (init) => {
     requests.push(JSON.parse(String(init?.body)));
-    if (requests.length === 1)
-      return new Response("SECRET_ERROR_BODY", { status: 400 });
+    if (requests.length === 1) return new Response("SECRET_ERROR_BODY", { status: 400 });
     return new Response(
       sse(
         {
@@ -91,11 +89,7 @@ test("GLM retry, partial tools and final assembly are observed without capturing
       return chunks;
     }),
   );
-  expect(
-    chunks.some(
-      (c) => c.type === "tool_use" && c.input.includes("PRIVATE_PATH"),
-    ),
-  ).toBe(true);
+  expect(chunks.some((c) => c.type === "tool_use" && c.input.includes("PRIVATE_PATH"))).toBe(true);
   expect(requests.map((r) => [r.max_tokens, r.reasoning_effort])).toEqual([
     [128_000, "max"],
     [128_000, "max"],
@@ -104,9 +98,7 @@ test("GLM retry, partial tools and final assembly are observed without capturing
   expect(requests[1]?.stream_options).toBeUndefined();
   expect(calls[0]?.input.runId).toBe("child-1");
   expect(calls[0]?.events.filter((e) => e.type === "request")).toHaveLength(2);
-  expect(
-    calls[0]?.events.filter((e) => e.type === "tool_assembled"),
-  ).toHaveLength(1);
+  expect(calls[0]?.events.filter((e) => e.type === "tool_assembled")).toHaveLength(1);
   expect(calls[0]?.status).toBe("completed");
   expect(JSON.stringify(calls)).not.toMatch(/SECRET|PRIVATE/);
 });
@@ -117,9 +109,7 @@ test("concurrent observations keep run identities isolated and capture auxiliary
     async () =>
       new Response(
         JSON.stringify({
-          choices: [
-            { message: { content: "PRIVATE_RESULT" }, finish_reason: "stop" },
-          ],
+          choices: [{ message: { content: "PRIVATE_RESULT" }, finish_reason: "stop" }],
           usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
         }),
       ),
@@ -127,9 +117,7 @@ test("concurrent observations keep run identities isolated and capture auxiliary
   await withModelObserver(observer, () =>
     Promise.all(
       ["a", "b"].map((runId) =>
-        withModelObservationScope(runId, "completion_review", () =>
-          model().complete([]),
-        ),
+        withModelObservationScope(runId, "completion_review", () => model().complete([])),
       ),
     ),
   );
@@ -138,9 +126,7 @@ test("concurrent observations keep run identities isolated and capture auxiliary
     calls.every(
       (c) =>
         c.status === "completed" &&
-        c.events.some(
-          (e) => e.type === "result" && e.usage?.promptTokens === 10,
-        ),
+        c.events.some((e) => e.type === "result" && e.usage?.promptTokens === 10),
     ),
   ).toBe(true);
   expect(JSON.stringify(calls)).not.toContain("PRIVATE_RESULT");
@@ -160,16 +146,11 @@ test("malformed streams and cancellation terminate observation; observer failure
   const abort = new AbortController();
   abort.abort();
   await expect(
-    withModelObserver(observer, () =>
-      model().complete([], { signal: abort.signal }),
-    ),
+    withModelObserver(observer, () => model().complete([], { signal: abort.signal })),
   ).rejects.toThrow();
   expect(calls[1]?.status).toBe("cancelled");
   mockFetch(
-    async () =>
-      new Response(
-        JSON.stringify({ choices: [{ message: { content: "ok" } }] }),
-      ),
+    async () => new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] })),
   );
   const result = await withModelObserver(
     {
@@ -234,14 +215,10 @@ test("Anthropic stream records network progress and tool fragments with unchange
     for await (const chunk of anthropic.completeStream([])) out.push(chunk);
     return out;
   });
-  expect(
-    chunks.some((c) => c.type === "tool_use" && c.name === "read_file"),
-  ).toBe(true);
+  expect(chunks.some((c) => c.type === "tool_use" && c.name === "read_file")).toBe(true);
   expect(calls[0]?.events.some((e) => e.type === "bytes")).toBe(true);
   expect(
-    calls[0]?.events.filter(
-      (e) => e.type === "delta" && e.kind === "tool_fragment",
-    ),
+    calls[0]?.events.filter((e) => e.type === "delta" && e.kind === "tool_fragment"),
   ).toHaveLength(2);
   expect(calls[0]?.status).toBe("completed");
   expect(JSON.stringify(calls)).not.toMatch(/PRIVATE|SECRET/);

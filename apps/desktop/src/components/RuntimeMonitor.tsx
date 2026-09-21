@@ -1,7 +1,4 @@
-import type {
-  DesktopMonitorSnapshot,
-  MonitorTask,
-} from "../agent/monitorTypes";
+import type { DesktopMonitorSnapshot, MonitorTask } from "../agent/monitorTypes";
 import styles from "./RuntimeMonitor.module.css";
 // biome-ignore lint/suspicious/noControlCharactersInRegex: Strip terminal ANSI escapes from log output.
 const ansiEscape = /\x1b\[[0-9;]*[A-Za-z]/g;
@@ -61,9 +58,7 @@ function Evidence({ task }: { task: MonitorTask }) {
     </>
   );
 }
-export function TaskOverview({
-  snapshot,
-}: { snapshot: DesktopMonitorSnapshot | null }) {
+export function TaskOverview({ snapshot }: { snapshot: DesktopMonitorSnapshot | null }) {
   const tasks = snapshot?.tasks ?? [];
   const blocked = tasks.filter((t) => t.status === "blocked");
   return (
@@ -90,15 +85,10 @@ export function TaskOverview({
               {check.visual ? (
                 <span style={{ display: "block" }}>
                   视觉验收：
-                  {
-                    { pass: "通过", fail: "失败", unknown: "无法判断" }[
-                      check.visual.verdict
-                    ]
-                  }{" "}
-                  · {check.visual.summary}
+                  {{ pass: "通过", fail: "失败", unknown: "无法判断" }[check.visual.verdict]} ·{" "}
+                  {check.visual.summary}
                   <small style={{ display: "block" }}>
-                    截图：{check.visual.screenshotHash.slice(0, 12)} · 1280 ×
-                    800
+                    截图：{check.visual.screenshotHash.slice(0, 12)} · 1280 × 800
                   </small>
                   {check.visual.checks.map((item) => (
                     <span key={item.criterion} style={{ display: "block" }}>
@@ -129,14 +119,11 @@ export function TaskOverview({
         </article>
       ) : null}
       {!tasks.length ? (
-        <p className={styles.empty}>
-          尚无委派任务。这里会显示子任务依赖和执行结果。
-        </p>
+        <p className={styles.empty}>尚无委派任务。这里会显示子任务依赖和执行结果。</p>
       ) : null}
       {tasks.length ? (
         <p className={styles.summary}>
-          {tasks.length} 个子任务 ·{" "}
-          {tasks.filter((t) => t.status === "done").length} 执行结束 ·{" "}
+          {tasks.length} 个子任务 · {tasks.filter((t) => t.status === "done").length} 执行结束 ·{" "}
           {blocked.length} 阻塞
         </p>
       ) : null}
@@ -172,8 +159,7 @@ export function TaskOverview({
                 const dependency = tasks.find((t) => t.id === id);
                 return (
                   <span key={id}>
-                    {dependency?.name ?? id}（
-                    {statusLabel[dependency?.status ?? "waiting"]}）
+                    {dependency?.name ?? id}（{statusLabel[dependency?.status ?? "waiting"]}）
                   </span>
                 );
               })}
@@ -181,15 +167,11 @@ export function TaskOverview({
           ) : (
             <p>可独立执行</p>
           )}
-          {task.blocker ? (
-            <output className={styles.blocker}>{task.blocker}</output>
-          ) : null}
+          {task.blocker ? <output className={styles.blocker}>{task.blocker}</output> : null}
           {task.audit && task.freshness?.status !== "superseded" ? (
             <div>
               <p className={styles.status} data-status={task.audit.status}>
-                {task.audit.status === "verified"
-                  ? "阶段验收通过"
-                  : "阶段尚未通过验收"}
+                {task.audit.status === "verified" ? "阶段验收通过" : "阶段尚未通过验收"}
               </p>
               {task.audit.unmetCriteria.map((item) => (
                 <p key={item}>{item}</p>
@@ -200,15 +182,10 @@ export function TaskOverview({
                   {check.visual ? (
                     <span style={{ display: "block" }}>
                       视觉验收：
-                      {
-                        { pass: "通过", fail: "失败", unknown: "无法判断" }[
-                          check.visual.verdict
-                        ]
-                      }{" "}
-                      · {check.visual.summary}
+                      {{ pass: "通过", fail: "失败", unknown: "无法判断" }[check.visual.verdict]} ·{" "}
+                      {check.visual.summary}
                       <small style={{ display: "block" }}>
-                        截图：{check.visual.screenshotHash.slice(0, 12)} · 1280
-                        × 800
+                        截图：{check.visual.screenshotHash.slice(0, 12)} · 1280 × 800
                       </small>
                       {check.visual.checks.map((item) => (
                         <span key={item.criterion} style={{ display: "block" }}>
@@ -254,9 +231,7 @@ export function BackgroundJobs({
   return (
     <div className={styles.content}>
       <p className={styles.summary}>
-        {live
-          ? "每秒更新 · 日志仅保留最近部分"
-          : "历史记录 · 显示最后保存的日志"}
+        {live ? "每秒更新 · 日志仅保留最近部分" : "历史记录 · 显示最后保存的日志"}
       </p>
       {jobs.map((job) => (
         <article className={styles.card} key={job.id}>

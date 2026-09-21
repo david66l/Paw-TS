@@ -13,14 +13,9 @@ export interface LoopV2ProjectionCheckpointV1 {
   readonly checkpointHash: string;
 }
 
-export function loopV2ProjectionCheckpointPath(
-  workspaceRoot: string,
-  runId: string,
-): string {
+export function loopV2ProjectionCheckpointPath(workspaceRoot: string, runId: string): string {
   if (!workspaceRoot.trim() || !runId.trim()) {
-    throw new Error(
-      "Loop v2 projection checkpoint path requires workspace and runId",
-    );
+    throw new Error("Loop v2 projection checkpoint path requires workspace and runId");
   }
   return path.join(
     path.resolve(workspaceRoot),
@@ -79,9 +74,7 @@ export function assertLoopV2ProjectionCheckpointV1(
   if (value.kind !== "paw.loop-v2-projection-checkpoint") {
     throw new Error("Invalid loop v2 projection checkpoint kind");
   }
-  const expected = buildLoopV2ProjectionCheckpointV1(
-    value.report as LoopV2ShadowReport,
-  );
+  const expected = buildLoopV2ProjectionCheckpointV1(value.report as LoopV2ShadowReport);
   if (value.checkpointHash !== expected.checkpointHash) {
     throw new Error("Loop v2 projection checkpoint hash mismatch");
   }

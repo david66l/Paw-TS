@@ -74,10 +74,7 @@ function fallbackRegexScan(raw: string): ShellGuardResult | null {
  * 3. AST 解析 + 策略引擎分析
  * 4. 解析失败 → 保守回退
  */
-export function validateShellCommand(
-  command: string,
-  ctx?: ShellGuardContext,
-): ShellGuardResult {
+export function validateShellCommand(command: string, ctx?: ShellGuardContext): ShellGuardResult {
   const raw = command.trim();
   if (!raw) {
     return { allowed: false, reason: "empty command" };
@@ -126,11 +123,7 @@ function logAudit(
       sessionId: ctx?.sessionId || "default",
       workspace: ctx?.workspace || process.cwd(),
       command,
-      decision: result.allowed
-        ? "allow"
-        : result.requiresApproval
-          ? "ask"
-          : "block",
+      decision: result.allowed ? "allow" : result.requiresApproval ? "ask" : "block",
       reason: result.reason || "unknown",
       matchedRule: result.matchedRule,
       userId: ctx?.userId,

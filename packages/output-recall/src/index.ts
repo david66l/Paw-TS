@@ -24,8 +24,7 @@ import {
 export const OUTPUT_RECALL_TOOL_PLUGIN_ID_V1 = "paw.output-recall" as const;
 export const OUTPUT_RECALL_TOOL_PLUGIN_VERSION_V1 =
   "paw.output-recall.v3:journal-authority:t12000:h3000:l2000:dt3000:dh1000:dl500:c8000:u32000:r256000" as const;
-export const OUTPUT_RECALL_PROJECTION_SCHEMA_V1 =
-  "paw.output-recall-stub.v1" as const;
+export const OUTPUT_RECALL_PROJECTION_SCHEMA_V1 = "paw.output-recall-stub.v1" as const;
 
 export interface OutputRecallPolicyV1 {
   readonly previewThresholdChars: number;
@@ -36,15 +35,14 @@ export interface OutputRecallPolicyV1 {
   readonly maxCharsPerRun: number;
 }
 
-export const DEFAULT_OUTPUT_RECALL_POLICY_V1: OutputRecallPolicyV1 =
-  Object.freeze({
-    previewThresholdChars: 12_000,
-    previewHeadChars: 3_000,
-    previewTailChars: 2_000,
-    maxCharsPerRecall: 8_000,
-    maxCharsPerTurn: 32_000,
-    maxCharsPerRun: 256_000,
-  });
+export const DEFAULT_OUTPUT_RECALL_POLICY_V1: OutputRecallPolicyV1 = Object.freeze({
+  previewThresholdChars: 12_000,
+  previewHeadChars: 3_000,
+  previewTailChars: 2_000,
+  maxCharsPerRecall: 8_000,
+  maxCharsPerTurn: 32_000,
+  maxCharsPerRun: 256_000,
+});
 
 export interface DurableOutputRecallServiceOptionsV1 {
   readonly readCanonicalPrefix: () =>
@@ -53,18 +51,13 @@ export interface DurableOutputRecallServiceOptionsV1 {
   readonly loadPayloadEvidence: (
     prefix: readonly RunJournalEnvelopeV1[],
     signal?: AbortSignal,
-  ) =>
-    | VerifiedCanonicalPayloadEvidenceV1
-    | Promise<VerifiedCanonicalPayloadEvidenceV1>;
+  ) => VerifiedCanonicalPayloadEvidenceV1 | Promise<VerifiedCanonicalPayloadEvidenceV1>;
   readonly policy?: OutputRecallPolicyV1;
 }
 
 const ARTIFACT_REF = /^paw-payload:v1:[0-9a-f]{64}$/;
 const PROVIDER_TOOL_NAME = CONTEXT_RECALL.replaceAll(".", "_");
-const DELEGATED_OUTPUT_TOOLS = new Set([
-  "workspace_delegate",
-  "workspace_run_agent",
-]);
+const DELEGATED_OUTPUT_TOOLS = new Set(["workspace_delegate", "workspace_run_agent"]);
 const DELEGATED_PREVIEW_THRESHOLD_CHARS_V1 = 3_000;
 const DELEGATED_PREVIEW_HEAD_CHARS_V1 = 1_000;
 const DELEGATED_PREVIEW_TAIL_CHARS_V1 = 500;
@@ -74,18 +67,14 @@ export function createOutputRecallToolPluginV1(input?: {
   readonly policy?: OutputRecallPolicyV1;
   readonly legacyWorkspaceResource?: true;
 }): RuntimeToolPluginV1 {
-  const policy = freezeOutputRecallPolicyV1(
-    input?.policy ?? DEFAULT_OUTPUT_RECALL_POLICY_V1,
-  );
+  const policy = freezeOutputRecallPolicyV1(input?.policy ?? DEFAULT_OUTPUT_RECALL_POLICY_V1);
   return Object.freeze({
     schemaVersion: "paw.runtime-tool-plugin.v1",
     pluginId: OUTPUT_RECALL_TOOL_PLUGIN_ID_V1,
     pluginVersion: input?.legacyWorkspaceResource
       ? outputRecallPluginVersion(policy).replace("v3:journal-authority", "v2")
       : outputRecallPluginVersion(policy),
-    entries: Object.freeze([
-      createRecallEntry(policy, input?.legacyWorkspaceResource),
-    ]),
+    entries: Object.freeze([createRecallEntry(policy, input?.legacyWorkspaceResource)]),
   });
 }
 
@@ -95,17 +84,12 @@ export function createOutputRecallProjectorV1(input?: {
   readonly compactMutationReceipts?: true;
 }): ToolObservationProjectorV1 {
   const compactMutationReceipts = input?.compactMutationReceipts === true;
-  const policy = freezeOutputRecallPolicyV1(
-    input?.policy ?? DEFAULT_OUTPUT_RECALL_POLICY_V1,
-  );
+  const policy = freezeOutputRecallPolicyV1(input?.policy ?? DEFAULT_OUTPUT_RECALL_POLICY_V1);
   const projector: ToolObservationProjectorV1 = {
     project(observation, signal) {
       throwIfAborted(signal);
       if (compactMutationReceipts) {
-        const receipt = projectMutationReceiptV1(
-          observation,
-          policy.maxCharsPerRecall,
-        );
+        const receipt = projectMutationReceiptV1(observation, policy.maxCharsPerRecall);
         if (receipt !== undefined) return receipt;
       }
       const text = canonicalJsonStringify(observation.value);
@@ -151,9 +135,7 @@ export function createOutputRecallProjectorV1(input?: {
 export function createDurableOutputRecallServiceV1(
   options: DurableOutputRecallServiceOptionsV1,
 ): PayloadRecallServiceV1 {
-  const policy = freezeOutputRecallPolicyV1(
-    options.policy ?? DEFAULT_OUTPUT_RECALL_POLICY_V1,
-  );
+  const policy = freezeOutputRecallPolicyV1(options.policy ?? DEFAULT_OUTPUT_RECALL_POLICY_V1);
   if (typeof options.readCanonicalPrefix !== "function") {
     throw new Error("Output recall canonical-prefix reader is invalid");
   }
@@ -217,9 +199,7 @@ export function createDurableOutputRecallServiceV1(
   return Object.freeze(service);
 }
 
-export function freezeOutputRecallPolicyV1(
-  input: OutputRecallPolicyV1,
-): OutputRecallPolicyV1 {
+export function freezeOutputRecallPolicyV1(input: OutputRecallPolicyV1): OutputRecallPolicyV1 {
   if (
     !input ||
     typeof input !== "object" ||
@@ -238,11 +218,8 @@ export function freezeOutputRecallPolicyV1(
     input?.maxCharsPerRun,
   ];
   if (
-    values.some(
-      (value) => !Number.isSafeInteger(value) || (value as number) <= 0,
-    ) ||
-    input.previewHeadChars + input.previewTailChars >
-      input.previewThresholdChars ||
+    values.some((value) => !Number.isSafeInteger(value) || (value as number) <= 0) ||
+    input.previewHeadChars + input.previewTailChars > input.previewThresholdChars ||
     input.maxCharsPerRecall > input.maxCharsPerTurn ||
     input.maxCharsPerTurn > input.maxCharsPerRun
   ) {
@@ -285,18 +262,9 @@ function projectionPreviewPolicyV1(
     });
   }
   return Object.freeze({
-    thresholdChars: Math.min(
-      policy.previewThresholdChars,
-      DELEGATED_PREVIEW_THRESHOLD_CHARS_V1,
-    ),
-    headChars: Math.min(
-      policy.previewHeadChars,
-      DELEGATED_PREVIEW_HEAD_CHARS_V1,
-    ),
-    tailChars: Math.min(
-      policy.previewTailChars,
-      DELEGATED_PREVIEW_TAIL_CHARS_V1,
-    ),
+    thresholdChars: Math.min(policy.previewThresholdChars, DELEGATED_PREVIEW_THRESHOLD_CHARS_V1),
+    headChars: Math.min(policy.previewHeadChars, DELEGATED_PREVIEW_HEAD_CHARS_V1),
+    tailChars: Math.min(policy.previewTailChars, DELEGATED_PREVIEW_TAIL_CHARS_V1),
   });
 }
 
@@ -304,9 +272,7 @@ function createRecallEntry(
   policy: OutputRecallPolicyV1,
   legacyWorkspaceResource = false,
 ): RuntimeToolPluginEntryV1 {
-  const canonical = toolDefinitions().find(
-    (item) => item.function.name === PROVIDER_TOOL_NAME,
-  );
+  const canonical = toolDefinitions().find((item) => item.function.name === PROVIDER_TOOL_NAME);
   if (!canonical) throw new Error("Harness context.recall schema is missing");
   const definition: ToolDefinition = {
     ...canonical,
@@ -333,8 +299,7 @@ function createRecallEntry(
             type: "integer",
             minimum: 0,
             maximum: Number.MAX_SAFE_INTEGER,
-            description:
-              "Zero-based character offset for part=chunk (default 0)",
+            description: "Zero-based character offset for part=chunk (default 0)",
           },
           limit: {
             type: "integer",
@@ -365,8 +330,7 @@ function createRecallEntry(
       const part = record.part ?? "head";
       const offset = record.offset ?? 0;
       const limit = record.limit ?? policy.maxCharsPerRecall;
-      if (!ARTIFACT_REF.test(id))
-        return invalid("id must be an exact durable output id");
+      if (!ARTIFACT_REF.test(id)) return invalid("id must be an exact durable output id");
       if (part !== "head" && part !== "tail" && part !== "chunk") {
         return invalid("part must be head, tail, or chunk");
       }
@@ -378,9 +342,7 @@ function createRecallEntry(
         (limit as number) < 1 ||
         (limit as number) > policy.maxCharsPerRecall
       ) {
-        return invalid(
-          `limit must be between 1 and ${policy.maxCharsPerRecall}`,
-        );
+        return invalid(`limit must be between 1 and ${policy.maxCharsPerRecall}`);
       }
       return {
         ok: true as const,
@@ -407,13 +369,7 @@ function createRecallEntry(
         resources: legacyWorkspaceResource
           ? [
               {
-                key: path.join(
-                  root,
-                  ".paw",
-                  "paw-next",
-                  "durable-json-payloads",
-                  "*",
-                ),
+                key: path.join(root, ".paw", "paw-next", "durable-json-payloads", "*"),
                 access: "read",
               },
             ]
@@ -431,11 +387,7 @@ function parseRecallRequest(
   | { readonly ok: true; readonly request: PayloadRecallRequestV1 }
   | { readonly ok: false; readonly reason: string } {
   if (!ARTIFACT_REF.test(request.id)) return failure("invalid output id");
-  if (
-    request.part !== "head" &&
-    request.part !== "tail" &&
-    request.part !== "chunk"
-  ) {
+  if (request.part !== "head" && request.part !== "tail" && request.part !== "chunk") {
     return failure("invalid recall part");
   }
   if (!Number.isSafeInteger(request.offset) || request.offset < 0) {
@@ -464,34 +416,25 @@ function projectRecallAuthority(
   for (const envelope of prefix) {
     if (envelope.record.kind !== "input_fact") continue;
     const fact = envelope.record.fact;
-    if (
-      fact.type === "tool.call_observed" &&
-      fact.tool === PROVIDER_TOOL_NAME
-    ) {
+    if (fact.type === "tool.call_observed" && fact.tool === PROVIDER_TOOL_NAME) {
       const parsed = parseObservedRecallRequest(fact.args, policy);
-      if (parsed)
-        observed.set(fact.callId, { turn: fact.turn, request: parsed });
+      if (parsed) observed.set(fact.callId, { turn: fact.turn, request: parsed });
     } else if (fact.type === "tool.settled") {
       settledError.set(fact.callId, fact.observation?.isError ?? false);
     }
   }
 
   const matchingPending = [...observed.entries()].some(
-    ([callId, item]) =>
-      !settledError.has(callId) && sameRecallRequest(item.request, request),
+    ([callId, item]) => !settledError.has(callId) && sameRecallRequest(item.request, request),
   );
-  if (!matchingPending)
-    return failure("recall request is not canonically pending");
+  if (!matchingPending) return failure("recall request is not canonically pending");
 
   let runChars = 0;
   const turnChars = new Map<number, number>();
   for (const [callId, item] of observed) {
     if (settledError.get(callId) === true) continue;
     runChars += item.request.limit;
-    turnChars.set(
-      item.turn,
-      (turnChars.get(item.turn) ?? 0) + item.request.limit,
-    );
+    turnChars.set(item.turn, (turnChars.get(item.turn) ?? 0) + item.request.limit);
   }
   if (runChars > policy.maxCharsPerRun) {
     return failure("run recall budget exceeded");
@@ -506,8 +449,7 @@ function parseObservedRecallRequest(
   args: JsonValue,
   policy: OutputRecallPolicyV1,
 ): PayloadRecallRequestV1 | undefined {
-  if (!args || typeof args !== "object" || Array.isArray(args))
-    return undefined;
+  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
   const record = args as Readonly<Record<string, JsonValue>>;
   const id = typeof record.id === "string" ? record.id.trim() : "";
   const part = record.part ?? "head";
@@ -567,10 +509,7 @@ function selectWindow(
   };
 }
 
-function sameRecallRequest(
-  left: PayloadRecallRequestV1,
-  right: PayloadRecallRequestV1,
-): boolean {
+function sameRecallRequest(left: PayloadRecallRequestV1, right: PayloadRecallRequestV1): boolean {
   return (
     left.id === right.id &&
     left.part === right.part &&
@@ -608,10 +547,7 @@ function canonicalJsonStringify(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalJsonStringify(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${canonicalJsonStringify(record[key] as JsonValue)}`)
     .join(",")}}`;
 }
 

@@ -2,12 +2,7 @@ import type { JsonValue } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
 
-const EVIDENCE_LIST_KEYS = Object.freeze([
-  "evidence",
-  "topics",
-  "states",
-  "spans",
-] as const);
+const EVIDENCE_LIST_KEYS = Object.freeze(["evidence", "topics", "states", "spans"] as const);
 
 export interface MemoryEvidenceLedgerProjectionV1 {
   readonly payload: Readonly<Record<string, unknown>>;
@@ -32,9 +27,7 @@ export function createMemoryEvidenceLedgerV1(): MemoryEvidenceLedgerV1 {
   const seen = new Set<string>();
   return Object.freeze({
     project(tool: string, payload: Readonly<Record<string, unknown>>) {
-      const listKey = EVIDENCE_LIST_KEYS.find((key) =>
-        Array.isArray(payload[key]),
-      );
+      const listKey = EVIDENCE_LIST_KEYS.find((key) => Array.isArray(payload[key]));
       if (!listKey) {
         return Object.freeze({
           payload,
@@ -102,9 +95,7 @@ function evidenceIdentityV1(
             ]
               .filter(Boolean)
               .join("\n")
-          : [text(item?.evidenceRef), text(item?.contentHash)]
-              .filter(Boolean)
-              .join("\n");
+          : [text(item?.evidenceRef), text(item?.contentHash)].filter(Boolean).join("\n");
   if (stable) return `${listKey}:${stable}`;
   return `${tool}:${listKey}:${hashCanonicalJsonV1(value as JsonValue)}`;
 }

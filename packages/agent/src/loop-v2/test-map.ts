@@ -33,11 +33,7 @@ export interface TestMapV1 {
   readonly runner: "pytest" | "runtests" | "unittest" | "unknown";
 }
 
-const PYTHON_TEST_PATTERNS = [
-  /^test_[^/]+\.py$/,
-  /[^/]+_test\.py$/,
-  /conftest\.py$/,
-];
+const PYTHON_TEST_PATTERNS = [/^test_[^/]+\.py$/, /[^/]+_test\.py$/, /conftest\.py$/];
 
 function isTestFile(relPath: string): boolean {
   const basename = relPath.replaceAll("\\", "/").split("/").at(-1) ?? "";
@@ -49,28 +45,28 @@ export function extractPythonImports(source: string): readonly string[] {
   const imports: string[] = [];
   // from X import Y → X
   const fromRe = /^\s*from\s+([\w.]+)\s+import\s+/gm;
-  let m: RegExpExecArray | null;
-  while ((m = fromRe.exec(source)) !== null) {
+  let m: RegExpExecArray | null = fromRe.exec(source);
+  while (m !== null) {
     if (m[1]) imports.push(m[1]);
+    m = fromRe.exec(source);
   }
   // import X.Y → X.Y
   const importRe = /^\s*import\s+([\w.]+(?:\s*,\s*[\w.]+)*)/gm;
-  while ((m = importRe.exec(source)) !== null) {
+  m = importRe.exec(source);
+  while (m !== null) {
     if (m[1]) {
       for (const part of m[1].split(",")) {
         const trimmed = part.trim();
         if (trimmed) imports.push(trimmed);
       }
     }
+    m = importRe.exec(source);
   }
   return imports;
 }
 
 /** 将模块名映射到仓库内的源文件路径（试探常见布局）。 */
-function moduleToSourcePaths(
-  moduleName: string,
-  allSourceFiles: readonly Set<string>[],
-): string[] {
+function moduleToSourcePaths(moduleName: string, allSourceFiles: readonly Set<string>[]): string[] {
   const parts = moduleName.split(".");
   const paths: string[] = [];
   for (const sourceSet of allSourceFiles) {
@@ -90,10 +86,7 @@ function moduleToSourcePaths(
 }
 
 /** 命名约定：test_foo.py → foo.py 或 foo/__init__.py */
-function namingConventionMatches(
-  testFile: string,
-  sourceFiles: ReadonlySet<string>,
-): string[] {
+function namingConventionMatches(testFile: string, sourceFiles: ReadonlySet<string>): string[] {
   const basename = testFile.replaceAll("\\", "/").split("/").at(-1) ?? "";
   const m = /^test_(.+)\.py$/.exec(basename);
   if (!m?.[1]) return [];
@@ -109,10 +102,7 @@ function namingConventionMatches(
 }
 
 /** 目录邻近性：tests/test_foo.py 与同层或父层 foo.py 匹配。 */
-function directoryProximityMatches(
-  testFile: string,
-  sourceFiles: ReadonlySet<string>,
-): string[] {
+function directoryProximityMatches(testFile: string, sourceFiles: ReadonlySet<string>): string[] {
   const testDir = path.dirname(testFile.replaceAll("\\", "/"));
   const matches: string[] = [];
   for (const sf of sourceFiles) {
@@ -132,10 +122,7 @@ function detectRunner(workspaceRoot: string): TestMapV1["runner"] {
   const setupCfg = path.join(workspaceRoot, "setup.cfg");
   for (const cfg of [pyproject, setupCfg]) {
     try {
-      if (
-        fs.existsSync(cfg) &&
-        fs.readFileSync(cfg, "utf8").includes("[tool:pytest]")
-      ) {
+      if (fs.existsSync(cfg) && fs.readFileSync(cfg, "utf8").includes("[tool:pytest]")) {
         return "pytest";
       }
     } catch {
@@ -149,8 +136,6 @@ function testCommandFor(runner: TestMapV1["runner"], testFile: string): string {
   switch (runner) {
     case "runtests":
       return `python tests/runtests.py ${testFile.replace(/^tests\//, "").replace(/\.py$/, "")} -v 1`;
-    case "pytest":
-    case "unknown":
     default:
       return `python -m pytest ${testFile} -x -q`;
   }
@@ -164,9 +149,7 @@ export function buildTestMapV1(workspaceRoot: string): TestMapV1 {
   const normalizedRoot = path.resolve(workspaceRoot);
   const allFiles = collectPythonFiles(normalizedRoot, normalizedRoot);
   const sourceSet = new Set(allFiles.filter((f) => !isTestFile(f)));
-  const testFiles = allFiles.filter(
-    (f) => isTestFile(f) && !f.includes("conftest"),
-  );
+  const testFiles = allFiles.filter((f) => isTestFile(f) && !f.includes("conftest"));
 
   const entries: TestMapEntryV1[] = [];
   for (const testFile of testFiles) {
@@ -231,11 +214,7 @@ export function buildTestMapV1(workspaceRoot: string): TestMapV1 {
   };
 }
 
-function collectPythonFiles(
-  root: string,
-  base: string,
-  maxDepth = 5,
-): string[] {
+function collectPythonFiles(root: string, base: string, maxDepth = 5): string[] {
   const results: string[] = [];
   const skipDirs = new Set([
     ".git",
@@ -296,18 +275,14 @@ export function findImpactedTests(
       }
     }
   }
-  return [...impacted.values()].sort((a, b) =>
-    a.testFile.localeCompare(b.testFile),
-  );
+  return [...impacted.values()].sort((a, b) => a.testFile.localeCompare(b.testFile));
 }
 
 /**
  * 渲染受影响测试清单（事实陈述，无行为命令）。
  * 供探针增强与模型上下文使用。
  */
-export function renderImpactedTests(
-  impacted: readonly TestMapEntryV1[],
-): string | undefined {
+export function renderImpactedTests(impacted: readonly TestMapEntryV1[]): string | undefined {
   if (impacted.length === 0) return undefined;
   const tests = impacted
     .slice(0, 12)

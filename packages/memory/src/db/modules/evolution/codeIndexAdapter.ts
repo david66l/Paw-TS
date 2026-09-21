@@ -74,17 +74,10 @@ export class CodeIndexAdapter {
     }
   }
 
-  async findByFile(
-    req: CodeIndexQuery & { filePath: string },
-  ): Promise<CodeIndexRecord[]> {
+  async findByFile(req: CodeIndexQuery & { filePath: string }): Promise<CodeIndexRecord[]> {
     if (!this.queryFn) return [];
     try {
-      const blocks = this.queryFn(
-        this.workspaceRoot,
-        req.filePath,
-        [req.filePath],
-        5,
-      );
+      const blocks = this.queryFn(this.workspaceRoot, req.filePath, [req.filePath], 5);
       return blocks.map((b, i) => this.toRecord(b, req, i));
     } catch {
       return [];
@@ -95,11 +88,7 @@ export class CodeIndexAdapter {
     return this.queryFn !== null;
   }
 
-  private toRecord(
-    block: CodeContextBlock,
-    req: CodeIndexQuery,
-    i: number,
-  ): CodeIndexRecord {
+  private toRecord(block: CodeContextBlock, req: CodeIndexQuery, i: number): CodeIndexRecord {
     return {
       id: `codeidx_${req.repositoryId}_${i}`,
       repositoryId: req.repositoryId,

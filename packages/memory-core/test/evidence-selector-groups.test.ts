@@ -19,10 +19,7 @@ const requirement = (input: {
   label: input.id,
   searchText: input.id,
   temporalMode: "history" as const,
-  roleConstraint:
-    input.dependency === "responds_to"
-      ? ("assistant" as const)
-      : ("user" as const),
+  roleConstraint: input.dependency === "responds_to" ? ("assistant" as const) : ("user" as const),
   relation: input.relation ?? ("direct" as const),
   coverageMode: input.coverageMode ?? ("any" as const),
   minimumEvidence: 1,
@@ -62,10 +59,7 @@ describe("evidence selector transaction groups", () => {
   test("keeps independent comparative and convergent leaves separable but legacy plans atomic", () => {
     const comparative = compileMemoryEvidenceSelectorGroupsV1({
       intent,
-      requirements: [
-        requirement({ id: "a", relation: "comparative" }),
-        requirement({ id: "b" }),
-      ],
+      requirements: [requirement({ id: "a", relation: "comparative" }), requirement({ id: "b" })],
     });
     const convergent = compileMemoryEvidenceSelectorGroupsV1({
       intent,

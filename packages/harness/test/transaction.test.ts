@@ -11,9 +11,7 @@ function workspace(prefix: string): string {
 
 describe("validateToolArguments", () => {
   test("uses the canonical builtin schema", () => {
-    expect(
-      validateToolArguments("workspace.read_file", { path: "x.txt" }),
-    ).toBeNull();
+    expect(validateToolArguments("workspace.read_file", { path: "x.txt" })).toBeNull();
 
     const invalid = validateToolArguments("workspace.read_file", {
       path: 42,
@@ -53,11 +51,9 @@ describe("executeToolTransaction", () => {
         prepare: () => {
           order.push("effect.prepare");
           expect(fs.readFileSync(file, "utf8")).toBe("before\n");
-          expect(
-            fs.existsSync(
-              path.join(root, ".paw", "checkpoints", "testns_order", "1"),
-            ),
-          ).toBe(true);
+          expect(fs.existsSync(path.join(root, ".paw", "checkpoints", "testns_order", "1"))).toBe(
+            true,
+          );
           return "prepared";
         },
         settle: (_input, prepared) => {

@@ -17,9 +17,7 @@ describe("executeTool", () => {
   test("every advertised builtin has a native schema", () => {
     const reverse = toolNameReverseMap();
     const names = new Set(
-      toolDefinitions().map((definition) =>
-        reverse.get(definition.function.name),
-      ),
+      toolDefinitions().map((definition) => reverse.get(definition.function.name)),
     );
     const missing = listToolNames().filter((name) => !names.has(name));
     expect(missing).toEqual([]);
@@ -27,13 +25,9 @@ describe("executeTool", () => {
   test("workspace.read_file reads a relative file", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-"));
     writeFileSync(path.join(root, "x.txt"), "hello");
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.read_file",
-      {
-        path: "x.txt",
-      },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.read_file", {
+      path: "x.txt",
+    });
     expect(r.ok).toBe(true);
     expect(r.summary).toContain("x.txt");
     expect(JSON.stringify(r.payload)).toContain("hello");
@@ -88,11 +82,7 @@ describe("executeTool", () => {
 
   test("workspace.read_file rejects missing path", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.read_file",
-      {},
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.read_file", {});
     expect(r.ok).toBe(false);
     expect(JSON.stringify(r.payload)).toContain("E_SCHEMA_INVALID");
     expect(r.summary).toContain("missing required field: path");
@@ -100,26 +90,18 @@ describe("executeTool", () => {
 
   test("workspace.read_file missing file returns E_USER", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.read_file",
-      {
-        path: "missing.txt",
-      },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.read_file", {
+      path: "missing.txt",
+    });
     expect(r.ok).toBe(false);
     expect(JSON.stringify(r.payload)).toContain("E_USER");
   });
 
   test("workspace.read_file rejects wrong arg type before execution", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.read_file",
-      {
-        path: 123,
-      },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.read_file", {
+      path: 123,
+    });
     expect(r.ok).toBe(false);
     expect(JSON.stringify(r.payload)).toContain("E_SCHEMA_INVALID");
     expect(r.summary).toContain("field path must be string");
@@ -127,14 +109,10 @@ describe("executeTool", () => {
 
   test("workspace.write_file creates file", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-w-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.write_file",
-      {
-        path: "w.txt",
-        content: "ok",
-      },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.write_file", {
+      path: "w.txt",
+      content: "ok",
+    });
     expect(r.ok).toBe(true);
     expect(r.summary).toContain("write_file");
   });
@@ -295,12 +273,8 @@ describe("executeTool", () => {
     ).toBe(true);
     // Without args, defaults to requiring approval
     expect(toolRequiresApproval("workspace.run_shell")).toBe(true);
-    expect(toolRequiresApproval("workspace.run_shell", undefined, {})).toBe(
-      true,
-    );
-    expect(
-      toolRequiresApproval("workspace.run_shell", undefined, { command: "" }),
-    ).toBe(true);
+    expect(toolRequiresApproval("workspace.run_shell", undefined, {})).toBe(true);
+    expect(toolRequiresApproval("workspace.run_shell", undefined, { command: "" })).toBe(true);
     expect(
       toolRequiresApproval("workspace.job_start", undefined, {
         command: "pwd && env",
@@ -359,25 +333,28 @@ describe("executeTool", () => {
     };
     const ctx = { workspaceRoot: root, managedJobs };
 
-    expect(
-      await executeTool(ctx, "workspace.job_start", { command: "build" }),
-    ).toMatchObject({ ok: true, payload: { jobId: "shell-1" } });
+    expect(await executeTool(ctx, "workspace.job_start", { command: "build" })).toMatchObject({
+      ok: true,
+      payload: { jobId: "shell-1" },
+    });
     expect(await executeTool(ctx, "workspace.job_list", {})).toMatchObject({
       ok: true,
       payload: { jobs: [{ id: "shell-1" }] },
     });
-    expect(
-      await executeTool(ctx, "workspace.job_read", { id: "shell-1" }),
-    ).toMatchObject({ ok: true, payload: { text: "progress" } });
+    expect(await executeTool(ctx, "workspace.job_read", { id: "shell-1" })).toMatchObject({
+      ok: true,
+      payload: { text: "progress" },
+    });
     expect(
       await executeTool(ctx, "workspace.job_wait", {
         id: "shell-1",
         timeout_sec: 0.25,
       }),
     ).toMatchObject({ ok: true, payload: { timedOut: true } });
-    expect(
-      await executeTool(ctx, "workspace.job_kill", { id: "shell-1" }),
-    ).toMatchObject({ ok: true, payload: { status: "requested" } });
+    expect(await executeTool(ctx, "workspace.job_kill", { id: "shell-1" })).toMatchObject({
+      ok: true,
+      payload: { status: "requested" },
+    });
     expect(calls).toEqual([
       "start:build",
       "list",
@@ -396,13 +373,9 @@ describe("executeTool", () => {
 
   test("workspace.run_shell runs echo", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-sh-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.run_shell",
-      {
-        command: "echo paw-shell-ok",
-      },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.run_shell", {
+      command: "echo paw-shell-ok",
+    });
     expect(r.ok).toBe(true);
     expect(r.summary).toContain("exit");
     expect(JSON.stringify(r.payload)).toContain("paw-shell-ok");
@@ -410,13 +383,9 @@ describe("executeTool", () => {
 
   test("workspace.run_shell policy rejection returns E_POLICY_DENIED", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-sh-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.run_shell",
-      {
-        command: "rm -rf /",
-      },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.run_shell", {
+      command: "rm -rf /",
+    });
     expect(r.ok).toBe(false);
     expect(JSON.stringify(r.payload)).toContain("E_POLICY_DENIED");
   });
@@ -435,11 +404,11 @@ describe("executeTool", () => {
   test("workspace.edit_file replaces unique match", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-"));
     writeFileSync(path.join(root, "x.txt"), "hello world\n", "utf8");
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.edit_file",
-      { path: "x.txt", old_string: "world", new_string: "paw" },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.edit_file", {
+      path: "x.txt",
+      old_string: "world",
+      new_string: "paw",
+    });
     expect(r.ok).toBe(true);
     expect(r.summary).toContain("edit_file");
     const content = fs.readFileSync(path.join(root, "x.txt"), "utf8");
@@ -448,27 +417,25 @@ describe("executeTool", () => {
 
   test("workspace.edit_file creates a missing file with an empty old_string", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-create-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.edit_file",
-      { path: "nested/new.txt", old_string: "", new_string: "created\n" },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.edit_file", {
+      path: "nested/new.txt",
+      old_string: "",
+      new_string: "created\n",
+    });
 
     expect(r.ok).toBe(true);
     expect(r.summary).toContain("edit_file(create)");
-    expect(fs.readFileSync(path.join(root, "nested/new.txt"), "utf8")).toBe(
-      "created\n",
-    );
+    expect(fs.readFileSync(path.join(root, "nested/new.txt"), "utf8")).toBe("created\n");
   });
 
   test("workspace.edit_file cannot overwrite an existing file with empty old_string", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-create-"));
     writeFileSync(path.join(root, "x.txt"), "keep\n", "utf8");
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.edit_file",
-      { path: "x.txt", old_string: "", new_string: "replace\n" },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.edit_file", {
+      path: "x.txt",
+      old_string: "",
+      new_string: "replace\n",
+    });
 
     expect(r.ok).toBe(false);
     expect(r.summary).toContain("file already exists");
@@ -479,16 +446,12 @@ describe("executeTool", () => {
   test("workspace.edit_file rejects a no-op replacement as no progress", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-noop-"));
     writeFileSync(path.join(root, "x.txt"), "same\n", "utf8");
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.edit_file",
-      {
-        path: "x.txt",
-        old_string: "same",
-        new_string: "same",
-        replace_all: true,
-      },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.edit_file", {
+      path: "x.txt",
+      old_string: "same",
+      new_string: "same",
+      replace_all: true,
+    });
     expect(r.ok).toBe(false);
     expect(r.summary).toContain("no content change");
     expect(fs.readFileSync(path.join(root, "x.txt"), "utf8")).toBe("same\n");
@@ -496,11 +459,10 @@ describe("executeTool", () => {
 
   test("workspace.edit_file rejects missing old_string", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.edit_file",
-      { path: "x.txt", new_string: "x" },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.edit_file", {
+      path: "x.txt",
+      new_string: "x",
+    });
     expect(r.ok).toBe(false);
     expect(r.summary).toContain("E_SCHEMA_INVALID");
     expect(r.summary).toContain("old_string");
@@ -509,11 +471,11 @@ describe("executeTool", () => {
   test("workspace.edit_file rejects ambiguous match", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-edit-"));
     writeFileSync(path.join(root, "x.txt"), "dup dup\n", "utf8");
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.edit_file",
-      { path: "x.txt", old_string: "dup", new_string: "x" },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.edit_file", {
+      path: "x.txt",
+      old_string: "dup",
+      new_string: "x",
+    });
     expect(r.ok).toBe(false);
     expect(r.summary).toContain("appears 2 times");
   });
@@ -535,19 +497,15 @@ describe("executeTool streaming", () => {
     );
     expect(r.ok).toBe(true);
     expect(chunks.length).toBeGreaterThan(0);
-    expect(
-      chunks.some((c) => !c.isStderr && c.chunk.includes("registry-chunk")),
-    ).toBe(true);
+    expect(chunks.some((c) => !c.isStderr && c.chunk.includes("registry-chunk"))).toBe(true);
     expect(chunks.every((c) => c.tool === "workspace.run_shell")).toBe(true);
   });
 
   test("workspace.run_shell without onShellChunk still works", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-harness-nochunk-"));
-    const r = await executeTool(
-      { workspaceRoot: root },
-      "workspace.run_shell",
-      { command: "echo no-chunk" },
-    );
+    const r = await executeTool({ workspaceRoot: root }, "workspace.run_shell", {
+      command: "echo no-chunk",
+    });
     expect(r.ok).toBe(true);
     expect(JSON.stringify(r.payload)).toContain("no-chunk");
   });
@@ -591,35 +549,23 @@ describe("executeTool streaming", () => {
       },
     };
 
-    const listed = await executeTool(
-      { workspaceRoot: root, memoryRuntime },
-      "memory.list",
-      {},
-    );
+    const listed = await executeTool({ workspaceRoot: root, memoryRuntime }, "memory.list", {});
     expect(listed.ok).toBe(true);
     expect(listed.summary).toContain("1 entr");
     expect(JSON.stringify(listed.payload)).toContain("test_pref");
 
-    const read = await executeTool(
-      { workspaceRoot: root, memoryRuntime },
-      "memory.read",
-      { name: "test_pref" },
-    );
+    const read = await executeTool({ workspaceRoot: root, memoryRuntime }, "memory.read", {
+      name: "test_pref",
+    });
     expect(read.ok).toBe(true);
     expect(JSON.stringify(read.payload)).toContain("concise");
 
-    const missing = await executeTool(
-      { workspaceRoot: root, memoryRuntime },
-      "memory.read",
-      { name: "nope" },
-    );
+    const missing = await executeTool({ workspaceRoot: root, memoryRuntime }, "memory.read", {
+      name: "nope",
+    });
     expect(missing.ok).toBe(false);
 
-    const noRuntime = await executeTool(
-      { workspaceRoot: root },
-      "memory.list",
-      {},
-    );
+    const noRuntime = await executeTool({ workspaceRoot: root }, "memory.list", {});
     expect(noRuntime.ok).toBe(false);
   });
 

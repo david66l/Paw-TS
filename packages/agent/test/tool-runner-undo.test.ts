@@ -11,17 +11,12 @@ import {
   observeLoopV2DurableEnvelopeV1,
   replayLegacyTraceToLoopV2ShadowV1,
 } from "../src/loop-v2/index.js";
-import {
-  commitToolExecutionResult,
-  executeToolCalls,
-} from "../src/orchestrator/tool-runner.js";
+import { commitToolExecutionResult, executeToolCalls } from "../src/orchestrator/tool-runner.js";
 import { TaskStateManager } from "../src/task-state.js";
 
 describe("safe Agent edit undo", () => {
   test("finalizes an edit checkpoint and restores it without checkpointing the undo", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-tool-undo-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-tool-undo-"));
     const sourcePath = path.join(workspaceRoot, "source.txt");
     fs.writeFileSync(sourcePath, "before\n", "utf8");
     const checkpointSeq = { n: 0 };
@@ -53,10 +48,9 @@ describe("safe Agent edit undo", () => {
     expect(edited.results[0]?.ok).toBe(true);
     expect(fs.readFileSync(sourcePath, "utf8")).toBe("after\n");
     expect(checkpointSeq.n).toBe(1);
-    expect(
-      inspectLastSafeFileMutationCheckpoint(workspaceRoot, context.runId)
-        .status,
-    ).toBe("ready");
+    expect(inspectLastSafeFileMutationCheckpoint(workspaceRoot, context.runId).status).toBe(
+      "ready",
+    );
 
     const undone = await executeToolCalls(
       [
@@ -79,9 +73,9 @@ describe("safe Agent edit undo", () => {
       beforeContents: { "source.txt": "after\n" },
       afterContents: { "source.txt": "before\n" },
     });
-    expect(
-      inspectLastSafeFileMutationCheckpoint(workspaceRoot, context.runId),
-    ).toEqual({ status: "none" });
+    expect(inspectLastSafeFileMutationCheckpoint(workspaceRoot, context.runId)).toEqual({
+      status: "none",
+    });
 
     const trace: RunEventEnvelope[] = [
       {
@@ -155,17 +149,13 @@ describe("safe Agent edit undo", () => {
     expect(replayed).toEqual(live.snapshot());
     expect(replayed.state.currentMutationRevision).toBe(2);
     expect(
-      replayed.projectedEvents.filter(
-        (envelope) => envelope.event.type === "mutation.recorded",
-      ),
+      replayed.projectedEvents.filter((envelope) => envelope.event.type === "mutation.recorded"),
     ).toHaveLength(2);
     expect(taskState.snapshot().mutationRevision).toBe(2);
   });
 
   test("a rejected Paw-state write cannot shadow the previous real edit", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-tool-undo-reserved-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-tool-undo-reserved-"));
     const sourcePath = path.join(workspaceRoot, "source.txt");
     fs.writeFileSync(sourcePath, "before\n", "utf8");
     const checkpointSeq = { n: 0 };
@@ -175,11 +165,7 @@ describe("safe Agent edit undo", () => {
       emit: () => {},
       checkpointSeq,
       captureLoopV2Facts: true,
-      allowedTools: [
-        "workspace.edit_file",
-        "workspace.write_file",
-        "workspace.undo_last_edit",
-      ],
+      allowedTools: ["workspace.edit_file", "workspace.write_file", "workspace.undo_last_edit"],
     } as const;
 
     const edited = await executeToolCalls(
@@ -224,10 +210,7 @@ describe("safe Agent edit undo", () => {
       beforeContents: {},
       afterContents: {},
     });
-    const inspection = inspectLastSafeFileMutationCheckpoint(
-      workspaceRoot,
-      context.runId,
-    );
+    const inspection = inspectLastSafeFileMutationCheckpoint(workspaceRoot, context.runId);
     expect(inspection.status).toBe("ready");
     if (inspection.status !== "ready") throw new Error("expected ready");
     expect(inspection.entry.seq).toBe(1);
@@ -248,9 +231,7 @@ describe("safe Agent edit undo", () => {
   });
 
   test("legacy batches serialize an edit followed by undo in source order", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-tool-undo-batch-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-tool-undo-batch-"));
     const sourcePath = path.join(workspaceRoot, "source.txt");
     fs.writeFileSync(sourcePath, "before\n", "utf8");
     const context = {
@@ -302,9 +283,7 @@ describe("safe Agent edit undo", () => {
   });
 
   test("a post-effect checkpoint failure preserves the real tool result and capture", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-tool-checkpoint-finalize-"),
-    );
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-tool-checkpoint-finalize-"));
     const sourcePath = path.join(workspaceRoot, "source.txt");
     fs.writeFileSync(sourcePath, "before\n", "utf8");
     const context = {

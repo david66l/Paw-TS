@@ -18,11 +18,7 @@
  *   使用 AgentOrchestrator 实现，但接口不耦合到具体实现
  */
 
-import type {
-  AgentAcceptanceUpdateAction,
-  SkillRegistry,
-  TodoStore,
-} from "@paw/core";
+import type { AgentAcceptanceUpdateAction, SkillRegistry, TodoStore } from "@paw/core";
 import type { ArtifactRegistry as CoreArtifactRegistry } from "@paw/core";
 import type { WorkspaceWatcher } from "@paw/workspace";
 
@@ -69,10 +65,7 @@ export type PayloadRecallOutcomeV1 =
 
 /** Neutral async port used by context.recall; storage ownership stays external. */
 export interface PayloadRecallServiceV1 {
-  recall(
-    input: PayloadRecallRequestV1,
-    signal?: AbortSignal,
-  ): Promise<PayloadRecallOutcomeV1>;
+  recall(input: PayloadRecallRequestV1, signal?: AbortSignal): Promise<PayloadRecallOutcomeV1>;
 }
 
 export interface WebFetchRequestV1 {
@@ -166,9 +159,7 @@ export interface TaskProgressServiceV1 {
     items: readonly TaskProgressItemV1[],
     signal?: AbortSignal,
   ): Promise<TaskProgressOutcomeV1<TaskProgressSnapshotV1>>;
-  read(
-    signal?: AbortSignal,
-  ): Promise<TaskProgressOutcomeV1<TaskProgressViewV1>>;
+  read(signal?: AbortSignal): Promise<TaskProgressOutcomeV1<TaskProgressViewV1>>;
 }
 
 export interface SubAgentArtifact {
@@ -300,11 +291,7 @@ export interface FileLockLike {
 
 export interface SubAgentLauncher {
   /** 非流式启动（兼容旧接口） */
-  launch(
-    goal: string,
-    maxSteps?: number,
-    options?: SubAgentLaunchOptions,
-  ): Promise<SubAgentResult>;
+  launch(goal: string, maxSteps?: number, options?: SubAgentLaunchOptions): Promise<SubAgentResult>;
   /** 流式启动：实时转发事件到父 Agent */
   launchStreaming(options: {
     goal: string;
@@ -348,11 +335,7 @@ export interface HarnessContext {
   readonly subAgentLauncher?: SubAgentLauncher;
   readonly skillRegistry?: SkillRegistry;
   /** Shell 命令实时输出回调（流式推送到 TUI） */
-  readonly onShellChunk?: (
-    tool: string,
-    chunk: string,
-    isStderr: boolean,
-  ) => void;
+  readonly onShellChunk?: (tool: string, chunk: string, isStderr: boolean) => void;
   readonly watcher?: WorkspaceWatcher;
   readonly abortSignal?: AbortSignal;
   readonly parentRunId?: string;
@@ -415,11 +398,7 @@ export interface HarnessContext {
     }>;
     list(): readonly ManagedJobSnapshotV1[];
     read(id: string): ManagedJobReadV1;
-    wait(
-      id: string,
-      timeoutMs: number,
-      signal?: AbortSignal,
-    ): Promise<ManagedJobWaitV1>;
+    wait(id: string, timeoutMs: number, signal?: AbortSignal): Promise<ManagedJobWaitV1>;
     kill(id: string, reason?: string): "requested" | "already_finished";
   };
   /**

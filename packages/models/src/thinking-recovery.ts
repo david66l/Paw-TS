@@ -19,16 +19,13 @@ function confirmedWrites(messages: readonly ChatMessage[]): number {
     if (turn?.schemaVersion !== 2) continue;
     for (const call of turn.calls) {
       if (
-        ![
-          "workspace_write_file",
-          "workspace_edit_file",
-          "workspace_apply_patch",
-        ].includes(call.providerName)
+        !["workspace_write_file", "workspace_edit_file", "workspace_apply_patch"].includes(
+          call.providerName,
+        )
       )
         continue;
       const result = turn.results.find((item) => item.callId === call.callId);
-      if (result?.status === "completed" && !result.isError)
-        calls.add(call.callId);
+      if (result?.status === "completed" && !result.isError) calls.add(call.callId);
     }
   }
   return calls.size;
@@ -85,10 +82,7 @@ export function createThinkingRecoveryModel(
     complete: model.complete.bind(model),
     ...(stream
       ? {
-          async *completeStream(
-            messages: readonly ChatMessage[],
-            options?: ModelCompleteOptions,
-          ) {
+          async *completeStream(messages: readonly ChatMessage[], options?: ModelCompleteOptions) {
             options?.signal?.throwIfAborted();
             if (terminalError) throw terminalError;
             if (!options?.tools?.length) {
@@ -144,23 +138,15 @@ export function createThinkingRecoveryModel(
                   signal,
                   onObservation(event) {
                     if (event.type === "delta" && event.count > 0) {
-                      if (
-                        event.kind === "tool_fragment" ||
-                        event.kind === "text"
-                      )
-                        markAction();
+                      if (event.kind === "tool_fragment" || event.kind === "text") markAction();
                       if (event.kind === "thinking") thinking = true;
                     }
                     emitModelObservation(options, event);
                   },
                 })) {
                   signal.throwIfAborted();
-                  if (chunk.type === "thinking" && chunk.delta.length)
-                    thinking = true;
-                  if (
-                    chunk.type === "tool_use" ||
-                    (chunk.type === "text" && chunk.delta.length)
-                  )
+                  if (chunk.type === "thinking" && chunk.delta.length) thinking = true;
+                  if (chunk.type === "tool_use" || (chunk.type === "text" && chunk.delta.length))
                     markAction();
                   if (actionStarted || chunk.type === "done") {
                     for (const item of pending) yield item;
@@ -187,11 +173,7 @@ export function createThinkingRecoveryModel(
                 report({ ...event, type: "interrupted" });
                 // One recovery per logical call, and a separate total run allowance.
                 // No automatic retry for a silent provider/network or a repeated stall.
-                if (
-                  !thinking ||
-                  attempt > 0 ||
-                  recoveriesUsed >= policy.maxRecoveries
-                ) {
+                if (!thinking || attempt > 0 || recoveriesUsed >= policy.maxRecoveries) {
                   terminalError = new Error(
                     `Paw thinking recovery stopped: ${event.reason}; recovery allowance exhausted or retry ineligible`,
                   );

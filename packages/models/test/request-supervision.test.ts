@@ -19,18 +19,12 @@ test("a provider ignoring cancellation settles unknown, never retries or deliver
       });
     },
   };
-  const result = await createAgentLoopModelAdapter(
-    model,
-    "complete",
-    limits,
-  ).execute(
+  const result = await createAgentLoopModelAdapter(model, "complete", limits).execute(
     { messages: [{ role: "user", content: "work" }] },
     { signal: new AbortController().signal, onStreamEvent() {} },
   );
   expect(result).toMatchObject({ status: "unknown" });
-  expect("reason" in result && result.reason).toContain(
-    "ModelRequestIdleTimeout",
-  );
+  expect("reason" in result && result.reason).toContain("ModelRequestIdleTimeout");
   expect(providerSignal?.aborted).toBe(true);
   expect(calls).toBe(1);
   resolve({ text: "late result must not revive the task" });
@@ -40,10 +34,7 @@ test("a provider ignoring cancellation settles unknown, never retries or deliver
 
 test("active thinking bytes do not extend the no-action budget", async () => {
   const s = superviseModelRequest(new AbortController().signal, limits);
-  const timer = setInterval(
-    () => s.event({ type: "delta", kind: "thinking", count: 10 }),
-    5,
-  );
+  const timer = setInterval(() => s.event({ type: "delta", kind: "thinking", count: 10 }), 5);
   try {
     await expect(s.run(() => new Promise(() => {}))).rejects.toThrow(
       "ModelReasoningWithoutActionTimeout",
@@ -55,14 +46,9 @@ test("active thinking bytes do not extend the no-action budget", async () => {
 
 test("tool fragments leave reasoning-only mode but retain the absolute deadline", async () => {
   const s = superviseModelRequest(new AbortController().signal, limits);
-  const timer = setInterval(
-    () => s.event({ type: "delta", kind: "tool_fragment", count: 4 }),
-    5,
-  );
+  const timer = setInterval(() => s.event({ type: "delta", kind: "tool_fragment", count: 4 }), 5);
   try {
-    await expect(s.run(() => new Promise(() => {}))).rejects.toThrow(
-      "ModelRequestWallTimeout",
-    );
+    await expect(s.run(() => new Promise(() => {}))).rejects.toThrow("ModelRequestWallTimeout");
   } finally {
     clearInterval(timer);
   }
@@ -79,10 +65,7 @@ test("productive response may exceed the reasoning threshold without lowering mo
         kind: "tool_fragment",
         count: 1,
       });
-      const timer = setInterval(
-        () => options?.onObservation?.({ type: "bytes", count: 1 }),
-        5,
-      );
+      const timer = setInterval(() => options?.onObservation?.({ type: "bytes", count: 1 }), 5);
       try {
         await pause(130);
         return { text: "done" };
@@ -91,11 +74,7 @@ test("productive response may exceed the reasoning threshold without lowering mo
       }
     },
   };
-  const result = await createAgentLoopModelAdapter(
-    model,
-    "complete",
-    limits,
-  ).execute(
+  const result = await createAgentLoopModelAdapter(model, "complete", limits).execute(
     { messages: [], options: { maxOutputTokens: 128000 } },
     { signal: new AbortController().signal, onStreamEvent() {} },
   );
@@ -142,11 +121,7 @@ test("extended budget admits a response that acts after the former reasoning cut
       }
     },
   };
-  const result = await createAgentLoopModelAdapter(
-    model,
-    "complete",
-    extended,
-  ).execute(
+  const result = await createAgentLoopModelAdapter(model, "complete", extended).execute(
     { messages: [] },
     { signal: new AbortController().signal, onStreamEvent() {} },
   );

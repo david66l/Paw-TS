@@ -5,11 +5,7 @@
  * 读取失败时回退默认值，不抛异常。
  */
 
-import {
-  type PawSettingsLocal,
-  defaultSettingsPath,
-  loadPawSettingsLocal,
-} from "@paw/settings";
+import { type PawSettingsLocal, defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
 
 /**
  * 安全读取单个设置字段。
@@ -33,9 +29,7 @@ export function readSetting<T>(
 }
 
 /** 加载完整 settings 对象，失败返回 undefined */
-export function readPawSettingsLocal(
-  workspaceRoot: string,
-): PawSettingsLocal | undefined {
+export function readPawSettingsLocal(workspaceRoot: string): PawSettingsLocal | undefined {
   try {
     return loadPawSettingsLocal(defaultSettingsPath(workspaceRoot));
   } catch {

@@ -1,12 +1,4 @@
-import {
-  Bot,
-  Circle,
-  CircleCheck,
-  CircleGauge,
-  FileText,
-  NotebookText,
-  X,
-} from "lucide-react";
+import { Bot, Circle, CircleCheck, CircleGauge, FileText, NotebookText, X } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { shortToolName } from "../agent/toolCards";
 import type { AgentRunStatus, RunActivity, SubAgentInfo } from "../agent/types";
@@ -23,14 +15,7 @@ import styles from "./RightPanel.module.css";
 import type { DesktopMonitorSnapshot } from "../agent/monitorTypes";
 import { BackgroundJobs, TaskOverview } from "./RuntimeMonitor";
 
-export type RightTabId =
-  | "plan"
-  | "changes"
-  | "context"
-  | "memory"
-  | "agents"
-  | "tasks"
-  | "jobs";
+export type RightTabId = "plan" | "changes" | "context" | "memory" | "agents" | "tasks" | "jobs";
 
 const TABS: readonly { id: RightTabId; label: string }[] = [
   { id: "plan", label: "计划" },
@@ -145,9 +130,7 @@ function PlanTab({ plan }: { plan: PlanState }) {
 
   const { done, total, pct } = planProgress(plan.items);
   const currentId = currentPlanItemId(plan.items);
-  const currentItem = currentId
-    ? plan.items.find((i) => i.id === currentId)
-    : undefined;
+  const currentItem = currentId ? plan.items.find((i) => i.id === currentId) : undefined;
   const currentRunning = currentItem?.status === "running";
 
   // 当前步骤计时：id 变化时重置；running 期间每秒走表
@@ -185,17 +168,13 @@ function PlanTab({ plan }: { plan: PlanState }) {
           <ol className={styles.planList}>
             {plan.items.map((item, idx) => {
               const isDone =
-                item.status === "completed" ||
-                item.status === "done" ||
-                item.status === "skipped";
+                item.status === "completed" || item.status === "done" || item.status === "skipped";
               const isCurrent = item.id === currentId;
               const icon = planItemIcon(item.status);
               return (
                 <li
                   key={item.id}
-                  className={`${styles.planItem} ${
-                    isCurrent ? styles.planItemCurrent : ""
-                  }`}
+                  className={`${styles.planItem} ${isCurrent ? styles.planItemCurrent : ""}`}
                 >
                   <span className={`${styles.planIcon} ${icon.cls}`}>
                     {isDone ? (
@@ -229,12 +208,8 @@ function PlanTab({ plan }: { plan: PlanState }) {
       )}
       {(plan.revision !== undefined || plan.reason) && (
         <div className={styles.planMeta}>
-          {plan.revision !== undefined && (
-            <span className={styles.badge}>rev {plan.revision}</span>
-          )}
-          {plan.reason && (
-            <span className={styles.planReason}>{plan.reason}</span>
-          )}
+          {plan.revision !== undefined && <span className={styles.badge}>rev {plan.revision}</span>}
+          {plan.reason && <span className={styles.planReason}>{plan.reason}</span>}
         </div>
       )}
     </div>
@@ -260,17 +235,11 @@ function ChangesTab({ changes }: { changes: readonly ChangeEntry[] }) {
           </span>
           {typeof c.added === "number" || typeof c.removed === "number" ? (
             <span className={styles.changeStats}>
-              {(c.added ?? 0) > 0 ? (
-                <span className={styles.changeAdd}>+{c.added}</span>
-              ) : null}
-              {(c.removed ?? 0) > 0 ? (
-                <span className={styles.changeDel}>−{c.removed}</span>
-              ) : null}
+              {(c.added ?? 0) > 0 ? <span className={styles.changeAdd}>+{c.added}</span> : null}
+              {(c.removed ?? 0) > 0 ? <span className={styles.changeDel}>−{c.removed}</span> : null}
             </span>
           ) : null}
-          {c.summary && (
-            <span className={styles.changeSummary}>{c.summary}</span>
-          )}
+          {c.summary && <span className={styles.changeSummary}>{c.summary}</span>}
         </li>
       ))}
     </ul>
@@ -353,13 +322,8 @@ function AgentToolStream({ agent }: { agent: SubAgentInfo }) {
                     : styles.toolStreamDotFail
               }`}
             />
-            <span className={styles.toolStreamTool}>
-              {shortToolName(t.tool)}
-            </span>
-            <span
-              className={styles.toolStreamSummary}
-              title={t.result ?? t.summary}
-            >
+            <span className={styles.toolStreamTool}>{shortToolName(t.tool)}</span>
+            <span className={styles.toolStreamSummary} title={t.result ?? t.summary}>
               {t.result ?? t.summary}
             </span>
           </li>
@@ -380,8 +344,7 @@ function AgentsTab({
   roster: readonly AgentRosterItem[];
   runStatus: Record<string, AgentRunStatus>;
 }) {
-  const activity =
-    activities.find((a) => a.id === selectedActivityId) ?? activities.at(-1);
+  const activity = activities.find((a) => a.id === selectedActivityId) ?? activities.at(-1);
   const [openId, setOpenId] = useState<string | null>(null);
   /** 花名册展开详情的 agent id（与 activity 展开共用一套互斥状态） */
   const [openRosterId, setOpenRosterId] = useState<string | null>(null);
@@ -402,8 +365,7 @@ function AgentsTab({
           {visibleRoster.map((r) => {
             const st = runStatus[r.id] ?? "idle";
             const open = openRosterId === r.id;
-            const toolList =
-              r.tools === "inherit" || r.tools === undefined ? null : r.tools;
+            const toolList = r.tools === "inherit" || r.tools === undefined ? null : r.tools;
             return (
               <li key={r.id}>
                 <button
@@ -424,29 +386,19 @@ function AgentsTab({
                     <span className={styles.rolePet}>{r.name}</span>
                     <span className={styles.roleName}>{r.role}</span>
                   </div>
-                  <span className={styles.roleStatusText}>
-                    {roleStatusText(st)}
-                  </span>
+                  <span className={styles.roleStatusText}>{roleStatusText(st)}</span>
                   <span className={styles.roleCaret}>{open ? "▴" : "▾"}</span>
                 </button>
                 {open ? (
                   <div className={styles.roleDetail}>
-                    {r.description ? (
-                      <div className={styles.roleDesc}>{r.description}</div>
-                    ) : null}
+                    {r.description ? <div className={styles.roleDesc}>{r.description}</div> : null}
                     <div className={styles.roleConfig}>
-                      <span className={styles.roleCfg}>
-                        模型 {r.model ?? "inherit"}
-                      </span>
-                      <span className={styles.roleCfg}>
-                        步数 {r.maxSteps ?? "—"}
-                      </span>
+                      <span className={styles.roleCfg}>模型 {r.model ?? "inherit"}</span>
+                      <span className={styles.roleCfg}>步数 {r.maxSteps ?? "—"}</span>
                       <span className={styles.roleCfg}>
                         {r.childPolicy === "read_write" ? "可写" : "只读"}
                       </span>
-                      {r.canSpawn ? (
-                        <span className={styles.roleCfg}>可派生</span>
-                      ) : null}
+                      {r.canSpawn ? <span className={styles.roleCfg}>可派生</span> : null}
                     </div>
                     {toolList ? (
                       <div className={styles.roleTools}>
@@ -490,26 +442,16 @@ function AgentsTab({
                     className={styles.agentRowBtn}
                     onClick={() => setOpenId(open ? null : a.id)}
                   >
-                    <span
-                      className={`${styles.agentDot} ${AGENT_DOT[a.status]}`}
-                    />
+                    <span className={`${styles.agentDot} ${AGENT_DOT[a.status]}`} />
                     <span className={styles.agentLabel} title={a.label}>
                       {a.label}
                     </span>
-                    <span className={styles.agentCount}>
-                      {a.toolCount} 次操作
-                    </span>
-                    {a.tools?.some(
-                      (t) => t.tool === "file_lock" && t.ok === false,
-                    ) ? (
+                    <span className={styles.agentCount}>{a.toolCount} 次操作</span>
+                    {a.tools?.some((t) => t.tool === "file_lock" && t.ok === false) ? (
                       <span className={styles.agentLockChip}>锁冲突</span>
                     ) : null}
-                    <span className={styles.agentStatus}>
-                      {AGENT_STATUS_TEXT[a.status]}
-                    </span>
-                    <span className={styles.agentCaret}>
-                      {open ? "收起" : "展开"}
-                    </span>
+                    <span className={styles.agentStatus}>{AGENT_STATUS_TEXT[a.status]}</span>
+                    <span className={styles.agentCaret}>{open ? "收起" : "展开"}</span>
                   </button>
                   {open ? (
                     <div className={styles.agentExpand}>
@@ -520,12 +462,8 @@ function AgentsTab({
                       <AgentToolStream agent={a} />
                       {a.summary ? (
                         <div className={styles.agentField}>
-                          <div className={styles.agentFieldLabel}>
-                            结构化摘要
-                          </div>
-                          <div className={styles.agentFieldBody}>
-                            {a.summary}
-                          </div>
+                          <div className={styles.agentFieldLabel}>结构化摘要</div>
+                          <div className={styles.agentFieldBody}>{a.summary}</div>
                         </div>
                       ) : null}
                       {a.error ? (
@@ -536,16 +474,10 @@ function AgentsTab({
                       ) : null}
                       {a.files.length > 0 ? (
                         <div className={styles.agentField}>
-                          <div className={styles.agentFieldLabel}>
-                            关键文件 · {a.files.length}
-                          </div>
+                          <div className={styles.agentFieldLabel}>关键文件 · {a.files.length}</div>
                           <ul className={styles.agentFiles}>
                             {a.files.map((f) => (
-                              <li
-                                key={f}
-                                className={styles.agentFile}
-                                title={f}
-                              >
+                              <li key={f} className={styles.agentFile} title={f}>
                                 {f}
                               </li>
                             ))}
@@ -569,15 +501,7 @@ function ContextTab({ context }: { context: ContextSnapshot | null }) {
     return <EmptyState icon="◇" label="等待上下文数据" />;
   }
 
-  const {
-    turn,
-    maxSteps,
-    estimatedTokens,
-    budget,
-    nextBudget,
-    cost,
-    recentFiles,
-  } = context;
+  const { turn, maxSteps, estimatedTokens, budget, nextBudget, cost, recentFiles } = context;
   const hasBody =
     turn !== undefined ||
     estimatedTokens !== undefined ||
@@ -623,9 +547,7 @@ function ContextTab({ context }: { context: ContextSnapshot | null }) {
         <div className={styles.statGroup}>
           <div className={styles.statLabel}>估算 Token</div>
           <div className={styles.statRow}>
-            <span className={styles.stat}>
-              {estimatedTokens.toLocaleString()}
-            </span>
+            <span className={styles.stat}>{estimatedTokens.toLocaleString()}</span>
           </div>
         </div>
       )}
@@ -636,9 +558,7 @@ function ContextTab({ context }: { context: ContextSnapshot | null }) {
           <BudgetBar
             label="输入"
             used={nextBudget.selectedInputTokens}
-            budget={
-              nextBudget.contextWindowTokens - nextBudget.reservedOutputTokens
-            }
+            budget={nextBudget.contextWindowTokens - nextBudget.reservedOutputTokens}
           />
           <div className={styles.statRow}>
             <span className={styles.stat}>
@@ -662,21 +582,9 @@ function ContextTab({ context }: { context: ContextSnapshot | null }) {
         <div className={styles.statGroup}>
           <div className={styles.statLabel}>上下文预算</div>
           <div className={styles.budgetGrid}>
-            <BudgetBar
-              label="System"
-              used={budget.systemUsed}
-              budget={budget.systemBudget}
-            />
-            <BudgetBar
-              label="Tools"
-              used={budget.toolsUsed}
-              budget={budget.toolsBudget}
-            />
-            <BudgetBar
-              label="History"
-              used={budget.historyUsed}
-              budget={budget.historyBudget}
-            />
+            <BudgetBar label="System" used={budget.systemUsed} budget={budget.systemBudget} />
+            <BudgetBar label="Tools" used={budget.toolsUsed} budget={budget.toolsBudget} />
+            <BudgetBar label="History" used={budget.historyUsed} budget={budget.historyBudget} />
           </div>
         </div>
       )}
@@ -685,12 +593,8 @@ function ContextTab({ context }: { context: ContextSnapshot | null }) {
         <div className={styles.statGroup}>
           <div className={styles.statLabel}>Token 用量</div>
           <div className={styles.statRow}>
-            <span className={styles.stat}>
-              输入 {cost.promptTokens.toLocaleString()}
-            </span>
-            <span className={styles.stat}>
-              输出 {cost.completionTokens.toLocaleString()}
-            </span>
+            <span className={styles.stat}>输入 {cost.promptTokens.toLocaleString()}</span>
+            <span className={styles.stat}>输出 {cost.completionTokens.toLocaleString()}</span>
           </div>
           <div className={styles.statRow}>
             <span className={styles.statMuted}>
@@ -750,9 +654,7 @@ function MemoryTab({
         <div className={styles.statRow}>
           <span className={styles.stat}>{memory.selectedCount} 条</span>
           {memory.totalCandidates > 0 && (
-            <span className={styles.statMuted}>
-              / {memory.totalCandidates} 候选
-            </span>
+            <span className={styles.statMuted}>/ {memory.totalCandidates} 候选</span>
           )}
         </div>
         {memory.query ? (
@@ -767,14 +669,10 @@ function MemoryTab({
             {hits.map((h) => (
               <li key={h.id} className={styles.memoryItem}>
                 <div className={styles.memoryItemTitle}>
-                  {h.type ? (
-                    <span className={styles.memoryType}>{h.type}</span>
-                  ) : null}
+                  {h.type ? <span className={styles.memoryType}>{h.type}</span> : null}
                   <span>{h.title}</span>
                   {typeof h.score === "number" ? (
-                    <span className={styles.statMuted}>
-                      {h.score.toFixed(2)}
-                    </span>
+                    <span className={styles.statMuted}>{h.score.toFixed(2)}</span>
                   ) : null}
                 </div>
                 {h.summary && h.summary !== h.title ? (
@@ -802,8 +700,7 @@ function MemoryTab({
         </div>
         {memory.libraryOk === false ? (
           <div className={styles.statMuted}>
-            {memory.libraryError ||
-              "记忆库不可用（检查 Postgres / DATABASE_URL）"}
+            {memory.libraryError || "记忆库不可用（检查 Postgres / DATABASE_URL）"}
           </div>
         ) : null}
         {memory.libraryOk !== false && library.length === 0 ? (
@@ -821,9 +718,7 @@ function MemoryTab({
                 </div>
                 {it.summary ? (
                   <div className={styles.memoryItemSummary}>
-                    {it.summary.length > 160
-                      ? `${it.summary.slice(0, 160)}…`
-                      : it.summary}
+                    {it.summary.length > 160 ? `${it.summary.slice(0, 160)}…` : it.summary}
                   </div>
                 ) : null}
               </li>
@@ -858,14 +753,12 @@ export const RightPanel = memo(function RightPanel({
   onTabChange,
   onRefreshMemoryLibrary,
 }: RightPanelProps) {
-  const selectedActivity =
-    activities.find((a) => a.id === selectedActivityId) ?? activities.at(-1);
+  const selectedActivity = activities.find((a) => a.id === selectedActivityId) ?? activities.at(-1);
   const rosterVisible = sortRoster(agentRoster);
   // 角标 = 活跃数（运行中的花名册 + 运行中的子 Agent），无活跃不显示
   const activeCount =
     rosterVisible.filter((r) => agentRunStatus[r.id] === "running").length +
-    (selectedActivity?.agents.filter((a) => a.status === "running").length ??
-      0);
+    (selectedActivity?.agents.filter((a) => a.status === "running").length ?? 0);
 
   return (
     <aside className={styles.right}>
@@ -896,11 +789,7 @@ export const RightPanel = memo(function RightPanel({
         <div className={`${styles.body} selectable`} role="tabpanel">
           {tab === "tasks" && <TaskOverview snapshot={monitor} />}
           {tab === "jobs" && (
-            <BackgroundJobs
-              snapshot={monitor}
-              live={isRunning}
-              onStop={onStopJob}
-            />
+            <BackgroundJobs snapshot={monitor} live={isRunning} onStop={onStopJob} />
           )}
           {tab === "plan" && <PlanTab plan={plan} />}
           {tab === "changes" && <ChangesTab changes={changes} />}
@@ -922,25 +811,16 @@ export const RightPanel = memo(function RightPanel({
               </details>
               <details>
                 <summary className={styles.runHeading}>后台服务</summary>
-                <BackgroundJobs
-                  snapshot={monitor}
-                  live={isRunning}
-                  onStop={onStopJob}
-                />
+                <BackgroundJobs snapshot={monitor} live={isRunning} onStop={onStopJob} />
               </details>
               <details>
-                <summary className={styles.runHeading}>
-                  上下文与调用统计
-                </summary>
+                <summary className={styles.runHeading}>上下文与调用统计</summary>
                 <ContextTab context={context} />
               </details>
             </>
           )}
           {tab === "memory" && (
-            <MemoryTab
-              memory={memory}
-              onRefreshLibrary={onRefreshMemoryLibrary}
-            />
+            <MemoryTab memory={memory} onRefreshLibrary={onRefreshMemoryLibrary} />
           )}
         </div>
       </GlassPanel>

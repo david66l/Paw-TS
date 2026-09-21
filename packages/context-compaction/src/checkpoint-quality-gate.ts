@@ -36,17 +36,9 @@ export function createCheckpointCompressionQualityGateV1(
         evidence: CheckpointEvidenceBundleV1;
       }>,
     ) {
-      const beforeTokens = checkedCount(
-        countTokens(JSON.stringify(input.evidence.items)),
-      );
-      const afterTokens = checkedCount(
-        countTokens(JSON.stringify(input.checkpoint)),
-      );
-      const savings = evaluateContextCompactionSavingsV1(
-        beforeTokens,
-        afterTokens,
-        policy,
-      );
+      const beforeTokens = checkedCount(countTokens(JSON.stringify(input.evidence.items)));
+      const afterTokens = checkedCount(countTokens(JSON.stringify(input.checkpoint)));
+      const savings = evaluateContextCompactionSavingsV1(beforeTokens, afterTokens, policy);
       return savings.classification === "low"
         ? Object.freeze({
             status: "low_savings" as const,

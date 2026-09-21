@@ -37,10 +37,7 @@ describe("ArtifactRegistry — P3 冷库", () => {
   test("AC-P3-2 元数据：turn / tool / ok / size / preview", () => {
     const r = new ArtifactRegistry();
     const content = "line1\nline2\nline3\n".repeat(50);
-    const id = r.store(
-      content,
-      meta({ tool: "workspace.grep", ok: false, turn: 7 }),
-    );
+    const id = r.store(content, meta({ tool: "workspace.grep", ok: false, turn: 7 }));
     const e = r.get(id!);
     expect(e?.tool).toBe("workspace.grep");
     expect(e?.ok).toBe(false);
@@ -52,10 +49,7 @@ describe("ArtifactRegistry — P3 冷库", () => {
 
   test("AC-P3-3 动作+结果配对：callerText 保留", () => {
     const r = new ArtifactRegistry();
-    const id = r.store(
-      "big output".repeat(100),
-      meta({ callerText: "run_shell: npm test" }),
-    );
+    const id = r.store("big output".repeat(100), meta({ callerText: "run_shell: npm test" }));
     expect(r.get(id!)?.callerText).toBe("run_shell: npm test");
   });
 
@@ -85,9 +79,7 @@ describe("ArtifactRegistry — P3 冷库", () => {
     expect(tail.content).toBe(content.slice(12_000));
 
     // 精确重建：head + chunk 游标（8K/次，不重叠）拼回全文
-    expect(content).toBe(
-      (head.content ?? "") + (c1.content ?? "") + (c2.content ?? ""),
-    );
+    expect(content).toBe((head.content ?? "") + (c1.content ?? "") + (c2.content ?? ""));
   });
 
   test("AC-P3-4 单次上限 8K：limit 超限被压到 8K", () => {
@@ -95,9 +87,7 @@ describe("ArtifactRegistry — P3 冷库", () => {
     const id = r.store("x".repeat(30_000), meta())!;
     const out = r.tryRecall(id, { limit: 99_999 });
     expect(out.ok).toBe(true);
-    expect(out.content?.length).toBe(
-      DEFAULT_ARCHIVE_OPTIONS.recallPerCallChars,
-    );
+    expect(out.content?.length).toBe(DEFAULT_ARCHIVE_OPTIONS.recallPerCallChars);
   });
 
   test("AC-P3-4 每轮物化总预算 16K + 每步 ≤2 次", () => {

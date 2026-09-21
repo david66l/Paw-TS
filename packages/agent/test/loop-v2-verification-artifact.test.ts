@@ -24,10 +24,7 @@ import {
 const RUN_ID = "loop-v2-artifact";
 const FILE = "src/value.ts";
 
-function append(
-  state: WorkingDecisionStateV2,
-  event: LoopV2Event,
-): WorkingDecisionStateV2 {
+function append(state: WorkingDecisionStateV2, event: LoopV2Event): WorkingDecisionStateV2 {
   return projectLoopV2Event(state, {
     schemaVersion: LOOP_V2_SCHEMA_VERSION,
     runId: RUN_ID,
@@ -39,15 +36,7 @@ function append(
 
 function stepPatch(before: string, after: string): string {
   return formatPatch(
-    structuredPatch(
-      `a/${FILE}`,
-      `b/${FILE}`,
-      before,
-      after,
-      undefined,
-      undefined,
-      { context: 3 },
-    ),
+    structuredPatch(`a/${FILE}`, `b/${FILE}`, before, after, undefined, undefined, { context: 3 }),
   );
 }
 
@@ -79,9 +68,7 @@ function startedState(): WorkingDecisionStateV2 {
   });
 }
 
-function stateWithMutations(
-  mutations: readonly MutationJournalEntryV2[],
-): WorkingDecisionStateV2 {
+function stateWithMutations(mutations: readonly MutationJournalEntryV2[]): WorkingDecisionStateV2 {
   let state = startedState();
   for (const entry of mutations) {
     state = append(state, { type: "mutation.recorded", mutation: entry });
@@ -89,9 +76,7 @@ function stateWithMutations(
   return state;
 }
 
-function externalCriterion(
-  state: WorkingDecisionStateV2,
-): WorkingDecisionStateV2 {
+function externalCriterion(state: WorkingDecisionStateV2): WorkingDecisionStateV2 {
   return append(state, {
     type: "criterion.upserted",
     criterion: {
@@ -107,10 +92,7 @@ function externalCriterion(
   });
 }
 
-function passReview(
-  state: WorkingDecisionStateV2,
-  terminalContent: string,
-): SemanticReviewV2 {
+function passReview(state: WorkingDecisionStateV2, terminalContent: string): SemanticReviewV2 {
   const patch = renderMutationStepPatchV2([
     { path: FILE, beforeContent: "", afterContent: terminalContent },
   ]);
@@ -140,15 +122,11 @@ describe("Loop Kernel v2 verification and artifact", () => {
     const after = createArtifactContentBlobV2(
       "export const value = 3;\nexport const ready = true;\n",
     );
-    const mutations = [
-      mutation(1, 2, before, middle),
-      mutation(2, 3, middle, after),
-    ];
-    const artifact = materializeCandidateArtifactV2(
-      mutations,
-      [before, middle, after],
-      { status: "unavailable", detail: "git diff timed out" },
-    );
+    const mutations = [mutation(1, 2, before, middle), mutation(2, 3, middle, after)];
+    const artifact = materializeCandidateArtifactV2(mutations, [before, middle, after], {
+      status: "unavailable",
+      detail: "git diff timed out",
+    });
 
     expect(artifact.status).toBe("valid");
     expect(artifact.source).toBe("mutation_journal");
@@ -262,11 +240,10 @@ describe("Loop Kernel v2 verification and artifact", () => {
     expect(discontinuous.status).toBe("invalid");
     expect(discontinuous.errors.join("\n")).toContain("continuity mismatch");
 
-    const mismatch = materializeCandidateArtifactV2(
-      [first, second],
-      [before, middle, after],
-      { status: "mismatch", detail: "untracked write detected" },
-    );
+    const mismatch = materializeCandidateArtifactV2([first, second], [before, middle, after], {
+      status: "mismatch",
+      detail: "untracked write detected",
+    });
     expect(mismatch.status).toBe("invalid");
     expect(mismatch.patch).toBe("");
     expect(mismatch.errors.join("\n")).toContain("untracked write detected");

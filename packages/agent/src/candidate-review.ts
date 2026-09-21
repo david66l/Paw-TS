@@ -1,12 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type {
-  ChatMessage,
-  CostTracker,
-  ModelTokenUsage,
-  RunEventEnvelope,
-} from "@paw/core";
+import type { ChatMessage, CostTracker, ModelTokenUsage, RunEventEnvelope } from "@paw/core";
 import type { SubAgentLauncher } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
 import { gitDiff } from "@paw/workspace";
@@ -99,10 +94,7 @@ export class ModelCandidateReviewer implements CandidateReviewer {
       },
     ];
     const first = await this.complete(messages, input.signal);
-    const parsed = enforceEvidenceDiscipline(
-      parseCandidateReview(first.text),
-      evidence.conclusive,
-    );
+    const parsed = enforceEvidenceDiscipline(parseCandidateReview(first.text), evidence.conclusive);
     if (hasExplicitReviewProtocol(first.text)) {
       const usage = first.usage ? sumUsage([first.usage]) : undefined;
       return {
@@ -125,10 +117,7 @@ export class ModelCandidateReviewer implements CandidateReviewer {
     );
     const usage = sumUsage([first.usage, second.usage].filter(isUsage));
     return {
-      ...enforceEvidenceDiscipline(
-        parseCandidateReview(second.text),
-        evidence.conclusive,
-      ),
+      ...enforceEvidenceDiscipline(parseCandidateReview(second.text), evidence.conclusive),
       modelCalls: 2,
       ...(usage ? { usage } : {}),
     };
@@ -138,10 +127,7 @@ export class ModelCandidateReviewer implements CandidateReviewer {
     messages: readonly ChatMessage[],
     signal?: AbortSignal,
   ): Promise<{ readonly text: string; readonly usage?: ModelTokenUsage }> {
-    const result = await this.model.complete(
-      messages,
-      signal ? { signal } : undefined,
-    );
+    const result = await this.model.complete(messages, signal ? { signal } : undefined);
     if (result.usage) this.costTracker?.record(this.model.label, result.usage);
     return { text: result.text, usage: result.usage };
   }
@@ -190,14 +176,10 @@ export class SubAgentCandidateReviewer implements CandidateReviewer {
     );
     const parsed = parseCandidateReview(result.summary);
     const modelEvents =
-      result.trace?.events.filter(
-        (event) => event.event.type === "model.done",
-      ) ?? [];
+      result.trace?.events.filter((event) => event.event.type === "model.done") ?? [];
     const usage = sumUsage(
       modelEvents.flatMap((event) =>
-        event.event.type === "model.done" && event.event.usage
-          ? [event.event.usage]
-          : [],
+        event.event.type === "model.done" && event.event.usage ? [event.event.usage] : [],
       ),
     );
     return {
@@ -245,14 +227,10 @@ export function candidateReviewInput(
 }
 
 export function candidateSummaryFingerprint(summary: string): string {
-  return createHash("sha256")
-    .update(summary.trim().replace(/\s+/g, " "), "utf8")
-    .digest("hex");
+  return createHash("sha256").update(summary.trim().replace(/\s+/g, " "), "utf8").digest("hex");
 }
 
-export function extractCandidateDeliberation(
-  messages: readonly ChatMessage[],
-): string[] {
+export function extractCandidateDeliberation(messages: readonly ChatMessage[]): string[] {
   const candidates: Array<{ index: number; score: number; text: string }> = [];
   const signal =
     /(?:safer|risk|strict|exact|assert|expect|edge|preserv|retain|include|omit|drop|loss|position|index|exception|error detail|message|alternative|trade.?off|hypothesis|uncertain|可能|风险|严格|保留|丢失|位置|异常|消息|方案)/gi;
@@ -262,9 +240,7 @@ export function extractCandidateDeliberation(
     // Historical final reports are candidate outputs, not implementation
     // deliberation. Feeding them back here makes a later review judge stale
     // verification claims even when the current proposedSummary removed them.
-    const content = /["'](?:action|tool)["']\s*:\s*["']final_answer["']/i.test(
-      message.content,
-    )
+    const content = /["'](?:action|tool)["']\s*:\s*["']final_answer["']/i.test(message.content)
       ? undefined
       : message.content;
     const source = [message.thinking, content]
@@ -274,15 +250,10 @@ export function extractCandidateDeliberation(
     if (!source) continue;
     const matches = source.match(signal)?.length ?? 0;
     const score = matches + (message.thinking ? 2 : 0);
-    if (score > 0)
-      candidates.push({ index, score, text: source.slice(-6_000) });
+    if (score > 0) candidates.push({ index, score, text: source.slice(-6_000) });
   }
-  candidates.sort(
-    (left, right) => right.score - left.score || left.index - right.index,
-  );
-  const selected = candidates
-    .slice(0, 6)
-    .sort((left, right) => left.index - right.index);
+  candidates.sort((left, right) => right.score - left.score || left.index - right.index);
+  const selected = candidates.slice(0, 6).sort((left, right) => left.index - right.index);
   const excerpts: string[] = [];
   let chars = 0;
   for (const candidate of selected) {
@@ -295,9 +266,7 @@ export function extractCandidateDeliberation(
 }
 
 export function parseCandidateReview(raw: string): CandidateReviewResult {
-  const matches = [
-    ...raw.matchAll(/(?:^|\n)\s*VERDICT:\s*(PASS|FAIL|PARTIAL)\s*(?=\n|$)/gi),
-  ];
+  const matches = [...raw.matchAll(/(?:^|\n)\s*VERDICT:\s*(PASS|FAIL|PARTIAL)\s*(?=\n|$)/gi)];
   const verdictText = matches.at(-1)?.[1]?.toLowerCase();
   const verdict: CandidateReviewVerdict =
     verdictText === "pass" || verdictText === "fail" ? verdictText : "partial";
@@ -312,9 +281,7 @@ export function parseCandidateReview(raw: string): CandidateReviewResult {
   return {
     verdict,
     reportGrounding:
-      groundingText === "pass" || groundingText === "fail"
-        ? groundingText
-        : "unknown",
+      groundingText === "pass" || groundingText === "fail" ? groundingText : "unknown",
     summary: compactReviewSummary(
       withoutVerdict ||
         (matches.length > 0
@@ -336,30 +303,17 @@ function isUsage(value: ModelTokenUsage | undefined): value is ModelTokenUsage {
   return value !== undefined;
 }
 
-function sumUsage(
-  usages: readonly ModelTokenUsage[],
-): ModelTokenUsage | undefined {
+function sumUsage(usages: readonly ModelTokenUsage[]): ModelTokenUsage | undefined {
   if (usages.length === 0) return undefined;
   return {
-    promptTokens: usages.reduce(
-      (sum, usage) => sum + (usage.promptTokens ?? 0),
-      0,
-    ),
-    completionTokens: usages.reduce(
-      (sum, usage) => sum + (usage.completionTokens ?? 0),
-      0,
-    ),
+    promptTokens: usages.reduce((sum, usage) => sum + (usage.promptTokens ?? 0), 0),
+    completionTokens: usages.reduce((sum, usage) => sum + (usage.completionTokens ?? 0), 0),
     totalTokens: usages.reduce(
       (sum, usage) =>
-        sum +
-        (usage.totalTokens ??
-          (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0)),
+        sum + (usage.totalTokens ?? (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0)),
       0,
     ),
-    cachedPromptTokens: usages.reduce(
-      (sum, usage) => sum + (usage.cachedPromptTokens ?? 0),
-      0,
-    ),
+    cachedPromptTokens: usages.reduce((sum, usage) => sum + (usage.cachedPromptTokens ?? 0), 0),
     cacheMissPromptTokens: usages.reduce(
       (sum, usage) => sum + (usage.cacheMissPromptTokens ?? 0),
       0,
@@ -388,14 +342,11 @@ function buildCandidateReviewGoal(
         : result.mutationRevision < input.mutationRevision
           ? "pre-change/stale"
           : "future/invalid";
-    const classification = [result.failureKind, result.retryability]
-      .filter(Boolean)
-      .join("/");
+    const classification = [result.failureKind, result.retryability].filter(Boolean).join("/");
     return `- [r${result.mutationRevision}; ${phase}${result.family ? `; family=${result.family}` : ""}] ${result.outcome}${classification ? ` (${classification})` : ""}: ${result.command} — ${result.summary}${result.evidence ? ` — observed: ${result.evidence}` : ""}`;
   });
   const currentDiffInspected =
-    input.filesChanged.length > 0 &&
-    input.diffInspectedRevision === input.mutationRevision;
+    input.filesChanged.length > 0 && input.diffInspectedRevision === input.mutationRevision;
   const diffInspection = currentDiffInspected
     ? `- final diff inspection: confirmed by the host for current candidate r${input.mutationRevision}`
     : input.diffInspectedRevision === undefined
@@ -465,10 +416,7 @@ function captureCandidateEvidence(input: CandidateReviewInput): {
     return { text: truncateDiff(captured.diff), conclusive: true };
   }
 
-  const snapshots = captureCurrentFileSnapshots(
-    input.workspaceRoot,
-    input.filesChanged,
-  );
+  const snapshots = captureCurrentFileSnapshots(input.workspaceRoot, input.filesChanged);
   const reason = captured.error ?? "Git returned an empty diff";
   if (snapshots) {
     return {

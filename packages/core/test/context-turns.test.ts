@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChatMessage } from "../src/context/manager.js";
-import {
-  flattenContextTurnsV1,
-  groupContextTurnsV1,
-} from "../src/context/turns.js";
+import { flattenContextTurnsV1, groupContextTurnsV1 } from "../src/context/turns.js";
 
 describe("derived context turns v1", () => {
   test("groups a leading prefix and assistant-boundary units", () => {
@@ -51,9 +48,7 @@ describe("derived context turns v1", () => {
     expect(turns).toHaveLength(1);
     expect(turns[0]?.messages[0]).toBe(messages[0]);
     expect(turns[0]?.messages[0]?.attachments).toBe(messages[0]?.attachments);
-    expect(turns[0]?.messages[0]?.nativeToolTurn).toEqual(
-      messages[0]?.nativeToolTurn,
-    );
+    expect(turns[0]?.messages[0]?.nativeToolTurn).toEqual(messages[0]?.nativeToolTurn);
   });
 
   test("keeps leading pre-assistant messages as standalone units", () => {

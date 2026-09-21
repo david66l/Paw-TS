@@ -25,8 +25,7 @@ import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 import { MemoryWritePipeline } from "../src/longterm/write/pipeline.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -81,10 +80,7 @@ describe("memory-config.json", () => {
       const cfg = await loadMemoryConfig(root);
       expect(cfg).toEqual({ enable: true, readonly: true, shadow: true });
       // 文件在 .paw/ 下（gitignore 覆盖，不进 git）
-      const raw = await readFile(
-        join(root, ".paw", "memory-config.json"),
-        "utf-8",
-      );
+      const raw = await readFile(join(root, ".paw", "memory-config.json"), "utf-8");
       expect(JSON.parse(raw).readonly).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -96,11 +92,7 @@ describe("memory-config.json", () => {
     try {
       await saveMemoryConfig({}, root);
       const { writeFile } = await import("node:fs/promises");
-      await writeFile(
-        join(root, ".paw", "memory-config.json"),
-        "{corrupted",
-        "utf-8",
-      );
+      await writeFile(join(root, ".paw", "memory-config.json"), "{corrupted", "utf-8");
       expect(await loadMemoryConfig(root)).toEqual(DEFAULT_MEMORY_CONFIG);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -116,10 +108,7 @@ const RUN = `run_m9_${Date.now().toString(36)}`;
 const REPO = `m9-export-${Date.now().toString(36)}`;
 const createdIds: string[] = [];
 
-function makeSemantic(
-  fact: string,
-  overrides: Partial<SemanticFact> = {},
-): SemanticFact {
+function makeSemantic(fact: string, overrides: Partial<SemanticFact> = {}): SemanticFact {
   const now = new Date().toISOString();
   return {
     id: "",
@@ -158,9 +147,7 @@ describe("export + readonly db 集成", () => {
   });
 
   it("export：密钥条目跳过、高熵打码、报告正确", async () => {
-    const normal = makeSemantic(
-      "The export pipeline writes JSONL plus a README summary",
-    );
+    const normal = makeSemantic("The export pipeline writes JSONL plus a README summary");
     const withSecret = makeSemantic(
       "call the service with sk-a1b2c3d4e5f6g7h8i9j0k1l2m3n4 when needed",
     );
@@ -198,9 +185,7 @@ describe("export + readonly db 集成", () => {
   });
 
   it("export --all 含已失效条目（带 tInvalid 标注）", async () => {
-    const dead = makeSemantic(
-      "Fluorite fact later invalidated but exported with annotation",
-    );
+    const dead = makeSemantic("Fluorite fact later invalidated but exported with annotation");
     await engine.put(dead);
     const id = deriveEntryId(dead);
     createdIds.push(id);
@@ -211,10 +196,7 @@ describe("export + readonly db 集成", () => {
     const dirAll = await mkdtemp(join(tmpdir(), "m9-exp-b-"));
     try {
       await exportMemories({ engine, dir: dirActive, repo: REPO });
-      const activeJsonl = await readFile(
-        join(dirActive, "memory-export.jsonl"),
-        "utf-8",
-      );
+      const activeJsonl = await readFile(join(dirActive, "memory-export.jsonl"), "utf-8");
       expect(activeJsonl).not.toContain(id); // 默认不含已失效
 
       await exportMemories({
@@ -223,10 +205,7 @@ describe("export + readonly db 集成", () => {
         repo: REPO,
         includeInvalidated: true,
       });
-      const jsonl = await readFile(
-        join(dirAll, "memory-export.jsonl"),
-        "utf-8",
-      );
+      const jsonl = await readFile(join(dirAll, "memory-export.jsonl"), "utf-8");
       const row = JSON.parse(
         jsonl
           .trim()
@@ -242,9 +221,7 @@ describe("export + readonly db 集成", () => {
   });
 
   it("readonly：enqueue 丢弃 + op-log 记录，检索正常", async () => {
-    const entry = makeSemantic(
-      "Gypsum readonly probe stays retrievable while writes drop",
-    );
+    const entry = makeSemantic("Gypsum readonly probe stays retrievable while writes drop");
     await engine.put(entry);
     const id = deriveEntryId(entry);
     createdIds.push(id);
@@ -317,9 +294,7 @@ describe("export + readonly db 集成", () => {
     // 脚本写临时文件执行（Windows 多行 -e 参数会被拆分），用绝对路径 import
     const root = await mkdtemp(join(tmpdir(), "m9-cli-"));
     try {
-      const longtermIndex = fileURLToPath(
-        new URL("../src/longterm/index.ts", import.meta.url),
-      );
+      const longtermIndex = fileURLToPath(new URL("../src/longterm/index.ts", import.meta.url));
       const scriptPath = join(root, "probe.ts");
       const { writeFile } = await import("node:fs/promises");
       await writeFile(

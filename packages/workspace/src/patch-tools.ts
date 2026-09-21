@@ -98,10 +98,7 @@ function countLinesChanged(patch: ReturnType<typeof parsePatch>[number]): {
  * @param patchText unified diff 格式的补丁文本（可包含多个文件的修改）
  * @returns 汇总结果，包含每个文件的状态和整体统计
  */
-export function applyWorkspacePatch(
-  workspaceRoot: string,
-  patchText: string,
-): PatchResult {
+export function applyWorkspacePatch(workspaceRoot: string, patchText: string): PatchResult {
   if (!patchText.trim()) {
     return { ok: false, results: [], summary: "apply_patch: empty patch" };
   }
@@ -155,10 +152,7 @@ export function applyWorkspacePatch(
   const originals = new Map<string, string>();
   for (const t of targets) {
     try {
-      if (
-        fs.existsSync(t.resolvedPath) &&
-        fs.statSync(t.resolvedPath).isFile()
-      ) {
+      if (fs.existsSync(t.resolvedPath) && fs.statSync(t.resolvedPath).isFile()) {
         originals.set(t.resolvedPath, fs.readFileSync(t.resolvedPath, "utf8"));
       } else if (t.patch.isCreate !== true) {
         // 文件不存在且不是创建操作 → 报错

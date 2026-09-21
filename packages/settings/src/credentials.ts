@@ -19,12 +19,7 @@
 import type { PawSettingsLocal } from "./schema.js";
 
 /** 需要 API Key + 可选 Base URL 的 AI 提供商类型。 */
-export type CredentialProvider =
-  | "anthropic"
-  | "openai"
-  | "qwen"
-  | "deepseek"
-  | "glm";
+export type CredentialProvider = "anthropic" | "openai" | "qwen" | "deepseek" | "glm";
 
 /** API Key 的扁平字段名映射：provider → settings 字段 key。 */
 const API_KEY_FIELDS: Record<CredentialProvider, keyof PawSettingsLocal> = {
@@ -155,10 +150,7 @@ export function resolveBaseUrl(
  * @param provider - AI 提供商标识
  * @returns 密钥可用返回 true，否则返回 false
  */
-export function hasApiKey(
-  settings: PawSettingsLocal,
-  provider: CredentialProvider,
-): boolean {
+export function hasApiKey(settings: PawSettingsLocal, provider: CredentialProvider): boolean {
   return resolveApiKey(settings, provider) !== undefined;
 }
 
@@ -213,9 +205,7 @@ export function redactSecrets(settings: PawSettingsLocal): PawSettingsLocal {
       const entry: Record<string, unknown> = { ...server };
       if (entry.env && typeof entry.env === "object") {
         const envCopy: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(
-          entry.env as Record<string, unknown>,
-        )) {
+        for (const [key, value] of Object.entries(entry.env as Record<string, unknown>)) {
           envCopy[key] = typeof value === "string" ? maskKey(value) : value;
         }
         entry.env = envCopy;

@@ -69,14 +69,9 @@ function parseSandboxConfig(value: unknown): ShellSandboxConfig | undefined {
   }
 
   // 容器化沙箱配置
-  const runtime =
-    raw.runtime === "docker" || raw.runtime === "podman"
-      ? raw.runtime
-      : undefined;
+  const runtime = raw.runtime === "docker" || raw.runtime === "podman" ? raw.runtime : undefined;
   const image =
-    typeof raw.image === "string" && raw.image.trim()
-      ? raw.image.trim()
-      : DEFAULT_SANDBOX_IMAGE;
+    typeof raw.image === "string" && raw.image.trim() ? raw.image.trim() : DEFAULT_SANDBOX_IMAGE;
   const memoryMb =
     typeof raw.memory_mb === "number" && Number.isFinite(raw.memory_mb)
       ? Math.max(256, Math.floor(raw.memory_mb))
@@ -86,18 +81,13 @@ function parseSandboxConfig(value: unknown): ShellSandboxConfig | undefined {
       ? Math.max(0.25, raw.cpus)
       : undefined;
   const containerWorkspaceRoot =
-    typeof raw.container_workspace_root === "string" &&
-    raw.container_workspace_root.trim()
+    typeof raw.container_workspace_root === "string" && raw.container_workspace_root.trim()
       ? raw.container_workspace_root.trim()
       : undefined;
   const commandShell =
-    raw.command_shell === "bash" || raw.command_shell === "sh"
-      ? raw.command_shell
-      : undefined;
+    raw.command_shell === "bash" || raw.command_shell === "sh" ? raw.command_shell : undefined;
   const pullPolicy =
-    raw.pull_policy === "missing" || raw.pull_policy === "never"
-      ? raw.pull_policy
-      : undefined;
+    raw.pull_policy === "missing" || raw.pull_policy === "never" ? raw.pull_policy : undefined;
 
   return {
     mode,
@@ -117,13 +107,6 @@ function parseSandboxConfig(value: unknown): ShellSandboxConfig | undefined {
  *
  * @returns ShellSandboxConfig（默认：mode="off" 的关闭沙箱）
  */
-export function resolveShellSandboxConfig(
-  workspaceRoot: string,
-): ShellSandboxConfig {
-  return readSetting(
-    workspaceRoot,
-    (s) => s.sandbox,
-    OFF_SHELL_SANDBOX,
-    parseSandboxConfig,
-  );
+export function resolveShellSandboxConfig(workspaceRoot: string): ShellSandboxConfig {
+  return readSetting(workspaceRoot, (s) => s.sandbox, OFF_SHELL_SANDBOX, parseSandboxConfig);
 }

@@ -12,15 +12,9 @@ export type ToolPreparationV2<TPrepared, TResult> =
   | { readonly kind: "dispatch"; readonly prepared: TPrepared }
   | { readonly kind: "settled"; readonly result: TResult };
 
-export interface ToolSchedulerHooksV2<
-  TPrepared,
-  TResult,
-  TCommitted = TResult,
-> {
+export interface ToolSchedulerHooksV2<TPrepared, TResult, TCommitted = TResult> {
   /** Missing, invalid, or throwing classifiers fail closed to exclusive. */
-  readonly classify?: (
-    call: ScheduledToolCallV2,
-  ) => ToolExecutionModeV2 | undefined;
+  readonly classify?: (call: ScheduledToolCallV2) => ToolExecutionModeV2 | undefined;
   /** Ordered preflight: authority/approval may return an explicit result. */
   readonly prepare: (
     call: ScheduledToolCallV2,
@@ -153,12 +147,7 @@ async function runParallelGroup<TPrepared, TResult, TCommitted>(
       const slot = slots.get(nextToCommit);
       if (!slot) throw new Error("Tool scheduler missing settled slot");
       const call = requiredCall(calls, nextToCommit);
-      const value = await hooks.commit(
-        call,
-        slot.result,
-        nextToCommit,
-        slot.mode,
-      );
+      const value = await hooks.commit(call, slot.result, nextToCommit, slot.mode);
       committedOutput.push({
         index: nextToCommit,
         callId: call.callId,
@@ -264,13 +253,9 @@ function safeExecutionMode(
       if (
         mode.scope === undefined ||
         (Array.isArray(mode.scope) &&
-          mode.scope.every(
-            (path) => typeof path === "string" && path.length > 0,
-          ))
+          mode.scope.every((path) => typeof path === "string" && path.length > 0))
       ) {
-        return mode.scope
-          ? { kind: "exclusive", scope: [...mode.scope] }
-          : { kind: "exclusive" };
+        return mode.scope ? { kind: "exclusive", scope: [...mode.scope] } : { kind: "exclusive" };
       }
     }
   } catch {
@@ -282,10 +267,8 @@ function safeExecutionMode(
 function assertCalls(calls: readonly ScheduledToolCallV2[]): void {
   const ids = new Set<string>();
   for (const call of calls) {
-    if (!call.callId.trim())
-      throw new Error("Tool scheduler callId must not be empty");
-    if (!call.tool.trim())
-      throw new Error("Tool scheduler tool must not be empty");
+    if (!call.callId.trim()) throw new Error("Tool scheduler callId must not be empty");
+    if (!call.tool.trim()) throw new Error("Tool scheduler tool must not be empty");
     if (ids.has(call.callId)) {
       throw new Error(`Tool scheduler duplicate callId: ${call.callId}`);
     }
@@ -293,10 +276,7 @@ function assertCalls(calls: readonly ScheduledToolCallV2[]): void {
   }
 }
 
-function requiredCall(
-  calls: readonly ScheduledToolCallV2[],
-  index: number,
-): ScheduledToolCallV2 {
+function requiredCall(calls: readonly ScheduledToolCallV2[], index: number): ScheduledToolCallV2 {
   const call = calls[index];
   if (!call) throw new Error(`Tool scheduler missing call at index ${index}`);
   return call;

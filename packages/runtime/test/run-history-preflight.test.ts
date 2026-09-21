@@ -77,11 +77,7 @@ describe("canonical tool history preflight", () => {
 
     let approvalCalls = 0;
     const resolution = await permissions.resolve(
-      validatedCall(
-        registry,
-        root,
-        call("edit-3", "workspace_edit_file", editArgs("c.txt")),
-      ),
+      validatedCall(registry, root, call("edit-3", "workspace_edit_file", editArgs("c.txt"))),
       async () => {
         approvalCalls += 1;
         return { decision: "deny" };
@@ -192,11 +188,7 @@ describe("canonical tool history preflight", () => {
 
     let approvalCalls = 0;
     const resolution = await permissions.resolve(
-      validatedCall(
-        registry,
-        root,
-        call("edit-next", "workspace_edit_file", editArgs("c.txt")),
-      ),
+      validatedCall(registry, root, call("edit-next", "workspace_edit_file", editArgs("c.txt"))),
       async () => {
         approvalCalls += 1;
         return { decision: "allow_once" };
@@ -330,17 +322,9 @@ describe("canonical tool history preflight", () => {
     const cases: readonly InputFactV1[][] = [
       allowedEdit,
       [...allowedRead, allocation("read", 1, 0, 1)],
-      [
-        ...allowedEdit,
-        allocation("edit", 1, 0, 1),
-        allocation("edit", 1, 0, 2),
-      ],
+      [...allowedEdit, allocation("edit", 1, 0, 1), allocation("edit", 1, 0, 2)],
       [...allowedEdit, allocation("edit", 1, 1, 1)],
-      [
-        allowedRead[0] as InputFactV1,
-        settled("read"),
-        allowedRead[1] as InputFactV1,
-      ],
+      [allowedRead[0] as InputFactV1, settled("read"), allowedRead[1] as InputFactV1],
     ];
     for (const facts of cases) {
       expect(() =>
@@ -453,9 +437,7 @@ function mutatePermission(
   );
 }
 
-function permissionEngine(
-  defaultAction: "ask" | "deny" = "ask",
-): FrozenPermissionEngineV1 {
+function permissionEngine(defaultAction: "ask" | "deny" = "ask"): FrozenPermissionEngineV1 {
   return new FrozenPermissionEngineV1({
     policyVersion: POLICY_VERSION,
     defaultAction,
@@ -483,11 +465,7 @@ function call(
   return { id, name, arguments: args, argumentsValid: true };
 }
 
-function validatedCall(
-  registry: FrozenToolRegistryV1,
-  root: string,
-  toolCall: RuntimeToolCallV1,
-) {
+function validatedCall(registry: FrozenToolRegistryV1, root: string, toolCall: RuntimeToolCallV1) {
   const result = registry.validateAndClassify(toolCall, root);
   if (!result.ok) throw new Error(result.result.summary);
   return result.value;

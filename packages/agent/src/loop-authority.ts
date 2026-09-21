@@ -43,9 +43,7 @@ const V2_POLICY: LoopAuthorityPolicyV1 = Object.freeze({
 });
 
 /** Undefined is the established v1 default. Shadow must preserve v1 behavior. */
-export function resolveLoopAuthorityPolicyV1(
-  kernel?: LoopKernelVersion,
-): LoopAuthorityPolicyV1 {
+export function resolveLoopAuthorityPolicyV1(kernel?: LoopKernelVersion): LoopAuthorityPolicyV1 {
   if (kernel === "v2") return V2_POLICY;
   if (kernel === "v2-shadow") return V2_SHADOW_POLICY;
   return V1_POLICY;

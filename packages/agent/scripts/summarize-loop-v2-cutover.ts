@@ -20,13 +20,8 @@ for (const entry of readRunDirectories(runsRoot)) {
   const runDirectory = path.join(runsRoot, entry);
   try {
     const terminalRaw = readRequiredBySuffix(runDirectory, "terminal-v1.json");
-    const candidateRaw = readOptionalBySuffix(
-      runDirectory,
-      "candidate-v1.json",
-    );
-    const candidate = candidateRaw
-      ? parseLoopV2LiveCandidateArtifactV1(candidateRaw)
-      : undefined;
+    const candidateRaw = readOptionalBySuffix(runDirectory, "candidate-v1.json");
+    const candidate = candidateRaw ? parseLoopV2LiveCandidateArtifactV1(candidateRaw) : undefined;
     const reviewRaw = readOptionalBySuffix(runDirectory, "review-v1.json");
     const review = reviewRaw
       ? candidate
@@ -35,21 +30,9 @@ for (const entry of readRunDirectories(runsRoot)) {
             throw new Error("review-v1.json exists without candidate-v1.json");
           })()
       : undefined;
-    const terminal = parseLoopV2LiveTerminalArtifactV1(
-      terminalRaw,
-      candidate,
-      review,
-    );
-    const shadowRaw = readRequiredBySuffix(
-      runDirectory,
-      "run-result-shadow-v1.json",
-    );
-    const shadow = parseLoopV2RunResultShadowArtifactV1(
-      shadowRaw,
-      terminal,
-      candidate,
-      review,
-    );
+    const terminal = parseLoopV2LiveTerminalArtifactV1(terminalRaw, candidate, review);
+    const shadowRaw = readRequiredBySuffix(runDirectory, "run-result-shadow-v1.json");
+    const shadow = parseLoopV2RunResultShadowArtifactV1(shadowRaw, terminal, candidate, review);
     observations.push({
       runId: terminal.runId,
       terminalComparison: terminal.comparison,
@@ -83,10 +66,7 @@ function readRequiredBySuffix(directory: string, suffix: string): string {
   return fs.readFileSync(target, "utf8");
 }
 
-function readOptionalBySuffix(
-  directory: string,
-  suffix: string,
-): string | undefined {
+function readOptionalBySuffix(directory: string, suffix: string): string | undefined {
   const target = path.join(directory, suffix);
   return fs.existsSync(target) ? fs.readFileSync(target, "utf8") : undefined;
 }

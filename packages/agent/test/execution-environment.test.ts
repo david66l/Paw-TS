@@ -12,10 +12,7 @@ import {
   parseExecutionEnvironmentSnapshotV1,
 } from "../src/execution-environment.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
-import {
-  TaskStateManager,
-  latestSubstantiveVerification,
-} from "../src/task-state.js";
+import { TaskStateManager, latestSubstantiveVerification } from "../src/task-state.js";
 
 const RUNTIME: ExecutionRuntimeV1 = Object.freeze({
   platform: "win32",
@@ -171,9 +168,7 @@ describe("ExecutionEnvironmentRegistryV1", () => {
       },
     );
     const serialized = JSON.parse(JSON.stringify(first.snapshot()));
-    expect(parseExecutionEnvironmentSnapshotV1(serialized)).toEqual(
-      first.snapshot(),
-    );
+    expect(parseExecutionEnvironmentSnapshotV1(serialized)).toEqual(first.snapshot());
 
     const resumed = new ExecutionEnvironmentRegistryV1({
       runId: "env-resume",
@@ -220,9 +215,7 @@ describe("ExecutionEnvironmentRegistryV1", () => {
     );
     const corrupt = JSON.parse(JSON.stringify(registry.snapshot()));
     corrupt.events[0].seq = 7;
-    expect(() => parseExecutionEnvironmentSnapshotV1(corrupt)).toThrow(
-      /event 1/,
-    );
+    expect(() => parseExecutionEnvironmentSnapshotV1(corrupt)).toThrow(/event 1/);
   });
 
   test("invalidates green verification after an incompatible environment resume", () => {
@@ -298,9 +291,7 @@ describe("ExecutionEnvironmentRegistryV1", () => {
     });
     expect(result.status).toBe("completed");
     const saved = stateStore.load("execution-environment-wiring");
-    const snapshot = parseExecutionEnvironmentSnapshotV1(
-      saved?.executionEnvironment,
-    );
+    const snapshot = parseExecutionEnvironmentSnapshotV1(saved?.executionEnvironment);
     expect(snapshot?.events).toHaveLength(1);
     expect(snapshot?.events[0]).toMatchObject({
       type: "shell.completed",

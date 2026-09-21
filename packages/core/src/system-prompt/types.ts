@@ -21,10 +21,7 @@
  *    这让上层（UI/日志）可以展示 token 预算消耗的完整 audit trail。
  */
 
-import type {
-  LegacyMemoryRecordV1,
-  LegacyProjectMemoryV1,
-} from "@paw/protocol";
+import type { LegacyMemoryRecordV1, LegacyProjectMemoryV1 } from "@paw/protocol";
 
 /**
  * 构建系统提示词的配置选项

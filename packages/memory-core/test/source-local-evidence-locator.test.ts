@@ -57,9 +57,7 @@ describe("source-local evidence locator boundary", () => {
       lockedSourceIds: ["session-1"],
       budget: DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
     };
-    expect(memorySourceLocalAnchorKindsV1(request)).toEqual([
-      "assistant_output",
-    ]);
+    expect(memorySourceLocalAnchorKindsV1(request)).toEqual(["assistant_output"]);
     expect(
       memorySourceLocalAnchorKindsV1({
         ...request,
@@ -450,9 +448,7 @@ describe("source-local evidence locator boundary", () => {
         },
       ],
     };
-    const resultFor = (
-      hit: MemorySourceLocalEvidenceHitV1,
-    ): MemorySourceLocalEvidenceResultV1 => ({
+    const resultFor = (hit: MemorySourceLocalEvidenceHitV1): MemorySourceLocalEvidenceResultV1 => ({
       locatorVersion: locator.locatorVersion,
       locatorRevision: "revision",
       hits: [hit],
@@ -759,9 +755,7 @@ describe("source-local evidence locator boundary", () => {
         },
       ],
     };
-    const resultFor = (
-      hit: MemorySourceLocalEvidenceHitV1,
-    ): MemorySourceLocalEvidenceResultV1 => ({
+    const resultFor = (hit: MemorySourceLocalEvidenceHitV1): MemorySourceLocalEvidenceResultV1 => ({
       locatorVersion: locator.locatorVersion,
       locatorRevision: "revision",
       hits: [hit],

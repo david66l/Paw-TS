@@ -32,11 +32,7 @@ export function loadPawSettingsLocal(filePath: string): PawSettingsLocal {
   try {
     json = JSON.parse(raw) as unknown;
   } catch (e) {
-    throw new PawError(
-      "CONFIG",
-      `Invalid JSON in settings file: ${filePath}`,
-      e,
-    );
+    throw new PawError("CONFIG", `Invalid JSON in settings file: ${filePath}`, e);
   }
   const parsed = pawSettingsLocalSchema.safeParse(json);
   if (!parsed.success) {
@@ -52,17 +48,12 @@ export function loadPawSettingsLocal(filePath: string): PawSettingsLocal {
 import { redactSecrets } from "./credentials.js";
 
 /** Mask secrets for terminal output (never print full API keys). */
-export function redactSettingsForDisplay(
-  s: PawSettingsLocal,
-): Record<string, unknown> {
+export function redactSettingsForDisplay(s: PawSettingsLocal): Record<string, unknown> {
   return redactSecrets(s) as Record<string, unknown>;
 }
 
 /** Write settings back to disk, preserving unknown keys. */
-export function savePawSettingsLocal(
-  filePath: string,
-  settings: PawSettingsLocal,
-): void {
+export function savePawSettingsLocal(filePath: string, settings: PawSettingsLocal): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");

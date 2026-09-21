@@ -42,8 +42,7 @@ export interface ToolResultLine {
   readonly provenance?: ObservationProvenanceV1;
 }
 
-export const OBSERVATION_PROVENANCE_SCHEMA_V1 =
-  "paw.observation-provenance.v1" as const;
+export const OBSERVATION_PROVENANCE_SCHEMA_V1 = "paw.observation-provenance.v1" as const;
 
 export interface ObservationProvenanceV1 {
   readonly schemaVersion: typeof OBSERVATION_PROVENANCE_SCHEMA_V1;
@@ -76,8 +75,7 @@ export interface ObservationProvenanceV1 {
   readonly permissionAuthority: "none";
 }
 
-export const OBSERVATION_PROVENANCE_PREFIX =
-  "[Observation Provenance v1]" as const;
+export const OBSERVATION_PROVENANCE_PREFIX = "[Observation Provenance v1]" as const;
 
 /**
  * 工具结果的解析后表示（输出格式）。

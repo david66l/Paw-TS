@@ -52,9 +52,7 @@ describe("verified canonical payload index", () => {
     });
     const snapshot = sessionSnapshot(fixture.prefix);
     const carrier = fixture.prefix.find(
-      (entry) =>
-        entry.record.kind === "input_fact" &&
-        entry.record.fact.type === "model.settled",
+      (entry) => entry.record.kind === "input_fact" && entry.record.fact.type === "model.settled",
     );
     if (
       !carrier ||
@@ -72,9 +70,9 @@ describe("verified canonical payload index", () => {
       payload: carrier.record.fact.response,
     });
     expect(resolved as unknown).toEqual(fixture.values.model);
-    expect(() =>
-      evidence.assertSnapshot({ ...snapshot, tailSeq: snapshot.tailSeq + 1 }),
-    ).toThrow("snapshot mismatch");
+    expect(() => evidence.assertSnapshot({ ...snapshot, tailSeq: snapshot.tailSeq + 1 })).toThrow(
+      "snapshot mismatch",
+    );
     expect(() =>
       createVerifiedModelResponseEvidenceV1({
         index,
@@ -108,9 +106,7 @@ describe("verified canonical payload index", () => {
       tailSeq: 18,
       budget: budget(1_000_000),
     });
-    expect(index.prefixDigest).toBe(
-      hashJson(fixture.prefix as unknown as JsonValue),
-    );
+    expect(index.prefixDigest).toBe(hashJson(fixture.prefix as unknown as JsonValue));
     expect(index.occurrences.map((item) => item.location.kind)).toEqual([
       "input_attachment",
       "input_attachment",
@@ -147,9 +143,7 @@ describe("verified canonical payload index", () => {
     const fixture = completeFixture({ equalAttachmentValues: true });
     const index = await build(fixture);
     expect(index.occurrences[0]?.value).toEqual(index.occurrences[1]?.value);
-    expect(index.occurrences[0]?.binding).not.toEqual(
-      index.occurrences[1]?.binding,
-    );
+    expect(index.occurrences[0]?.binding).not.toEqual(index.occurrences[1]?.binding);
     expect(index.totalBytes).toBe(uniqueBindingBytes(fixture.values));
     expect(fixture.resolver.resolveCalls).toHaveLength(4);
   });
@@ -157,9 +151,7 @@ describe("verified canonical payload index", () => {
   test("binds exact prefix identity and digest and rejects forged indexes", async () => {
     const fixture = completeFixture();
     const index = await build(fixture);
-    expect(() =>
-      assertIndexMatches(index, fixture, fixture.prefix),
-    ).not.toThrow();
+    expect(() => assertIndexMatches(index, fixture, fixture.prefix)).not.toThrow();
 
     for (const mutation of [
       (prefix: RunJournalEnvelopeV1[]) => {
@@ -188,14 +180,12 @@ describe("verified canonical payload index", () => {
     ]) {
       const changed = clone(fixture.prefix);
       mutation(changed);
-      expect(() => assertIndexMatches(index, fixture, changed)).toThrow(
-        "prefix mismatch",
-      );
+      expect(() => assertIndexMatches(index, fixture, changed)).toThrow("prefix mismatch");
     }
 
-    expect(() =>
-      assertIndexMatches(index, fixture, fixture.prefix, budget(999_999)),
-    ).toThrow("prefix mismatch");
+    expect(() => assertIndexMatches(index, fixture, fixture.prefix, budget(999_999))).toThrow(
+      "prefix mismatch",
+    );
 
     const forged = { ...index };
     expect(() =>
@@ -240,8 +230,7 @@ describe("verified canonical payload index", () => {
       workspaceRoot: rootA,
       readCanonicalPayloadIdentity: writerA.readCanonicalPayloadIdentity,
       async resolve(payloadValue, expectedBinding, signal) {
-        mutableResolver.readCanonicalPayloadIdentity =
-          readerB.readCanonicalPayloadIdentity;
+        mutableResolver.readCanonicalPayloadIdentity = readerB.readCanonicalPayloadIdentity;
         mutableResolver.workspaceRoot = rootB;
         return writerA.resolve(payloadValue, expectedBinding, signal);
       },
@@ -249,9 +238,7 @@ describe("verified canonical payload index", () => {
     };
     const identityA = writerA.readCanonicalPayloadIdentity();
     expect(Object.isFrozen(identityA)).toBeTrue();
-    expect(
-      Reflect.set(identityA as object, "workspaceRoot", rootB),
-    ).toBeFalse();
+    expect(Reflect.set(identityA as object, "workspaceRoot", rootB)).toBeFalse();
     const index = await buildVerifiedCanonicalPayloadIndexV1({
       fullPrefix: prefix,
       resolver: mutableResolver,
@@ -286,9 +273,7 @@ describe("verified canonical payload index", () => {
   test("requires exact carrier location, owner, and payload for every lookup", async () => {
     const fixture = completeFixture();
     const index = await build(fixture);
-    const model = index.occurrences.find(
-      (item) => item.location.kind === "model_response",
-    );
+    const model = index.occurrences.find((item) => item.location.kind === "model_response");
     if (!model || model.location.kind !== "model_response") {
       throw new Error("model occurrence is missing");
     }
@@ -331,9 +316,7 @@ describe("verified canonical payload index", () => {
   test("detaches every value and lookup result from hostile input and resolver mutation", async () => {
     const fixture = completeFixture();
     const index = await build(fixture);
-    const model = index.occurrences.find(
-      (item) => item.location.kind === "model_response",
-    );
+    const model = index.occurrences.find((item) => item.location.kind === "model_response");
     if (!model || model.location.kind !== "model_response") {
       throw new Error("model occurrence is missing");
     }
@@ -373,17 +356,13 @@ describe("verified canonical payload index", () => {
       },
       {
         name: "attachment type",
-        mutate: (fixture) =>
-          replaceArtifact(fixture, fixture.refs.attachment, { not: "text" }),
+        mutate: (fixture) => replaceArtifact(fixture, fixture.refs.attachment, { not: "text" }),
         message: "must be text",
       },
       {
         name: "model identity",
         mutate: (fixture) => {
-          const response = clone(fixture.values.model) as Record<
-            string,
-            unknown
-          >;
+          const response = clone(fixture.values.model) as Record<string, unknown>;
           const calls = response.toolCalls as Array<Record<string, unknown>>;
           if (!calls[0]) throw new Error("model call fixture is missing");
           calls[0].callId = "call-other";
@@ -751,11 +730,7 @@ class JournalFixture {
   }
 }
 
-function replaceArtifact(
-  fixture: CompleteFixture,
-  artifactRef: string,
-  value: JsonValue,
-): void {
+function replaceArtifact(fixture: CompleteFixture, artifactRef: string, value: JsonValue): void {
   fixture.resolver.mutate(artifactRef, value);
   for (const envelope of fixture.prefix) {
     if (envelope.record.kind !== "input_fact") continue;
@@ -767,19 +742,13 @@ function replaceArtifact(
       payloads.push(fact.response);
     } else if (fact.type === "tool.settled" && fact.observation?.payload) {
       payloads.push(fact.observation.payload);
-    } else if (
-      fact.type === "context.checkpoint_distillation_settled" &&
-      fact.checkpoint
-    ) {
+    } else if (fact.type === "context.checkpoint_distillation_settled" && fact.checkpoint) {
       payloads.push(fact.checkpoint);
     } else if (fact.type === "context.checkpoint_recorded") {
       payloads.push(fact.checkpoint);
     }
     for (const payload of payloads) {
-      if (
-        payload.kind === "artifact_ref" &&
-        payload.artifactRef === artifactRef
-      ) {
+      if (payload.kind === "artifact_ref" && payload.artifactRef === artifactRef) {
         (payload as { hash: string }).hash = hashJson(value);
       }
     }
@@ -822,9 +791,7 @@ function uniqueBindingBytes(values: CompleteFixture["values"]): number {
   return total;
 }
 
-function minimalAttachmentPrefix(
-  payload: DurableJsonPayloadV1,
-): readonly RunJournalEnvelopeV1[] {
+function minimalAttachmentPrefix(payload: DurableJsonPayloadV1): readonly RunJournalEnvelopeV1[] {
   return [
     envelope(1, { kind: "input_fact", fact: attempt() }),
     envelope(2, {
@@ -845,9 +812,7 @@ function sessionSnapshot(
   prefix: readonly RunJournalEnvelopeV1[],
 ): SessionInputSnapshot<InputFactV1> {
   const entries = prefix.flatMap((entry) =>
-    entry.record.kind === "input_fact"
-      ? [{ seq: entry.seq, fact: entry.record.fact }]
-      : [],
+    entry.record.kind === "input_fact" ? [{ seq: entry.seq, fact: entry.record.fact }] : [],
   );
   return {
     entries,
@@ -919,10 +884,7 @@ function attachment(attachmentId: string, content: DurableJsonPayloadV1) {
   };
 }
 
-function envelope(
-  seq: number,
-  record: RunJournalEnvelopeV1["record"],
-): RunJournalEnvelopeV1 {
+function envelope(seq: number, record: RunJournalEnvelopeV1["record"]): RunJournalEnvelopeV1 {
   return {
     schemaVersion: RUN_JOURNAL_SCHEMA_VERSION_V1,
     sessionId: "session-1",
@@ -943,10 +905,7 @@ function canonicalJson(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`)
     .join(",")}}`;
 }
 

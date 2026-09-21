@@ -10,10 +10,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  findSettingsFile,
-  resolveLlmConfig,
-} from "../src/longterm/eval/llm-client.js";
+import { findSettingsFile, resolveLlmConfig } from "../src/longterm/eval/llm-client.js";
 import {
   COUNTERFACTUAL_FIXTURES,
   type CfItemResult,
@@ -43,10 +40,7 @@ import { validateCandidate } from "../src/longterm/write/distiller.js";
 describe("parseVerdict", () => {
   test("合法 JSON / 容忍前后废话 / 非法返回 null", () => {
     expect(
-      parseVerdict('{"verdict":"corrected","reason":"ok"}', [
-        "corrected",
-        "uncorrected",
-      ] as const),
+      parseVerdict('{"verdict":"corrected","reason":"ok"}', ["corrected", "uncorrected"] as const),
     ).toEqual({ verdict: "corrected", reason: "ok" });
     expect(
       parseVerdict('前面废话 {"verdict":"uncorrected","reason":"r"} 后面', [
@@ -54,20 +48,10 @@ describe("parseVerdict", () => {
         "uncorrected",
       ] as const)?.verdict,
     ).toBe("uncorrected");
+    expect(parseVerdict('{"verdict":"maybe"}', ["corrected", "uncorrected"] as const)).toBeNull();
+    expect(parseVerdict("不是 JSON", ["corrected", "uncorrected"] as const)).toBeNull();
     expect(
-      parseVerdict('{"verdict":"maybe"}', [
-        "corrected",
-        "uncorrected",
-      ] as const),
-    ).toBeNull();
-    expect(
-      parseVerdict("不是 JSON", ["corrected", "uncorrected"] as const),
-    ).toBeNull();
-    expect(
-      parseVerdict('{"verdict":"kept","reason":"r"}', [
-        "kept",
-        "reversed",
-      ] as const)?.verdict,
+      parseVerdict('{"verdict":"kept","reason":"r"}', ["kept", "reversed"] as const)?.verdict,
     ).toBe("kept");
   });
 });
@@ -82,26 +66,14 @@ describe("conservativeMerge", () => {
       inconsistent: false,
     });
     // 任一坏档 → final 取坏档，且标记不一致
-    expect(conservativeMerge("uncorrected", "corrected", bad).final).toBe(
-      "uncorrected",
-    );
-    expect(conservativeMerge("corrected", "uncorrected", bad).final).toBe(
-      "uncorrected",
-    );
-    expect(
-      conservativeMerge("corrected", "uncorrected", bad).inconsistent,
-    ).toBe(true);
+    expect(conservativeMerge("uncorrected", "corrected", bad).final).toBe("uncorrected");
+    expect(conservativeMerge("corrected", "uncorrected", bad).final).toBe("uncorrected");
+    expect(conservativeMerge("corrected", "uncorrected", bad).inconsistent).toBe(true);
     // 单边 unjudged 用另一边
-    expect(conservativeMerge("corrected", "unjudged", bad).final).toBe(
-      "corrected",
-    );
-    expect(conservativeMerge("unjudged", "uncorrected", bad).final).toBe(
-      "uncorrected",
-    );
+    expect(conservativeMerge("corrected", "unjudged", bad).final).toBe("corrected");
+    expect(conservativeMerge("unjudged", "uncorrected", bad).final).toBe("uncorrected");
     // 都 unjudged
-    expect(conservativeMerge("unjudged", "unjudged", bad).final).toBe(
-      "unjudged",
-    );
+    expect(conservativeMerge("unjudged", "unjudged", bad).final).toBe("unjudged");
   });
 });
 
@@ -159,18 +131,13 @@ describe("summarizeCounterfactual", () => {
     expect(ok.passed).toBe(true);
 
     // 未召回不计入纠正率分母，但计入召回率
-    const mixed = summarizeCounterfactual([
-      mk("a", true, "corrected"),
-      mk("b", false, "unjudged"),
-    ]);
+    const mixed = summarizeCounterfactual([mk("a", true, "corrected"), mk("b", false, "unjudged")]);
     expect(mixed.recallRate).toBe(0.5);
     expect(mixed.correctionRate).toBe(1);
     expect(mixed.passed).toBe(true);
 
     // 无已判定样本 → passed null
-    expect(
-      summarizeCounterfactual([mk("a", false, "unjudged")]).passed,
-    ).toBeNull();
+    expect(summarizeCounterfactual([mk("a", false, "unjudged")]).passed).toBeNull();
     expect(summarizeCounterfactual([]).correctionRate).toBeNull();
   });
 });
@@ -204,11 +171,7 @@ describe("summarizeNoiseResilience", () => {
     expect(NOISE_TASK_START_TOP_K).toBeGreaterThan(1);
   });
 
-  const mk = (
-    taskId: string,
-    itemId: string,
-    final: string,
-  ): NoiseItemResult => ({
+  const mk = (taskId: string, itemId: string, final: string): NoiseItemResult => ({
     taskId,
     itemId,
     v1: final,
@@ -251,16 +214,10 @@ describe("summarizeNoiseResilience", () => {
   });
 
   test("空集 / 种子被拦截（无正确 id）边界", () => {
-    expect(
-      summarizeNoiseResilience([], new Map(), new Set()).keptRate,
-    ).toBeNull();
+    expect(summarizeNoiseResilience([], new Map(), new Set()).keptRate).toBeNull();
     // 有任务但正确 id 缺失 → 该任务不计入分母
     const correct = new Map([["nz-01", "id-01"]]);
-    const r = summarizeNoiseResilience(
-      [mk("nz-02", "id-x", "helpful")],
-      correct,
-      new Set(),
-    );
+    const r = summarizeNoiseResilience([mk("nz-02", "id-x", "helpful")], correct, new Set());
     expect(r.keptRate).toBeNull();
     expect(r.noiseInjected).toBe(0);
   });
@@ -294,16 +251,11 @@ describe("summarizeNegation", () => {
     expect(s.verbatimRate).toBeCloseTo(2 / 3);
     expect(s.passed).toBe(false); // 有一条 reversed
 
-    const perfect = summarizeNegation([
-      mk("a", true, true, "kept"),
-      mk("b", true, true, "kept"),
-    ]);
+    const perfect = summarizeNegation([mk("a", true, true, "kept"), mk("b", true, true, "kept")]);
     expect(perfect.keptRate).toBe(1);
     expect(perfect.passed).toBe(true);
 
-    expect(
-      summarizeNegation([mk("a", false, false, "unjudged")]).passed,
-    ).toBeNull();
+    expect(summarizeNegation([mk("a", false, false, "unjudged")]).passed).toBeNull();
   });
 });
 
@@ -439,9 +391,7 @@ describe("findSettingsFile", () => {
         join(dir, "a", "b", ".paw", "settings.local.json"),
       );
       // b/.paw 距 startDir 第 5 层（超出 maxUp=4）→ null
-      expect(
-        findSettingsFile(join(dir, "a", "b", "c", "d", "e", "f", "g"), 4),
-      ).toBeNull();
+      expect(findSettingsFile(join(dir, "a", "b", "c", "d", "e", "f", "g"), 4)).toBeNull();
       // startDir 无 .paw 且无父级 → null
       expect(findSettingsFile(dir, 4)).toBeNull();
     } finally {
@@ -482,9 +432,7 @@ describe("fixture 合法性", () => {
         modification: f.modification,
         evidence: ["runs/redteam#s0"],
       });
-      expect(v.ok, `nz ${f.taskId}: ${v.ok ? "" : v.errors.join(";")}`).toBe(
-        true,
-      );
+      expect(v.ok, `nz ${f.taskId}: ${v.ok ? "" : v.errors.join(";")}`).toBe(true);
     }
     for (const p of NOISE_POLLUTANTS) {
       const v = validateCandidate({
@@ -499,9 +447,7 @@ describe("fixture 合法性", () => {
   });
 
   test("episodic 夹具 whenToUse 均以 When 开头（T1 episodic 检索主键纪律）", () => {
-    for (const f of NOISE_FIXTURES)
-      expect(f.whenToUse.startsWith("When"), f.taskId).toBe(true);
-    for (const p of NOISE_POLLUTANTS)
-      expect(p.whenToUse.startsWith("When")).toBe(true);
+    for (const f of NOISE_FIXTURES) expect(f.whenToUse.startsWith("When"), f.taskId).toBe(true);
+    for (const p of NOISE_POLLUTANTS) expect(p.whenToUse.startsWith("When")).toBe(true);
   });
 });

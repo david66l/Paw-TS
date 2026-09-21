@@ -94,11 +94,7 @@ export type MemoryEvidenceReaderProjectionPayloadV1 =
   | Readonly<{
       kind: "personalization";
       constraints: readonly Readonly<{
-        disposition:
-          | "explicit_positive"
-          | "explicit_negative"
-          | "goal"
-          | "contextual";
+        disposition: "explicit_positive" | "explicit_negative" | "goal" | "contextual";
         claim: MemoryEvidenceReaderProjectedClaimV1;
       }>[];
       coverageCertificateRevision: string;
@@ -205,9 +201,7 @@ function buildProjection(
   const origin = compileMemoryQueryAnswerOriginV1(input.query);
   const executionByRequirement = new Map(
     input.selectorSnapshot.groups.flatMap((group) =>
-      group.requirements.map(
-        (requirement) => [requirement.requirementId, requirement] as const,
-      ),
+      group.requirements.map((requirement) => [requirement.requirementId, requirement] as const),
     ),
   );
   const slotRequirements = input.requirements
@@ -232,9 +226,7 @@ function buildProjection(
           temporalConstraints: new Map(
             input.requirements.map((requirement, index) => [
               requirement.requirementId,
-              input.temporalConstraints[
-                index
-              ] as MemoryEvidenceBoundTemporalConstraintV1,
+              input.temporalConstraints[index] as MemoryEvidenceBoundTemporalConstraintV1,
             ]),
           ),
         });
@@ -250,8 +242,7 @@ function buildProjection(
     slots: input.slots,
     frame: input.frame,
     validatedObservations: input.validatedObservations,
-    bindingCertificateValidationContexts:
-      input.bindingCertificateValidationContexts,
+    bindingCertificateValidationContexts: input.bindingCertificateValidationContexts,
     ...(input.coverageCertificate === undefined
       ? {}
       : { coverageCertificate: input.coverageCertificate }),
@@ -260,16 +251,9 @@ function buildProjection(
     reject("execution_mismatch");
   }
   if (expectedExecution.status !== "complete") reject("root_incomplete");
-  const nodeById = new Map(
-    input.program.nodes.map((node) => [node.nodeId, node]),
-  );
-  const resultById = new Map(
-    expectedExecution.nodes.map((node) => [node.nodeId, node]),
-  );
-  const reachableNodeIds = collectReachableNodeIds(
-    input.program.rootNodeId,
-    nodeById,
-  );
+  const nodeById = new Map(input.program.nodes.map((node) => [node.nodeId, node]));
+  const resultById = new Map(expectedExecution.nodes.map((node) => [node.nodeId, node]));
+  const reachableNodeIds = collectReachableNodeIds(input.program.rootNodeId, nodeById);
   for (const nodeId of reachableNodeIds) {
     const node = nodeById.get(nodeId);
     const result = resultById.get(nodeId);
@@ -287,8 +271,7 @@ function buildProjection(
   const valueById = validateValueGraph(expectedExecution.nodes);
   const reachableValueIds = new Set(
     [...reachableNodeIds].flatMap(
-      (nodeId) =>
-        resultById.get(nodeId)?.values.map((value) => value.valueId) ?? [],
+      (nodeId) => resultById.get(nodeId)?.values.map((value) => value.valueId) ?? [],
     ),
   );
   const reachableValueById = new Map(
@@ -310,11 +293,7 @@ function buildProjection(
   const stateBindingCertificateIds = Object.freeze(
     [...collectPayloadCertificateIds(payload)].sort(),
   );
-  if (
-    stateBindingCertificateIds.some(
-      (certificateId) => !certificateById.has(certificateId),
-    )
-  ) {
+  if (stateBindingCertificateIds.some((certificateId) => !certificateById.has(certificateId))) {
     reject("certificate_scope_invalid");
   }
   const stateBindingCertificates = Object.freeze(
@@ -325,8 +304,7 @@ function buildProjection(
     }),
   );
   const durationValue = answerResult.values.find(
-    (value): value is MemoryEvidenceExecutionDurationValueV1 =>
-      value.kind === "temporal_duration",
+    (value): value is MemoryEvidenceExecutionDurationValueV1 => value.kind === "temporal_duration",
   );
   const personalizationValue = answerResult.values.find(
     (value): value is MemoryEvidenceExecutionPersonalizationValueV1 =>
@@ -341,8 +319,7 @@ function buildProjection(
     personalizationValue?.coverageCertificate === undefined
       ? {}
       : {
-          personalizationCoverageCertificate:
-            personalizationValue.coverageCertificate,
+          personalizationCoverageCertificate: personalizationValue.coverageCertificate,
         }),
     ...(input.coverageCertificate === undefined
       ? {}
@@ -366,9 +343,7 @@ function buildProjection(
   });
 }
 
-function validateSourceAndSelector(
-  input: MemoryEvidenceReaderProjectionInputV1,
-): void {
+function validateSourceAndSelector(input: MemoryEvidenceReaderProjectionInputV1): void {
   if (
     !input.query.trim() ||
     input.requirements.length < 1 ||
@@ -383,8 +358,7 @@ function validateSourceAndSelector(
     hashCanonicalJsonV1(snapshotIdentity as never) !== snapshotRevision ||
     input.program.selectorSnapshotRevision !== snapshotRevision ||
     input.program.originRevision !== input.selectorSnapshot.originRevision ||
-    input.program.lockedSourceRevision !==
-      input.selectorSnapshot.lockedSourceRevision ||
+    input.program.lockedSourceRevision !== input.selectorSnapshot.lockedSourceRevision ||
     input.selectorSnapshot.lockedSourceRevision !==
       hashCanonicalJsonV1({
         schemaVersion: "paw.memory-locked-source-set.v1",
@@ -397,13 +371,9 @@ function validateSourceAndSelector(
   const lockedSourceIds = new Set(input.lockedSourceIds);
   if (
     !same(expectedLock, input.sourceLock) ||
-    input.sourceLock.items.some(
-      (item) => !lockedSourceIds.has(item.sourceId),
-    ) ||
+    input.sourceLock.items.some((item) => !lockedSourceIds.has(item.sourceId)) ||
     input.bindingCertificateValidationContexts.some(
-      (context) =>
-        context.query !== input.query ||
-        !same(context.sourceLock, input.sourceLock),
+      (context) => context.query !== input.query || !same(context.sourceLock, input.sourceLock),
     )
   ) {
     reject("source_lock_mismatch");
@@ -415,23 +385,14 @@ function validateReachableReadNode(
   selectorSnapshot: MemorySelectorExecutionSnapshotV1,
   sourceLock: MemoryStateSourceLockV2,
 ): void {
-  const group = selectorSnapshot.groups.find(
-    (candidate) => candidate.groupId === node.groupId,
-  );
+  const group = selectorSnapshot.groups.find((candidate) => candidate.groupId === node.groupId);
   const requirement = group?.requirements.find(
     (candidate) => candidate.requirementId === node.requirementId,
   );
-  if (
-    !group ||
-    group.status !== "committed" ||
-    !requirement ||
-    requirement.status !== "assessed"
-  ) {
+  if (!group || group.status !== "committed" || !requirement || requirement.status !== "assessed") {
     reject("selector_uncommitted");
   }
-  const itemByRef = new Map(
-    sourceLock.items.map((item) => [item.evidenceRef, item]),
-  );
+  const itemByRef = new Map(sourceLock.items.map((item) => [item.evidenceRef, item]));
   for (const evidenceRef of node.supportingEvidenceRefs ?? []) {
     const item = itemByRef.get(evidenceRef);
     if (!item) reject("source_lock_mismatch");
@@ -466,11 +427,9 @@ function projectAnswer(
     ) {
       reject("dangling_value");
     }
-    const { certificateRevision, ...certificateIdentity } =
-      duration.endpointCertificate;
+    const { certificateRevision, ...certificateIdentity } = duration.endpointCertificate;
     if (
-      hashCanonicalJsonV1(certificateIdentity as never) !==
-        certificateRevision ||
+      hashCanonicalJsonV1(certificateIdentity as never) !== certificateRevision ||
       certificateRevision !== duration.endpointCertificateRevision
     ) {
       reject("certificate_scope_invalid");
@@ -484,17 +443,14 @@ function projectAnswer(
       unit: duration.unit,
       value: duration.value,
       endpointPolicy: duration.endpointPolicy,
-      ...(duration.queryAnchor === undefined
-        ? {}
-        : { queryAnchor: duration.queryAnchor }),
+      ...(duration.queryAnchor === undefined ? {} : { queryAnchor: duration.queryAnchor }),
       endpoints: Object.freeze(endpoints),
       endpointCertificateRevision: certificateRevision,
     });
   }
   if (answer.operation === "aggregate_operands") {
     const aggregates = answer.values.filter(
-      (value): value is MemoryEvidenceExecutionAggregateValueV1 =>
-        value.kind === "aggregate",
+      (value): value is MemoryEvidenceExecutionAggregateValueV1 => value.kind === "aggregate",
     );
     const aggregate = aggregates[0];
     if (
@@ -513,15 +469,11 @@ function projectAnswer(
       operator: aggregate.operator,
       aggregationUnit: aggregate.aggregationUnit,
       countBasis: aggregate.countBasis,
-      ...(aggregate.numericValue === undefined
-        ? {}
-        : { numericValue: aggregate.numericValue }),
+      ...(aggregate.numericValue === undefined ? {} : { numericValue: aggregate.numericValue }),
       ...(aggregate.numericDecimal === undefined
         ? {}
         : { numericDecimal: aggregate.numericDecimal }),
-      ...(aggregate.numericUnit === undefined
-        ? {}
-        : { numericUnit: aggregate.numericUnit }),
+      ...(aggregate.numericUnit === undefined ? {} : { numericUnit: aggregate.numericUnit }),
       members: Object.freeze(
         aggregate.memberValueIds.map((valueId) =>
           projectedClaim(valueById.get(valueId), certificateById),
@@ -532,13 +484,7 @@ function projectAnswer(
   if (answer.operation === "compile_personalization_profile") {
     return projectPersonalization(answer, valueById, certificateById);
   }
-  return projectEvidenceGroups(
-    answer,
-    valueById,
-    certificateById,
-    program,
-    resultById,
-  );
+  return projectEvidenceGroups(answer, valueById, certificateById, program, resultById);
 }
 
 function projectPersonalization(
@@ -560,8 +506,7 @@ function projectPersonalization(
   ) {
     reject("profile_unsafe");
   }
-  const { certificateRevision, ...coverageIdentity } =
-    profile.coverageCertificate;
+  const { certificateRevision, ...coverageIdentity } = profile.coverageCertificate;
   if (
     hashCanonicalJsonV1(coverageIdentity as never) !== certificateRevision ||
     certificateRevision !== profile.coverageCertificateRevision ||
@@ -607,10 +552,7 @@ function projectPersonalization(
       }
       return {
         disposition: coverageClaim.disposition,
-        claim: projectedClaim(
-          valueById.get(coverageClaim.valueId),
-          certificateById,
-        ),
+        claim: projectedClaim(valueById.get(coverageClaim.valueId), certificateById),
       };
     });
   const projectedIds = new Set(constraints.map((item) => item.claim.valueId));
@@ -649,16 +591,12 @@ function projectEvidenceGroups(
     "compare_operands",
   ]);
   if (!allowed.has(answer.operation)) reject("unsupported_answer_operation");
-  const programAnswer = program.nodes.find(
-    (node) => node.nodeId === program.answerNodeId,
-  );
+  const programAnswer = program.nodes.find((node) => node.nodeId === program.answerNodeId);
   if (!programAnswer || programAnswer.operation !== answer.operation) {
     reject("program_mismatch");
   }
   const operandNodeIds =
-    programAnswer.operandNodeIds.length > 0
-      ? programAnswer.operandNodeIds
-      : [programAnswer.nodeId];
+    programAnswer.operandNodeIds.length > 0 ? programAnswer.operandNodeIds : [programAnswer.nodeId];
   const readNodeByRequirement = new Map(
     program.nodes.flatMap((node) =>
       node.operation === "read_requirement" && node.requirementId
@@ -682,13 +620,9 @@ function projectEvidenceGroups(
       reject("reachable_node_incomplete");
     }
     const observations = operand.values.filter(
-      (value): value is MemoryEvidenceExecutionObservationValueV1 =>
-        value.kind === "observation",
+      (value): value is MemoryEvidenceExecutionObservationValueV1 => value.kind === "observation",
     );
-    const byRequirement = new Map<
-      string,
-      MemoryEvidenceExecutionObservationValueV1[]
-    >();
+    const byRequirement = new Map<string, MemoryEvidenceExecutionObservationValueV1[]>();
     for (const observation of observations) {
       const values = byRequirement.get(observation.requirementId) ?? [];
       values.push(observation);
@@ -713,10 +647,7 @@ function projectEvidenceGroups(
           .map((value) => {
             if (membership.has(value.valueId)) reject("dangling_value");
             membership.add(value.valueId);
-            return projectedClaim(
-              valueById.get(value.valueId),
-              certificateById,
-            );
+            return projectedClaim(valueById.get(value.valueId), certificateById);
           }),
       );
       const slotId = values[0]?.slotId;
@@ -745,9 +676,7 @@ function projectEvidenceGroups(
   ) {
     reject("dangling_value");
   }
-  const comparisons = answer.values.filter(
-    (value) => value.kind === "comparison",
-  );
+  const comparisons = answer.values.filter((value) => value.kind === "comparison");
   if (
     (answer.operation === "compare_operands" && comparisons.length !== 1) ||
     (answer.operation !== "compare_operands" && comparisons.length !== 0)
@@ -799,8 +728,7 @@ function projectEvidenceGroups(
       ? {}
       : {
           comparison: Object.freeze({
-            ...(comparison?.kind !== "comparison" ||
-            comparison.relation === undefined
+            ...(comparison?.kind !== "comparison" || comparison.relation === undefined
               ? {}
               : { relation: comparison.relation }),
             sides,
@@ -861,9 +789,7 @@ function validateValueGraph(
   return valueById;
 }
 
-function referencedValueIds(
-  value: MemoryEvidenceExecutionValueV1,
-): readonly string[] {
+function referencedValueIds(value: MemoryEvidenceExecutionValueV1): readonly string[] {
   switch (value.kind) {
     case "observation":
     case "render_contract":
@@ -899,10 +825,7 @@ function referencedValueIds(
 
 function collectReachableNodeIds(
   rootNodeId: string,
-  nodeById: ReadonlyMap<
-    string,
-    MemoryEvidenceExecutionProgramV1["nodes"][number]
-  >,
+  nodeById: ReadonlyMap<string, MemoryEvidenceExecutionProgramV1["nodes"][number]>,
 ): ReadonlySet<string> {
   const reachable = new Set<string>();
   const visit = (nodeId: string) => {
@@ -931,9 +854,7 @@ function collectPayloadCertificateIds(
 }
 
 function same(left: unknown, right: unknown): boolean {
-  return (
-    hashCanonicalJsonV1(left as never) === hashCanonicalJsonV1(right as never)
-  );
+  return hashCanonicalJsonV1(left as never) === hashCanonicalJsonV1(right as never);
 }
 
 function reject(reason: MemoryEvidenceReaderProjectionRejectedReasonV1): never {
@@ -942,9 +863,7 @@ function reject(reason: MemoryEvidenceReaderProjectionRejectedReasonV1): never {
   throw error;
 }
 
-function rejectionReason(
-  error: unknown,
-): MemoryEvidenceReaderProjectionRejectedReasonV1 {
+function rejectionReason(error: unknown): MemoryEvidenceReaderProjectionRejectedReasonV1 {
   if (
     error instanceof Error &&
     error.name === "MemoryEvidenceReaderProjectionRejected" &&

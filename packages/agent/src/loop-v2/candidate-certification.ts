@@ -11,8 +11,7 @@ import {
 } from "./schema.js";
 
 /** Review-only binding for a defect visible against the complete task goal. */
-export const HOST_TASK_GOAL_REVIEW_CRITERION_ID =
-  "paw.review.task_goal.v1" as const;
+export const HOST_TASK_GOAL_REVIEW_CRITERION_ID = "paw.review.task_goal.v1" as const;
 
 export interface CandidateSnapshotV2 {
   readonly path: string;
@@ -69,10 +68,7 @@ export interface CandidateReviewPayloadV2 {
   /** How the reviewer must interpret local verification records. */
   readonly verificationContext: Readonly<{
     readonly authority: "local" | "external" | "not_required";
-    readonly localEvidenceRole:
-      | "delivery_authority"
-      | "diagnostic_not_acceptance"
-      | "not_required";
+    readonly localEvidenceRole: "delivery_authority" | "diagnostic_not_acceptance" | "not_required";
     readonly externalVerification: "pending" | "not_configured";
   }>;
   /** Baseline-to-terminal artifact derived from the complete mutation journal. */
@@ -179,9 +175,7 @@ export interface SemanticReviewOnceResultV2 {
   readonly ledger: SemanticReviewLedgerV2;
 }
 
-export type SemanticReviewerV2 = (
-  payload: CandidateReviewPayloadV2,
-) => Promise<unknown>;
+export type SemanticReviewerV2 = (payload: CandidateReviewPayloadV2) => Promise<unknown>;
 
 export function buildCandidateInputV2(
   state: WorkingDecisionStateV2,
@@ -235,10 +229,7 @@ export function buildCandidateInputV2(
       .map(normalizeChangeSurface)
       .sort(compareById),
     currentVerification: Object.values(state.verification)
-      .filter(
-        (verification) =>
-          verification.mutationRevision === state.currentMutationRevision,
-      )
+      .filter((verification) => verification.mutationRevision === state.currentMutationRevision)
       .map(normalizeVerification)
       .sort(compareById),
     unresolvedRisks: Object.values(state.risks)
@@ -264,12 +255,9 @@ export function candidateInputHashV2(input: CandidateInputV2): string {
  * latest delivery readiness, but an extra test run must not cause a second
  * model review of unchanged code.
  */
-export function semanticReviewSubjectHashV2(
-  payload: CandidateReviewPayloadV2,
-): string {
+export function semanticReviewSubjectHashV2(payload: CandidateReviewPayloadV2): string {
   assertReviewPayloadIdentity(payload);
-  const { currentVerification: _verification, ...semanticInput } =
-    payload.input;
+  const { currentVerification: _verification, ...semanticInput } = payload.input;
   return sha256Canonical({
     schemaVersion: "paw.semantic-review-subject.v1",
     input: semanticInput,
@@ -297,14 +285,8 @@ export function buildCandidateReviewPayloadV2(
     }
   }
   const input = buildCandidateInputV2(state, snapshots);
-  if (
-    input.criteria.some(
-      (criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID,
-    )
-  ) {
-    throw new Error(
-      "Candidate criterion uses the reserved task-goal review id",
-    );
+  if (input.criteria.some((criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID)) {
+    throw new Error("Candidate criterion uses the reserved task-goal review id");
   }
   if (!terminalPatch.patch.trim()) {
     throw new Error("Candidate terminal patch must not be empty");
@@ -313,10 +295,7 @@ export function buildCandidateReviewPayloadV2(
     throw new Error("Candidate terminal patch hash mismatch");
   }
   const changedPaths = sortedUnique(terminalPatch.changedPaths);
-  if (
-    changedPaths.length === 0 ||
-    changedPaths.length !== terminalPatch.changedPaths.length
-  ) {
+  if (changedPaths.length === 0 || changedPaths.length !== terminalPatch.changedPaths.length) {
     throw new Error("Candidate terminal patch changed paths are invalid");
   }
   return {
@@ -331,8 +310,7 @@ export function buildCandidateReviewPayloadV2(
           : verificationAuthority === "not_required"
             ? "not_required"
             : "delivery_authority",
-      externalVerification:
-        verificationAuthority === "external" ? "pending" : "not_configured",
+      externalVerification: verificationAuthority === "external" ? "pending" : "not_configured",
     },
     terminalPatch: {
       patch: terminalPatch.patch,
@@ -352,10 +330,7 @@ export function buildCandidateReviewPayloadV2(
   };
 }
 
-export function semanticReviewKeyV2(
-  mutationRevision: number,
-  candidateInputHash: string,
-): string {
+export function semanticReviewKeyV2(mutationRevision: number, candidateInputHash: string): string {
   if (!Number.isSafeInteger(mutationRevision) || mutationRevision < 0) {
     throw new Error("Semantic review mutationRevision must be non-negative");
   }
@@ -389,10 +364,7 @@ export function evaluateCandidateReadinessV2(
   }
 
   const mutations = Object.values(state.mutations).sort(compareMutations);
-  if (
-    requireMutation &&
-    !mutations.some((mutation) => mutation.workspaceEffect === "product")
-  ) {
+  if (requireMutation && !mutations.some((mutation) => mutation.workspaceEffect === "product")) {
     gaps.push({
       code: "product_mutation_missing",
       message: "No product mutation is present in the mutation journal.",
@@ -466,9 +438,7 @@ export function evaluateCandidateReadinessV2(
       });
       continue;
     }
-    const unknown = criterion.evidenceRefs.filter(
-      (reference) => !knownEvidenceIds.has(reference),
-    );
+    const unknown = criterion.evidenceRefs.filter((reference) => !knownEvidenceIds.has(reference));
     if (unknown.length > 0) {
       gaps.push({
         code: "criterion_evidence_unknown",
@@ -482,9 +452,7 @@ export function evaluateCandidateReadinessV2(
   const currentVerification = Object.values(state.verification).filter(
     (verification) => verification.mutationRevision === currentRevision,
   );
-  const authoritative = currentVerification.filter(
-    (verification) => verification.authoritative,
-  );
+  const authoritative = currentVerification.filter((verification) => verification.authoritative);
   const authoritativePasses = authoritative.filter(
     (verification) => verification.outcome === "passed",
   );
@@ -499,25 +467,20 @@ export function evaluateCandidateReadinessV2(
   );
   const missingScopes = requiredScopes.filter(
     (scope) =>
-      !authoritativePasses.some((verification) =>
-        verificationCoversScope(verification, scope),
-      ),
+      !authoritativePasses.some((verification) => verificationCoversScope(verification, scope)),
   );
   const harnessBlockedScopes = missingScopes.filter((scope) =>
-    harnessFailures.some((verification) =>
-      verificationCoversScope(verification, scope),
-    ),
+    harnessFailures.some((verification) => verificationCoversScope(verification, scope)),
   );
-  const localVerification: CandidateReadinessV2["localVerification"] =
-    !requireVerification
-      ? "not_required"
-      : codeFailures.length > 0
-        ? "code_failed"
-        : missingScopes.length === 0 && authoritativePasses.length > 0
-          ? "passed"
-          : harnessFailures.length > 0
-            ? "harness_failed"
-            : "missing";
+  const localVerification: CandidateReadinessV2["localVerification"] = !requireVerification
+    ? "not_required"
+    : codeFailures.length > 0
+      ? "code_failed"
+      : missingScopes.length === 0 && authoritativePasses.length > 0
+        ? "passed"
+        : harnessFailures.length > 0
+          ? "harness_failed"
+          : "missing";
   if (requireVerification) {
     if (codeFailures.length > 0) {
       // A local-authority failure is a delivery blocker. With external
@@ -543,8 +506,7 @@ export function evaluateCandidateReadinessV2(
     } else if (
       missingScopes.length > 0 &&
       !(
-        verificationAuthority === "external" &&
-        harnessBlockedScopes.length === missingScopes.length
+        verificationAuthority === "external" && harnessBlockedScopes.length === missingScopes.length
       )
     ) {
       gaps.push({
@@ -560,8 +522,7 @@ export function evaluateCandidateReadinessV2(
       gaps.push({
         code: "verification_unavailable",
         evidenceRefs: harnessFailures.map((verification) => verification.id),
-        message:
-          "Current authoritative verification is unavailable because the harness failed.",
+        message: "Current authoritative verification is unavailable because the harness failed.",
       });
     } else if (
       requiredScopes.length === 0 &&
@@ -587,25 +548,16 @@ export function evaluateCandidateReadinessV2(
   }
 
   const blocked = gaps.some((gap) =>
-    [
-      "criterion_blocked",
-      "verification_unavailable",
-      "artifact_unreconstructible",
-    ].includes(gap.code),
+    ["criterion_blocked", "verification_unavailable", "artifact_unreconstructible"].includes(
+      gap.code,
+    ),
   );
   return {
-    disposition:
-      gaps.length === 0
-        ? "ready_for_review"
-        : blocked
-          ? "blocked"
-          : "needs_work",
+    disposition: gaps.length === 0 ? "ready_for_review" : blocked ? "blocked" : "needs_work",
     readyForSemanticReview: gaps.length === 0,
     gaps,
     pendingExternalCriterionIds,
-    currentAuthoritativeVerificationIds: authoritativePasses.map(
-      (verification) => verification.id,
-    ),
+    currentAuthoritativeVerificationIds: authoritativePasses.map((verification) => verification.id),
     localVerification,
   };
 }
@@ -626,10 +578,7 @@ export async function reviewCandidateOnceV2(
 ): Promise<SemanticReviewOnceResultV2> {
   assertReviewPayloadIdentity(payload);
   const inputHash = payload.candidateInputHash;
-  const reviewKey = semanticReviewKeyV2(
-    payload.input.mutationRevision,
-    inputHash,
-  );
+  const reviewKey = semanticReviewKeyV2(payload.input.mutationRevision, inputHash);
   const recorded = ledger.records[reviewKey];
   if (recorded) {
     const validated = validateSemanticReviewRecordV2(recorded, payload);
@@ -659,9 +608,7 @@ export async function reviewCandidateOnceV2(
           : "Reviewer did not complete.",
       ),
       completion: "protocol_partial",
-      reasonCode: protocolInvalid
-        ? "reviewer_protocol_invalid"
-        : "reviewer_error",
+      reasonCode: protocolInvalid ? "reviewer_protocol_invalid" : "reviewer_error",
     };
   }
   const nextLedger = {
@@ -685,10 +632,7 @@ export function validateSemanticReviewRecordV2(
   if (!isRecord(value)) {
     throw new Error("Semantic review record must be an object");
   }
-  const reviewKey = semanticReviewKeyV2(
-    payload.input.mutationRevision,
-    payload.candidateInputHash,
-  );
+  const reviewKey = semanticReviewKeyV2(payload.input.mutationRevision, payload.candidateInputHash);
   if (value.reviewKey !== reviewKey) {
     throw new Error("Semantic review record key mismatch");
   }
@@ -744,10 +688,7 @@ export function rebindSemanticReviewRecordV2(
   nextPayload: CandidateReviewPayloadV2,
 ): SemanticReviewRecordV2 {
   const previous = validateSemanticReviewRecordV2(record, previousPayload);
-  if (
-    semanticReviewSubjectHashV2(previousPayload) !==
-    semanticReviewSubjectHashV2(nextPayload)
-  ) {
+  if (semanticReviewSubjectHashV2(previousPayload) !== semanticReviewSubjectHashV2(nextPayload)) {
     throw new Error("Semantic review subject changed during record rebind");
   }
   const rebound: SemanticReviewRecordV2 = {
@@ -771,10 +712,7 @@ export function createSemanticReviewSubjectChangedRecordV2(
   payload: CandidateReviewPayloadV2,
 ): SemanticReviewRecordV2 {
   assertReviewPayloadIdentity(payload);
-  const reviewKey = semanticReviewKeyV2(
-    payload.input.mutationRevision,
-    payload.candidateInputHash,
-  );
+  const reviewKey = semanticReviewKeyV2(payload.input.mutationRevision, payload.candidateInputHash);
   return {
     reviewKey,
     review: partialReview(
@@ -795,10 +733,7 @@ export function createInterruptedSemanticReviewRecordV2(
   payload: CandidateReviewPayloadV2,
 ): SemanticReviewRecordV2 {
   assertReviewPayloadIdentity(payload);
-  const reviewKey = semanticReviewKeyV2(
-    payload.input.mutationRevision,
-    payload.candidateInputHash,
-  );
+  const reviewKey = semanticReviewKeyV2(payload.input.mutationRevision, payload.candidateInputHash);
   return {
     reviewKey,
     review: partialReview(
@@ -828,28 +763,14 @@ function parseSemanticReviewV2(
     !["pass", "fail", "partial"].includes(String(value.verdict)) ||
     !Array.isArray(value.findings)
   ) {
-    throw new SemanticReviewProtocolError(
-      "Semantic review identity is invalid",
-    );
+    throw new SemanticReviewProtocolError("Semantic review identity is invalid");
   }
-  const findings = value.findings.map((finding) =>
-    parseFinding(finding, payload),
-  );
-  if (
-    value.verdict === "pass" &&
-    findings.some((finding) => finding.severity === "blocking")
-  ) {
-    throw new SemanticReviewProtocolError(
-      "A passing review cannot contain blocking findings",
-    );
+  const findings = value.findings.map((finding) => parseFinding(finding, payload));
+  if (value.verdict === "pass" && findings.some((finding) => finding.severity === "blocking")) {
+    throw new SemanticReviewProtocolError("A passing review cannot contain blocking findings");
   }
-  if (
-    value.verdict === "fail" &&
-    !findings.some((finding) => finding.severity === "blocking")
-  ) {
-    throw new SemanticReviewProtocolError(
-      "A failing review must contain a blocking finding",
-    );
+  if (value.verdict === "fail" && !findings.some((finding) => finding.severity === "blocking")) {
+    throw new SemanticReviewProtocolError("A failing review must contain a blocking finding");
   }
   return {
     candidateInputHash: expectedHash,
@@ -859,10 +780,7 @@ function parseSemanticReviewV2(
   };
 }
 
-function parseFinding(
-  value: unknown,
-  payload: CandidateReviewPayloadV2,
-): SemanticReviewFindingV2 {
+function parseFinding(value: unknown, payload: CandidateReviewPayloadV2): SemanticReviewFindingV2 {
   if (!isRecord(value)) {
     throw new SemanticReviewProtocolError("Review finding must be an object");
   }
@@ -882,44 +800,30 @@ function parseFinding(
     typeof value.criterionId !== "string" &&
     typeof value.invariantId !== "string"
   ) {
-    throw new SemanticReviewProtocolError(
-      "Blocking findings must bind a criterion or invariant",
-    );
+    throw new SemanticReviewProtocolError("Blocking findings must bind a criterion or invariant");
   }
   if (value.severity === "blocking" && value.evidenceRefs.length === 0) {
-    throw new SemanticReviewProtocolError(
-      "Blocking findings must bind visible evidence",
-    );
+    throw new SemanticReviewProtocolError("Blocking findings must bind visible evidence");
   }
   const criterionIds = new Set(
     payload.input.criteria
       .map((criterion) => criterion.id)
       .concat(HOST_TASK_GOAL_REVIEW_CRITERION_ID),
   );
-  const invariantIds = new Set(
-    payload.input.invariants.map((invariant) => invariant.id),
-  );
-  if (
-    typeof value.criterionId === "string" &&
-    !criterionIds.has(value.criterionId)
-  ) {
+  const invariantIds = new Set(payload.input.invariants.map((invariant) => invariant.id));
+  if (typeof value.criterionId === "string" && !criterionIds.has(value.criterionId)) {
     throw new SemanticReviewProtocolError(
       `Review finding refers to unknown criterion: ${value.criterionId}`,
     );
   }
-  if (
-    typeof value.invariantId === "string" &&
-    !invariantIds.has(value.invariantId)
-  ) {
+  if (typeof value.invariantId === "string" && !invariantIds.has(value.invariantId)) {
     throw new SemanticReviewProtocolError(
       `Review finding refers to unknown invariant: ${value.invariantId}`,
     );
   }
   const visibleEvidenceRefs = new Set([
     ...payload.mutationPatches.map((mutation) => `mutation:${mutation.callId}`),
-    ...payload.input.changedPublicSurface.map(
-      (surface) => `surface:${surface.id}`,
-    ),
+    ...payload.input.changedPublicSurface.map((surface) => `surface:${surface.id}`),
     ...payload.input.currentVerification.map((verification) => verification.id),
     ...payload.snapshots.map((snapshot) => `snapshot:${snapshot.path}`),
   ]);
@@ -943,15 +847,12 @@ function parseFinding(
   const referencesPublicSurface = value.evidenceRefs.some((reference) => {
     if (!reference.startsWith("surface:")) return false;
     const surfaceId = reference.slice("surface:".length);
-    return payload.input.changedPublicSurface.some(
-      (surface) => surface.id === surfaceId,
-    );
+    return payload.input.changedPublicSurface.some((surface) => surface.id === surfaceId);
   });
   if (
     value.severity === "blocking" &&
     referencesPublicSurface &&
-    (typeof value.minimalAlternative !== "string" ||
-      !value.minimalAlternative.trim())
+    (typeof value.minimalAlternative !== "string" || !value.minimalAlternative.trim())
   ) {
     throw new SemanticReviewProtocolError(
       "Blocking public-surface findings must compare a minimal alternative",
@@ -959,12 +860,8 @@ function parseFinding(
   }
   return {
     severity: value.severity,
-    ...(typeof value.criterionId === "string"
-      ? { criterionId: value.criterionId }
-      : {}),
-    ...(typeof value.invariantId === "string"
-      ? { invariantId: value.invariantId }
-      : {}),
+    ...(typeof value.criterionId === "string" ? { criterionId: value.criterionId } : {}),
+    ...(typeof value.invariantId === "string" ? { invariantId: value.invariantId } : {}),
     ...(typeof value.file === "string" ? { file: value.file } : {}),
     ...(typeof value.line === "number" && Number.isSafeInteger(value.line)
       ? { line: value.line }
@@ -980,13 +877,9 @@ function parseFinding(
 
 function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
   if (
-    payload.input.criteria.some(
-      (criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID,
-    )
+    payload.input.criteria.some((criterion) => criterion.id === HOST_TASK_GOAL_REVIEW_CRITERION_ID)
   ) {
-    throw new Error(
-      "Candidate criterion uses the reserved task-goal review id",
-    );
+    throw new Error("Candidate criterion uses the reserved task-goal review id");
   }
   const expectedEvidenceRole =
     payload.verificationContext.authority === "external"
@@ -1001,9 +894,7 @@ function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
   }
   if (
     payload.verificationContext.externalVerification !==
-    (payload.verificationContext.authority === "external"
-      ? "pending"
-      : "not_configured")
+    (payload.verificationContext.authority === "external" ? "pending" : "not_configured")
   ) {
     throw new Error("Candidate review external verification state is invalid");
   }
@@ -1013,8 +904,7 @@ function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
   }
   if (
     !payload.terminalPatch.patch.trim() ||
-    sha256Canonical(payload.terminalPatch.patch) !==
-      payload.terminalPatch.patchHash ||
+    sha256Canonical(payload.terminalPatch.patch) !== payload.terminalPatch.patchHash ||
     sortedUnique(payload.terminalPatch.changedPaths).length !==
       payload.terminalPatch.changedPaths.length
   ) {
@@ -1033,14 +923,10 @@ function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
       material.mutationRevision !== mutation.mutationRevision ||
       sha256Canonical(material.patch) !== mutation.patchHash
     ) {
-      throw new Error(
-        `Candidate review payload patch mismatch: ${mutation.callId}`,
-      );
+      throw new Error(`Candidate review payload patch mismatch: ${mutation.callId}`);
     }
   }
-  const snapshotByPath = new Map(
-    payload.snapshots.map((snapshot) => [snapshot.path, snapshot]),
-  );
+  const snapshotByPath = new Map(payload.snapshots.map((snapshot) => [snapshot.path, snapshot]));
   if (snapshotByPath.size !== payload.input.snapshotHashes.length) {
     throw new Error("Candidate review payload snapshot set is incomplete");
   }
@@ -1051,9 +937,7 @@ function assertReviewPayloadIdentity(payload: CandidateReviewPayloadV2): void {
       material.contentHash !== snapshot.contentHash ||
       candidateSnapshotHashV2(material.content) !== snapshot.contentHash
     ) {
-      throw new Error(
-        `Candidate review payload snapshot mismatch: ${snapshot.path}`,
-      );
+      throw new Error(`Candidate review payload snapshot mismatch: ${snapshot.path}`);
     }
   }
 }
@@ -1102,9 +986,7 @@ function assertSnapshots(snapshots: readonly CandidateSnapshotV2[]): void {
   const paths = new Set<string>();
   for (const snapshot of snapshots) {
     if (!snapshot.path.trim() || !snapshot.contentHash.trim()) {
-      throw new Error(
-        "Candidate snapshot path and contentHash must not be empty",
-      );
+      throw new Error("Candidate snapshot path and contentHash must not be empty");
     }
     if (paths.has(snapshot.path)) {
       throw new Error(`Duplicate candidate snapshot path: ${snapshot.path}`);
@@ -1113,27 +995,21 @@ function assertSnapshots(snapshots: readonly CandidateSnapshotV2[]): void {
   }
 }
 
-function normalizeCriterion(
-  criterion: SemanticCriterionV2,
-): SemanticCriterionV2 {
+function normalizeCriterion(criterion: SemanticCriterionV2): SemanticCriterionV2 {
   return {
     ...criterion,
     evidenceRefs: sortedUnique(criterion.evidenceRefs),
   };
 }
 
-function normalizeInvariant(
-  invariant: BehavioralInvariantV2,
-): BehavioralInvariantV2 {
+function normalizeInvariant(invariant: BehavioralInvariantV2): BehavioralInvariantV2 {
   return {
     ...invariant,
     evidenceRefs: sortedUnique(invariant.evidenceRefs),
   };
 }
 
-function normalizeChangeSurface(
-  surface: ChangeSurfaceRecordV2,
-): ChangeSurfaceRecordV2 {
+function normalizeChangeSurface(surface: ChangeSurfaceRecordV2): ChangeSurfaceRecordV2 {
   return {
     ...surface,
     observables: sortedUnique(surface.observables),
@@ -1141,9 +1017,7 @@ function normalizeChangeSurface(
   };
 }
 
-function normalizeVerification(
-  verification: VerificationRecordV2,
-): VerificationRecordV2 {
+function normalizeVerification(verification: VerificationRecordV2): VerificationRecordV2 {
   return {
     ...verification,
     argv: [...verification.argv],
@@ -1155,26 +1029,18 @@ function verificationCoversScope(
   verification: VerificationRecordV2,
   requiredScope: string,
 ): boolean {
-  return verification.scope.some(
-    (scope) => scope === "*" || scope === requiredScope,
-  );
+  return verification.scope.some((scope) => scope === "*" || scope === requiredScope);
 }
 
 function normalizeRisk(risk: RiskRecordV2): RiskRecordV2 {
   return { ...risk, evidenceRefs: sortedUnique(risk.evidenceRefs) };
 }
 
-function compareMutations(
-  left: MutationJournalEntryV2,
-  right: MutationJournalEntryV2,
-): number {
+function compareMutations(left: MutationJournalEntryV2, right: MutationJournalEntryV2): number {
   return left.mutationRevision - right.mutationRevision || left.seq - right.seq;
 }
 
-function compareById<T extends { readonly id: string }>(
-  left: T,
-  right: T,
-): number {
+function compareById<T extends { readonly id: string }>(left: T, right: T): number {
   return left.id.localeCompare(right.id);
 }
 

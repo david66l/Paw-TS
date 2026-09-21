@@ -1,7 +1,4 @@
-import {
-  type ArtifactContentBlobV2,
-  artifactContentHashV2,
-} from "./artifact-materializer.js";
+import { type ArtifactContentBlobV2, artifactContentHashV2 } from "./artifact-materializer.js";
 import {
   type CandidateSourceSnapshotV2,
   candidateSnapshotHashV2,
@@ -18,8 +15,7 @@ export function materializeTerminalCandidateSnapshotsV2(
     Readonly<{ contentHash: string | null; contentRef: string | null }>
   >();
   const mutations = Object.values(state.mutations).sort(
-    (left, right) =>
-      left.mutationRevision - right.mutationRevision || left.seq - right.seq,
+    (left, right) => left.mutationRevision - right.mutationRevision || left.seq - right.seq,
   );
   for (const mutation of mutations) {
     for (const path of mutation.paths) {

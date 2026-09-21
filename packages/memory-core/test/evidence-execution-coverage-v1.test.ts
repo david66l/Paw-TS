@@ -84,9 +84,7 @@ const selectorSnapshot = compileMemorySelectorExecutionSnapshotV1({
   ],
 });
 
-function notebook(
-  unresolvedEvidenceRefs: readonly string[] = [],
-): MemoryEvidenceNotebookV1 {
+function notebook(unresolvedEvidenceRefs: readonly string[] = []): MemoryEvidenceNotebookV1 {
   return {
     policyVersion: PAW_MEMORY_EVIDENCE_NOTEBOOK_POLICY_VERSION_V1,
     sources: [],
@@ -124,9 +122,7 @@ describe("execution coverage certificate v1", () => {
       status: "closed",
       reasonCodes: [],
     });
-    expect(() =>
-      validateMemoryEvidenceExecutionCoverageCertificateV1(certificate),
-    ).not.toThrow();
+    expect(() => validateMemoryEvidenceExecutionCoverageCertificateV1(certificate)).not.toThrow();
   });
 
   test("keeps unresolved notebook peers and missing audit proof open", () => {

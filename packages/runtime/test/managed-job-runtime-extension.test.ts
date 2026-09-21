@@ -49,9 +49,7 @@ describe("managed Job runtime extension", () => {
       command: `${JSON.stringify(process.execPath)} job.mjs`,
     });
     expect(started.jobId).toBe("shell-1");
-    expect(facts.map((fact) => fact.type)).toEqual([
-      "runtime.activity_started",
-    ]);
+    expect(facts.map((fact) => fact.type)).toEqual(["runtime.activity_started"]);
 
     const waited = await controller.wait(started.jobId, 5_000);
     expect(waited.timedOut).toBe(false);
@@ -100,9 +98,7 @@ describe("managed Job runtime extension", () => {
           "Paw restarted before this job's terminal effect was durably committed; the old PID was not reattached.",
       },
     ]);
-    expect(controller.read("shell-7").snapshot.status).toBe(
-      "interrupted_orphaned",
-    );
+    expect(controller.read("shell-7").snapshot.status).toBe("interrupted_orphaned");
     await controller.close();
   });
 
@@ -133,9 +129,7 @@ describe("managed Job runtime extension", () => {
     };
 
     expect(reducer.reduce([started], {}).decision.kind).toBe("await_external");
-    expect(reducer.reduce([started, settled], {}).decision.kind).toBe(
-      "continue",
-    );
+    expect(reducer.reduce([started, settled], {}).decision.kind).toBe("continue");
     expect(
       reducer.reduce(
         [

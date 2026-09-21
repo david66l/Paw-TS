@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type {
-  ControlDecisionActionV1,
-  InputFactV1,
-  JsonValue,
-} from "@paw/protocol";
+import type { ControlDecisionActionV1, InputFactV1, JsonValue } from "@paw/protocol";
 import {
   type AgentLoopDependencies,
   type AgentLoopFactMapper,
@@ -48,10 +44,7 @@ type TestDependencies = AgentLoopDependencies<
 type ModelStep =
   | TestModelSettlement
   | Error
-  | ((
-      request: TestRequest,
-      signal: AbortSignal,
-    ) => Promise<TestModelSettlement>);
+  | ((request: TestRequest, signal: AbortSignal) => Promise<TestModelSettlement>);
 
 interface HarnessOptions {
   readonly model: readonly ModelStep[];
@@ -127,8 +120,7 @@ function createHarness(options: HarnessOptions) {
         reducerInputs.push(snapshot);
         return {
           canonicalFactCount: snapshot.length,
-          decision:
-            options.decide?.(snapshot) ?? decisionAfterLatestFact(snapshot),
+          decision: options.decide?.(snapshot) ?? decisionAfterLatestFact(snapshot),
         };
       },
     },
@@ -167,9 +159,7 @@ describe("minimal agent loop", () => {
       await runAgentLoop({ ...h.dependencies, onModelStreamEvent: callback });
       expect(
         findModelSettlement(
-          await h.session
-            .readInputSnapshot()
-            .then((s) => s.entries.map((e) => e.fact)),
+          await h.session.readInputSnapshot().then((s) => s.entries.map((e) => e.fact)),
         )?.status,
       ).toBe("completed");
     }
@@ -230,9 +220,9 @@ describe("minimal agent loop", () => {
       "model.dispatch_recorded",
       "model.settled",
     ]);
-    expect(
-      harness.trace.indexOf("append:tool.dispatch_recorded:call-1"),
-    ).toBeLessThan(harness.trace.indexOf("tools.execute:call-1"));
+    expect(harness.trace.indexOf("append:tool.dispatch_recorded:call-1")).toBeLessThan(
+      harness.trace.indexOf("tools.execute:call-1"),
+    );
   });
 
   test("ToolExecutor receives the actual model turn instead of a batch-local constant", async () => {
@@ -279,10 +269,7 @@ describe("minimal agent loop", () => {
           releaseFirst.resolve();
           return { status: "success", callId: secondCall.id, result: "second" };
         })();
-        const [firstResult, secondResult] = await Promise.all([
-          firstTask,
-          secondTask,
-        ]);
+        const [firstResult, secondResult] = await Promise.all([firstTask, secondTask]);
         return [secondResult, firstResult];
       },
     });
@@ -311,9 +298,7 @@ describe("minimal agent loop", () => {
     const state = await runAgentLoop(harness.dependencies);
 
     expect(state.decision.kind).toBe("incomplete");
-    expect(findModelSettlement(harness.session.inputFacts)?.status).toBe(
-      "failed",
-    );
+    expect(findModelSettlement(harness.session.inputFacts)?.status).toBe("failed");
   });
 
   test("truncated output is settled but never authorizes partial tool calls", async () => {
@@ -338,9 +323,7 @@ describe("minimal agent loop", () => {
     expect(harness.toolCalls).toBe(0);
     expect(
       harness.session.inputFacts.some(
-        (fact) =>
-          fact.type === "tool.call_observed" ||
-          fact.type === "tool.dispatch_recorded",
+        (fact) => fact.type === "tool.call_observed" || fact.type === "tool.dispatch_recorded",
       ),
     ).toBe(false);
     expect(findModelSettlement(harness.session.inputFacts)).toMatchObject({
@@ -361,9 +344,7 @@ describe("minimal agent loop", () => {
     const harness = createHarness({
       model: [modelSuccess("must stop", [toolCall("must-not-run")])],
       decide(facts) {
-        const observed = facts.some(
-          (fact) => fact.type === "tool.call_observed",
-        );
+        const observed = facts.some((fact) => fact.type === "tool.call_observed");
         const cancelled = facts.some(
           (fact) => fact.type === "tool.settled" && fact.status === "cancelled",
         );
@@ -417,9 +398,7 @@ describe("minimal agent loop", () => {
     expect(findModelSettlement(harness.session.inputFacts)).toMatchObject({
       status: "unknown",
     });
-    expect(
-      findModelSettlement(harness.session.inputFacts)?.errorCode,
-    ).toBeUndefined();
+    expect(findModelSettlement(harness.session.inputFacts)?.errorCode).toBeUndefined();
     expect(harness.session.inputFacts[0]?.type).toBe("model.dispatch_recorded");
   });
 
@@ -449,9 +428,10 @@ describe("minimal agent loop", () => {
     });
 
     expect(state.decision).toEqual({ kind: "aborted", reason: "abort-wins" });
-    expect(
-      harness.session.derivedDecisions.map((decision) => decision.action.kind),
-    ).toEqual(["continue", "abort"]);
+    expect(harness.session.derivedDecisions.map((decision) => decision.action.kind)).toEqual([
+      "continue",
+      "abort",
+    ]);
     expect(harness.session.derivedDecisions.at(-1)).toMatchObject({
       inputThroughSeq: 4,
       action: { kind: "abort" },
@@ -522,17 +502,9 @@ describe("minimal agent loop", () => {
       kind: "completed",
       reason: "batch-accounted",
     });
-    expect(executorInputIds).toEqual([
-      "denied",
-      "cancelled",
-      "unknown",
-      "failed",
-    ]);
+    expect(executorInputIds).toEqual(["denied", "cancelled", "unknown", "failed"]);
     expect(
-      findToolSettlements(harness.session.inputFacts).map((fact) => [
-        fact.callId,
-        fact.status,
-      ]),
+      findToolSettlements(harness.session.inputFacts).map((fact) => [fact.callId, fact.status]),
     ).toEqual([
       ["denied", "rejected"],
       ["cancelled", "cancelled"],
@@ -571,10 +543,7 @@ describe("minimal agent loop", () => {
     await runAgentLoop(harness.dependencies);
 
     expect(
-      findToolSettlements(harness.session.inputFacts).map((fact) => [
-        fact.callId,
-        fact.status,
-      ]),
+      findToolSettlements(harness.session.inputFacts).map((fact) => [fact.callId, fact.status]),
     ).toEqual([
       ["first", "unknown"],
       ["second", "unknown"],
@@ -583,9 +552,7 @@ describe("minimal agent loop", () => {
 
   test("L08b duplicate, missing, and unrelated tool results fail closed", async () => {
     const harness = createHarness({
-      model: [
-        modelSuccess("tools", [toolCall("duplicate"), toolCall("missing")]),
-      ],
+      model: [modelSuccess("tools", [toolCall("duplicate"), toolCall("missing")])],
       async executeTools() {
         return [
           { status: "success", callId: "duplicate", result: "one" },
@@ -602,10 +569,7 @@ describe("minimal agent loop", () => {
     await runAgentLoop(harness.dependencies);
 
     expect(
-      findToolSettlements(harness.session.inputFacts).map((fact) => [
-        fact.callId,
-        fact.status,
-      ]),
+      findToolSettlements(harness.session.inputFacts).map((fact) => [fact.callId, fact.status]),
     ).toEqual([
       ["duplicate", "unknown"],
       ["missing", "unknown"],
@@ -627,10 +591,7 @@ describe("minimal agent loop", () => {
     await runAgentLoop(harness.dependencies);
 
     expect(
-      findToolSettlements(harness.session.inputFacts).map((fact) => [
-        fact.callId,
-        fact.status,
-      ]),
+      findToolSettlements(harness.session.inputFacts).map((fact) => [fact.callId, fact.status]),
     ).toEqual([
       ["first", "unknown"],
       ["second", "unknown"],
@@ -722,12 +683,8 @@ describe("minimal agent loop", () => {
     await runAgentLoop(harness.dependencies);
 
     expect(harness.requests).toHaveLength(1);
-    expect(JSON.stringify(harness.requests[0])).toContain(
-      "canonical direction",
-    );
-    expect(JSON.stringify(harness.requests[0])).not.toContain(
-      "promoted direction payload",
-    );
+    expect(JSON.stringify(harness.requests[0])).toContain("canonical direction");
+    expect(JSON.stringify(harness.requests[0])).not.toContain("promoted direction payload");
   });
 
   test("Context receives one complete Session snapshot without DerivedDecision", async () => {
@@ -813,9 +770,7 @@ describe("minimal agent loop", () => {
       action: { kind: "continue", reasonCode: "continue" },
     });
     const snapshots: TestRequest[] = [];
-    const originalRead = harness.session.readInputSnapshot.bind(
-      harness.session,
-    );
+    const originalRead = harness.session.readInputSnapshot.bind(harness.session);
     harness.session.readInputSnapshot = async () => {
       const snapshot = await originalRead();
       snapshots.push(snapshot);
@@ -848,21 +803,14 @@ describe("minimal agent loop", () => {
 
   test("L12 safe boundary is after all tool settlements and before next model intent", async () => {
     const harness = createHarness({
-      model: [
-        modelSuccess("tools", [toolCall("a"), toolCall("b")]),
-        modelSuccess("done"),
-      ],
+      model: [modelSuccess("tools", [toolCall("a"), toolCall("b")]), modelSuccess("done")],
     });
 
     await runAgentLoop(harness.dependencies);
 
     const boundary = harness.trace.indexOf("boundary:after_tool_batch_settled");
-    expect(boundary).toBeGreaterThan(
-      harness.trace.indexOf("append:tool.settled:b:completed"),
-    );
-    expect(boundary).toBeLessThan(
-      harness.trace.indexOf("append:model.dispatch_recorded:2"),
-    );
+    expect(boundary).toBeGreaterThan(harness.trace.indexOf("append:tool.settled:b:completed"));
+    expect(boundary).toBeLessThan(harness.trace.indexOf("append:model.dispatch_recorded:2"));
   });
 
   test("L13 returned terminal state is the exact state produced by the sole reducer", async () => {
@@ -905,16 +853,12 @@ describe("minimal agent loop", () => {
     await runAgentLoop(harness.dependencies);
 
     expect(harness.session.derivedDecisions).toHaveLength(3);
-    expect(
-      harness.session.derivedDecisions.map(
-        (decision) => decision.inputThroughSeq,
-      ),
-    ).toEqual([0, 3, 6]);
+    expect(harness.session.derivedDecisions.map((decision) => decision.inputThroughSeq)).toEqual([
+      0, 3, 6,
+    ]);
     expect(harness.reducerInputs).toHaveLength(3);
     expect(harness.reducerInputs.at(-1)).toHaveLength(4);
-    expect(JSON.stringify(harness.reducerInputs)).not.toContain(
-      "control.decided",
-    );
+    expect(JSON.stringify(harness.reducerInputs)).not.toContain("control.decided");
   });
 
   test("CAS conflict re-reads an inserted abort and never commits stale completed", async () => {
@@ -934,9 +878,7 @@ describe("minimal agent loop", () => {
       inputThroughSeq: 1,
       action: { kind: "abort", reasonCode: "raced abort" },
     });
-    expect(
-      harness.trace.some((entry) => entry.startsWith("derived-conflict:")),
-    ).toBe(true);
+    expect(harness.trace.some((entry) => entry.startsWith("derived-conflict:"))).toBe(true);
   });
 
   test("continue and tool intents commit atomically or abort wins with zero execution", async () => {
@@ -960,11 +902,9 @@ describe("minimal agent loop", () => {
 
     expect(state.decision).toEqual({ kind: "aborted", reason: "atomic race" });
     expect(harness.toolCalls).toBe(0);
-    expect(
-      harness.session.inputFacts.some(
-        (fact) => fact.type === "tool.dispatch_recorded",
-      ),
-    ).toBe(false);
+    expect(harness.session.inputFacts.some((fact) => fact.type === "tool.dispatch_recorded")).toBe(
+      false,
+    );
     expect(findToolSettlements(harness.session.inputFacts)).toEqual([
       expect.objectContaining({ callId: "must-not-run", status: "cancelled" }),
     ]);
@@ -978,22 +918,13 @@ describe("minimal agent loop", () => {
         action: { kind: "abort", reasonCode: "atomic race" },
       }),
     ]);
-    expect(
-      harness.trace.some((entry) =>
-        entry.startsWith("decision-input-conflict:"),
-      ),
-    ).toBe(true);
+    expect(harness.trace.some((entry) => entry.startsWith("decision-input-conflict:"))).toBe(true);
   });
 
   test("abort after atomic authorization settles every call without invoking tools", async () => {
     const controller = new AbortController();
     const harness = createHarness({
-      model: [
-        modelSuccess("authorized batch", [
-          toolCall("first"),
-          toolCall("second"),
-        ]),
-      ],
+      model: [modelSuccess("authorized batch", [toolCall("first"), toolCall("second")])],
       decide(facts) {
         const abortFact = facts.find((fact) => fact.type === "abort.requested");
         return abortFact
@@ -1021,17 +952,16 @@ describe("minimal agent loop", () => {
         .map((fact) => fact.callId),
     ).toEqual(["first", "second"]);
     expect(
-      findToolSettlements(harness.session.inputFacts).map((fact) => [
-        fact.callId,
-        fact.status,
-      ]),
+      findToolSettlements(harness.session.inputFacts).map((fact) => [fact.callId, fact.status]),
     ).toEqual([
       ["first", "cancelled"],
       ["second", "cancelled"],
     ]);
-    expect(
-      harness.session.derivedDecisions.map((decision) => decision.action.kind),
-    ).toEqual(["continue", "continue", "abort"]);
+    expect(harness.session.derivedDecisions.map((decision) => decision.action.kind)).toEqual([
+      "continue",
+      "continue",
+      "abort",
+    ]);
   });
 
   test("unpersisted promoted input ID becomes runtime.failed and never reaches Context", async () => {
@@ -1121,9 +1051,7 @@ describe("minimal agent loop", () => {
 
       expect(state.decision.kind).toBe("aborted");
       expect(harness.modelCalls).toBe(0);
-      expect(harness.session.inputFacts.map((fact) => fact.type)).toEqual([
-        "abort.requested",
-      ]);
+      expect(harness.session.inputFacts.map((fact) => fact.type)).toEqual(["abort.requested"]);
     }
   });
 
@@ -1145,9 +1073,7 @@ describe("minimal agent loop", () => {
       expect(harness.toolCalls).toBe(0);
       expect(
         harness.session.inputFacts.some(
-          (fact) =>
-            fact.type === "tool.call_observed" ||
-            fact.type === "tool.dispatch_recorded",
+          (fact) => fact.type === "tool.call_observed" || fact.type === "tool.dispatch_recorded",
         ),
       ).toBe(false);
       expect(harness.session.inputFacts.at(-1)?.type).toBe("runtime.failed");
@@ -1185,9 +1111,7 @@ describe("minimal agent loop", () => {
     });
     expect(
       harness.session.inputFacts.some(
-        (fact) =>
-          fact.type === "tool.call_observed" ||
-          fact.type === "tool.dispatch_recorded",
+        (fact) => fact.type === "tool.call_observed" || fact.type === "tool.dispatch_recorded",
       ),
     ).toBe(false);
     expect(harness.session.inputFacts.at(-1)).toMatchObject({
@@ -1198,29 +1122,23 @@ describe("minimal agent loop", () => {
 
   test("mismatched derived cursor or action is rejected before CAS commit", async () => {
     const cursorHarness = createHarness({ model: [modelSuccess("done")] });
-    const originalCursorMapper =
-      cursorHarness.dependencies.facts.derivedDecision;
+    const originalCursorMapper = cursorHarness.dependencies.facts.derivedDecision;
     cursorHarness.dependencies.facts.derivedDecision = (input) => ({
       ...originalCursorMapper(input),
       inputThroughSeq: input.inputThroughSeq - 1,
     });
 
-    await expect(runAgentLoop(cursorHarness.dependencies)).rejects.toThrow(
-      "inputThroughSeq",
-    );
+    await expect(runAgentLoop(cursorHarness.dependencies)).rejects.toThrow("inputThroughSeq");
     expect(cursorHarness.session.derivedDecisions).toHaveLength(0);
 
     const actionHarness = createHarness({ model: [modelSuccess("done")] });
-    const originalActionMapper =
-      actionHarness.dependencies.facts.derivedDecision;
+    const originalActionMapper = actionHarness.dependencies.facts.derivedDecision;
     actionHarness.dependencies.facts.derivedDecision = (input) => ({
       ...originalActionMapper(input),
       action: { kind: "abort", reasonCode: "wrong-action" },
     });
 
-    await expect(runAgentLoop(actionHarness.dependencies)).rejects.toThrow(
-      "action",
-    );
+    await expect(runAgentLoop(actionHarness.dependencies)).rejects.toThrow("action");
     expect(actionHarness.session.derivedDecisions).toHaveLength(0);
   });
 
@@ -1232,9 +1150,7 @@ describe("minimal agent loop", () => {
       modelCallId: "wrong-model-call",
     });
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "Model settlement identity",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("Model settlement identity");
     expect(harness.session.derivedDecisions).toHaveLength(1);
   });
 
@@ -1248,15 +1164,11 @@ describe("minimal agent loop", () => {
       callId: "ghost-dispatch",
     });
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "Tool dispatch identity",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("Tool dispatch identity");
     expect(harness.toolCalls).toBe(0);
-    expect(
-      harness.session.inputFacts.some(
-        (fact) => fact.type === "tool.dispatch_recorded",
-      ),
-    ).toBe(false);
+    expect(harness.session.inputFacts.some((fact) => fact.type === "tool.dispatch_recorded")).toBe(
+      false,
+    );
   });
 
   test("mapper cannot settle a different call ID than the active call", async () => {
@@ -1269,9 +1181,7 @@ describe("minimal agent loop", () => {
       callId: "ghost-settlement",
     });
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "Tool settlement identity",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("Tool settlement identity");
     expect(harness.toolCalls).toBe(1);
     expect(findToolSettlements(harness.session.inputFacts)).toHaveLength(0);
   });
@@ -1302,9 +1212,7 @@ describe("minimal agent loop", () => {
       stateHash: "tampered-state-hash",
     });
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "stateHash",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("stateHash");
     expect(harness.session.derivedDecisions).toHaveLength(0);
   });
 
@@ -1315,9 +1223,7 @@ describe("minimal agent loop", () => {
         ? new Error("journal unavailable")
         : undefined;
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "journal unavailable",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("journal unavailable");
     expect(harness.modelCalls).toBe(0);
   });
 
@@ -1330,22 +1236,14 @@ describe("minimal agent loop", () => {
         ? new Error("cannot record tool intent")
         : undefined;
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "cannot record tool intent",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("cannot record tool intent");
     expect(harness.toolCalls).toBe(0);
     expect(harness.session.derivedDecisions).toHaveLength(1);
   });
 
   test("a multi-call authorization batch never exposes partial dispatch intents", async () => {
     const harness = createHarness({
-      model: [
-        modelSuccess("batch", [
-          toolCall("first"),
-          toolCall("second"),
-          toolCall("third"),
-        ]),
-      ],
+      model: [modelSuccess("batch", [toolCall("first"), toolCall("second"), toolCall("third")])],
     });
     harness.session.failInputAppend = (facts) =>
       facts.some((fact) => fact.type === "tool.dispatch_recorded")
@@ -1358,14 +1256,10 @@ describe("minimal agent loop", () => {
 
     expect(harness.toolCalls).toBe(0);
     expect(
-      harness.session.inputFacts.filter(
-        (fact) => fact.type === "tool.call_observed",
-      ),
+      harness.session.inputFacts.filter((fact) => fact.type === "tool.call_observed"),
     ).toHaveLength(3);
     expect(
-      harness.session.inputFacts.filter(
-        (fact) => fact.type === "tool.dispatch_recorded",
-      ),
+      harness.session.inputFacts.filter((fact) => fact.type === "tool.dispatch_recorded"),
     ).toHaveLength(0);
     expect(harness.session.derivedDecisions).toHaveLength(1);
   });
@@ -1382,9 +1276,7 @@ function toolCall(id: string): TestToolCall {
   return { id, name: "test_tool", args: { id } };
 }
 
-function decisionAfterLatestFact(
-  facts: readonly InputFactV1[],
-): ControlDecision {
+function decisionAfterLatestFact(facts: readonly InputFactV1[]): ControlDecision {
   const latest = facts.at(-1);
   if (latest?.type === "abort.requested") {
     return { kind: "aborted", reason: latest.reason ?? "aborted" };
@@ -1429,10 +1321,7 @@ function createFactMapper(): AgentLoopFactMapper<
       };
     },
     modelSettled({ turn, settlement }) {
-      if (
-        settlement.status === "success" ||
-        settlement.status === "truncated"
-      ) {
+      if (settlement.status === "success" || settlement.status === "truncated") {
         return {
           type: "model.settled",
           modelCallId: `model-${turn}`,
@@ -1452,9 +1341,7 @@ function createFactMapper(): AgentLoopFactMapper<
                   ? {}
                   : { argumentsValid: call.argumentsValid }),
               })),
-              ...(settlement.status === "truncated"
-                ? { truncationReason: settlement.reason }
-                : {}),
+              ...(settlement.status === "truncated" ? { truncationReason: settlement.reason } : {}),
             },
             hash: `response-${turn}`,
           },

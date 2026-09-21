@@ -9,19 +9,13 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { closeSql, getSql, ping } from "../src/db/connection.js";
 import { parseMemoryArgs, runMemoryCommand } from "../src/longterm/cli.js";
-import {
-  collectMemoryDiff,
-  renderMemoryDiff,
-} from "../src/longterm/observability/diff.js";
+import { collectMemoryDiff, renderMemoryDiff } from "../src/longterm/observability/diff.js";
 import {
   recordAdoption,
   recordRetrievalHits,
   recordTaskSuccess,
 } from "../src/longterm/observability/ledger.js";
-import {
-  appendOpLog,
-  queryOpLog,
-} from "../src/longterm/observability/op-log.js";
+import { appendOpLog, queryOpLog } from "../src/longterm/observability/op-log.js";
 import {
   type MemoryStats,
   UNVERIFIED_WARN_RATIO,
@@ -33,8 +27,7 @@ import type { SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -50,16 +43,7 @@ describe("parseMemoryArgs", () => {
 
   test("list --kind/--all/--repo/--limit", () => {
     expect(
-      parseMemoryArgs([
-        "list",
-        "--kind",
-        "episodic",
-        "--all",
-        "--repo",
-        "r1",
-        "--limit",
-        "5",
-      ]),
+      parseMemoryArgs(["list", "--kind", "episodic", "--all", "--repo", "r1", "--limit", "5"]),
     ).toEqual({
       subcommand: "list",
       kind: "episodic",
@@ -84,12 +68,11 @@ describe("parseMemoryArgs", () => {
   });
 
   test("diff --since 校验时间格式", () => {
-    expect("error" in parseMemoryArgs(["diff", "--since", "不是时间"])).toBe(
-      true,
-    );
-    expect(
-      parseMemoryArgs(["diff", "--since", "2026-08-01T00:00:00Z"]),
-    ).toEqual({ subcommand: "diff", since: "2026-08-01T00:00:00Z" });
+    expect("error" in parseMemoryArgs(["diff", "--since", "不是时间"])).toBe(true);
+    expect(parseMemoryArgs(["diff", "--since", "2026-08-01T00:00:00Z"])).toEqual({
+      subcommand: "diff",
+      since: "2026-08-01T00:00:00Z",
+    });
   });
 
   test("未知子命令/参数报错", () => {
@@ -122,9 +105,7 @@ function makeStats(overrides: Partial<MemoryStats>): MemoryStats {
 
 describe("renderMemoryStats 告警", () => {
   test("unverified 占比 >10% 输出告警", () => {
-    const text = renderMemoryStats(
-      makeStats({ unverified: 11, unverifiedRatio: 0.11 }),
-    );
+    const text = renderMemoryStats(makeStats({ unverified: 11, unverifiedRatio: 0.11 }));
     expect(text).toContain("告警");
     expect(text).toContain("11.0%");
   });
@@ -243,9 +224,7 @@ describe("可观测性 db 集成", () => {
   });
 
   it("ledger 批量记账：注入→freq、任务成功→utility、采纳→op-log", async () => {
-    const fact = makeFact(
-      "Ledger batch accounting records freq utility adoption",
-    );
+    const fact = makeFact("Ledger batch accounting records freq utility adoption");
     const id = deriveEntryId(fact);
     createdIds.push(id);
     await engine.put(fact);
@@ -300,9 +279,7 @@ describe("可观测性 db 集成", () => {
     expect(whyText).toContain("freq=0");
 
     // diff：窗口内应看到这条新增 + 失效
-    const diff = await collectMemoryDiff(
-      new Date(Date.now() - 3600_000).toISOString(),
-    );
+    const diff = await collectMemoryDiff(new Date(Date.now() - 3600_000).toISOString());
     expect(diff.added.map((e) => e.id)).toContain(id);
     expect(diff.invalidated.map((e) => e.id)).toContain(id);
     expect(diff.opCounts.governed).toBeGreaterThanOrEqual(1);

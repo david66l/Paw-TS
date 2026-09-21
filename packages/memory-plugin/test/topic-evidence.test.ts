@@ -51,9 +51,9 @@ describe("memory topic evidence planner", () => {
       "response-new",
       "response-old",
     ]);
-    expect(
-      deploymentPlan.evidenceStates.map((state) => state.memoryId),
-    ).toEqual(["deploy-current"]);
+    expect(deploymentPlan.evidenceStates.map((state) => state.memoryId)).toEqual([
+      "deploy-current",
+    ]);
     expect(responsePlan.evidenceStates.map((state) => state.state)).toEqual([
       "current",
       "historical",
@@ -78,10 +78,7 @@ describe("memory topic evidence planner", () => {
       settledAt: 1_750_000_000_000,
     };
     const first = createMemoryTopicEvidenceSectionsV1(fact, 10);
-    const second = createMemoryTopicEvidenceSectionsV1(
-      { ...fact, queryId: "query-2" },
-      99,
-    );
+    const second = createMemoryTopicEvidenceSectionsV1({ ...fact, queryId: "query-2" }, 99);
     expect(first).toHaveLength(2);
     expect(first[0]?.id).toBe(second[0]?.id);
     expect(first[0]?.contentHash).toBe(second[0]?.contentHash);

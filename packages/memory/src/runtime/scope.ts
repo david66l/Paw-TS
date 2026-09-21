@@ -12,10 +12,7 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  type MemoryScopeKey,
-  createMemoryScopeKey,
-} from "../longterm/store/scope-key.js";
+import { type MemoryScopeKey, createMemoryScopeKey } from "../longterm/store/scope-key.js";
 import type { MemoryRuntimeOptions } from "./types.js";
 
 export interface ResolvedScope extends MemoryScopeKey {
@@ -42,19 +39,11 @@ function tryGitRemote(workspaceRoot: string): string | null {
 
 function readSettingsOverrides(
   workspaceRoot: string,
-): Partial<
-  Pick<
-    MemoryRuntimeOptions,
-    "tenantId" | "userId" | "repositoryId" | "workspaceId"
-  >
-> {
+): Partial<Pick<MemoryRuntimeOptions, "tenantId" | "userId" | "repositoryId" | "workspaceId">> {
   try {
     const p = path.join(workspaceRoot, ".paw", "settings.local.json");
     if (!fs.existsSync(p)) return {};
-    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<
-      string,
-      unknown
-    >;
+    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
     return {
       tenantId:
         typeof raw.tenant_id === "string"
@@ -93,16 +82,10 @@ export function resolveScope(opts: MemoryRuntimeOptions): ResolvedScope {
   const file = readSettingsOverrides(workspaceRoot);
 
   const tenantId =
-    opts.tenantId?.trim() ||
-    file.tenantId?.trim() ||
-    process.env.PAW_TENANT_ID?.trim() ||
-    "local";
+    opts.tenantId?.trim() || file.tenantId?.trim() || process.env.PAW_TENANT_ID?.trim() || "local";
 
   const userId =
-    opts.userId?.trim() ||
-    file.userId?.trim() ||
-    process.env.PAW_USER_ID?.trim() ||
-    "local";
+    opts.userId?.trim() || file.userId?.trim() || process.env.PAW_USER_ID?.trim() || "local";
 
   const gitRemote = tryGitRemote(workspaceRoot);
   const repositoryId =
@@ -110,8 +93,7 @@ export function resolveScope(opts: MemoryRuntimeOptions): ResolvedScope {
     file.repositoryId?.trim() ||
     (gitRemote ? `git:${sha16(gitRemote)}` : `ws:${sha16(workspaceRoot)}`);
 
-  const workspaceId =
-    opts.workspaceId?.trim() || file.workspaceId?.trim() || repositoryId;
+  const workspaceId = opts.workspaceId?.trim() || file.workspaceId?.trim() || repositoryId;
 
   return {
     ...createMemoryScopeKey({

@@ -42,9 +42,7 @@ export function evaluateLoopV2SemanticReviewGateV1(input: {
   };
 }
 
-function semanticReviewFeedbackMessage(
-  result: SemanticReviewOnceResultV2,
-): string {
+function semanticReviewFeedbackMessage(result: SemanticReviewOnceResultV2): string {
   if (result.reasonCode === "review_subject_changed") {
     return [
       `[LoopV2SemanticReview:checkpoint_stale key=${result.reviewKey}]`,
@@ -76,7 +74,5 @@ function semanticReviewFeedbackMessage(
 
 function bound(value: string, maxChars: number): string {
   const compact = value.replace(/\s+/g, " ").trim();
-  return compact.length <= maxChars
-    ? compact
-    : `${compact.slice(0, maxChars - 1)}…`;
+  return compact.length <= maxChars ? compact : `${compact.slice(0, maxChars - 1)}…`;
 }

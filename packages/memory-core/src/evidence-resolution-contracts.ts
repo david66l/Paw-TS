@@ -7,10 +7,7 @@ import type {
   RankedMemoryEvidenceSourceV2,
 } from "./evidence-first.js";
 import type { MemoryEvidenceObligationShapeV1 } from "./evidence-obligation.js";
-import type {
-  MemoryEvidenceBindingV1,
-  MemoryEvidenceUseV1,
-} from "./evidence-origin.js";
+import type { MemoryEvidenceBindingV1, MemoryEvidenceUseV1 } from "./evidence-origin.js";
 import type {
   MemoryEvidenceQueryIntentV3,
   MemoryEvidenceRequirementV3,
@@ -41,14 +38,8 @@ export interface MemoryEvidenceIndexV1 {
    * refs must prove source membership without teaching the core their schema.
    * The indexVersion must change when this mapping changes.
    */
-  readonly evidenceRefBelongsToSource?: (
-    sourceId: string,
-    evidenceRef: string,
-  ) => boolean;
-  search(
-    query: string,
-    signal: AbortSignal,
-  ): Promise<MemoryEvidenceIndexSearchResultV1>;
+  readonly evidenceRefBelongsToSource?: (sourceId: string, evidenceRef: string) => boolean;
+  search(query: string, signal: AbortSignal): Promise<MemoryEvidenceIndexSearchResultV1>;
 }
 
 /**
@@ -77,11 +68,7 @@ export interface MemoryEvidenceResolutionV1 {
     | "completed"
     | "partial"
     | "fallback";
-  readonly closureAuditStatus:
-    | "not_needed"
-    | "not_configured"
-    | "completed"
-    | "fallback";
+  readonly closureAuditStatus: "not_needed" | "not_configured" | "completed" | "fallback";
   /** Auditors observe by default; only an explicit repair profile may rewrite a packet. */
   readonly closureMode: MemoryEvidenceClosureModeV1;
   readonly closureVerdict?: MemoryEvidenceClosureVerdictV1;
@@ -133,12 +120,7 @@ export interface MemoryEvidenceResolutionV1 {
     mechanicalBindingSummaryRevision: string;
     unsupportedCompleteSlotCount: number;
     unsupportedDerivedOperationCount: number;
-    executionStatus?:
-      | "complete"
-      | "partial"
-      | "missing"
-      | "conflict"
-      | "unsupported";
+    executionStatus?: "complete" | "partial" | "missing" | "conflict" | "unsupported";
     executionProgramRevision?: string;
     executionRevision?: string;
     executionCompleteNodeCount?: number;
@@ -146,12 +128,8 @@ export interface MemoryEvidenceResolutionV1 {
     executionMissingNodeCount?: number;
     executionConflictNodeCount?: number;
     executionUnsupportedNodeCount?: number;
-    executionOperationStatusCounts?: Readonly<
-      Record<string, Readonly<Record<string, number>>>
-    >;
-    executionAnswerOperandStatusCounts?: Readonly<
-      Record<string, Readonly<Record<string, number>>>
-    >;
+    executionOperationStatusCounts?: Readonly<Record<string, Readonly<Record<string, number>>>>;
+    executionAnswerOperandStatusCounts?: Readonly<Record<string, Readonly<Record<string, number>>>>;
     executionAnswerOperationStatusCounts?: Readonly<
       Record<string, Readonly<Record<string, number>>>
     >;
@@ -161,10 +139,7 @@ export interface MemoryEvidenceResolutionV1 {
     executionAggregationUnit?: string;
     executionAggregateCountBasis?: string;
     executionAggregateMaterializationExact?: boolean;
-    executionAggregateMaterializationState?:
-      | "exact"
-      | "inexact"
-      | "not_materialized";
+    executionAggregateMaterializationState?: "exact" | "inexact" | "not_materialized";
     executionDurationEndpointPolicy?: string;
     executionDurationEndpointContractKind?: string;
     executionDurationEndpointOrdering?: string;

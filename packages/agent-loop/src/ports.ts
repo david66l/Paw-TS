@@ -12,9 +12,7 @@ export interface PortCallOptions {
 }
 
 /** 模型流事件的接收函数。流事件只用于实时展示，不代表已经持久结算。 */
-export type ModelStreamSink<TModelStreamEvent> = (
-  event: TModelStreamEvent,
-) => void | Promise<void>;
+export type ModelStreamSink<TModelStreamEvent> = (event: TModelStreamEvent) => void | Promise<void>;
 
 /** 启动一次模型回合所需的参数。 */
 export interface ModelCallOptions<TModelStreamEvent> extends PortCallOptions {
@@ -156,10 +154,7 @@ export interface LoopPolicy<TInputFact, TRunConfig> {
  * 作为这里的输入。
  */
 export interface ControlReducer<TInputFact, TRunConfig, TControlState> {
-  reduce(
-    inputFacts: readonly TInputFact[],
-    runConfig: TRunConfig,
-  ): TControlState;
+  reduce(inputFacts: readonly TInputFact[], runConfig: TRunConfig): TControlState;
 }
 
 /**
@@ -196,8 +191,4 @@ export interface PromotedInputSource {
 
 /** Agent Loop 与输入协调层之间唯一需要的窄端口。 */
 export type LoopInputPort = SafeBoundaryReporter & PromotedInputSource;
-import type {
-  DurableJsonPayloadV1,
-  InputFactV1,
-  ModelResponseV1,
-} from "@paw/protocol";
+import type { DurableJsonPayloadV1, InputFactV1, ModelResponseV1 } from "@paw/protocol";

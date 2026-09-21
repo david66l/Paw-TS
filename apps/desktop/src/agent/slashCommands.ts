@@ -85,9 +85,7 @@ export async function tryHandleSlashCommand(
     } catch (e) {
       return {
         handled: true,
-        messages: [
-          `Doctor 失败：${e instanceof Error ? e.message : String(e)}`,
-        ],
+        messages: [`Doctor 失败：${e instanceof Error ? e.message : String(e)}`],
       };
     }
   }
@@ -112,9 +110,7 @@ export async function tryHandleSlashCommand(
     } catch (e) {
       return {
         handled: true,
-        messages: [
-          `Status 失败：${e instanceof Error ? e.message : String(e)}`,
-        ],
+        messages: [`Status 失败：${e instanceof Error ? e.message : String(e)}`],
       };
     }
   }
@@ -124,9 +120,7 @@ export async function tryHandleSlashCommand(
     if (!runId) {
       return {
         handled: true,
-        messages: [
-          "/checkpoints: 没有 runId（先跑一次任务，或 /checkpoints <runId>）",
-        ],
+        messages: ["/checkpoints: 没有 runId（先跑一次任务，或 /checkpoints <runId>）"],
       };
     }
     try {
@@ -144,8 +138,7 @@ export async function tryHandleSlashCommand(
         };
       }
       const lines = r.items.map(
-        (c) =>
-          `  seq ${c.seq} · ${c.tool} · ${c.targets.join(", ") || "(none)"}`,
+        (c) => `  seq ${c.seq} · ${c.tool} · ${c.targets.join(", ") || "(none)"}`,
       );
       return {
         handled: true,
@@ -154,9 +147,7 @@ export async function tryHandleSlashCommand(
     } catch (e) {
       return {
         handled: true,
-        messages: [
-          `Checkpoints 失败：${e instanceof Error ? e.message : String(e)}`,
-        ],
+        messages: [`Checkpoints 失败：${e instanceof Error ? e.message : String(e)}`],
       };
     }
   }
@@ -208,14 +199,8 @@ export async function tryHandleSlashCommand(
         };
       }
       const lines = r.items.slice(0, 20).map((item) => {
-        const st =
-          item.status === "completed"
-            ? "✓"
-            : item.status === "failed"
-              ? "✗"
-              : "○";
-        const goal =
-          item.goal.length > 48 ? `${item.goal.slice(0, 48)}…` : item.goal;
+        const st = item.status === "completed" ? "✓" : item.status === "failed" ? "✗" : "○";
+        const goal = item.goal.length > 48 ? `${item.goal.slice(0, 48)}…` : item.goal;
         const date = new Date(item.startedAt).toLocaleString();
         return `  ${st} ${item.runId} · ${goal} · ${item.toolCallCount} tools · ${date}`;
       });
@@ -228,9 +213,7 @@ export async function tryHandleSlashCommand(
     } catch (e) {
       return {
         handled: true,
-        messages: [
-          `Run 历史失败：${e instanceof Error ? e.message : String(e)}`,
-        ],
+        messages: [`Run 历史失败：${e instanceof Error ? e.message : String(e)}`],
       };
     }
   }
@@ -254,9 +237,7 @@ export async function tryHandleSlashCommand(
           messages: [`Replay 失败：${r.error ?? "unknown"}`],
         };
       }
-      const lines = r.events.map(
-        (ev, i) => `  ${ev.seq ?? i + 1}. ${ev.summary}`,
-      );
+      const lines = r.events.map((ev, i) => `  ${ev.seq ?? i + 1}. ${ev.summary}`);
       return {
         handled: true,
         messages: [
@@ -266,9 +247,7 @@ export async function tryHandleSlashCommand(
     } catch (e) {
       return {
         handled: true,
-        messages: [
-          `Replay 失败：${e instanceof Error ? e.message : String(e)}`,
-        ],
+        messages: [`Replay 失败：${e instanceof Error ? e.message : String(e)}`],
       };
     }
   }

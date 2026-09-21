@@ -42,14 +42,10 @@ export const modelConfigSchema = z
     reasoningEffort: z.enum(["high", "max"]).optional(),
     imageInput: z.literal(true).optional(),
   })
-  .refine(
-    (value) =>
-      !(value.thinkingEnabled === false && value.reasoningEffort !== undefined),
-    {
-      message: "reasoningEffort requires thinkingEnabled to be true or omitted",
-      path: ["reasoningEffort"],
-    },
-  );
+  .refine((value) => !(value.thinkingEnabled === false && value.reasoningEffort !== undefined), {
+    message: "reasoningEffort requires thinkingEnabled to be true or omitted",
+    path: ["reasoningEffort"],
+  });
 
 /**
  * `.paw/settings.local.json` 的完整 schema。
@@ -95,9 +91,7 @@ export const pawSettingsLocalSchema = z
      * - `orchestrated` / `team`：狸花调度多 Agent
      */
     agent_mode: z.enum(["coding", "orchestrated", "team", "multi"]).optional(),
-    collaboration_mode: z
-      .enum(["coding", "orchestrated", "team", "multi"])
-      .optional(),
+    collaboration_mode: z.enum(["coding", "orchestrated", "team", "multi"]).optional(),
     /**
      * Ollama embedding 模型名，用于语义记忆增强。
      * 例如 "nomic-embed-text"、"bge-m3"。未设置 = 无语义增强。

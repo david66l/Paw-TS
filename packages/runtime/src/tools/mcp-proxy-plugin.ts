@@ -15,9 +15,7 @@ export const MCP_PROXY_TOOL_PLUGIN_VERSION_V1 = "paw.mcp-proxy.v1" as const;
  * Install one provider-stable MCP gateway while binding the frozen registry
  * identity to the local profile's MCP scope hash.
  */
-export function createMcpProxyToolPluginV1(
-  scopeHash: string,
-): RuntimeToolPluginV1 {
+export function createMcpProxyToolPluginV1(scopeHash: string): RuntimeToolPluginV1 {
   if (!/^[a-f0-9]{64}$/.test(scopeHash)) {
     throw new Error("MCP proxy scopeHash must be a lowercase SHA-256 digest");
   }
@@ -44,9 +42,7 @@ function classifyMcpProxyToolV1(
       effectClass: "read",
       permissionCategory: "read",
       concurrencyMode: "parallel",
-      resources: [
-        { key: `${root}${path.sep}.paw-mcp-catalog`, access: "read" },
-      ],
+      resources: [{ key: `${root}${path.sep}.paw-mcp-catalog`, access: "read" }],
     };
   }
   if (args.action === "call") {
@@ -55,9 +51,7 @@ function classifyMcpProxyToolV1(
       effectClass: "unknown",
       permissionCategory: "shell",
       concurrencyMode: "exclusive",
-      resources: [
-        { key: `${root}${path.sep}.paw-mcp-external`, access: "write" },
-      ],
+      resources: [{ key: `${root}${path.sep}.paw-mcp-external`, access: "write" }],
     };
   }
   throw new Error("MCP proxy action must be search or call");

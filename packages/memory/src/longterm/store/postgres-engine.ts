@@ -56,11 +56,7 @@ function renderSearchText(entry: MemoryEntry): {
     case "episodic":
       return {
         title: entry.perspective,
-        summary: [
-          entry.whenToUse,
-          ...entry.modification,
-          entry.failureFixPair?.feedback ?? "",
-        ]
+        summary: [entry.whenToUse, ...entry.modification, entry.failureFixPair?.feedback ?? ""]
           .filter(Boolean)
           .join("\n"),
         tags: [entry.issueType, ...(entry.branch ? [entry.branch] : [])],
@@ -148,14 +144,8 @@ function assertEmbeddingIdentity(service: MemoryEmbeddingService): void {
   }
 }
 
-function assertEmbeddingVector(
-  vector: readonly number[],
-  service: MemoryEmbeddingService,
-): void {
-  if (
-    vector.length !== EMBEDDING_DIMENSIONS ||
-    vector.some((value) => !Number.isFinite(value))
-  ) {
+function assertEmbeddingVector(vector: readonly number[], service: MemoryEmbeddingService): void {
+  if (vector.length !== EMBEDDING_DIMENSIONS || vector.some((value) => !Number.isFinite(value))) {
     throw new Error(
       `Memory embedding ${service.model}@${service.version} returned an invalid vector`,
     );
@@ -182,9 +172,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
    */
   async retrievalRevisionToken(): Promise<string> {
     if (!this.scope) {
-      throw new Error(
-        "A scoped store is required for a retrieval revision token",
-      );
+      throw new Error("A scoped store is required for a retrieval revision token");
     }
     const sql = getSql();
     const rows = await sql`
@@ -243,15 +231,9 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     readonly complete: boolean;
   }> {
     if (!this.scope) {
-      throw new Error(
-        "A scoped store is required for derived-index inspection",
-      );
+      throw new Error("A scoped store is required for derived-index inspection");
     }
-    const ids = [
-      ...new Set(
-        input.ids.map((id) => id.trim()).filter((id) => id.length > 0),
-      ),
-    ];
+    const ids = [...new Set(input.ids.map((id) => id.trim()).filter((id) => id.length > 0))];
     if (ids.length === 0) {
       return Object.freeze({
         schemaVersion: "paw.memory-derived-index-coverage.v1",
@@ -286,13 +268,9 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const presentEmbeddings = new Set(
       rows.filter((row) => row.embedding_present).map((row) => row.id),
     );
-    const missingItemIds = Object.freeze(
-      ids.filter((id) => !presentItems.has(id)),
-    );
+    const missingItemIds = Object.freeze(ids.filter((id) => !presentItems.has(id)));
     const missingEmbeddingIds = Object.freeze(
-      input.requireEmbedding
-        ? ids.filter((id) => !presentEmbeddings.has(id))
-        : [],
+      input.requireEmbedding ? ids.filter((id) => !presentEmbeddings.has(id)) : [],
     );
     return Object.freeze({
       schemaVersion: "paw.memory-derived-index-coverage.v1",
@@ -333,12 +311,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     const degraded = (entry as { degraded?: boolean }).degraded === true;
     const verificationStatus = degraded
       ? "unverified"
-      : [
-            "agent_verified",
-            "user_statement",
-            "repo_docs",
-            "trial_graduated",
-          ].includes(entry.source)
+      : ["agent_verified", "user_statement", "repo_docs", "trial_graduated"].includes(entry.source)
         ? "verified"
         : "unverified";
 
@@ -387,13 +360,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
     try {
       const vec = await this.embedder.embed(embeddingInput(entry));
       assertEmbeddingVector(vec, this.embedder);
-      await storeEmbedding(
-        id,
-        "1",
-        vec,
-        this.embedder.model,
-        this.embedder.version,
-      );
+      await storeEmbedding(id, "1", vec, this.embedder.model, this.embedder.version);
     } catch {
       /* embedding 失败不影响条目写入 */
     }
@@ -737,13 +704,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
         entries.push(entry);
         const vec = await this.embedder.embed(embeddingInput(entry));
         assertEmbeddingVector(vec, this.embedder);
-        await storeEmbedding(
-          entry.id,
-          "1",
-          vec,
-          this.embedder.model,
-          this.embedder.version,
-        );
+        await storeEmbedding(entry.id, "1", vec, this.embedder.model, this.embedder.version);
         indexed += 1;
       } catch {
         failed += 1;
@@ -763,10 +724,7 @@ export class PostgresMemoryStoreEngine implements MemoryStoreEngine {
           this.searchText(probe, 10).catch(() => [] as ScoredId[]),
           this.searchVector(probe, 10).catch(() => [] as ScoredId[]),
         ]);
-        if (
-          textHits.some((h) => h.id === entry.id) ||
-          vecHits.some((h) => h.id === entry.id)
-        ) {
+        if (textHits.some((h) => h.id === entry.id) || vecHits.some((h) => h.id === entry.id)) {
           smokePassed += 1;
         } else {
           smokeFailedIds.push(entry.id);

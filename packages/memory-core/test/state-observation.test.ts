@@ -27,24 +27,17 @@ function observation(
 describe("memory state reducer v1", () => {
   test("lets a later approximate observation replace an older exact value", () => {
     const exact = observation("I have 1,250 followers.", { turnOrder: 1 });
-    const approximate = observation(
-      "I think I am now close to 1,300 followers.",
-      {
-        turnOrder: 2,
-      },
-    );
+    const approximate = observation("I think I am now close to 1,300 followers.", {
+      turnOrder: 2,
+    });
     const result = resolveMemoryStateObservationsV1({
       observations: [exact, approximate],
       mode: "latest",
     });
-    expect(result.current.map((item) => item.evidenceRef)).toEqual([
-      approximate.evidenceRef,
-    ]);
+    expect(result.current.map((item) => item.evidenceRef)).toEqual([approximate.evidenceRef]);
     expect(result.current[0]?.valueQualifier).toBe("approximate");
     expect(result.current[0]?.epistemicStatus).toBe("uncertain");
-    expect(result.history.map((item) => item.evidenceRef)).toEqual([
-      exact.evidenceRef,
-    ]);
+    expect(result.history.map((item) => item.evidenceRef)).toEqual([exact.evidenceRef]);
   });
 
   test("uses turn order inside one episode and does not let plans replace observations", () => {

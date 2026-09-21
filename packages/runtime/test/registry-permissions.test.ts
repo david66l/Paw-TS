@@ -52,9 +52,9 @@ describe("Paw Next frozen tool registry", () => {
     ]);
     expect(installed.registryHash).not.toBe(base.registryHash);
     expect(installed.registryHash).toBe(rebuilt.registryHash);
-    expect(() =>
-      createFrozenToolRegistryV1({ plugins: [plugin, plugin] }),
-    ).toThrow("Duplicate runtime tool plugin");
+    expect(() => createFrozenToolRegistryV1({ plugins: [plugin, plugin] })).toThrow(
+      "Duplicate runtime tool plugin",
+    );
   });
 
   test("plugin tools use read permissions and workspace-scoped resources", () => {
@@ -137,8 +137,7 @@ describe("Paw Next frozen tool registry", () => {
       [
         "workspace_apply_patch",
         {
-          patch:
-            "--- a/../outside.ts\n+++ b/../outside.ts\n@@ -1 +1 @@\n-a\n+b\n",
+          patch: "--- a/../outside.ts\n+++ b/../outside.ts\n@@ -1 +1 @@\n-a\n+b\n",
         },
       ],
     ] as const) {
@@ -196,17 +195,13 @@ describe("Paw Next frozen tool registry", () => {
     };
     const before = structuredClone(definition);
 
-    expect(Reflect.set(definition.function, "description", "tampered")).toBe(
-      false,
-    );
+    expect(Reflect.set(definition.function, "description", "tampered")).toBe(false);
     expect(
       Reflect.set(definition.function.parameters.properties, "evil", {
         type: "string",
       }),
     ).toBe(false);
-    expect(() =>
-      definition.function.parameters.required.push("evil"),
-    ).toThrow();
+    expect(() => definition.function.parameters.required.push("evil")).toThrow();
     expect(definition).toEqual(before);
 
     const rebuilt = createFrozenToolRegistryV1();
@@ -231,9 +226,7 @@ describe("Paw Next frozen tool registry", () => {
       permissionCategory: "read",
       concurrencyMode: "parallel",
     });
-    expect(read.value.classification.resources[0]?.key).toBe(
-      canonical(path.join(root, "a.txt")),
-    );
+    expect(read.value.classification.resources[0]?.key).toBe(canonical(path.join(root, "a.txt")));
 
     const bad = registry.validateAndClassify(
       call("edit-1", "workspace_edit_file", { path: "a.txt" }),
@@ -246,10 +239,7 @@ describe("Paw Next frozen tool registry", () => {
       error_code: "E_SCHEMA_INVALID",
     });
 
-    const unknown = registry.validateAndClassify(
-      call("ghost", "workspace_unknown", {}),
-      root,
-    );
+    const unknown = registry.validateAndClassify(call("ghost", "workspace_unknown", {}), root);
     expect(unknown.ok).toBe(false);
     if (!unknown.ok) {
       expect(unknown.result.payload).toMatchObject({ code: "E_TOOL_UNKNOWN" });
@@ -329,9 +319,7 @@ describe("Paw Next frozen tool registry", () => {
         root,
       ).ok,
     ).toBe(false);
-    expect(registry.registryHash).not.toBe(
-      createFrozenToolRegistryV1().registryHash,
-    );
+    expect(registry.registryHash).not.toBe(createFrozenToolRegistryV1().registryHash);
   });
 
   test("classifies managed job operations through the shared shell policy", () => {
@@ -366,15 +354,10 @@ describe("Paw Next frozen tool registry", () => {
     const registry = createFrozenToolRegistryV1({
       shellSandbox: OFF_SHELL_SANDBOX,
     });
-    expect(() => registry.assertCompatibleShellSandbox(undefined)).toThrow(
-      "does not match",
-    );
-    expect(() =>
-      registry.assertCompatibleShellSandbox(OFF_SHELL_SANDBOX),
-    ).not.toThrow();
+    expect(() => registry.assertCompatibleShellSandbox(undefined)).toThrow("does not match");
+    expect(() => registry.assertCompatibleShellSandbox(OFF_SHELL_SANDBOX)).not.toThrow();
     expect(registry.registryHash).toBe(
-      createFrozenToolRegistryV1({ shellSandbox: OFF_SHELL_SANDBOX })
-        .registryHash,
+      createFrozenToolRegistryV1({ shellSandbox: OFF_SHELL_SANDBOX }).registryHash,
     );
   });
 });
@@ -386,16 +369,12 @@ describe("Paw Next frozen permission engine", () => {
       {
         policyVersion: "bad",
         defaultAction: "deny",
-        rules: [
-          { id: "bad", layer: "user", category: "read", action: "permit" },
-        ],
+        rules: [{ id: "bad", layer: "user", category: "read", action: "permit" }],
       },
       {
         policyVersion: "bad",
         defaultAction: "deny",
-        rules: [
-          { id: "bad", layer: "user", category: "network", action: "deny" },
-        ],
+        rules: [{ id: "bad", layer: "user", category: "network", action: "deny" }],
       },
     ]) {
       expect(() => new FrozenPermissionEngineV1(config as never)).toThrow();
@@ -456,8 +435,7 @@ describe("Paw Next frozen permission engine", () => {
     };
     const noChannel = new FrozenPermissionEngineV1(config);
     expect(
-      (await noChannel.resolve(value, undefined, new AbortController().signal))
-        .resolution,
+      (await noChannel.resolve(value, undefined, new AbortController().signal)).resolution,
     ).toBe("deny");
 
     const engine = new FrozenPermissionEngineV1(config);
@@ -491,10 +469,9 @@ describe("Paw Next frozen permission engine", () => {
     expect(prompts).toBe(1);
 
     const nextRun = new FrozenPermissionEngineV1(config);
-    expect(
-      (await nextRun.resolve(value, undefined, new AbortController().signal))
-        .resolution,
-    ).toBe("deny");
+    expect((await nextRun.resolve(value, undefined, new AbortController().signal)).resolution).toBe(
+      "deny",
+    );
   });
 });
 
@@ -504,11 +481,7 @@ function workspace(): string {
   return root;
 }
 
-function call(
-  id: string,
-  name: string,
-  args: Record<string, unknown>,
-): RuntimeToolCallV1 {
+function call(id: string, name: string, args: Record<string, unknown>): RuntimeToolCallV1 {
   return { id, name, arguments: args, argumentsValid: true };
 }
 

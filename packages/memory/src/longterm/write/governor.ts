@@ -20,11 +20,7 @@
 import { getSql } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
 import { appendOpLog } from "../observability/op-log.js";
-import type {
-  EpisodicExperience,
-  MemoryEntry,
-  SemanticFact,
-} from "../store/engine.js";
+import type { EpisodicExperience, MemoryEntry, SemanticFact } from "../store/engine.js";
 import { deriveEntryId } from "../store/id.js";
 import { extractJson } from "./distiller.js";
 
@@ -81,9 +77,7 @@ export function isTemporalInversion(
 // ── prompt ──
 
 /** 批量裁决 prompt：候选 C1..Cn、既有条目 E1..Em（全局去重），整数序号引用 */
-export function buildAdjudicationPrompt(
-  items: readonly AdjudicateItem[],
-): string {
+export function buildAdjudicationPrompt(items: readonly AdjudicateItem[]): string {
   // 既有条目全局去重编号
   const entrySeq = new Map<string, number>();
   const entries: MemoryEntry[] = [];
@@ -98,9 +92,7 @@ export function buildAdjudicationPrompt(
 
   const candidateBlocks = items.map((item, i) => {
     const c = item.candidate;
-    const sims =
-      item.similar.map((s) => `E${entrySeq.get(s.id)}`).join(", ") ||
-      "(无相似条目)";
+    const sims = item.similar.map((s) => `E${entrySeq.get(s.id)}`).join(", ") || "(无相似条目)";
     return [
       `候选 C${i + 1}（kind: ${c.kind}，相似既有条目: ${sims}）:`,
       `  content: ${candidateText(c)}`,
@@ -110,8 +102,7 @@ export function buildAdjudicationPrompt(
   });
 
   const entryBlocks = entries.map((e, i) => {
-    const fact =
-      e.kind === "semantic" ? e.fact : JSON.stringify(e).slice(0, 200);
+    const fact = e.kind === "semantic" ? e.fact : JSON.stringify(e).slice(0, 200);
     return `既有条目 E${i + 1}:\n  fact: ${fact}\n  tValid: ${e.tValid}    tInvalid: ${e.tInvalid ?? "(活跃)"}    source: ${e.source}`;
   });
 
@@ -142,10 +133,7 @@ ${entryBlocks.length > 0 ? entryBlocks.join("\n\n") : "（库中无相似既有�
 
 export interface ParsedBatchDecision {
   /** candidateIndex（0-based）→ 裁决；targetSeq 为 0-based 既有条目序号 */
-  byCandidate: Map<
-    number,
-    { op: GovernorOp; targetSeq?: number; reason?: string }
-  >;
+  byCandidate: Map<number, { op: GovernorOp; targetSeq?: number; reason?: string }>;
   /** 校验问题（幻觉序号等），每条已降级处理 */
   errors: string[];
 }
@@ -170,15 +158,8 @@ export function parseGovernorOutput(
     }
     const dec = d as Record<string, unknown>;
     const cSeq = dec.candidate;
-    if (
-      typeof cSeq !== "number" ||
-      !Number.isInteger(cSeq) ||
-      cSeq < 1 ||
-      cSeq > numCandidates
-    ) {
-      errors.push(
-        `幻觉候选序号: ${JSON.stringify(cSeq)}（合法范围 1..${numCandidates}）`,
-      );
+    if (typeof cSeq !== "number" || !Number.isInteger(cSeq) || cSeq < 1 || cSeq > numCandidates) {
+      errors.push(`幻觉候选序号: ${JSON.stringify(cSeq)}（合法范围 1..${numCandidates}）`);
       continue;
     }
     const op = dec.op;
@@ -285,9 +266,7 @@ export class LongtermGovernor {
         );
         parsed = parseGovernorOutput(raw, needsLlm.length, entries.length);
       } catch (e) {
-        errors.push(
-          `attempt ${attempt + 1}: ${e instanceof Error ? e.message : String(e)}`,
-        );
+        errors.push(`attempt ${attempt + 1}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 
@@ -319,15 +298,10 @@ export class LongtermGovernor {
           },
         });
       } else {
-        const targetId =
-          dec.targetSeq !== undefined ? entries[dec.targetSeq]!.id : undefined;
+        const targetId = dec.targetSeq !== undefined ? entries[dec.targetSeq]!.id : undefined;
         results[index] = { op: dec.op, targetId, reason: dec.reason };
       }
-      await this.record(
-        item.candidate,
-        results[index]!,
-        results[index]!.targetId,
-      );
+      await this.record(item.candidate, results[index]!, results[index]!.targetId);
     }
 
     return results.map((r) => r!);

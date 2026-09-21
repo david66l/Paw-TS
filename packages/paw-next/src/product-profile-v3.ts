@@ -6,11 +6,7 @@ import {
   type PawNextMemoryPluginProfileV1,
   freezePawNextMemoryPluginProfileV1,
 } from "@paw/memory-plugin";
-import type {
-  LanguageModel,
-  PawModelTransport,
-  PawProviderProtocol,
-} from "@paw/models";
+import type { LanguageModel, PawModelTransport, PawProviderProtocol } from "@paw/models";
 import { WORK_SEGMENT_POLICY_VERSION_V1 } from "@paw/protocol";
 import {
   type ApprovalPromptV1,
@@ -38,12 +34,10 @@ import {
 import type { PawNextProductProfileV1 } from "./product-profile.js";
 import type { PawNextStartupRunIdentityV1 } from "./startup-scan.js";
 
-export const PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V3 =
-  "paw.next-product-profiles.v3" as const;
+export const PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V3 = "paw.next-product-profiles.v3" as const;
 export const DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V3 =
   ".paw/paw-next-product-profiles.v3.json" as const;
-export const PAW_NEXT_MCP_RUNTIME_POLICY_VERSION_V1 =
-  "paw.mcp-runtime.v1" as const;
+export const PAW_NEXT_MCP_RUNTIME_POLICY_VERSION_V1 = "paw.mcp-runtime.v1" as const;
 
 export interface PawNextMcpRuntimeProfileV1 {
   readonly policyVersion: typeof PAW_NEXT_MCP_RUNTIME_POLICY_VERSION_V1;
@@ -165,28 +159,20 @@ export interface BuiltPawNextTaskProfileV3 {
 export function loadPawNextProductProfileStoreV3(
   options: LoadPawNextProductProfileStoreOptionsV3,
 ): PawNextProductProfileStoreV3 {
-  const workspaceRoot = canonicalPawNextWorkspaceInternal(
-    options.workspaceRoot,
-  );
+  const workspaceRoot = canonicalPawNextWorkspaceInternal(options.workspaceRoot);
   const raw = readStrictPawNextWorkspaceJsonInternal(
     workspaceRoot,
-    options.profilePath ??
-      path.join(workspaceRoot, DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V3),
+    options.profilePath ?? path.join(workspaceRoot, DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V3),
     "Paw Next V3 product profile",
   );
-  const root = exactRecordInternal(raw, "V3 profile store", [
-    "schemaVersion",
-    "profiles",
-  ]);
+  const root = exactRecordInternal(raw, "V3 profile store", ["schemaVersion", "profiles"]);
   if (root.schemaVersion !== PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V3) {
     throw new Error("Unsupported Paw Next V3 product profile schemaVersion");
   }
   if (!Array.isArray(root.profiles)) {
     throw new Error("Paw Next V3 product profiles must be an array");
   }
-  const profiles = root.profiles.map((value, index) =>
-    parseProfileV3(value, `profiles[${index}]`),
-  );
+  const profiles = root.profiles.map((value, index) => parseProfileV3(value, `profiles[${index}]`));
   assertUniqueProfiles(profiles);
   return Object.freeze({
     schemaVersion: PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V3,
@@ -199,9 +185,7 @@ export function buildPawNextTaskProfileV3(
 ): BuiltPawNextTaskProfileV3 {
   const profile = parseProfileV3(input.profile, "profile");
   if ((profile.approval === "available") !== Boolean(input.requestApproval)) {
-    throw new Error(
-      "V3 approval profile does not match the host approval transport",
-    );
+    throw new Error("V3 approval profile does not match the host approval transport");
   }
   const commonProfile: PawNextProductProfileV1 = Object.freeze({
     profileId: profile.profileId,
@@ -245,27 +229,17 @@ export function buildPawNextTaskProfileV3(
   const identityTask = Object.freeze({
     ...task,
     ...(input.model ? { model: input.model } : {}),
-    ...(input.requestApproval
-      ? { requestApproval: input.requestApproval }
-      : {}),
-    ...(profile.legacyOutputRecall
-      ? { legacyOutputRecall: true as const }
-      : {}),
+    ...(input.requestApproval ? { requestApproval: input.requestApproval } : {}),
+    ...(profile.legacyOutputRecall ? { legacyOutputRecall: true as const } : {}),
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(profile.environmentAuditRetry
-      ? { environmentAuditRetry: true as const }
-      : {}),
-    ...(profile.environmentAuditSinglePass
-      ? { environmentAuditSinglePass: true as const }
-      : {}),
+    ...(profile.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
+    ...(profile.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
     ...(profile.environmentAuditEvidenceRepair
       ? { environmentAuditEvidenceRepair: true as const }
       : {}),
-    ...(profile.compactMutationReceipts
-      ? { compactMutationReceipts: true as const }
-      : {}),
+    ...(profile.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
     ...(profile.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
@@ -281,9 +255,7 @@ export function buildPawNextTaskProfileV3(
         ? { recoverReasoningTimeout: true as const }
         : {}),
       ...(profile.control.liveSteering ? { liveSteering: true as const } : {}),
-      ...(profile.control.settleFinalToolBatch
-        ? { settleFinalToolBatch: true as const }
-        : {}),
+      ...(profile.control.settleFinalToolBatch ? { settleFinalToolBatch: true as const } : {}),
       mode: "interactive",
       maxModelTurns: profile.control.maxModelTurns,
       naturalStop: profile.control.naturalStop,
@@ -308,18 +280,12 @@ export function buildPawNextTaskProfileV3(
     payloadRuntime: profile.payloadRuntime,
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(profile.environmentAuditRetry
-      ? { environmentAuditRetry: true as const }
-      : {}),
-    ...(profile.environmentAuditSinglePass
-      ? { environmentAuditSinglePass: true as const }
-      : {}),
+    ...(profile.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
+    ...(profile.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
     ...(profile.environmentAuditEvidenceRepair
       ? { environmentAuditEvidenceRepair: true as const }
       : {}),
-    ...(profile.compactMutationReceipts
-      ? { compactMutationReceipts: true as const }
-      : {}),
+    ...(profile.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
     ...(profile.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
@@ -328,9 +294,7 @@ export function buildPawNextTaskProfileV3(
     ...(profile.longHorizon ? { longHorizon: profile.longHorizon } : {}),
   });
   const taskOptions: PawNextTaskProfileOptionsV3 = deepFreeze({
-    ...(input.collaborationModels
-      ? { collaborationModels: input.collaborationModels }
-      : {}),
+    ...(input.collaborationModels ? { collaborationModels: input.collaborationModels } : {}),
     productVersion: "v3",
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
@@ -347,12 +311,8 @@ export function buildPawNextTaskProfileV3(
     maxModelTurns: profile.control.maxModelTurns,
     naturalStop: profile.control.naturalStop,
     ...(profile.control.liveSteering ? { liveSteering: true as const } : {}),
-    ...(profile.control.recoverReasoningTimeout
-      ? { recoverReasoningTimeout: true as const }
-      : {}),
-    ...(profile.control.settleFinalToolBatch
-      ? { settleFinalToolBatch: true as const }
-      : {}),
+    ...(profile.control.recoverReasoningTimeout ? { recoverReasoningTimeout: true as const } : {}),
+    ...(profile.control.settleFinalToolBatch ? { settleFinalToolBatch: true as const } : {}),
     maxSegments: profile.control.maxSegments,
     maxTotalModelTurns: profile.control.maxTotalModelTurns,
     workSegmentPolicyVersion: profile.workSegmentPolicyVersion,
@@ -362,28 +322,18 @@ export function buildPawNextTaskProfileV3(
     estimatorId: task.estimatorId as string,
     estimatorVersion: task.estimatorVersion as string,
     heartbeatPolicy: task.heartbeatPolicy as SessionLeaseHeartbeatPolicyV1,
-    ...(task.shellSandbox === undefined
-      ? {}
-      : { shellSandbox: task.shellSandbox }),
+    ...(task.shellSandbox === undefined ? {} : { shellSandbox: task.shellSandbox }),
     payloadRuntime: profile.payloadRuntime,
-    ...(profile.legacyOutputRecall
-      ? { legacyOutputRecall: true as const }
-      : {}),
+    ...(profile.legacyOutputRecall ? { legacyOutputRecall: true as const } : {}),
     ...(profile.mcp === undefined ? {} : { mcp: profile.mcp }),
     ...(profile.memory === undefined ? {} : { memory: profile.memory }),
     ...(profile.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(profile.environmentAuditRetry
-      ? { environmentAuditRetry: true as const }
-      : {}),
-    ...(profile.environmentAuditSinglePass
-      ? { environmentAuditSinglePass: true as const }
-      : {}),
+    ...(profile.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
+    ...(profile.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
     ...(profile.environmentAuditEvidenceRepair
       ? { environmentAuditEvidenceRepair: true as const }
       : {}),
-    ...(profile.compactMutationReceipts
-      ? { compactMutationReceipts: true as const }
-      : {}),
+    ...(profile.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
     ...(profile.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(profile.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(profile.stageGraph ? { stageGraph: true as const } : {}),
@@ -408,10 +358,7 @@ function deepFreeze<T>(value: T): T {
   return Object.freeze(value);
 }
 
-function parseProfileV3(
-  value: unknown,
-  label: string,
-): PawNextProductProfileV3 {
+function parseProfileV3(value: unknown, label: string): PawNextProductProfileV3 {
   const record = exactRecordWithOptionalKeysV1(
     value,
     label,
@@ -452,19 +399,11 @@ function parseProfileV3(
   }
   if (record.deliveryLedger !== undefined && record.deliveryLedger !== true)
     throw new Error("Unsupported delivery ledger policy");
-  if (
-    record.compactMutationReceipts !== undefined &&
-    record.compactMutationReceipts !== true
-  )
+  if (record.compactMutationReceipts !== undefined && record.compactMutationReceipts !== true)
     throw new Error("Unsupported mutation receipt policy");
   if (record.compactMutationReceipts && record.legacyOutputRecall)
-    throw new Error(
-      "Mutation receipts require journal-authority output recall",
-    );
-  if (
-    record.legacyOutputRecall !== undefined &&
-    record.legacyOutputRecall !== true
-  )
+    throw new Error("Mutation receipts require journal-authority output recall");
+  if (record.legacyOutputRecall !== undefined && record.legacyOutputRecall !== true)
     throw new Error("Unsupported output recall compatibility policy");
   if (
     record.environmentAuditRetry !== undefined &&
@@ -473,14 +412,12 @@ function parseProfileV3(
     throw new Error("Audit retry requires environment auditing");
   if (
     record.environmentAuditEvidenceRepair !== undefined &&
-    (record.environmentAuditEvidenceRepair !== true ||
-      record.environmentAuditSinglePass !== true)
+    (record.environmentAuditEvidenceRepair !== true || record.environmentAuditSinglePass !== true)
   )
     throw new Error("Audit evidence repair requires single-pass auditing");
   if (
     record.environmentAuditSinglePass !== undefined &&
-    (record.environmentAuditSinglePass !== true ||
-      record.environmentAudit !== true)
+    (record.environmentAuditSinglePass !== true || record.environmentAudit !== true)
   )
     throw new Error("Single-pass audit requires environment auditing");
   if (record.environmentAudit !== undefined && record.environmentAudit !== true)
@@ -543,18 +480,12 @@ function parseProfileV3(
     ...(record.legacyOutputRecall ? { legacyOutputRecall: true as const } : {}),
     approval: record.approval,
     ...(record.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(record.environmentAuditRetry
-      ? { environmentAuditRetry: true as const }
-      : {}),
-    ...(record.environmentAuditSinglePass
-      ? { environmentAuditSinglePass: true as const }
-      : {}),
+    ...(record.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
+    ...(record.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
     ...(record.environmentAuditEvidenceRepair
       ? { environmentAuditEvidenceRepair: true as const }
       : {}),
-    ...(record.compactMutationReceipts
-      ? { compactMutationReceipts: true as const }
-      : {}),
+    ...(record.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
     ...(record.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(record.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(record.stageGraph ? { stageGraph: true as const } : {}),
@@ -566,24 +497,15 @@ function parseProfileV3(
     payloadRuntime: freezeFileDurableJsonPayloadRuntimePolicyV1(
       record.payloadRuntime as FileDurableJsonPayloadRuntimePolicyV1,
     ),
-    ...(record.mcp === undefined
-      ? {}
-      : { mcp: parseMcpRuntimeV1(record.mcp, `${label}.mcp`) }),
+    ...(record.mcp === undefined ? {} : { mcp: parseMcpRuntimeV1(record.mcp, `${label}.mcp`) }),
     ...(record.memory === undefined
       ? {}
       : { memory: freezePawNextMemoryPluginProfileV1(record.memory) }),
   });
 }
 
-function parseMcpRuntimeV1(
-  value: unknown,
-  label: string,
-): PawNextMcpRuntimeProfileV1 {
-  const record = exactRecordInternal(value, label, [
-    "policyVersion",
-    "servers",
-    "allowedTools",
-  ]);
+function parseMcpRuntimeV1(value: unknown, label: string): PawNextMcpRuntimeProfileV1 {
+  const record = exactRecordInternal(value, label, ["policyVersion", "servers", "allowedTools"]);
   if (record.policyVersion !== PAW_NEXT_MCP_RUNTIME_POLICY_VERSION_V1) {
     throw new Error("Unsupported Paw Next MCP runtime policy version");
   }
@@ -622,9 +544,7 @@ function parseMcpRuntimeV1(
         throw new Error(`Invalid Paw Next MCP server env: ${parsed.name}`);
       }
       env = Object.fromEntries(
-        Object.entries(parsed.env as Record<string, string>).sort(([a], [b]) =>
-          a.localeCompare(b),
-        ),
+        Object.entries(parsed.env as Record<string, string>).sort(([a], [b]) => a.localeCompare(b)),
       );
     }
     serverNames.add(parsed.name);
@@ -677,33 +597,21 @@ function exactRecordWithOptionalKeysV1(
   return record;
 }
 
-function parseControlV3(
-  value: unknown,
-  label: string,
-): PawNextProductProfileV3["control"] {
+function parseControlV3(value: unknown, label: string): PawNextProductProfileV3["control"] {
   const record = exactRecordWithOptionalKeysV1(
     value,
     label,
-    [
-      "mode",
-      "maxModelTurns",
-      "naturalStop",
-      "maxSegments",
-      "maxTotalModelTurns",
-    ],
+    ["mode", "maxModelTurns", "naturalStop", "maxSegments", "maxTotalModelTurns"],
     ["liveSteering", "settleFinalToolBatch", "recoverReasoningTimeout"],
   );
   if (
-    (record.recoverReasoningTimeout !== undefined &&
-      record.recoverReasoningTimeout !== true) ||
+    (record.recoverReasoningTimeout !== undefined && record.recoverReasoningTimeout !== true) ||
     (record.liveSteering !== undefined && record.liveSteering !== true) ||
-    (record.settleFinalToolBatch !== undefined &&
-      record.settleFinalToolBatch !== true) ||
+    (record.settleFinalToolBatch !== undefined && record.settleFinalToolBatch !== true) ||
     record.mode !== "interactive" ||
     !Number.isSafeInteger(record.maxModelTurns) ||
     (record.maxModelTurns as number) <= 0 ||
-    (record.naturalStop !== "complete" &&
-      record.naturalStop !== "await_user") ||
+    (record.naturalStop !== "complete" && record.naturalStop !== "await_user") ||
     !Number.isSafeInteger(record.maxSegments) ||
     (record.maxSegments as number) <= 0 ||
     !Number.isSafeInteger(record.maxTotalModelTurns) ||
@@ -716,20 +624,14 @@ function parseControlV3(
     maxModelTurns: record.maxModelTurns as number,
     naturalStop: record.naturalStop,
     ...(record.liveSteering === true ? { liveSteering: true as const } : {}),
-    ...(record.recoverReasoningTimeout === true
-      ? { recoverReasoningTimeout: true as const }
-      : {}),
-    ...(record.settleFinalToolBatch === true
-      ? { settleFinalToolBatch: true as const }
-      : {}),
+    ...(record.recoverReasoningTimeout === true ? { recoverReasoningTimeout: true as const } : {}),
+    ...(record.settleFinalToolBatch === true ? { settleFinalToolBatch: true as const } : {}),
     maxSegments: record.maxSegments as number,
     maxTotalModelTurns: record.maxTotalModelTurns as number,
   });
 }
 
-function assertUniqueProfiles(
-  profiles: readonly PawNextProductProfileV3[],
-): void {
+function assertUniqueProfiles(profiles: readonly PawNextProductProfileV3[]): void {
   const revisions = new Set<string>();
   const hashes = new Set<string>();
   for (const profile of profiles) {

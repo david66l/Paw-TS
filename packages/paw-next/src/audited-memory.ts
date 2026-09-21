@@ -1,9 +1,6 @@
 import type { SessionInputSnapshot } from "@paw/agent-loop";
 import type { InputFactV1 } from "@paw/protocol";
-import {
-  ENVIRONMENT_AUDIT_POLICY_VERSION_V1,
-  fingerprintAuditFile,
-} from "./environment-audit.js";
+import { ENVIRONMENT_AUDIT_POLICY_VERSION_V1, fingerprintAuditFile } from "./environment-audit.js";
 
 export const AUDITED_MEMORY_POLICY_V1 = "paw.audited-memory.v1" as const;
 
@@ -16,8 +13,7 @@ export function memoryUserStatement(content: string): string {
   const end = content.indexOf(boundary, prefix.length);
   if (end < 0) return "";
   try {
-    if (!Array.isArray(JSON.parse(content.slice(prefix.length, end))))
-      return "";
+    if (!Array.isArray(JSON.parse(content.slice(prefix.length, end)))) return "";
     return content.slice(end + boundary.length);
   } catch {
     return "";
@@ -34,9 +30,7 @@ export function admittedMemorySourceSeqs(
   const allowed = new Set<number>();
   const feedbackIds = new Set(
     snapshot.entries.flatMap(({ fact }) =>
-      fact.type === "input.accepted" && fact.callerId === "completion-review"
-        ? [fact.inputId]
-        : [],
+      fact.type === "input.accepted" && fact.callerId === "completion-review" ? [fact.inputId] : [],
     ),
   );
   let segment: (typeof snapshot.entries)[number][] = [];
@@ -53,9 +47,7 @@ export function admittedMemorySourceSeqs(
     const settlement = [...segment]
       .reverse()
       .find(
-        ({ fact }) =>
-          fact.type === "completion.review_settled" &&
-          fact.reviewId === claim.reviewId,
+        ({ fact }) => fact.type === "completion.review_settled" && fact.reviewId === claim.reviewId,
       );
     const fact = settlement?.fact;
     if (!settlement || fact?.type !== "completion.review_settled") return;
@@ -100,10 +92,7 @@ export function admittedMemorySourceSeqs(
       segment = [];
     }
     segment.push(entry);
-    if (
-      entry.fact.type === "input.promoted" &&
-      !feedbackIds.has(entry.fact.inputId)
-    ) {
+    if (entry.fact.type === "input.promoted" && !feedbackIds.has(entry.fact.inputId)) {
       allowed.add(entry.seq);
     }
   }

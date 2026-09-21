@@ -99,9 +99,7 @@ describe("memory evidence support verifier", () => {
               text: '{"assessments":[{"requirementId":"unknown"}]}',
             };
           }
-          expect(request.user).toContain(
-            "paw.memory-evidence-support-repair-input.v1",
-          );
+          expect(request.user).toContain("paw.memory-evidence-support-repair-input.v1");
           return {
             status: "completed",
             text: JSON.stringify({

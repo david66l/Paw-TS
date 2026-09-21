@@ -24,18 +24,8 @@ const feb = "2025-02-01T00:00:00.000Z";
 describe("aspect edge admission policy", () => {
   test("admits role-grounded evidence but rejects generic topical supports", () => {
     const setup = setupGraph();
-    const eventSupport = edge(
-      setup.aspectId,
-      "workshop",
-      "concise-current",
-      "supports",
-    );
-    const genericSupport = edge(
-      setup.aspectId,
-      "friendly-tone",
-      "concise-current",
-      "supports",
-    );
+    const eventSupport = edge(setup.aspectId, "workshop", "concise-current", "supports");
+    const genericSupport = edge(setup.aspectId, "friendly-tone", "concise-current", "supports");
     const result = evaluateMemoryAspectEdgeAdmissionV1({
       snapshot: setup.snapshot,
       edges: [eventSupport, genericSupport],
@@ -52,18 +42,8 @@ describe("aspect edge admission policy", () => {
 
   test("requires both an explicit transition cue and discriminant overlap", () => {
     const setup = setupGraph();
-    const grounded = edge(
-      setup.aspectId,
-      "concise-current",
-      "detailed-old",
-      "supersedes",
-    );
-    const unrelated = edge(
-      setup.aspectId,
-      "friendly-tone",
-      "detailed-old",
-      "supersedes",
-    );
+    const grounded = edge(setup.aspectId, "concise-current", "detailed-old", "supersedes");
+    const unrelated = edge(setup.aspectId, "friendly-tone", "detailed-old", "supersedes");
     const result = evaluateMemoryAspectEdgeAdmissionV1({
       snapshot: setup.snapshot,
       edges: [grounded, unrelated],
@@ -114,10 +94,7 @@ function setupGraph() {
         "Now switched to concise responses instead of detailed responses",
       ),
       evidence("friendly-tone", "Prefers a friendly conversational tone"),
-      evidence(
-        "workshop",
-        "A writing workshop led to the concise response preference",
-      ),
+      evidence("workshop", "A writing workshop led to the concise response preference"),
     ],
   };
 }
@@ -132,11 +109,7 @@ function claim(id: string, validFrom: string) {
   });
 }
 
-function membership(
-  claimId: string,
-  aspectId: string,
-  role: "state" | "event",
-) {
+function membership(claimId: string, aspectId: string, role: "state" | "event") {
   return createMemoryClaimAspectMembershipV1({
     scope,
     claimId,

@@ -1,10 +1,7 @@
 import fs from "node:fs";
 
 import type { InputFactV1 } from "@paw/protocol";
-import {
-  FileRunSessionV1,
-  acquireFileSessionExecutionLeaseV1,
-} from "../../src/index.js";
+import { FileRunSessionV1, acquireFileSessionExecutionLeaseV1 } from "../../src/index.js";
 
 const [
   mode,

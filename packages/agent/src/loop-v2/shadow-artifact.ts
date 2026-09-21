@@ -19,14 +19,8 @@ import {
 import { decisionStateHash } from "./projector.js";
 import { replayLoopV2 } from "./replay.js";
 import { type RunOutcomeV2, deriveRunOutcomeV2 } from "./run-outcome.js";
-import type {
-  LoopV2ShadowReason,
-  LoopV2ShadowReport,
-} from "./shadow-runtime.js";
-import {
-  createLoopV2ShadowObserver,
-  observeLoopV2DurableEnvelopeV1,
-} from "./shadow-runtime.js";
+import type { LoopV2ShadowReason, LoopV2ShadowReport } from "./shadow-runtime.js";
+import { createLoopV2ShadowObserver, observeLoopV2DurableEnvelopeV1 } from "./shadow-runtime.js";
 
 export const LOOP_V2_SHADOW_ARTIFACT_SCHEMA_VERSION = 1 as const;
 
@@ -34,9 +28,7 @@ export interface LoopV2ShadowAssessmentV1 {
   readonly legacyTerminal: LoopV2ShadowReport["legacyTerminal"];
   readonly coverage: LoopV2ShadowReport["coverage"] & {
     readonly projectedRatio: number;
-    readonly gapsByReason: Readonly<
-      Partial<Record<LoopV2ShadowReason, number>>
-    >;
+    readonly gapsByReason: Readonly<Partial<Record<LoopV2ShadowReason, number>>>;
   };
   readonly facts: {
     readonly evidence: number;
@@ -93,16 +85,12 @@ export function buildLoopV2ShadowArtifactV1(
   return { ...withoutHash, artifactHash: sha256Canonical(withoutHash) };
 }
 
-export function serializeLoopV2ShadowArtifactV1(
-  artifact: LoopV2ShadowArtifactV1,
-): string {
+export function serializeLoopV2ShadowArtifactV1(artifact: LoopV2ShadowArtifactV1): string {
   assertLoopV2ShadowArtifactV1(artifact);
   return `${canonicalJson(artifact)}\n`;
 }
 
-export function parseLoopV2ShadowArtifactV1(
-  serialized: string,
-): LoopV2ShadowArtifactV1 {
+export function parseLoopV2ShadowArtifactV1(serialized: string): LoopV2ShadowArtifactV1 {
   let value: unknown;
   try {
     value = JSON.parse(serialized);
@@ -158,18 +146,14 @@ export function assessLoopV2ShadowReportV1(
         detail: "shadow artifact uses the mutation journal as primary evidence",
       })
     : undefined;
-  const artifactEvidence = materialized
-    ? artifactEvidenceV2(materialized)
-    : undefined;
+  const artifactEvidence = materialized ? artifactEvidenceV2(materialized) : undefined;
   const readiness =
     candidateProposed && artifactEvidence
       ? evaluateCandidateReadinessV2(report.state, artifactEvidence, policy)
       : undefined;
   const terminalStatus = report.legacyTerminal?.status;
   const interruptedBy =
-    terminalStatus === "failed" || terminalStatus === "aborted"
-      ? terminalStatus
-      : undefined;
+    terminalStatus === "failed" || terminalStatus === "aborted" ? terminalStatus : undefined;
   const v2Outcome = deriveRunOutcomeV2({
     candidateProposed,
     ...(readiness ? { readiness } : {}),
@@ -188,22 +172,17 @@ export function assessLoopV2ShadowReportV1(
   const gapsByReason: Partial<Record<LoopV2ShadowReason, number>> = {};
   for (const diagnostic of report.diagnostics) {
     if (diagnostic.disposition !== "gap") continue;
-    gapsByReason[diagnostic.reason] =
-      (gapsByReason[diagnostic.reason] ?? 0) + 1;
+    gapsByReason[diagnostic.reason] = (gapsByReason[diagnostic.reason] ?? 0) + 1;
   }
   const sortedGaps = Object.fromEntries(
-    Object.entries(gapsByReason).sort(([left], [right]) =>
-      left.localeCompare(right),
-    ),
+    Object.entries(gapsByReason).sort(([left], [right]) => left.localeCompare(right)),
   ) as Partial<Record<LoopV2ShadowReason, number>>;
   return {
     legacyTerminal: report.legacyTerminal,
     coverage: {
       ...report.coverage,
       projectedRatio:
-        report.coverage.observed === 0
-          ? 0
-          : report.coverage.projected / report.coverage.observed,
+        report.coverage.observed === 0 ? 0 : report.coverage.projected / report.coverage.observed,
       gapsByReason: sortedGaps,
     },
     facts: {
@@ -231,9 +210,7 @@ export function assertLoopV2ShadowArtifactV1(
 ): asserts value is LoopV2ShadowArtifactV1 {
   const record = asRecord(value, "artifact");
   if (record.schemaVersion !== LOOP_V2_SHADOW_ARTIFACT_SCHEMA_VERSION) {
-    throw new Error(
-      `Unsupported loop v2 shadow artifact schema: ${String(record.schemaVersion)}`,
-    );
+    throw new Error(`Unsupported loop v2 shadow artifact schema: ${String(record.schemaVersion)}`);
   }
   if (record.kind !== "paw.loop-v2-shadow") {
     throw new Error("Invalid loop v2 shadow artifact kind");
@@ -253,9 +230,7 @@ export function assertLoopV2ShadowArtifactV1(
   }
 }
 
-function normalizePolicy(
-  policy: CandidateReadinessPolicyV2,
-): LoopV2ShadowArtifactPolicyV1 {
+function normalizePolicy(policy: CandidateReadinessPolicyV2): LoopV2ShadowArtifactPolicyV1 {
   if (
     policy.requireProductMutation !== undefined &&
     typeof policy.requireProductMutation !== "boolean"
@@ -273,19 +248,14 @@ function normalizePolicy(
   if (
     policy.requiredVerificationScopes !== undefined &&
     (!Array.isArray(policy.requiredVerificationScopes) ||
-      policy.requiredVerificationScopes.some(
-        (scope) => typeof scope !== "string",
-      ))
+      policy.requiredVerificationScopes.some((scope) => typeof scope !== "string"))
   ) {
-    throw new Error(
-      "Loop v2 shadow requiredVerificationScopes must be strings",
-    );
+    throw new Error("Loop v2 shadow requiredVerificationScopes must be strings");
   }
   const requireProductMutation = policy.requireProductMutation ?? true;
   const verificationAuthority =
     policy.verificationAuthority ??
-    (policy.requireAuthoritativeVerification === false ||
-    !requireProductMutation
+    (policy.requireAuthoritativeVerification === false || !requireProductMutation
       ? "not_required"
       : "local");
   return {
@@ -293,17 +263,13 @@ function normalizePolicy(
     verificationAuthority,
     requiredVerificationScopes: [
       ...new Set(
-        (policy.requiredVerificationScopes ?? [])
-          .map((scope) => scope.trim())
-          .filter(Boolean),
+        (policy.requiredVerificationScopes ?? []).map((scope) => scope.trim()).filter(Boolean),
       ),
     ].sort(),
   };
 }
 
-export function assertLoopV2ShadowReportIntegrity(
-  report: LoopV2ShadowReport,
-): void {
+export function assertLoopV2ShadowReportIntegrity(report: LoopV2ShadowReport): void {
   const record = asRecord(report, "report");
   if (typeof record.runId !== "string" || !record.runId.trim()) {
     throw new Error("Loop v2 shadow report runId is missing");
@@ -318,10 +284,7 @@ export function assertLoopV2ShadowReportIntegrity(
   if (decisionStateHash(report.state) !== report.stateHash) {
     throw new Error("Loop v2 shadow state hash mismatch");
   }
-  if (
-    (report.controlState === undefined) !==
-    (report.controlStateHash === undefined)
-  ) {
+  if ((report.controlState === undefined) !== (report.controlStateHash === undefined)) {
     throw new Error("Loop v2 shadow control state is incomplete");
   }
   if (report.controlState && report.controlStateHash) {
@@ -330,9 +293,7 @@ export function assertLoopV2ShadowReportIntegrity(
       return input ? [input] : [];
     });
     const controlReplay = replayControlFactsV1(record.runId, inputs);
-    if (
-      canonicalJson(controlReplay.state) !== canonicalJson(report.controlState)
-    ) {
+    if (canonicalJson(controlReplay.state) !== canonicalJson(report.controlState)) {
       throw new Error("Loop v2 shadow control state mismatch");
     }
     if (controlStateHashV1(report.controlState) !== report.controlStateHash) {
@@ -371,15 +332,10 @@ export function assertLoopV2ShadowReportIntegrity(
   }
   const counts = {
     observed: report.diagnostics.length,
-    projected: report.diagnostics.filter(
-      (diagnostic) => diagnostic.disposition === "projected",
-    ).length,
-    gaps: report.diagnostics.filter(
-      (diagnostic) => diagnostic.disposition === "gap",
-    ).length,
-    ignored: report.diagnostics.filter(
-      (diagnostic) => diagnostic.disposition === "ignored",
-    ).length,
+    projected: report.diagnostics.filter((diagnostic) => diagnostic.disposition === "projected")
+      .length,
+    gaps: report.diagnostics.filter((diagnostic) => diagnostic.disposition === "gap").length,
+    ignored: report.diagnostics.filter((diagnostic) => diagnostic.disposition === "ignored").length,
   };
   let priorSourceSeq = 0;
   for (const diagnostic of report.diagnostics) {
@@ -410,9 +366,7 @@ export function assertLoopV2ShadowReportIntegrity(
   }
 }
 
-function referencedContentArtifacts(
-  report: LoopV2ShadowReport,
-): readonly string[] {
+function referencedContentArtifacts(report: LoopV2ShadowReport): readonly string[] {
   const refs: string[] = [];
   for (const evidence of Object.values(report.state.evidence)) {
     const ref = evidence.observation.artifactRef;
@@ -449,10 +403,7 @@ function compareTerminal(
   return "aligned_noncompleted";
 }
 
-function asRecord(
-  value: unknown,
-  label: string,
-): Readonly<Record<string, unknown>> {
+function asRecord(value: unknown, label: string): Readonly<Record<string, unknown>> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`Loop v2 shadow ${label} must be an object`);
   }

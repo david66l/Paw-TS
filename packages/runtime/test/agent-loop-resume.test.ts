@@ -10,11 +10,7 @@ import {
   createInteractiveControlReducerV1,
   runAgentLoop,
 } from "@paw/agent-loop";
-import type {
-  ControlDecisionActionV1,
-  DerivedDecisionV1,
-  InputFactV1,
-} from "@paw/protocol";
+import type { ControlDecisionActionV1, DerivedDecisionV1, InputFactV1 } from "@paw/protocol";
 import {
   EMPTY_RUN_JOURNAL_PREFIX_HASH_V1,
   FileRunSessionV1,
@@ -43,14 +39,10 @@ describe("File Session Agent Loop resume", () => {
       action: { kind: "continue", reasonCode: "continue" },
     };
     await fixture.session.appendInputFacts([attemptStarted()]);
-    expect(await fixture.session.commitDerivedDecision(1, decision)).toBe(
-      "committed",
-    );
+    expect(await fixture.session.commitDerivedDecision(1, decision)).toBe("committed");
     const firstTail = (await fixture.session.readInputSnapshot()).tailSeq;
 
-    expect(
-      await fixture.session.commitDerivedDecision(firstTail, decision),
-    ).toBe("committed");
+    expect(await fixture.session.commitDerivedDecision(firstTail, decision)).toBe("committed");
     expect((await fixture.session.readInputSnapshot()).tailSeq).toBe(firstTail);
     expect(await fixture.session.readCanonicalPrefix()).toHaveLength(2);
     let conflictingDecisionError: unknown;
@@ -63,9 +55,7 @@ describe("File Session Agent Loop resume", () => {
       conflictingDecisionError = error;
     }
     expect(conflictingDecisionError).toBeInstanceOf(Error);
-    expect((conflictingDecisionError as Error).message).toContain(
-      "conflicting derived decision",
-    );
+    expect((conflictingDecisionError as Error).message).toContain("conflicting derived decision");
     let decisionAndInputError: unknown;
     try {
       await fixture.session.commitDecisionAndInputFacts(firstTail, decision, [
@@ -78,21 +68,15 @@ describe("File Session Agent Loop resume", () => {
     expect((await fixture.session.readInputSnapshot()).tailSeq).toBe(firstTail);
 
     expect(
-      await fixture.session.commitInputFacts(firstTail, [
-        modelDispatch(1, "repair-model"),
-      ]),
+      await fixture.session.commitInputFacts(firstTail, [modelDispatch(1, "repair-model")]),
     ).toBe("committed");
-    expect((await fixture.session.readInputSnapshot()).tailSeq).toBe(
-      firstTail + 1,
-    );
+    expect((await fixture.session.readInputSnapshot()).tailSeq).toBe(firstTail + 1);
     await fixture.close();
   });
 
   test("a durably repaired unknown model result terminates on startup with zero model call", async () => {
     const fixture = fileSessionFixture();
-    await fixture.session.appendInputFacts([
-      modelDispatch(1, "model-crashed-after-dispatch"),
-    ]);
+    await fixture.session.appendInputFacts([modelDispatch(1, "model-crashed-after-dispatch")]);
     const repair = await repairRunRecoveryV1({ session: fixture.session });
     expect(repair.status).toBe("repaired");
     expect(repair.repairedFacts).toEqual([
@@ -188,32 +172,22 @@ function terminalOnlyFactMapper() {
       throw new Error("model intent must not be mapped during terminal resume");
     },
     modelSettled(): never {
-      throw new Error(
-        "model settlement must not be mapped during terminal resume",
-      );
+      throw new Error("model settlement must not be mapped during terminal resume");
     },
     toolCallObserved(): never {
-      throw new Error(
-        "tool observation must not be mapped during terminal resume",
-      );
+      throw new Error("tool observation must not be mapped during terminal resume");
     },
     toolDispatchIntent(): never {
-      throw new Error(
-        "tool dispatch must not be mapped during terminal resume",
-      );
+      throw new Error("tool dispatch must not be mapped during terminal resume");
     },
     toolSettled(): never {
-      throw new Error(
-        "tool settlement must not be mapped during terminal resume",
-      );
+      throw new Error("tool settlement must not be mapped during terminal resume");
     },
     runAbortObserved(): never {
       throw new Error("abort must not be mapped during terminal resume");
     },
     runtimeFailed(): never {
-      throw new Error(
-        "runtime failure must not be mapped during terminal resume",
-      );
+      throw new Error("runtime failure must not be mapped during terminal resume");
     },
     derivedDecision(input: {
       readonly state: InteractiveControlStateV1;
@@ -232,9 +206,7 @@ function terminalOnlyFactMapper() {
   };
 }
 
-function decisionAction(
-  decision: InteractiveControlStateV1["decision"],
-): ControlDecisionActionV1 {
+function decisionAction(decision: InteractiveControlStateV1["decision"]): ControlDecisionActionV1 {
   switch (decision.kind) {
     case "continue":
       return { kind: "continue", reasonCode: "continue" };

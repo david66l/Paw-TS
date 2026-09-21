@@ -6,17 +6,11 @@ import {
   advanceRepeatToolReminder,
 } from "../src/lifecycle/repeat-tool-reminder.js";
 
-function call(
-  tool: string,
-  args: Record<string, unknown>,
-): AgentToolCallAction {
+function call(tool: string, args: Record<string, unknown>): AgentToolCallAction {
   return { type: "tool_call", tool, args };
 }
 
-function advance(
-  state: RepeatToolState | undefined,
-  next: AgentToolCallAction,
-) {
+function advance(state: RepeatToolState | undefined, next: AgentToolCallAction) {
   return advanceRepeatToolReminder(state, [next]);
 }
 

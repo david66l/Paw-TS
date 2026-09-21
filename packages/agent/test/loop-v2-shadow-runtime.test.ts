@@ -16,11 +16,7 @@ import {
 } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
-function legacyEnvelope(
-  seq: number,
-  event: RunEvent,
-  runId = "shadow-r19",
-): RunEventEnvelope {
+function legacyEnvelope(seq: number, event: RunEvent, runId = "shadow-r19"): RunEventEnvelope {
   return { runId, seq, ts: 10_000 + seq, event };
 }
 
@@ -71,19 +67,13 @@ describe("Loop Kernel v2 shadow migration", () => {
       controlState: { turn: number };
     };
     tampered.controlState.turn = 2;
-    expect(() => assertLoopV2ShadowReportIntegrity(tampered)).toThrow(
-      "control state mismatch",
-    );
+    expect(() => assertLoopV2ShadowReportIntegrity(tampered)).toThrow("control state mismatch");
   });
 
   test("legacy final_answer without a natural boundary is explicit control intent", () => {
     const observer = createLoopV2ShadowObserver("shadow-legacy-candidate");
     observer.observe(
-      legacyEnvelope(
-        1,
-        { type: "run.started", goal: "Return status" },
-        "shadow-legacy-candidate",
-      ),
+      legacyEnvelope(1, { type: "run.started", goal: "Return status" }, "shadow-legacy-candidate"),
     );
     observer.observe(
       legacyEnvelope(
@@ -107,9 +97,7 @@ describe("Loop Kernel v2 shadow migration", () => {
   test("host stable checkpoint is review-only and cannot submit or certify a candidate", () => {
     const runId = "shadow-host-checkpoint";
     const observer = createLoopV2ShadowObserver(runId);
-    observer.observe(
-      legacyEnvelope(1, { type: "run.started", goal: "Change source" }, runId),
-    );
+    observer.observe(legacyEnvelope(1, { type: "run.started", goal: "Change source" }, runId));
     observer.observe(
       legacyEnvelope(
         2,
@@ -139,11 +127,7 @@ describe("Loop Kernel v2 shadow migration", () => {
       },
     });
     observer.observe(
-      legacyEnvelope(
-        3,
-        { type: "candidate.checkpoint", mutationRevision: 1 },
-        runId,
-      ),
+      legacyEnvelope(3, { type: "candidate.checkpoint", mutationRevision: 1 }, runId),
     );
     const checkpoint = observer.snapshot().state.currentCandidate;
     if (!checkpoint) throw new Error("host checkpoint was not projected");
@@ -261,9 +245,7 @@ describe("Loop Kernel v2 shadow migration", () => {
     const restored = restoreLoopV2ProjectionObserver(before);
 
     expect(restored.snapshot()).toEqual(before);
-    restored.observe(
-      legacyEnvelope(9, { type: "phase", name: "model" }, "shadow-restore"),
-    );
+    restored.observe(legacyEnvelope(9, { type: "phase", name: "model" }, "shadow-restore"));
     expect(restored.snapshot()).toMatchObject({
       sourceThroughSeq: 9,
       stateHash: before.stateHash,
@@ -274,11 +256,7 @@ describe("Loop Kernel v2 shadow migration", () => {
     const runId = "shadow-natural-checkpoint";
     const full = createLoopV2ShadowObserver(runId);
     const prefix = createLoopV2ShadowObserver(runId);
-    const started = legacyEnvelope(
-      1,
-      { type: "run.started", goal: "Inspect the result" },
-      runId,
-    );
+    const started = legacyEnvelope(1, { type: "run.started", goal: "Inspect the result" }, runId);
     const stopped = legacyEnvelope(
       2,
       { type: "provider.turn_stopped", turn: 1, empty: false },
@@ -299,16 +277,12 @@ describe("Loop Kernel v2 shadow migration", () => {
     restored.observe(final);
 
     expect(restored.snapshot()).toEqual(full.snapshot());
-    expect(restored.snapshot().state.currentCandidate?.source).toBe(
-      "natural_stop_adapter",
-    );
+    expect(restored.snapshot().state.currentCandidate?.source).toBe("natural_stop_adapter");
   });
 
   test("rich read facts project exact coverage while repeated spans stay non-progress", () => {
     const observer = createLoopV2ShadowObserver("shadow-r19");
-    observer.observe(
-      legacyEnvelope(1, { type: "run.started", goal: "Inspect src/a.ts" }),
-    );
+    observer.observe(legacyEnvelope(1, { type: "run.started", goal: "Inspect src/a.ts" }));
     for (const seq of [2, 3]) {
       observer.observe(
         legacyEnvelope(seq, {
@@ -421,9 +395,7 @@ describe("Loop Kernel v2 shadow migration", () => {
 
   test("rich search is hashed from raw results and a racing mutation stays a gap", () => {
     const observer = createLoopV2ShadowObserver("shadow-r19");
-    observer.observe(
-      legacyEnvelope(1, { type: "run.started", goal: "Find the symbol" }),
-    );
+    observer.observe(legacyEnvelope(1, { type: "run.started", goal: "Find the symbol" }));
     observer.observe(
       legacyEnvelope(2, {
         type: "tool.result",
@@ -470,18 +442,14 @@ describe("Loop Kernel v2 shadow migration", () => {
 
     const report = observer.snapshot();
     expect(Object.values(report.state.evidence)).toHaveLength(1);
-    expect(Object.values(report.state.evidence)[0]?.observation.kind).toBe(
-      "search",
-    );
+    expect(Object.values(report.state.evidence)[0]?.observation.kind).toBe("search");
     expect(report.coverage).toEqual({
       observed: 3,
       projected: 2,
       gaps: 1,
       ignored: 0,
     });
-    expect(report.diagnostics.at(-1)?.reason).toBe(
-      "rich_concurrent_mutation_ambiguous",
-    );
+    expect(report.diagnostics.at(-1)?.reason).toBe("rich_concurrent_mutation_ambiguous");
   });
 
   test("two captured file commits form a continuous, reconstructible mutation journal", () => {
@@ -525,18 +493,15 @@ describe("Loop Kernel v2 shadow migration", () => {
 
     const report = observer.snapshot();
     const mutations = Object.values(report.state.mutations);
-    expect(mutations.map((mutation) => mutation.mutationRevision)).toEqual([
-      1, 2,
-    ]);
+    expect(mutations.map((mutation) => mutation.mutationRevision)).toEqual([1, 2]);
     expect(report.diagnostics.slice(1).map((item) => item.reason)).toEqual([
       "rich_mutation_projected",
       "rich_mutation_projected",
     ]);
-    const artifact = materializeCandidateArtifactV2(
-      mutations,
-      report.artifactBlobs,
-      { status: "unavailable", detail: "shadow does not require Git" },
-    );
+    const artifact = materializeCandidateArtifactV2(mutations, report.artifactBlobs, {
+      status: "unavailable",
+      detail: "shadow does not require Git",
+    });
     expect(artifact.status).toBe("valid");
     expect(artifact.changedPaths).toEqual(["src/value.py"]);
     expect(artifact.patch).toContain("+value = 2");
@@ -545,9 +510,7 @@ describe("Loop Kernel v2 shadow migration", () => {
 
   test("unbounded mutation captures stay explicit gaps", () => {
     const observer = createLoopV2ShadowObserver("shadow-r19");
-    observer.observe(
-      legacyEnvelope(1, { type: "run.started", goal: "Change safely" }),
-    );
+    observer.observe(legacyEnvelope(1, { type: "run.started", goal: "Change safely" }));
     observer.observe(
       legacyEnvelope(2, {
         type: "tool.result",
@@ -618,9 +581,7 @@ describe("Loop Kernel v2 shadow migration", () => {
 
   test("verification projects only with a no-mutation effect audit", () => {
     const observer = createLoopV2ShadowObserver("shadow-r19");
-    observer.observe(
-      legacyEnvelope(1, { type: "run.started", goal: "Run the tests" }),
-    );
+    observer.observe(legacyEnvelope(1, { type: "run.started", goal: "Run the tests" }));
     observer.observe(
       legacyEnvelope(2, {
         type: "tool.result",
@@ -671,9 +632,7 @@ describe("Loop Kernel v2 shadow migration", () => {
       outcome: "passed",
       authoritative: true,
     });
-    expect(report.diagnostics.at(-1)?.reason).toBe(
-      "rich_verification_projected",
-    );
+    expect(report.diagnostics.at(-1)?.reason).toBe("rich_verification_projected");
   });
 
   test("R19 projects only facts proved by the legacy event contract", () => {
@@ -700,9 +659,7 @@ describe("Loop Kernel v2 shadow migration", () => {
         ok: true,
         summary: "Edited src/a.ts",
         workspaceEffect: { changed: true, paths: ["src/a.ts"] },
-        fileChanges: [
-          { path: "src/a.ts", added: 1, removed: 1, diff: "truncated" },
-        ],
+        fileChanges: [{ path: "src/a.ts", added: 1, removed: 1, diff: "truncated" }],
       }),
     );
     observer.observe(
@@ -715,9 +672,7 @@ describe("Loop Kernel v2 shadow migration", () => {
     const report = observer.snapshot();
     expect(report.projectedEvents).toHaveLength(2);
     expect(report.projectedEvents[0]?.event.type).toBe("task.started");
-    expect(report.state.goal?.verbatim).toBe(
-      "Fix the bug and verify the behavior.",
-    );
+    expect(report.state.goal?.verbatim).toBe("Fix the bug and verify the behavior.");
     expect(Object.keys(report.state.evidence)).toHaveLength(0);
     expect(Object.keys(report.state.mutations)).toHaveLength(0);
     expect(report.state.currentCandidate).toMatchObject({
@@ -767,9 +722,7 @@ describe("Loop Kernel v2 shadow migration", () => {
     if (!finalEvent) throw new Error("Expected a final fixture event");
     expect(() => first.observe(finalEvent)).toThrow(/sequence must increase/);
     expect(() =>
-      first.observe(
-        legacyEnvelope(4, { type: "run.started", goal: "x" }, "other"),
-      ),
+      first.observe(legacyEnvelope(4, { type: "run.started", goal: "x" }, "other")),
     ).toThrow(/run mismatch/);
   });
 
@@ -822,18 +775,12 @@ describe("Loop Kernel v2 shadow migration", () => {
     const report = shadow.getLastLoopV2ShadowReport();
     const terminal = [...shadowEvents]
       .reverse()
-      .find(
-        (item) =>
-          item.event.type === "run.completed" ||
-          item.event.type === "run.failed",
-      );
+      .find((item) => item.event.type === "run.completed" || item.event.type === "run.failed");
     expect(report?.sourceThroughSeq).toBe(terminal?.seq);
     expect(report?.projectedEvents).toHaveLength(3);
     expect(Object.keys(report?.state.evidence ?? {})).toHaveLength(1);
     expect(
-      report?.diagnostics.some(
-        (diagnostic) => diagnostic.reason === "rich_read_projected",
-      ),
+      report?.diagnostics.some((diagnostic) => diagnostic.reason === "rich_read_projected"),
     ).toBe(true);
     expect(terminalReports).toBe(1);
   });
@@ -870,9 +817,7 @@ describe("Loop Kernel v2 shadow migration", () => {
 
     expect(result.status).toBe("completed");
     expect(calls).toBe(1);
-    expect(
-      events.filter((event) => event.event.type === "provider.turn_stopped"),
-    ).toHaveLength(1);
+    expect(events.filter((event) => event.event.type === "provider.turn_stopped")).toHaveLength(1);
     const report = shadow.getLastLoopV2ShadowReport();
     expect(report?.controlState).toMatchObject({
       status: "running",
@@ -906,11 +851,9 @@ describe("Loop Kernel v2 shadow migration", () => {
     expect(mutations[0]?.paths).toEqual(["hello.txt"]);
     expect(mutations[0]?.beforeHashes["hello.txt"]).toBeNull();
     expect(mutations[0]?.afterHashes["hello.txt"]).toMatch(/^sha256:/);
-    expect(
-      report?.diagnostics.some(
-        (item) => item.reason === "rich_mutation_projected",
-      ),
-    ).toBe(true);
+    expect(report?.diagnostics.some((item) => item.reason === "rich_mutation_projected")).toBe(
+      true,
+    );
     expect(report?.state.currentCandidate).toMatchObject({
       mutationRevision: 1,
     });
@@ -1054,13 +997,9 @@ describe("Loop Kernel v2 shadow migration", () => {
     expect(report.coverage.gaps).toBe(0);
     expect(report.state.currentMutationRevision).toBe(0);
     expect(
-      report.diagnostics.filter(
-        (item) => item.reason === "rich_mutation_no_effect",
-      ),
+      report.diagnostics.filter((item) => item.reason === "rich_mutation_no_effect"),
     ).toHaveLength(1);
-    expect(
-      report.diagnostics.filter((item) => item.reason === "rich_tool_failed"),
-    ).toHaveLength(1);
+    expect(report.diagnostics.filter((item) => item.reason === "rich_tool_failed")).toHaveLength(1);
   });
 
   test("a convergence-policy rejected shell is an audited no-op, not a mutation gap", async () => {
@@ -1139,11 +1078,7 @@ describe("Loop Kernel v2 shadow migration", () => {
     if (!report) throw new Error("Missing shadow report");
     expect(report.coverage.gaps).toBe(0);
     expect(report.state.currentMutationRevision).toBe(1);
-    expect(
-      report.diagnostics.some(
-        (item) => item.reason === "rich_mutation_no_effect",
-      ),
-    ).toBe(true);
+    expect(report.diagnostics.some((item) => item.reason === "rich_mutation_no_effect")).toBe(true);
     expect(Object.values(report.state.verification)).toHaveLength(1);
   });
 
@@ -1244,10 +1179,7 @@ describe("Loop Kernel v2 shadow migration", () => {
     );
     expect(artifact.status).toBe("valid");
     expect(artifact.patch).toContain("+after");
-    const readiness = evaluateCandidateReadinessV2(
-      report.state,
-      artifactEvidenceV2(artifact),
-    );
+    const readiness = evaluateCandidateReadinessV2(report.state, artifactEvidenceV2(artifact));
     expect(readiness).toMatchObject({
       disposition: "ready_for_review",
       readyForSemanticReview: true,

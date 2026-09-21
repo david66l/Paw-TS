@@ -1,9 +1,6 @@
 import { getSql } from "@paw/memory/db";
 
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 import {
   type MemoryTopicDossierV1,
   PAW_MEMORY_TOPIC_DOSSIER_EXTRACTOR_VERSION_V1,
@@ -31,14 +28,8 @@ export interface MemoryTopicDossierStoreV1 {
     }>,
     signal: AbortSignal,
   ): Promise<MemoryTopicDossierV1 | undefined>;
-  getCurrent(
-    topicId: string,
-    signal: AbortSignal,
-  ): Promise<MemoryTopicDossierV1 | undefined>;
-  put(
-    dossier: MemoryTopicDossierV1,
-    signal: AbortSignal,
-  ): Promise<Readonly<{ inserted: boolean }>>;
+  getCurrent(topicId: string, signal: AbortSignal): Promise<MemoryTopicDossierV1 | undefined>;
+  put(dossier: MemoryTopicDossierV1, signal: AbortSignal): Promise<Readonly<{ inserted: boolean }>>;
 }
 
 export function createPostgresMemoryTopicDossierStoreV1(
@@ -52,10 +43,7 @@ export function createPostgresMemoryTopicDossierStoreV1(
 
   return Object.freeze({
     scope,
-    async getExact(
-      key: Parameters<MemoryTopicDossierStoreV1["getExact"]>[0],
-      signal: AbortSignal,
-    ) {
+    async getExact(key: Parameters<MemoryTopicDossierStoreV1["getExact"]>[0], signal: AbortSignal) {
       const started = Date.now();
       if (signal.aborted) throw abortError();
       const sql = getSql();

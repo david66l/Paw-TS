@@ -9,8 +9,7 @@ import {
 } from "./aspect-graph.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
 
-export const PAW_MEMORY_ASPECT_GRAPH_GOLD_VERSION_V1 =
-  "paw.memory-aspect-graph-gold.v1" as const;
+export const PAW_MEMORY_ASPECT_GRAPH_GOLD_VERSION_V1 = "paw.memory-aspect-graph-gold.v1" as const;
 export const PAW_MEMORY_ASPECT_GRAPH_GOLD_EVAL_VERSION_V1 =
   "paw.memory-aspect-graph-gold-eval.v1" as const;
 
@@ -67,9 +66,7 @@ export interface MemoryAspectGraphGoldEvaluationV1 {
   readonly currentStateExactMatch: number;
 }
 
-export function deriveMemoryAspectCorpusRevisionV1(
-  snapshot: MemoryAspectGraphSnapshotV1,
-): string {
+export function deriveMemoryAspectCorpusRevisionV1(snapshot: MemoryAspectGraphSnapshotV1): string {
   measureMemoryAspectGraphV1(snapshot);
   return hashCanonicalJsonV1({
     schemaVersion: "paw.memory-aspect-corpus.v1",
@@ -96,19 +93,13 @@ export function createMemoryAspectGraphGoldV1(
   const claimIds = new Set(input.snapshot.claims.map((claim) => claim.id));
   const pairs = normalizePairs(input.pairs ?? [], claimIds);
   const edges = normalizeEdges(input.edges ?? [], claimIds);
-  const currentStates = normalizeCurrentStates(
-    input.currentStates ?? [],
-    claimIds,
-  );
+  const currentStates = normalizeCurrentStates(input.currentStates ?? [], claimIds);
   if (pairs.length + edges.length + currentStates.length === 0) {
     throw namedError("MemoryAspectGoldAnnotationsMissing");
   }
   return Object.freeze({
     schemaVersion: PAW_MEMORY_ASPECT_GRAPH_GOLD_VERSION_V1,
-    annotationSetId: text(
-      input.annotationSetId,
-      "MemoryAspectGoldSetIdInvalid",
-    ),
+    annotationSetId: text(input.annotationSetId, "MemoryAspectGoldSetIdInvalid"),
     corpusRevision: deriveMemoryAspectCorpusRevisionV1(input.snapshot),
     pairs,
     edges,
@@ -135,11 +126,7 @@ export function parseMemoryAspectGraphGoldV1(
     snapshot,
     annotationSetId: stringValue(root.annotationSetId),
     pairs: arrayValue(root.pairs).map((item) => {
-      const record = exactRecord(item, [
-        "leftClaimId",
-        "rightClaimId",
-        "sameAspect",
-      ]);
+      const record = exactRecord(item, ["leftClaimId", "rightClaimId", "sameAspect"]);
       return {
         leftClaimId: stringValue(record.leftClaimId),
         rightClaimId: stringValue(record.rightClaimId),
@@ -147,12 +134,7 @@ export function parseMemoryAspectGraphGoldV1(
       };
     }),
     edges: arrayValue(root.edges).map((item) => {
-      const record = exactRecord(item, [
-        "fromClaimId",
-        "toClaimId",
-        "edgeType",
-        "present",
-      ]);
+      const record = exactRecord(item, ["fromClaimId", "toClaimId", "edgeType", "present"]);
       return {
         fromClaimId: stringValue(record.fromClaimId),
         toClaimId: stringValue(record.toClaimId),
@@ -161,11 +143,7 @@ export function parseMemoryAspectGraphGoldV1(
       };
     }),
     currentStates: arrayValue(root.currentStates).map((item) => {
-      const record = exactRecord(item, [
-        "anchorClaimIds",
-        "asOf",
-        "currentClaimIds",
-      ]);
+      const record = exactRecord(item, ["anchorClaimIds", "asOf", "currentClaimIds"]);
       return {
         anchorClaimIds: arrayValue(record.anchorClaimIds).map(stringValue),
         asOf: stringValue(record.asOf),
@@ -195,26 +173,19 @@ export function evaluateMemoryAspectGraphGoldV1(
       .filter(
         (edge) =>
           !snapshot.lifecycleEvents.some(
-            (event) =>
-              event.targetKind === "edge" && event.targetId === edge.id,
+            (event) => event.targetKind === "edge" && event.targetId === edge.id,
           ),
       )
       .map((edge) => edgeKey(edge.fromClaimId, edge.toClaimId, edge.edgeType)),
   );
   const edgeOutcomes = gold.edges.map((item) => ({
     expected: item.present,
-    actual: activeEdges.has(
-      edgeKey(item.fromClaimId, item.toClaimId, item.edgeType),
-    ),
+    actual: activeEdges.has(edgeKey(item.fromClaimId, item.toClaimId, item.edgeType)),
   }));
   const currentOutcomes: Array<{ expected: boolean; actual: boolean }> = [];
   let exact = 0;
   for (const item of gold.currentStates) {
-    const actual = currentClaimsForAnchors(
-      snapshot,
-      item.anchorClaimIds,
-      item.asOf,
-    );
+    const actual = currentClaimsForAnchors(snapshot, item.anchorClaimIds, item.asOf);
     const expected = new Set(item.currentClaimIds);
     for (const claimId of new Set([...actual, ...expected])) {
       currentOutcomes.push({
@@ -232,8 +203,7 @@ export function evaluateMemoryAspectGraphGoldV1(
     evidenceEdges: classificationMetrics(edgeOutcomes),
     currentState: classificationMetrics(currentOutcomes),
     currentStateCaseCount: gold.currentStates.length,
-    currentStateExactMatch:
-      gold.currentStates.length === 0 ? 0 : exact / gold.currentStates.length,
+    currentStateExactMatch: gold.currentStates.length === 0 ? 0 : exact / gold.currentStates.length,
   });
 }
 
@@ -242,9 +212,7 @@ function claimsShareAspect(
   leftClaimId: string,
   rightClaimId: string,
 ): boolean {
-  const left = new Set(
-    resolvedClaimStates(snapshot, leftClaimId).map(stateIdentity),
-  );
+  const left = new Set(resolvedClaimStates(snapshot, leftClaimId).map(stateIdentity));
   return resolvedClaimStates(snapshot, rightClaimId).some((state) =>
     left.has(stateIdentity(state)),
   );
@@ -267,17 +235,13 @@ function resolvedClaimStates(
       .filter(
         (event) =>
           event.targetKind === "membership" &&
-          (asOf === undefined ||
-            Date.parse(event.occurredAt) <= Date.parse(asOf)),
+          (asOf === undefined || Date.parse(event.occurredAt) <= Date.parse(asOf)),
       )
       .map((event) => event.targetId),
   );
-  const aspects = new Map(
-    snapshot.aspects.map((aspect) => [aspect.id, aspect]),
-  );
+  const aspects = new Map(snapshot.aspects.map((aspect) => [aspect.id, aspect]));
   for (const membership of snapshot.memberships) {
-    if (retracted.has(membership.id) || membership.claimId !== claimId)
-      continue;
+    if (retracted.has(membership.id) || membership.claimId !== claimId) continue;
     const aspect = aspects.get(membership.aspectId);
     const effectiveAspectIds =
       aspect?.status === "redirected"
@@ -293,9 +257,7 @@ function resolvedClaimStates(
     }
   }
   return Object.freeze(
-    [...result.values()].sort((a, b) =>
-      stateIdentity(a).localeCompare(stateIdentity(b)),
-    ),
+    [...result.values()].sort((a, b) => stateIdentity(a).localeCompare(stateIdentity(b))),
   );
 }
 
@@ -307,15 +269,11 @@ function currentClaimsForAnchors(
   const statesByAnchor = anchorClaimIds.map(
     (claimId) =>
       new Map(
-        resolvedClaimStates(snapshot, claimId, asOf).map((state) => [
-          stateIdentity(state),
-          state,
-        ]),
+        resolvedClaimStates(snapshot, claimId, asOf).map((state) => [stateIdentity(state), state]),
       ),
   );
   const first = statesByAnchor[0];
-  if (first === undefined)
-    throw namedError("MemoryAspectGoldCurrentStateAnchorMissing");
+  if (first === undefined) throw namedError("MemoryAspectGoldCurrentStateAnchorMissing");
   const shared = [...first].filter(([key]) =>
     statesByAnchor.slice(1).every((states) => states.has(key)),
   );
@@ -352,10 +310,7 @@ function normalizePairs(
     if (pair.leftClaimId === pair.rightClaimId) {
       throw namedError("MemoryAspectGoldPairSelfReference");
     }
-    const [leftClaimId, rightClaimId] = [
-      pair.leftClaimId,
-      pair.rightClaimId,
-    ].sort();
+    const [leftClaimId, rightClaimId] = [pair.leftClaimId, pair.rightClaimId].sort();
     const normalized = Object.freeze({
       leftClaimId: leftClaimId as string,
       rightClaimId: rightClaimId as string,
@@ -388,11 +343,7 @@ function normalizeEdges(
       edgeType: edgeTypeValue(edge.edgeType),
       present: booleanValue(edge.present),
     });
-    const key = edgeKey(
-      normalized.fromClaimId,
-      normalized.toClaimId,
-      normalized.edgeType,
-    );
+    const key = edgeKey(normalized.fromClaimId, normalized.toClaimId, normalized.edgeType);
     const previous = result.get(key);
     if (previous && previous.present !== normalized.present) {
       throw namedError("MemoryAspectGoldEdgeConflict");
@@ -423,10 +374,7 @@ function normalizeCurrentStates(
     });
     const key = `${normalized.anchorClaimIds.join("\n")}\n${normalized.asOf}`;
     const previous = result.get(key);
-    if (
-      previous &&
-      !sameSet(new Set(previous.currentClaimIds), new Set(currentClaimIds))
-    ) {
+    if (previous && !sameSet(new Set(previous.currentClaimIds), new Set(currentClaimIds))) {
       throw namedError("MemoryAspectGoldCurrentStateConflict");
     }
     result.set(key, normalized);
@@ -450,13 +398,9 @@ function classificationMetrics(
   const total = outcomes.length;
   const correct = truePositive + trueNegative;
   const precision =
-    truePositive + falsePositive === 0
-      ? 0
-      : truePositive / (truePositive + falsePositive);
+    truePositive + falsePositive === 0 ? 0 : truePositive / (truePositive + falsePositive);
   const recall =
-    truePositive + falseNegative === 0
-      ? 0
-      : truePositive / (truePositive + falseNegative);
+    truePositive + falseNegative === 0 ? 0 : truePositive / (truePositive + falseNegative);
   return Object.freeze({
     total,
     correct,
@@ -467,27 +411,18 @@ function classificationMetrics(
     accuracy: total === 0 ? 0 : correct / total,
     precision,
     recall,
-    f1:
-      precision + recall === 0
-        ? 0
-        : (2 * precision * recall) / (precision + recall),
+    f1: precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall),
   });
 }
 
-function comparePair(
-  left: MemoryAspectPairGoldV1,
-  right: MemoryAspectPairGoldV1,
-): number {
+function comparePair(left: MemoryAspectPairGoldV1, right: MemoryAspectPairGoldV1): number {
   return (
     left.leftClaimId.localeCompare(right.leftClaimId) ||
     left.rightClaimId.localeCompare(right.rightClaimId)
   );
 }
 
-function compareEdge(
-  left: MemoryEvidenceEdgeGoldV1,
-  right: MemoryEvidenceEdgeGoldV1,
-): number {
+function compareEdge(left: MemoryEvidenceEdgeGoldV1, right: MemoryEvidenceEdgeGoldV1): number {
   return edgeKey(left.fromClaimId, left.toClaimId, left.edgeType).localeCompare(
     edgeKey(right.fromClaimId, right.toClaimId, right.edgeType),
   );
@@ -498,9 +433,7 @@ function compareCurrentState(
   right: MemoryCurrentStateGoldV1,
 ): number {
   return (
-    left.anchorClaimIds
-      .join("\n")
-      .localeCompare(right.anchorClaimIds.join("\n")) ||
+    left.anchorClaimIds.join("\n").localeCompare(right.anchorClaimIds.join("\n")) ||
     left.asOf.localeCompare(right.asOf)
   );
 }
@@ -535,10 +468,7 @@ function edgeTypeValue(value: unknown): MemoryEvidenceEdgeTypeV1 {
   throw namedError("MemoryAspectGoldEdgeTypeInvalid");
 }
 
-function exactRecord(
-  value: unknown,
-  keys: readonly string[],
-): Record<string, unknown> {
+function exactRecord(value: unknown, keys: readonly string[]): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw namedError("MemoryAspectGoldRecordInvalid");
   const record = value as Record<string, unknown>;
@@ -555,14 +485,12 @@ function arrayValue(value: unknown): unknown[] {
 }
 
 function stringValue(value: unknown): string {
-  if (typeof value !== "string")
-    throw namedError("MemoryAspectGoldStringInvalid");
+  if (typeof value !== "string") throw namedError("MemoryAspectGoldStringInvalid");
   return value;
 }
 
 function booleanValue(value: unknown): boolean {
-  if (typeof value !== "boolean")
-    throw namedError("MemoryAspectGoldBooleanInvalid");
+  if (typeof value !== "boolean") throw namedError("MemoryAspectGoldBooleanInvalid");
   return value;
 }
 

@@ -4,11 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { ChatMessage, RunEventEnvelope } from "@paw/core";
-import {
-  CONTEXT_SUMMARY_PREFIX,
-  ContextManager,
-  listCompactionCommits,
-} from "@paw/core";
+import { CONTEXT_SUMMARY_PREFIX, ContextManager, listCompactionCommits } from "@paw/core";
 import type { LanguageModel } from "@paw/models";
 
 import { AgentOrchestrator } from "../src/orchestrator.js";
@@ -43,8 +39,7 @@ function auxiliaryModel(responder: (user: string) => string): LanguageModel {
     label: "aux-compression",
     capabilities: { contextWindow: 128_000 },
     async complete(messages) {
-      const user =
-        messages.find((m) => m.role === "user")?.content?.toString() ?? "";
+      const user = messages.find((m) => m.role === "user")?.content?.toString() ?? "";
       return { text: responder(user) };
     },
     async *completeStream() {
@@ -132,17 +127,13 @@ describe("AgentOrchestrator compression & budget", () => {
       },
     });
     expect(r.status).toBe("completed");
-    expect(
-      events.some((e) => e.event.type === "compression.auto_compact.started"),
-    ).toBe(true);
+    expect(events.some((e) => e.event.type === "compression.auto_compact.started")).toBe(true);
     const skipped = events.find((e) => e.event.type === "compression.skipped");
     expect(skipped?.event.type).toBe("compression.skipped");
     if (skipped?.event.type === "compression.skipped") {
       expect(skipped.event.reason).toContain("summary quality");
     }
-    expect(
-      events.some((e) => e.event.type === "compression.auto_compact.done"),
-    ).toBe(false);
+    expect(events.some((e) => e.event.type === "compression.auto_compact.done")).toBe(false);
   });
 
   test("skips compaction when savings are below threshold", async () => {
@@ -182,9 +173,7 @@ describe("AgentOrchestrator compression & budget", () => {
     if (skipped?.event.type === "compression.skipped") {
       expect(skipped.event.reason).toContain("savings too low");
     }
-    expect(
-      events.some((e) => e.event.type === "compression.auto_compact.done"),
-    ).toBe(false);
+    expect(events.some((e) => e.event.type === "compression.auto_compact.done")).toBe(false);
   });
 
   test("P4.4 successful compaction emits compression.commit (snapshot 落盘)", async () => {
@@ -260,18 +249,14 @@ describe("AgentOrchestrator compression & budget", () => {
       },
     });
     expect(r.status).toBe("completed");
-    const done = events.find(
-      (e) => e.event.type === "compression.auto_compact.done",
-    );
+    const done = events.find((e) => e.event.type === "compression.auto_compact.done");
     expect(done).toBeDefined();
     const commit = events.find((e) => e.event.type === "compression.commit");
     expect(commit?.event.type).toBe("compression.commit");
     if (commit?.event.type === "compression.commit") {
       expect(commit.event.commit).toBe(1);
       expect(commit.event.snapshotPath).toContain("compaction-commits");
-      expect(commit.event.beforeTokens).toBeGreaterThan(
-        commit.event.afterTokens,
-      );
+      expect(commit.event.beforeTokens).toBeGreaterThan(commit.event.afterTokens);
       // 快照确实落盘（回滚点可用）
       const { existsSync } = await import("node:fs");
       expect(existsSync(commit.event.snapshotPath)).toBe(true);
@@ -291,17 +276,10 @@ describe("AgentOrchestrator compression & budget", () => {
     expect(pinnedObservation).toBe(pinnedAction + 1);
 
     const savedCommit = listCompactionCommits(dir, "commit1")[0];
-    const savedContents = savedCommit?.afterMessages.map(
-      (message) => message.content,
-    );
-    expect(
-      savedContents?.findIndex((content) =>
-        content.startsWith("pinned observation"),
-      ),
-    ).toBe(
-      (savedContents?.findIndex((content) =>
-        content.startsWith("decided pinned action"),
-      ) ?? -2) + 1,
+    const savedContents = savedCommit?.afterMessages.map((message) => message.content);
+    expect(savedContents?.findIndex((content) => content.startsWith("pinned observation"))).toBe(
+      (savedContents?.findIndex((content) => content.startsWith("decided pinned action")) ?? -2) +
+        1,
     );
   });
 
@@ -316,9 +294,7 @@ describe("AgentOrchestrator compression & budget", () => {
         async complete(messages) {
           calls += 1;
           expect(
-            messages.some((message) =>
-              message.content.includes("acceptance-001 [pending]"),
-            ),
+            messages.some((message) => message.content.includes("acceptance-001 [pending]")),
           ).toBe(true);
           return { text: '{"action":"final_answer","summary":"Done."}' };
         },
@@ -395,11 +371,7 @@ describe("AgentOrchestrator compression & budget", () => {
     expect(result.status).toBe("incomplete");
     expect(result.message).toContain("acceptance-001 [pending]");
     expect(calls).toBe(3);
-    expect(
-      events.some(
-        (event) => event.event.type === "compression.auto_compact.done",
-      ),
-    ).toBe(true);
+    expect(events.some((event) => event.event.type === "compression.auto_compact.done")).toBe(true);
   });
 
   test("P4.3 context.blocks 逐块账本：system/pinned/tool 块齐全", async () => {
@@ -439,9 +411,7 @@ describe("AgentOrchestrator compression & budget", () => {
     // 辅助模型调用。实测这会在任务即将 final_answer 时引入额外故障点。
     // 体量 ~15K tokens（tail 8K 保底下 middle 仍可压缩 ≥20%）
     const chunk = "word ".repeat(800); // ~4K chars ≈ 1K tokens
-    const smallHistory: ChatMessage[] = [
-      { role: "user", content: "fix the login bug" },
-    ];
+    const smallHistory: ChatMessage[] = [{ role: "user", content: "fix the login bug" }];
     for (let i = 0; i < 15; i++) {
       smallHistory.push({ role: "assistant", content: `Step ${i}: ${chunk}` });
       smallHistory.push({ role: "user", content: `Continue ${i}` });
@@ -505,13 +475,9 @@ describe("AgentOrchestrator compression & budget", () => {
       },
     });
     expect(r.status).toBe("completed");
-    const trigger = events.find(
-      (e) => e.event.type === "compression.monitor.trigger",
-    );
+    const trigger = events.find((e) => e.event.type === "compression.monitor.trigger");
     expect(trigger).toBeUndefined();
-    const done = events.find(
-      (e) => e.event.type === "compression.auto_compact.done",
-    );
+    const done = events.find((e) => e.event.type === "compression.auto_compact.done");
     expect(done).toBeUndefined();
   });
 });

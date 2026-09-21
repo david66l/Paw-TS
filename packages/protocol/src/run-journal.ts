@@ -13,19 +13,16 @@ export const RUN_JOURNAL_SCHEMA_VERSION_V1 = "paw.run-journal.v1" as const;
 
 export const WORK_SEGMENT_POLICY_VERSION_V1 = "paw.work-segment.v1" as const;
 
-export const MEMORY_RETRIEVAL_POLICY_VERSION_V1 =
-  "paw.memory-retrieval.v1" as const;
+export const MEMORY_RETRIEVAL_POLICY_VERSION_V1 = "paw.memory-retrieval.v1" as const;
 
 export const MEMORY_WRITE_POLICY_VERSION_V1 = "paw.memory-writer.v1" as const;
 
-export const MEMORY_ATOM_PROPOSAL_SCHEMA_VERSION_V1 =
-  "paw.memory-atom-proposal.v1" as const;
+export const MEMORY_ATOM_PROPOSAL_SCHEMA_VERSION_V1 = "paw.memory-atom-proposal.v1" as const;
 
 export const MEMORY_TOPIC_ORGANIZATION_POLICY_VERSION_V1 =
   "paw.memory-topic-organization.v1" as const;
 
-export const MEMORY_TOPIC_PROPOSAL_SCHEMA_VERSION_V1 =
-  "paw.memory-topic-proposal.v1" as const;
+export const MEMORY_TOPIC_PROPOSAL_SCHEMA_VERSION_V1 = "paw.memory-topic-proposal.v1" as const;
 
 export const MEMORY_TOPIC_EVIDENCE_POLICY_VERSION_V1 =
   "paw.memory-topic-evidence-planner.v1" as const;
@@ -33,14 +30,12 @@ export const MEMORY_TOPIC_EVIDENCE_POLICY_VERSION_V1 =
 export const MEMORY_PERSONA_PROJECTION_POLICY_VERSION_V1 =
   "paw.memory-persona-evidence-projector.v1" as const;
 
-export const MEMORY_RAW_EVIDENCE_POLICY_VERSION_V1 =
-  "paw.memory-raw-evidence-resolver.v1" as const;
+export const MEMORY_RAW_EVIDENCE_POLICY_VERSION_V1 = "paw.memory-raw-evidence-resolver.v1" as const;
 
 export const MEMORY_EVIDENCE_COVERAGE_POLICY_VERSION_V1 =
   "paw.memory-evidence-coverage-planner.v1" as const;
 
-export const COMPLETION_REVIEW_POLICY_VERSION_V1 =
-  "paw.completion-review.v1" as const;
+export const COMPLETION_REVIEW_POLICY_VERSION_V1 = "paw.completion-review.v1" as const;
 
 export type JsonPrimitive = string | number | boolean | null;
 
@@ -62,8 +57,7 @@ export type DurableJsonPayloadV1 =
       hash: string;
     }>;
 
-export const MODEL_RESPONSE_SCHEMA_VERSION_V1 =
-  "paw.model-response.v1" as const;
+export const MODEL_RESPONSE_SCHEMA_VERSION_V1 = "paw.model-response.v1" as const;
 
 export interface ModelResponseUsageV1 {
   readonly promptTokens?: number;
@@ -106,8 +100,7 @@ export interface InputAttachmentV1 {
   readonly content: DurableJsonPayloadV1;
 }
 
-export const TOOL_OBSERVATION_SCHEMA_VERSION_V1 =
-  "paw.tool-observation.v1" as const;
+export const TOOL_OBSERVATION_SCHEMA_VERSION_V1 = "paw.tool-observation.v1" as const;
 
 /** Model-visible, status-preserving tool evidence. */
 export interface ToolObservationV1 {
@@ -117,8 +110,7 @@ export interface ToolObservationV1 {
   readonly payload?: DurableJsonPayloadV1;
 }
 
-export const TASK_CHECKPOINT_SCHEMA_VERSION_V1 =
-  "paw.task-checkpoint.v1" as const;
+export const TASK_CHECKPOINT_SCHEMA_VERSION_V1 = "paw.task-checkpoint.v1" as const;
 
 export interface TaskCheckpointItemV1 {
   readonly statement: string;
@@ -161,11 +153,7 @@ export interface MemoryCardV1 {
   readonly contentHash: string;
 }
 
-export type MemoryAtomKindV1 =
-  | "semantic"
-  | "episodic"
-  | "profile"
-  | "instruction";
+export type MemoryAtomKindV1 = "semantic" | "episodic" | "profile" | "instruction";
 
 export type MemoryAtomActionV1 = "store" | "update" | "merge" | "skip";
 
@@ -187,12 +175,7 @@ export interface MemoryAtomProposalV1 {
   readonly contentHash: string;
 }
 
-export type MemoryTopicFamilyV1 =
-  | "semantic"
-  | "episodic"
-  | "profile"
-  | "instruction"
-  | "mixed";
+export type MemoryTopicFamilyV1 = "semantic" | "episodic" | "profile" | "instruction" | "mixed";
 
 export interface MemoryTopicMemberProposalV1 {
   readonly memoryId: string;
@@ -278,12 +261,7 @@ export type ModelSettlementStatusV1 =
   | "unknown"
   | "rejected";
 
-export type ToolSettlementStatusV1 =
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "unknown"
-  | "rejected";
+export type ToolSettlementStatusV1 = "completed" | "failed" | "cancelled" | "unknown" | "rejected";
 
 export type TaskCheckpointDistillationStatusV1 =
   | "completed"
@@ -302,11 +280,7 @@ export type CompletionReviewTriggerV1 =
   | "fresh_verification_inconclusive"
   | "model_requested";
 
-export type CompletionReviewVerdictV1 =
-  | "allow"
-  | "block"
-  | "await_user"
-  | "unknown";
+export type CompletionReviewVerdictV1 = "allow" | "block" | "await_user" | "unknown";
 
 /** Objective observations that may be supplied to the control reducer. */
 export type InputFactV1 =
@@ -368,10 +342,7 @@ export type InputFactV1 =
       /** Durable at-most-once claim made before any memory extraction model call. */
       type: "memory.write_claimed";
       writeId: string;
-      trigger:
-        | "task_terminal"
-        | "work_segment_terminal"
-        | "explicit_user_request";
+      trigger: "task_terminal" | "work_segment_terminal" | "explicit_user_request";
       policyVersion: typeof MEMORY_WRITE_POLICY_VERSION_V1;
       extractorVersion: string;
       scopeFingerprint: string;
@@ -613,9 +584,7 @@ export type InputFactV1 =
       type: "context.checkpoint_distillation_claimed";
       claimId: string;
       checkpointId: string;
-      boundary:
-        | "after_model_turn_without_tool_calls"
-        | "after_tool_batch_settled";
+      boundary: "after_model_turn_without_tool_calls" | "after_tool_batch_settled";
       supersedesCheckpointId?: string;
       policyVersion: string;
       sourceFromSeq: number;
@@ -642,38 +611,17 @@ export type InputFactV1 =
       checkpoint: DurableJsonPayloadV1;
     }>;
 
-export type AttemptStartedFactV1 = Extract<
-  InputFactV1,
-  { type: "attempt.started" }
->;
-export type InputAcceptedFactV1 = Extract<
-  InputFactV1,
-  { type: "input.accepted" }
->;
-export type InputPromotedFactV1 = Extract<
-  InputFactV1,
-  { type: "input.promoted" }
->;
-export type WorkSegmentStartedFactV1 = Extract<
-  InputFactV1,
-  { type: "work.segment_started" }
->;
+export type AttemptStartedFactV1 = Extract<InputFactV1, { type: "attempt.started" }>;
+export type InputAcceptedFactV1 = Extract<InputFactV1, { type: "input.accepted" }>;
+export type InputPromotedFactV1 = Extract<InputFactV1, { type: "input.promoted" }>;
+export type WorkSegmentStartedFactV1 = Extract<InputFactV1, { type: "work.segment_started" }>;
 export type MemoryRetrievalSettledFactV1 = Extract<
   InputFactV1,
   { type: "memory.retrieval_settled" }
 >;
-export type MemoryWriteClaimedFactV1 = Extract<
-  InputFactV1,
-  { type: "memory.write_claimed" }
->;
-export type MemoryCandidateStagedFactV1 = Extract<
-  InputFactV1,
-  { type: "memory.candidate_staged" }
->;
-export type MemoryWriteSettledFactV1 = Extract<
-  InputFactV1,
-  { type: "memory.write_settled" }
->;
+export type MemoryWriteClaimedFactV1 = Extract<InputFactV1, { type: "memory.write_claimed" }>;
+export type MemoryCandidateStagedFactV1 = Extract<InputFactV1, { type: "memory.candidate_staged" }>;
+export type MemoryWriteSettledFactV1 = Extract<InputFactV1, { type: "memory.write_settled" }>;
 export type MemoryTopicOrganizationClaimedFactV1 = Extract<
   InputFactV1,
   { type: "memory.topic_organization_claimed" }
@@ -702,22 +650,10 @@ export type MemoryEvidenceCoverageSettledFactV1 = Extract<
   InputFactV1,
   { type: "memory.evidence_coverage_settled" }
 >;
-export type ModelDispatchRecordedFactV1 = Extract<
-  InputFactV1,
-  { type: "model.dispatch_recorded" }
->;
-export type ModelSettledFactV1 = Extract<
-  InputFactV1,
-  { type: "model.settled" }
->;
-export type ToolCallObservedFactV1 = Extract<
-  InputFactV1,
-  { type: "tool.call_observed" }
->;
-export type ToolDispatchRecordedFactV1 = Extract<
-  InputFactV1,
-  { type: "tool.dispatch_recorded" }
->;
+export type ModelDispatchRecordedFactV1 = Extract<InputFactV1, { type: "model.dispatch_recorded" }>;
+export type ModelSettledFactV1 = Extract<InputFactV1, { type: "model.settled" }>;
+export type ToolCallObservedFactV1 = Extract<InputFactV1, { type: "tool.call_observed" }>;
+export type ToolDispatchRecordedFactV1 = Extract<InputFactV1, { type: "tool.dispatch_recorded" }>;
 export type ToolPermissionResolvedFactV1 = Extract<
   InputFactV1,
   { type: "tool.permission_resolved" }
@@ -735,18 +671,9 @@ export type RuntimeActivitySettledFactV1 = Extract<
   InputFactV1,
   { type: "runtime.activity_settled" }
 >;
-export type AbortRequestedFactV1 = Extract<
-  InputFactV1,
-  { type: "abort.requested" }
->;
-export type RuntimeFailedFactV1 = Extract<
-  InputFactV1,
-  { type: "runtime.failed" }
->;
-export type PolicyRequestRecordedFactV1 = Extract<
-  InputFactV1,
-  { type: "policy.request_recorded" }
->;
+export type AbortRequestedFactV1 = Extract<InputFactV1, { type: "abort.requested" }>;
+export type RuntimeFailedFactV1 = Extract<InputFactV1, { type: "runtime.failed" }>;
+export type PolicyRequestRecordedFactV1 = Extract<InputFactV1, { type: "policy.request_recorded" }>;
 export type CompletionReviewClaimedFactV1 = Extract<
   InputFactV1,
   { type: "completion.review_claimed" }
@@ -780,51 +707,30 @@ export type ControlDecisionActionV1 =
   | Readonly<{ kind: "failed"; reasonCode: string }>
   | Readonly<{ kind: "abort"; reasonCode: string }>;
 
-export type ContinueDecisionActionV1 = Extract<
-  ControlDecisionActionV1,
-  { kind: "continue" }
->;
-export type WaitDecisionActionV1 = Extract<
-  ControlDecisionActionV1,
-  { kind: "wait" }
->;
-export type CompleteDecisionActionV1 = Extract<
-  ControlDecisionActionV1,
-  { kind: "complete" }
->;
-export type IncompleteDecisionActionV1 = Extract<
-  ControlDecisionActionV1,
-  { kind: "incomplete" }
->;
-export type FailedDecisionActionV1 = Extract<
-  ControlDecisionActionV1,
-  { kind: "failed" }
->;
+export type ContinueDecisionActionV1 = Extract<ControlDecisionActionV1, { kind: "continue" }>;
+export type WaitDecisionActionV1 = Extract<ControlDecisionActionV1, { kind: "wait" }>;
+export type CompleteDecisionActionV1 = Extract<ControlDecisionActionV1, { kind: "complete" }>;
+export type IncompleteDecisionActionV1 = Extract<ControlDecisionActionV1, { kind: "incomplete" }>;
+export type FailedDecisionActionV1 = Extract<ControlDecisionActionV1, { kind: "failed" }>;
 
 /**
  * 用户决策（2026-08-21）：因崩溃修复产生的 incomplete 终局允许接续新工作
  * 段。范围只限 repair 结算的 unknown 族原因；预算耗尽等其余 incomplete 仍
  * 不可开段（开段也无法推进，应开新 run）。
  */
-export const CRASH_RECOVERY_INCOMPLETE_REASONS_V1: ReadonlySet<string> =
-  new Set(["model-result-unknown", "tool-result-unknown"]);
+export const CRASH_RECOVERY_INCOMPLETE_REASONS_V1: ReadonlySet<string> = new Set([
+  "model-result-unknown",
+  "tool-result-unknown",
+]);
 
 export function isCrashRecoveryIncompleteReasonV1(reason: string): boolean {
   return CRASH_RECOVERY_INCOMPLETE_REASONS_V1.has(reason);
 }
 
-export function isCrashRecoveryIncompleteActionV1(
-  action: ControlDecisionActionV1,
-): boolean {
-  return (
-    action.kind === "incomplete" &&
-    isCrashRecoveryIncompleteReasonV1(action.reasonCode)
-  );
+export function isCrashRecoveryIncompleteActionV1(action: ControlDecisionActionV1): boolean {
+  return action.kind === "incomplete" && isCrashRecoveryIncompleteReasonV1(action.reasonCode);
 }
-export type AbortDecisionActionV1 = Extract<
-  ControlDecisionActionV1,
-  { kind: "abort" }
->;
+export type AbortDecisionActionV1 = Extract<ControlDecisionActionV1, { kind: "abort" }>;
 
 /**
  * A persisted reducer output. It is replay evidence, never a reducer input.
@@ -860,9 +766,7 @@ export function parseModelResponseV1(value: unknown): ModelResponseV1 {
   return value as ModelResponseV1;
 }
 
-export function assertModelResponseV1(
-  value: unknown,
-): asserts value is ModelResponseV1 {
+export function assertModelResponseV1(value: unknown): asserts value is ModelResponseV1 {
   assertModelResponse(value);
 }
 
@@ -880,15 +784,11 @@ export function parseToolObservationV1(value: unknown): ToolObservationV1 {
   return value as ToolObservationV1;
 }
 
-export function assertToolObservationV1(
-  value: unknown,
-): asserts value is ToolObservationV1 {
+export function assertToolObservationV1(value: unknown): asserts value is ToolObservationV1 {
   assertToolObservation(value, "tool observation");
 }
 
-export function isToolObservationV1(
-  value: unknown,
-): value is ToolObservationV1 {
+export function isToolObservationV1(value: unknown): value is ToolObservationV1 {
   try {
     parseToolObservationV1(value);
     return true;
@@ -902,9 +802,7 @@ export function parseTaskCheckpointV1(value: unknown): TaskCheckpointV1 {
   return value as TaskCheckpointV1;
 }
 
-export function assertTaskCheckpointV1(
-  value: unknown,
-): asserts value is TaskCheckpointV1 {
+export function assertTaskCheckpointV1(value: unknown): asserts value is TaskCheckpointV1 {
   assertTaskCheckpoint(value, "task checkpoint");
 }
 
@@ -918,9 +816,7 @@ export function isTaskCheckpointV1(value: unknown): value is TaskCheckpointV1 {
 }
 
 /** Parse and strictly validate an untrusted Paw Next journal value. */
-export function parseRunJournalEnvelopeV1(
-  value: unknown,
-): RunJournalEnvelopeV1 {
+export function parseRunJournalEnvelopeV1(value: unknown): RunJournalEnvelopeV1 {
   const envelope = expectObject(value, "journal envelope");
   assertExactKeys(
     envelope,
@@ -928,11 +824,7 @@ export function parseRunJournalEnvelopeV1(
     [],
     "journal envelope",
   );
-  assertExact(
-    envelope.schemaVersion,
-    RUN_JOURNAL_SCHEMA_VERSION_V1,
-    "schemaVersion",
-  );
+  assertExact(envelope.schemaVersion, RUN_JOURNAL_SCHEMA_VERSION_V1, "schemaVersion");
   assertId(envelope.sessionId, "sessionId");
   assertId(envelope.runId, "runId");
   assertPositiveInteger(envelope.seq, "seq");
@@ -949,9 +841,7 @@ export function parseRunJournalEnvelopeV1(
   return value as RunJournalEnvelopeV1;
 }
 
-export function assertRunJournalEnvelopeV1(
-  value: unknown,
-): asserts value is RunJournalEnvelopeV1 {
+export function assertRunJournalEnvelopeV1(value: unknown): asserts value is RunJournalEnvelopeV1 {
   parseRunJournalEnvelopeV1(value);
 }
 
@@ -1000,9 +890,7 @@ export function parseRunJournalPrefixV1(
   return envelopes;
 }
 
-export function isRunJournalEnvelopeV1(
-  value: unknown,
-): value is RunJournalEnvelopeV1 {
+export function isRunJournalEnvelopeV1(value: unknown): value is RunJournalEnvelopeV1 {
   try {
     parseRunJournalEnvelopeV1(value);
     return true;
@@ -1026,13 +914,8 @@ function assertRecord(value: unknown): void {
   throw new Error("Unsupported journal record kind");
 }
 
-function assertLifecycleIdentities(
-  envelopes: readonly RunJournalEnvelopeV1[],
-): void {
-  const acceptedInputs = new Map<
-    string,
-    Extract<InputFactV1, { type: "input.accepted" }>
-  >();
+function assertLifecycleIdentities(envelopes: readonly RunJournalEnvelopeV1[]): void {
+  const acceptedInputs = new Map<string, Extract<InputFactV1, { type: "input.accepted" }>>();
   const promotedInputIds = new Set<string>();
   const executionBudgets = new Map<
     string,
@@ -1073,10 +956,7 @@ function assertLifecycleIdentities(
       readonly sourceFromSeq: number;
       readonly sourceThroughSeq: number;
       readonly sourceInputHash: string;
-      settlement?: Extract<
-        InputFactV1,
-        { type: "context.checkpoint_distillation_settled" }
-      >;
+      settlement?: Extract<InputFactV1, { type: "context.checkpoint_distillation_settled" }>;
       recorded: boolean;
     }
   >();
@@ -1122,10 +1002,7 @@ function assertLifecycleIdentities(
       settled: boolean;
     }
   >();
-  const activities = new Map<
-    string,
-    { readonly activityKind: string; settled: boolean }
-  >();
+  const activities = new Map<string, { readonly activityKind: string; settled: boolean }>();
   const completionReviews = new Map<
     string,
     {
@@ -1136,11 +1013,7 @@ function assertLifecycleIdentities(
   >();
   let expectedSegmentIndex = 1;
 
-  for (
-    let envelopeIndex = 0;
-    envelopeIndex < envelopes.length;
-    envelopeIndex += 1
-  ) {
+  for (let envelopeIndex = 0; envelopeIndex < envelopes.length; envelopeIndex += 1) {
     const envelope = envelopes[envelopeIndex] as RunJournalEnvelopeV1;
     if (envelope.record.kind === "derived_decision") {
       const action = envelope.record.decision.action;
@@ -1152,8 +1025,7 @@ function assertLifecycleIdentities(
       }
       if (action.kind !== "continue") {
         terminalDecisionBoundaryOpen = true;
-        terminalBoundaryReducerVersion =
-          envelope.record.decision.reducerVersion;
+        terminalBoundaryReducerVersion = envelope.record.decision.reducerVersion;
         terminalBoundaryAction = action;
       }
       continue;
@@ -1171,17 +1043,12 @@ function assertLifecycleIdentities(
             previous.admissionPolicy !== fact.admissionPolicy ||
             fact.observedAtMs < previous.observedAtMs)
         )
-          throw new Error(
-            "Execution budget cannot reset or move its clock backwards",
-          );
+          throw new Error("Execution budget cannot reset or move its clock backwards");
         executionBudgets.set(fact.inputId, fact);
         break;
       }
       case "input.accepted": {
-        if (
-          acceptedInputs.has(fact.inputId) ||
-          promotedInputIds.has(fact.inputId)
-        ) {
+        if (acceptedInputs.has(fact.inputId) || promotedInputIds.has(fact.inputId)) {
           throw new Error(`duplicate accepted input: ${fact.inputId}`);
         }
         acceptedInputs.set(fact.inputId, fact);
@@ -1206,16 +1073,10 @@ function assertLifecycleIdentities(
           terminalDecisionBoundaryOpen &&
           terminalBoundaryReducerVersion !== undefined
         ) {
-          if (
-            enabledSegmentReducerVersions.has(terminalBoundaryReducerVersion)
-          ) {
-            throw new Error(
-              "terminal promotion requires a work segment marker",
-            );
+          if (enabledSegmentReducerVersions.has(terminalBoundaryReducerVersion)) {
+            throw new Error("terminal promotion requires a work segment marker");
           }
-          unauthorizedPromotionReducerVersions.add(
-            terminalBoundaryReducerVersion,
-          );
+          unauthorizedPromotionReducerVersions.add(terminalBoundaryReducerVersion);
         }
         break;
       }
@@ -1230,20 +1091,13 @@ function assertLifecycleIdentities(
         const decision = previous.record.decision;
         if (
           decision.action.kind !== "complete" &&
-          !(
-            decision.action.kind === "wait" &&
-            decision.action.waitFor === "user"
-          ) &&
+          !(decision.action.kind === "wait" && decision.action.waitFor === "user") &&
           !isCrashRecoveryIncompleteActionV1(decision.action)
         ) {
-          throw new Error(
-            "work segment requires an eligible terminal decision",
-          );
+          throw new Error("work segment requires an eligible terminal decision");
         }
         if (fact.reducerVersion !== decision.reducerVersion) {
-          throw new Error(
-            "work segment reducerVersion does not match decision",
-          );
+          throw new Error("work segment reducerVersion does not match decision");
         }
         if (fact.previousDecisionStateHash !== decision.stateHash) {
           throw new Error("work segment previous decision stateHash mismatch");
@@ -1255,14 +1109,10 @@ function assertLifecycleIdentities(
           throw new Error("terminal promotion requires a work segment marker");
         }
         if (!acceptedInputs.has(fact.inputId)) {
-          throw new Error(
-            `work segment input has no durable admission: ${fact.inputId}`,
-          );
+          throw new Error(`work segment input has no durable admission: ${fact.inputId}`);
         }
         if (promotedInputIds.has(fact.inputId)) {
-          throw new Error(
-            `work segment input is already promoted: ${fact.inputId}`,
-          );
+          throw new Error(`work segment input is already promoted: ${fact.inputId}`);
         }
         const next = envelopes[envelopeIndex + 1];
         if (
@@ -1271,22 +1121,16 @@ function assertLifecycleIdentities(
           next.record.fact.type !== "input.promoted" ||
           next.record.fact.inputId !== fact.inputId
         ) {
-          throw new Error(
-            "work segment must immediately precede its promotion",
-          );
+          throw new Error("work segment must immediately precede its promotion");
         }
         if ([...models.values()].some((model) => !model.settled)) {
           throw new Error("work segment cannot cross an unsettled model call");
         }
         if ([...tools.values()].some((tool) => !tool.settled)) {
-          throw new Error(
-            "work segment cannot cross an unsettled tool lifecycle",
-          );
+          throw new Error("work segment cannot cross an unsettled tool lifecycle");
         }
         if (openCheckpointClaimId || completedUnrecordedClaimId) {
-          throw new Error(
-            "work segment cannot cross pending checkpoint distillation",
-          );
+          throw new Error("work segment cannot cross pending checkpoint distillation");
         }
         expectedSegmentIndex += 1;
         enabledSegmentReducerVersions.add(fact.reducerVersion);
@@ -1305,14 +1149,10 @@ function assertLifecycleIdentities(
       }
       case "memory.persona_projection_settled": {
         if (!memoryQueryIds.has(fact.queryId)) {
-          throw new Error(
-            "memory persona projection requires a retrieval query",
-          );
+          throw new Error("memory persona projection requires a retrieval query");
         }
         if (memoryPersonaProjectionQueryIds.has(fact.queryId)) {
-          throw new Error(
-            `duplicate memory persona projection query: ${fact.queryId}`,
-          );
+          throw new Error(`duplicate memory persona projection query: ${fact.queryId}`);
         }
         memoryPersonaProjectionQueryIds.add(fact.queryId);
         break;
@@ -1322,9 +1162,7 @@ function assertLifecycleIdentities(
           throw new Error("memory raw evidence requires a retrieval query");
         }
         if (memoryRawEvidenceQueryIds.has(fact.queryId)) {
-          throw new Error(
-            `duplicate memory raw evidence query: ${fact.queryId}`,
-          );
+          throw new Error(`duplicate memory raw evidence query: ${fact.queryId}`);
         }
         memoryRawEvidenceQueryIds.add(fact.queryId);
         break;
@@ -1334,31 +1172,23 @@ function assertLifecycleIdentities(
           throw new Error("memory topic evidence requires a retrieval query");
         }
         if (memoryTopicEvidenceQueryIds.has(fact.queryId)) {
-          throw new Error(
-            `duplicate memory topic evidence query: ${fact.queryId}`,
-          );
+          throw new Error(`duplicate memory topic evidence query: ${fact.queryId}`);
         }
         memoryTopicEvidenceQueryIds.add(fact.queryId);
         break;
       }
       case "memory.evidence_coverage_settled": {
         if (!memoryQueryIds.has(fact.queryId)) {
-          throw new Error(
-            "memory evidence coverage requires a retrieval query",
-          );
+          throw new Error("memory evidence coverage requires a retrieval query");
         }
         if (
           !memoryTopicEvidenceQueryIds.has(fact.queryId) ||
           !memoryRawEvidenceQueryIds.has(fact.queryId)
         ) {
-          throw new Error(
-            "memory evidence coverage requires prior topic and raw evidence",
-          );
+          throw new Error("memory evidence coverage requires prior topic and raw evidence");
         }
         if (memoryEvidenceCoverageQueryIds.has(fact.queryId)) {
-          throw new Error(
-            `duplicate memory evidence coverage query: ${fact.queryId}`,
-          );
+          throw new Error(`duplicate memory evidence coverage query: ${fact.queryId}`);
         }
         memoryEvidenceCoverageQueryIds.add(fact.queryId);
         break;
@@ -1381,23 +1211,16 @@ function assertLifecycleIdentities(
       case "memory.candidate_staged": {
         const write = memoryWrites.get(fact.writeId);
         if (!write) {
-          throw new Error(
-            `memory candidate has no write claim: ${fact.writeId}`,
-          );
+          throw new Error(`memory candidate has no write claim: ${fact.writeId}`);
         }
         if (write.staged || write.settled) {
           throw new Error(`duplicate memory candidate stage: ${fact.writeId}`);
         }
         for (const atom of fact.atoms) {
           if (
-            atom.sourceSeqs.some(
-              (seq) =>
-                seq < write.sourceFromSeq || seq > write.sourceThroughSeq,
-            )
+            atom.sourceSeqs.some((seq) => seq < write.sourceFromSeq || seq > write.sourceThroughSeq)
           ) {
-            throw new Error(
-              `memory atom source is outside claimed range: ${atom.atomId}`,
-            );
+            throw new Error(`memory atom source is outside claimed range: ${atom.atomId}`);
           }
         }
         write.proposalHash = fact.proposalHash;
@@ -1407,57 +1230,35 @@ function assertLifecycleIdentities(
       case "memory.write_settled": {
         const write = memoryWrites.get(fact.writeId);
         if (!write) {
-          throw new Error(
-            `memory write settlement has no claim: ${fact.writeId}`,
-          );
+          throw new Error(`memory write settlement has no claim: ${fact.writeId}`);
         }
         if (write.settled) {
           throw new Error(`duplicate memory write settlement: ${fact.writeId}`);
         }
-        if (
-          (fact.status === "completed" || fact.status === "noop") &&
-          !write.staged
-        ) {
-          throw new Error(
-            `memory ${fact.status} settlement requires staged candidates`,
-          );
+        if ((fact.status === "completed" || fact.status === "noop") && !write.staged) {
+          throw new Error(`memory ${fact.status} settlement requires staged candidates`);
         }
-        if (
-          fact.proposalHash !== undefined &&
-          fact.proposalHash !== write.proposalHash
-        ) {
+        if (fact.proposalHash !== undefined && fact.proposalHash !== write.proposalHash) {
           throw new Error("memory write proposal hash mismatch");
         }
-        if (
-          write.staged &&
-          fact.status !== "interrupted" &&
-          fact.proposalHash === undefined
-        ) {
+        if (write.staged && fact.status !== "interrupted" && fact.proposalHash === undefined) {
           throw new Error("staged memory settlement requires proposal hash");
         }
         write.settled = true;
         write.settlementStatus = fact.status;
-        write.settlementIds = new Set([
-          ...fact.storedIds,
-          ...fact.invalidatedIds,
-        ]);
+        write.settlementIds = new Set([...fact.storedIds, ...fact.invalidatedIds]);
         break;
       }
       case "memory.topic_organization_claimed": {
         if (topicOrganizations.has(fact.organizationId)) {
-          throw new Error(
-            `duplicate memory topic organization claim: ${fact.organizationId}`,
-          );
+          throw new Error(`duplicate memory topic organization claim: ${fact.organizationId}`);
         }
         const sourceWrite = memoryWrites.get(fact.sourceWriteId);
         if (
           !sourceWrite?.settled ||
-          (sourceWrite.settlementStatus !== "completed" &&
-            sourceWrite.settlementStatus !== "noop")
+          (sourceWrite.settlementStatus !== "completed" && sourceWrite.settlementStatus !== "noop")
         ) {
-          throw new Error(
-            "memory topic organization requires a completed source write",
-          );
+          throw new Error("memory topic organization requires a completed source write");
         }
         if (
           fact.sourceProposalHash !== sourceWrite.proposalHash ||
@@ -1481,11 +1282,7 @@ function assertLifecycleIdentities(
         if (organization.staged || organization.settled) {
           throw new Error("duplicate memory topic candidate stage");
         }
-        if (
-          fact.topics.some(
-            (topic) => topic.scopeFingerprint !== organization.scopeFingerprint,
-          )
-        ) {
+        if (fact.topics.some((topic) => topic.scopeFingerprint !== organization.scopeFingerprint)) {
           throw new Error("memory topic candidate scope mismatch");
         }
         organization.proposalHash = fact.proposalHash;
@@ -1501,16 +1298,10 @@ function assertLifecycleIdentities(
         if (organization.settled) {
           throw new Error("duplicate memory topic organization settlement");
         }
-        if (
-          (fact.status === "completed" || fact.status === "noop") &&
-          !organization.staged
-        ) {
+        if ((fact.status === "completed" || fact.status === "noop") && !organization.staged) {
           throw new Error("successful memory topic settlement requires stage");
         }
-        if (
-          fact.proposalHash !== undefined &&
-          fact.proposalHash !== organization.proposalHash
-        ) {
+        if (fact.proposalHash !== undefined && fact.proposalHash !== organization.proposalHash) {
           throw new Error("memory topic proposal hash mismatch");
         }
         if (
@@ -1518,14 +1309,11 @@ function assertLifecycleIdentities(
           fact.status !== "interrupted" &&
           fact.proposalHash === undefined
         ) {
-          throw new Error(
-            "staged memory topic settlement requires proposal hash",
-          );
+          throw new Error("staged memory topic settlement requires proposal hash");
         }
         if (
           fact.status === "completed" &&
-          (organization.topicCount === 0 ||
-            fact.topicIds.length !== organization.topicCount)
+          (organization.topicCount === 0 || fact.topicIds.length !== organization.topicCount)
         ) {
           throw new Error("completed memory topic settlement count mismatch");
         }
@@ -1540,9 +1328,7 @@ function assertLifecycleIdentities(
       }
       case "model.dispatch_recorded": {
         if (terminalDecisionBoundaryOpen) {
-          throw new Error(
-            "model dispatch requires a work segment after terminal decision",
-          );
+          throw new Error("model dispatch requires a work segment after terminal decision");
         }
         if (models.has(fact.modelCallId)) {
           throw new Error(`duplicate model dispatch: ${fact.modelCallId}`);
@@ -1562,14 +1348,10 @@ function assertLifecycleIdentities(
       case "model.settled": {
         const model = models.get(fact.modelCallId);
         if (!model) {
-          throw new Error(
-            `model settlement has no dispatch: ${fact.modelCallId}`,
-          );
+          throw new Error(`model settlement has no dispatch: ${fact.modelCallId}`);
         }
         if (model.turn !== fact.turn) {
-          throw new Error(
-            `model settlement turn mismatch: ${fact.modelCallId}`,
-          );
+          throw new Error(`model settlement turn mismatch: ${fact.modelCallId}`);
         }
         if (model.settled) {
           throw new Error(`duplicate model settlement: ${fact.modelCallId}`);
@@ -1581,29 +1363,19 @@ function assertLifecycleIdentities(
       case "tool.call_observed": {
         const model = models.get(fact.modelCallId);
         if (!model) {
-          throw new Error(
-            `observed tool call has no model dispatch: ${fact.modelCallId}`,
-          );
+          throw new Error(`observed tool call has no model dispatch: ${fact.modelCallId}`);
         }
         if (!model.settled) {
-          throw new Error(
-            `observed tool call precedes model settlement: ${fact.modelCallId}`,
-          );
+          throw new Error(`observed tool call precedes model settlement: ${fact.modelCallId}`);
         }
         if (model.turn !== fact.turn) {
-          throw new Error(
-            `observed tool call turn mismatch: ${fact.modelCallId}`,
-          );
+          throw new Error(`observed tool call turn mismatch: ${fact.modelCallId}`);
         }
         if (!model.hasToolCalls) {
-          throw new Error(
-            `observed tool call contradicts model settlement: ${fact.modelCallId}`,
-          );
+          throw new Error(`observed tool call contradicts model settlement: ${fact.modelCallId}`);
         }
         if (fact.order !== model.nextToolOrder) {
-          throw new Error(
-            `observed tool call order is not contiguous: ${fact.modelCallId}`,
-          );
+          throw new Error(`observed tool call order is not contiguous: ${fact.modelCallId}`);
         }
         if (tools.has(fact.callId)) {
           throw new Error(`duplicate observed tool call: ${fact.callId}`);
@@ -1638,9 +1410,7 @@ function assertLifecycleIdentities(
       case "tool.permission_resolved": {
         const tool = tools.get(fact.callId);
         if (!tool) {
-          throw new Error(
-            `tool permission has no observed call: ${fact.callId}`,
-          );
+          throw new Error(`tool permission has no observed call: ${fact.callId}`);
         }
         if (!tool.dispatched) {
           throw new Error(`tool permission has no dispatch: ${fact.callId}`);
@@ -1664,40 +1434,28 @@ function assertLifecycleIdentities(
       case "tool.effect_checkpoint_allocated": {
         const tool = tools.get(fact.callId);
         if (!tool) {
-          throw new Error(
-            `tool effect checkpoint has no observed call: ${fact.callId}`,
-          );
+          throw new Error(`tool effect checkpoint has no observed call: ${fact.callId}`);
         }
         if (!tool.dispatched) {
-          throw new Error(
-            `tool effect checkpoint has no dispatch: ${fact.callId}`,
-          );
+          throw new Error(`tool effect checkpoint has no dispatch: ${fact.callId}`);
         }
         if (tool.settled) {
-          throw new Error(
-            `tool effect checkpoint follows settlement: ${fact.callId}`,
-          );
+          throw new Error(`tool effect checkpoint follows settlement: ${fact.callId}`);
         }
         if (tool.turn !== fact.turn || tool.sourceIndex !== fact.sourceIndex) {
-          throw new Error(
-            `tool effect checkpoint identity mismatch: ${fact.callId}`,
-          );
+          throw new Error(`tool effect checkpoint identity mismatch: ${fact.callId}`);
         }
         if (
           tool.permissionResolution !== "allow_once" &&
           tool.permissionResolution !== "allow_rule"
         ) {
-          throw new Error(
-            `tool effect checkpoint requires allowed permission: ${fact.callId}`,
-          );
+          throw new Error(`tool effect checkpoint requires allowed permission: ${fact.callId}`);
         }
         if (tool.checkpointSeq !== undefined) {
           throw new Error(`duplicate tool effect checkpoint: ${fact.callId}`);
         }
         if (fact.checkpointSeq <= latestEffectCheckpointSeq) {
-          throw new Error(
-            "tool effect checkpoint sequence must be strictly increasing",
-          );
+          throw new Error("tool effect checkpoint sequence must be strictly increasing");
         }
         tool.checkpointSeq = fact.checkpointSeq;
         latestEffectCheckpointSeq = fact.checkpointSeq;
@@ -1706,34 +1464,24 @@ function assertLifecycleIdentities(
       case "tool.settled": {
         const tool = tools.get(fact.callId);
         if (!tool) {
-          throw new Error(
-            `tool settlement has no observed call: ${fact.callId}`,
-          );
+          throw new Error(`tool settlement has no observed call: ${fact.callId}`);
         }
         if (tool.settled) {
           throw new Error(`duplicate tool settlement: ${fact.callId}`);
         }
-        const maySettleWithoutDispatch =
-          fact.status === "cancelled" || fact.status === "rejected";
+        const maySettleWithoutDispatch = fact.status === "cancelled" || fact.status === "rejected";
         if (!tool.dispatched && !maySettleWithoutDispatch) {
           throw new Error(`tool settlement has no dispatch: ${fact.callId}`);
         }
-        if (
-          tool.permissionResolution === "deny" &&
-          fact.status !== "rejected"
-        ) {
-          throw new Error(
-            `denied tool permission requires rejected settlement: ${fact.callId}`,
-          );
+        if (tool.permissionResolution === "deny" && fact.status !== "rejected") {
+          throw new Error(`denied tool permission requires rejected settlement: ${fact.callId}`);
         }
         if (
           (fact.status === "completed" || fact.status === "unknown") &&
           tool.permissionResolution !== "allow_once" &&
           tool.permissionResolution !== "allow_rule"
         ) {
-          throw new Error(
-            `executed tool settlement requires allowed permission: ${fact.callId}`,
-          );
+          throw new Error(`executed tool settlement requires allowed permission: ${fact.callId}`);
         }
         tool.settled = true;
         break;
@@ -1756,14 +1504,10 @@ function assertLifecycleIdentities(
       case "runtime.activity_settled": {
         const activity = activities.get(fact.activityId);
         if (!activity) {
-          throw new Error(
-            `runtime activity settlement has no start: ${fact.activityId}`,
-          );
+          throw new Error(`runtime activity settlement has no start: ${fact.activityId}`);
         }
         if (activity.settled) {
-          throw new Error(
-            `duplicate runtime activity settlement: ${fact.activityId}`,
-          );
+          throw new Error(`duplicate runtime activity settlement: ${fact.activityId}`);
         }
         activity.settled = true;
         if (
@@ -1781,9 +1525,7 @@ function assertLifecycleIdentities(
           throw new Error(`duplicate completion review: ${fact.reviewId}`);
         }
         if (fact.sourceThroughSeq >= envelope.seq) {
-          throw new Error(
-            "completion review cannot cover itself or future facts",
-          );
+          throw new Error("completion review cannot cover itself or future facts");
         }
         completionReviews.set(fact.reviewId, {
           candidateHash: fact.candidateHash,
@@ -1795,14 +1537,10 @@ function assertLifecycleIdentities(
       case "completion.review_settled": {
         const review = completionReviews.get(fact.reviewId);
         if (!review) {
-          throw new Error(
-            `completion review settlement has no claim: ${fact.reviewId}`,
-          );
+          throw new Error(`completion review settlement has no claim: ${fact.reviewId}`);
         }
         if (review.settled) {
-          throw new Error(
-            `duplicate completion review settlement: ${fact.reviewId}`,
-          );
+          throw new Error(`duplicate completion review settlement: ${fact.reviewId}`);
         }
         if (
           review.reviewerId === "paw.environment-audit.v1" &&
@@ -1810,15 +1548,9 @@ function assertLifecycleIdentities(
           !fact.environmentAudit
         )
           throw new Error("Environment audit allow requires evidence");
-        if (
-          fact.environmentAudit &&
-          review.reviewerId !== "paw.environment-audit.v1"
-        )
+        if (fact.environmentAudit && review.reviewerId !== "paw.environment-audit.v1")
           throw new Error("Environment audit reviewer mismatch");
-        if (
-          fact.environmentAudit &&
-          fact.environmentAudit.candidateHash !== review.candidateHash
-        )
+        if (fact.environmentAudit && fact.environmentAudit.candidateHash !== review.candidateHash)
           throw new Error("Environment audit candidate binding mismatch");
         review.settled = true;
         break;
@@ -1828,30 +1560,18 @@ function assertLifecycleIdentities(
           throw new Error("checkpoint distillation already has pending work");
         }
         if (checkpointClaimIds.has(fact.claimId)) {
-          throw new Error(
-            `duplicate checkpoint distillation claim: ${fact.claimId}`,
-          );
+          throw new Error(`duplicate checkpoint distillation claim: ${fact.claimId}`);
         }
-        if (
-          checkpointIds.has(fact.checkpointId) ||
-          claimedCheckpointIds.has(fact.checkpointId)
-        ) {
+        if (checkpointIds.has(fact.checkpointId) || claimedCheckpointIds.has(fact.checkpointId)) {
           throw new Error(`duplicate context checkpoint: ${fact.checkpointId}`);
         }
         if (fact.sourceThroughSeq >= envelope.seq) {
-          throw new Error(
-            "checkpoint distillation cannot cover itself or future facts",
-          );
+          throw new Error("checkpoint distillation cannot cover itself or future facts");
         }
         if (!latestCheckpoint && fact.supersedesCheckpointId !== undefined) {
-          throw new Error(
-            "first checkpoint distillation cannot supersede another",
-          );
+          throw new Error("first checkpoint distillation cannot supersede another");
         }
-        if (
-          latestCheckpoint &&
-          fact.supersedesCheckpointId !== latestCheckpoint.checkpointId
-        ) {
+        if (latestCheckpoint && fact.supersedesCheckpointId !== latestCheckpoint.checkpointId) {
           throw new Error("checkpoint distillation supersession is stale");
         }
         if (
@@ -1859,9 +1579,7 @@ function assertLifecycleIdentities(
           (fact.sourceFromSeq > latestCheckpoint.sourceFromSeq ||
             fact.sourceThroughSeq < latestCheckpoint.sourceThroughSeq)
         ) {
-          throw new Error(
-            "checkpoint distillation source range must be monotonic",
-          );
+          throw new Error("checkpoint distillation source range must be monotonic");
         }
         checkpointClaimIds.add(fact.claimId);
         claimedCheckpointIds.add(fact.checkpointId);
@@ -1882,19 +1600,13 @@ function assertLifecycleIdentities(
       case "context.checkpoint_distillation_settled": {
         const claim = checkpointClaims.get(fact.claimId);
         if (!claim) {
-          throw new Error(
-            `checkpoint distillation settlement has no claim: ${fact.claimId}`,
-          );
+          throw new Error(`checkpoint distillation settlement has no claim: ${fact.claimId}`);
         }
         if (openCheckpointClaimId !== fact.claimId) {
-          throw new Error(
-            `checkpoint distillation settlement is not active: ${fact.claimId}`,
-          );
+          throw new Error(`checkpoint distillation settlement is not active: ${fact.claimId}`);
         }
         if (claim.settlement) {
-          throw new Error(
-            `duplicate checkpoint distillation settlement: ${fact.claimId}`,
-          );
+          throw new Error(`duplicate checkpoint distillation settlement: ${fact.claimId}`);
         }
         if (fact.status === "completed") {
           const checkpoint = fact.checkpoint as DurableJsonPayloadV1;
@@ -1913,15 +1625,11 @@ function assertLifecycleIdentities(
       }
       case "context.checkpoint_recorded": {
         if (openCheckpointClaimId) {
-          throw new Error(
-            "context checkpoint cannot bypass active distillation",
-          );
+          throw new Error("context checkpoint cannot bypass active distillation");
         }
         if (completedUnrecordedClaimId) {
           if (fact.distillationClaimId !== completedUnrecordedClaimId) {
-            throw new Error(
-              "context checkpoint must record the completed distillation",
-            );
+            throw new Error("context checkpoint must record the completed distillation");
           }
         } else if (fact.distillationClaimId !== undefined) {
           throw new Error("context checkpoint has no completed distillation");
@@ -1930,17 +1638,12 @@ function assertLifecycleIdentities(
           throw new Error(`duplicate context checkpoint: ${fact.checkpointId}`);
         }
         if (fact.sourceThroughSeq >= envelope.seq) {
-          throw new Error(
-            "context checkpoint cannot cover itself or future facts",
-          );
+          throw new Error("context checkpoint cannot cover itself or future facts");
         }
         if (!latestCheckpoint && fact.supersedesCheckpointId !== undefined) {
           throw new Error("first context checkpoint cannot supersede another");
         }
-        if (
-          latestCheckpoint &&
-          fact.supersedesCheckpointId !== latestCheckpoint.checkpointId
-        ) {
+        if (latestCheckpoint && fact.supersedesCheckpointId !== latestCheckpoint.checkpointId) {
           throw new Error("context checkpoint supersession is stale");
         }
         if (
@@ -1960,9 +1663,7 @@ function assertLifecycleIdentities(
             settlement.checkpoint === undefined ||
             claim.recorded
           ) {
-            throw new Error(
-              "context checkpoint distillation binding is incomplete",
-            );
+            throw new Error("context checkpoint distillation binding is incomplete");
           }
           if (
             claim.checkpointId !== fact.checkpointId ||
@@ -1978,9 +1679,7 @@ function assertLifecycleIdentities(
           claim.recorded = true;
           completedUnrecordedClaimId = undefined;
         } else if (claimedCheckpointIds.has(fact.checkpointId)) {
-          throw new Error(
-            "context checkpoint cannot bypass its distillation claim",
-          );
+          throw new Error("context checkpoint cannot bypass its distillation claim");
         }
         checkpointIds.add(fact.checkpointId);
         latestCheckpoint = {
@@ -2001,15 +1700,11 @@ function sameControlDecisionAction(
   return (
     left.kind === right.kind &&
     left.reasonCode === right.reasonCode &&
-    (left.kind !== "wait" ||
-      (right.kind === "wait" && left.waitFor === right.waitFor))
+    (left.kind !== "wait" || (right.kind === "wait" && left.waitFor === right.waitFor))
   );
 }
 
-function sameDurableJsonPayload(
-  left: DurableJsonPayloadV1,
-  right: DurableJsonPayloadV1,
-): boolean {
+function sameDurableJsonPayload(left: DurableJsonPayloadV1, right: DurableJsonPayloadV1): boolean {
   if (left.kind !== right.kind || left.hash !== right.hash) return false;
   if (left.kind === "artifact_ref" && right.kind === "artifact_ref") {
     return left.artifactRef === right.artifactRef;
@@ -2064,9 +1759,7 @@ function sameJsonValue(left: JsonValue, right: JsonValue): boolean {
       Array.isArray(left) &&
       Array.isArray(right) &&
       left.length === right.length &&
-      left.every((item, index) =>
-        sameJsonValue(item, right[index] as JsonValue),
-      )
+      left.every((item, index) => sameJsonValue(item, right[index] as JsonValue))
     );
   }
   if (typeof left !== "object" || typeof right !== "object") return false;
@@ -2079,10 +1772,7 @@ function sameJsonValue(left: JsonValue, right: JsonValue): boolean {
     leftKeys.every(
       (key, index) =>
         key === rightKeys[index] &&
-        sameJsonValue(
-          leftRecord[key] as JsonValue,
-          rightRecord[key] as JsonValue,
-        ),
+        sameJsonValue(leftRecord[key] as JsonValue, rightRecord[key] as JsonValue),
     )
   );
 }
@@ -2097,16 +1787,12 @@ function assertInputFact(value: unknown): void {
         ["admissionPolicy"],
         fact.type,
       );
-      if (
-        fact.admissionPolicy !== undefined &&
-        fact.admissionPolicy !== "recent_round_floor_v1"
-      )
+      if (fact.admissionPolicy !== undefined && fact.admissionPolicy !== "recent_round_floor_v1")
         throw new Error("Invalid execution admission policy");
       assertId(fact.inputId, "inputId");
       for (const key of ["deadlineAtMs", "observedAtMs", "reserveMs"]) {
         assertNonNegativeInteger(fact[key], key);
-        if (!Number.isSafeInteger(fact[key]))
-          throw new Error(`Invalid execution budget ${key}`);
+        if (!Number.isSafeInteger(fact[key])) throw new Error(`Invalid execution budget ${key}`);
       }
       return;
     case "attempt.started":
@@ -2163,58 +1849,28 @@ function assertInputFact(value: unknown): void {
       assertPositiveInteger(fact.segmentIndex, "segmentIndex");
       assertId(fact.inputId, "inputId");
       assertNonEmptyString(fact.reducerVersion, "reducerVersion");
-      assertNonEmptyString(
-        fact.previousDecisionStateHash,
-        "previousDecisionStateHash",
-      );
+      assertNonEmptyString(fact.previousDecisionStateHash, "previousDecisionStateHash");
       assertControlDecisionAction(fact.previousAction, "previousAction");
-      assertExact(
-        fact.policyVersion,
-        WORK_SEGMENT_POLICY_VERSION_V1,
-        "policyVersion",
-      );
+      assertExact(fact.policyVersion, WORK_SEGMENT_POLICY_VERSION_V1, "policyVersion");
       return;
     case "memory.retrieval_settled":
       assertExactKeys(
         fact,
-        [
-          "type",
-          "queryId",
-          "trigger",
-          "providerVersion",
-          "policyVersion",
-          "status",
-          "cards",
-        ],
+        ["type", "queryId", "trigger", "providerVersion", "policyVersion", "status", "cards"],
         ["reasonCode"],
         fact.type,
       );
       assertId(fact.queryId, "queryId");
-      assertOneOf(
-        fact.trigger,
-        ["task_start", "work_segment_start"],
-        "memory trigger",
-      );
+      assertOneOf(fact.trigger, ["task_start", "work_segment_start"], "memory trigger");
       assertNonEmptyString(fact.providerVersion, "providerVersion");
-      assertExact(
-        fact.policyVersion,
-        MEMORY_RETRIEVAL_POLICY_VERSION_V1,
-        "policyVersion",
-      );
-      assertOneOf(
-        fact.status,
-        ["completed", "degraded", "failed", "disabled"],
-        "memory status",
-      );
+      assertExact(fact.policyVersion, MEMORY_RETRIEVAL_POLICY_VERSION_V1, "policyVersion");
+      assertOneOf(fact.status, ["completed", "degraded", "failed", "disabled"], "memory status");
       if (!Array.isArray(fact.cards) || fact.cards.length > 64) {
         throw new Error("memory cards must be a bounded array");
       }
       for (const card of fact.cards) assertMemoryCard(card);
       assertOptionalStringField(fact, "reasonCode");
-      if (
-        (fact.status === "failed" || fact.status === "disabled") &&
-        fact.cards.length > 0
-      ) {
+      if ((fact.status === "failed" || fact.status === "disabled") && fact.cards.length > 0) {
         throw new Error(`${fact.status} memory retrieval cannot contain cards`);
       }
       return;
@@ -2242,11 +1898,7 @@ function assertInputFact(value: unknown): void {
         ["task_terminal", "work_segment_terminal", "explicit_user_request"],
         "memory write trigger",
       );
-      assertExact(
-        fact.policyVersion,
-        MEMORY_WRITE_POLICY_VERSION_V1,
-        "memory write policyVersion",
-      );
+      assertExact(fact.policyVersion, MEMORY_WRITE_POLICY_VERSION_V1, "memory write policyVersion");
       assertNonEmptyString(fact.extractorVersion, "memory extractorVersion");
       assertNonEmptyString(fact.scopeFingerprint, "memory scopeFingerprint");
       assertPositiveInteger(fact.sourceFromSeq, "memory sourceFromSeq");
@@ -2258,12 +1910,7 @@ function assertInputFact(value: unknown): void {
       assertNonNegativeInteger(fact.claimedAt, "memory claimedAt");
       return;
     case "memory.candidate_staged":
-      assertExactKeys(
-        fact,
-        ["type", "writeId", "proposalHash", "atoms"],
-        [],
-        fact.type,
-      );
+      assertExactKeys(fact, ["type", "writeId", "proposalHash", "atoms"], [], fact.type);
       assertId(fact.writeId, "memory writeId");
       assertNonEmptyString(fact.proposalHash, "memory proposalHash");
       if (!Array.isArray(fact.atoms) || fact.atoms.length > 16) {
@@ -2274,15 +1921,7 @@ function assertInputFact(value: unknown): void {
     case "memory.write_settled":
       assertExactKeys(
         fact,
-        [
-          "type",
-          "writeId",
-          "status",
-          "storedIds",
-          "invalidatedIds",
-          "skippedAtomIds",
-          "settledAt",
-        ],
+        ["type", "writeId", "status", "storedIds", "invalidatedIds", "skippedAtomIds", "settledAt"],
         ["proposalHash", "reasonCode"],
         fact.type,
       );
@@ -2294,11 +1933,7 @@ function assertInputFact(value: unknown): void {
       );
       assertOptionalStringField(fact, "proposalHash");
       assertOptionalStringField(fact, "reasonCode");
-      for (const field of [
-        "storedIds",
-        "invalidatedIds",
-        "skippedAtomIds",
-      ] as const) {
+      for (const field of ["storedIds", "invalidatedIds", "skippedAtomIds"] as const) {
         const ids = fact[field];
         if (!Array.isArray(ids) || ids.length > 32) {
           throw new Error(`${field} must be a bounded array`);
@@ -2338,35 +1973,16 @@ function assertInputFact(value: unknown): void {
         MEMORY_TOPIC_ORGANIZATION_POLICY_VERSION_V1,
         "memory topic organization policyVersion",
       );
-      assertNonEmptyString(
-        fact.extractorVersion,
-        "memory topic extractorVersion",
-      );
-      assertNonEmptyString(
-        fact.scopeFingerprint,
-        "memory topic scopeFingerprint",
-      );
+      assertNonEmptyString(fact.extractorVersion, "memory topic extractorVersion");
+      assertNonEmptyString(fact.scopeFingerprint, "memory topic scopeFingerprint");
       assertId(fact.sourceWriteId, "memory topic sourceWriteId");
-      assertNonEmptyString(
-        fact.sourceProposalHash,
-        "memory topic sourceProposalHash",
-      );
-      assertUniqueBoundedIds(
-        fact.sourceMemoryIds,
-        64,
-        "memory topic sourceMemoryIds",
-        true,
-      );
+      assertNonEmptyString(fact.sourceProposalHash, "memory topic sourceProposalHash");
+      assertUniqueBoundedIds(fact.sourceMemoryIds, 64, "memory topic sourceMemoryIds", true);
       assertNonEmptyString(fact.sourceRevision, "memory topic sourceRevision");
       assertNonNegativeInteger(fact.claimedAt, "memory topic claimedAt");
       return;
     case "memory.topic_candidate_staged":
-      assertExactKeys(
-        fact,
-        ["type", "organizationId", "proposalHash", "topics"],
-        [],
-        fact.type,
-      );
+      assertExactKeys(fact, ["type", "organizationId", "proposalHash", "topics"], [], fact.type);
       assertId(fact.organizationId, "memory topic organizationId");
       assertNonEmptyString(fact.proposalHash, "memory topic proposalHash");
       if (!Array.isArray(fact.topics) || fact.topics.length > 16) {
@@ -2377,14 +1993,7 @@ function assertInputFact(value: unknown): void {
     case "memory.topic_organization_settled":
       assertExactKeys(
         fact,
-        [
-          "type",
-          "organizationId",
-          "status",
-          "topicIds",
-          "snapshotIds",
-          "settledAt",
-        ],
+        ["type", "organizationId", "status", "topicIds", "snapshotIds", "settledAt"],
         ["proposalHash", "reasonCode"],
         fact.type,
       );
@@ -2397,26 +2006,14 @@ function assertInputFact(value: unknown): void {
       assertOptionalStringField(fact, "proposalHash");
       assertOptionalStringField(fact, "reasonCode");
       assertUniqueBoundedIds(fact.topicIds, 16, "memory topicIds", false);
-      assertUniqueBoundedIds(
-        fact.snapshotIds,
-        16,
-        "memory topic snapshotIds",
-        false,
-      );
+      assertUniqueBoundedIds(fact.snapshotIds, 16, "memory topic snapshotIds", false);
       if (fact.topicIds.length !== fact.snapshotIds.length) {
-        throw new Error(
-          "memory topicIds and snapshotIds must have equal length",
-        );
+        throw new Error("memory topicIds and snapshotIds must have equal length");
       }
       if (fact.status !== "completed" && fact.topicIds.length > 0) {
-        throw new Error(
-          "non-completed memory topic organization cannot publish ids",
-        );
+        throw new Error("non-completed memory topic organization cannot publish ids");
       }
-      assertNonNegativeInteger(
-        fact.settledAt,
-        "memory topic organization settledAt",
-      );
+      assertNonNegativeInteger(fact.settledAt, "memory topic organization settledAt");
       return;
     case "memory.topic_evidence_settled": {
       assertExactKeys(
@@ -2441,19 +2038,9 @@ function assertInputFact(value: unknown): void {
         MEMORY_TOPIC_EVIDENCE_POLICY_VERSION_V1,
         "memory topic evidence plannerVersion",
       );
-      assertNonEmptyString(
-        fact.scopeFingerprint,
-        "memory topic evidence scopeFingerprint",
-      );
-      assertOneOf(
-        fact.status,
-        ["completed", "noop", "failed"],
-        "memory topic evidence status",
-      );
-      assertNonEmptyString(
-        fact.indexRevision,
-        "memory topic evidence indexRevision",
-      );
+      assertNonEmptyString(fact.scopeFingerprint, "memory topic evidence scopeFingerprint");
+      assertOneOf(fact.status, ["completed", "noop", "failed"], "memory topic evidence status");
+      assertNonEmptyString(fact.indexRevision, "memory topic evidence indexRevision");
       if (!Array.isArray(fact.indexEntries) || fact.indexEntries.length > 128) {
         throw new Error("memory topic index entries must be a bounded array");
       }
@@ -2467,19 +2054,13 @@ function assertInputFact(value: unknown): void {
         topicIds.add(entry.topicId);
         snapshotIds.add(entry.snapshotId);
       }
-      if (
-        !Array.isArray(fact.evidenceStates) ||
-        fact.evidenceStates.length > 32
-      ) {
+      if (!Array.isArray(fact.evidenceStates) || fact.evidenceStates.length > 32) {
         throw new Error("memory topic evidence states must be a bounded array");
       }
       const evidenceIds = new Set<string>();
       for (const state of fact.evidenceStates) {
         assertMemoryTopicEvidenceState(state);
-        if (
-          !topicIds.has(state.topicId) ||
-          !snapshotIds.has(state.snapshotId)
-        ) {
+        if (!topicIds.has(state.topicId) || !snapshotIds.has(state.snapshotId)) {
           throw new Error("memory topic evidence is outside the settled index");
         }
         const identity = `${state.topicId}\n${state.trajectoryId}\n${state.memoryId}`;
@@ -2493,17 +2074,12 @@ function assertInputFact(value: unknown): void {
         throw new Error("completed memory topic evidence requires states");
       }
       if (fact.status !== "completed" && fact.evidenceStates.length > 0) {
-        throw new Error(
-          "non-completed memory topic evidence cannot contain states",
-        );
+        throw new Error("non-completed memory topic evidence cannot contain states");
       }
       if (fact.status === "failed" && fact.indexEntries.length > 0) {
         throw new Error("failed memory topic evidence cannot contain an index");
       }
-      assertNonNegativeInteger(
-        fact.settledAt,
-        "memory topic evidence settledAt",
-      );
+      assertNonNegativeInteger(fact.settledAt, "memory topic evidence settledAt");
       return;
     }
     case "memory.persona_projection_settled": {
@@ -2530,19 +2106,9 @@ function assertInputFact(value: unknown): void {
         MEMORY_PERSONA_PROJECTION_POLICY_VERSION_V1,
         "memory persona projection projectorVersion",
       );
-      assertNonEmptyString(
-        fact.scopeFingerprint,
-        "memory persona projection scopeFingerprint",
-      );
-      assertOneOf(
-        fact.status,
-        ["completed", "noop", "failed"],
-        "memory persona projection status",
-      );
-      assertNonEmptyString(
-        fact.projectionRevision,
-        "memory persona projection revision",
-      );
+      assertNonEmptyString(fact.scopeFingerprint, "memory persona projection scopeFingerprint");
+      assertOneOf(fact.status, ["completed", "noop", "failed"], "memory persona projection status");
+      assertNonEmptyString(fact.projectionRevision, "memory persona projection revision");
       assertNonEmptyString(fact.projectionKey, "memory persona projection key");
       if (!Array.isArray(fact.claims) || fact.claims.length > 64) {
         throw new Error("memory persona claims must be a bounded array");
@@ -2555,10 +2121,7 @@ function assertInputFact(value: unknown): void {
         }
         claimIds.add(claim.memoryId);
       }
-      assertNonNegativeInteger(
-        fact.sourceCount,
-        "memory persona projection sourceCount",
-      );
+      assertNonNegativeInteger(fact.sourceCount, "memory persona projection sourceCount");
       if ((fact.sourceCount as number) > 128) {
         throw new Error("memory persona projection sourceCount is too large");
       }
@@ -2567,19 +2130,12 @@ function assertInputFact(value: unknown): void {
         throw new Error("completed memory persona projection requires claims");
       }
       if (fact.status !== "completed" && fact.claims.length > 0) {
-        throw new Error(
-          "non-completed memory persona projection cannot contain claims",
-        );
+        throw new Error("non-completed memory persona projection cannot contain claims");
       }
       if (fact.status !== "completed" && fact.sourceCount !== 0) {
-        throw new Error(
-          "non-completed memory persona projection cannot contain sources",
-        );
+        throw new Error("non-completed memory persona projection cannot contain sources");
       }
-      assertNonNegativeInteger(
-        fact.settledAt,
-        "memory persona projection settledAt",
-      );
+      assertNonNegativeInteger(fact.settledAt, "memory persona projection settledAt");
       return;
     }
     case "memory.raw_evidence_settled": {
@@ -2604,19 +2160,9 @@ function assertInputFact(value: unknown): void {
         MEMORY_RAW_EVIDENCE_POLICY_VERSION_V1,
         "memory raw evidence resolverVersion",
       );
-      assertNonEmptyString(
-        fact.scopeFingerprint,
-        "memory raw evidence scopeFingerprint",
-      );
-      assertOneOf(
-        fact.status,
-        ["completed", "noop", "failed"],
-        "memory raw evidence status",
-      );
-      assertNonEmptyString(
-        fact.resolutionRevision,
-        "memory raw evidence resolutionRevision",
-      );
+      assertNonEmptyString(fact.scopeFingerprint, "memory raw evidence scopeFingerprint");
+      assertOneOf(fact.status, ["completed", "noop", "failed"], "memory raw evidence status");
+      assertNonEmptyString(fact.resolutionRevision, "memory raw evidence resolutionRevision");
       if (!Array.isArray(fact.spans) || fact.spans.length > 16) {
         throw new Error("memory raw evidence spans must be a bounded array");
       }
@@ -2638,9 +2184,7 @@ function assertInputFact(value: unknown): void {
         throw new Error("completed memory raw evidence requires spans");
       }
       if (fact.status !== "completed" && fact.spans.length > 0) {
-        throw new Error(
-          "non-completed memory raw evidence cannot contain spans",
-        );
+        throw new Error("non-completed memory raw evidence cannot contain spans");
       }
       assertNonNegativeInteger(fact.settledAt, "memory raw evidence settledAt");
       return;
@@ -2670,19 +2214,9 @@ function assertInputFact(value: unknown): void {
         MEMORY_EVIDENCE_COVERAGE_POLICY_VERSION_V1,
         "memory evidence coverage plannerVersion",
       );
-      assertNonEmptyString(
-        fact.scopeFingerprint,
-        "memory evidence coverage scopeFingerprint",
-      );
-      assertOneOf(
-        fact.status,
-        ["completed", "noop", "failed"],
-        "memory evidence coverage status",
-      );
-      assertNonEmptyString(
-        fact.planRevision,
-        "memory evidence coverage planRevision",
-      );
+      assertNonEmptyString(fact.scopeFingerprint, "memory evidence coverage scopeFingerprint");
+      assertOneOf(fact.status, ["completed", "noop", "failed"], "memory evidence coverage status");
+      assertNonEmptyString(fact.planRevision, "memory evidence coverage planRevision");
       if (!Array.isArray(fact.requirements) || fact.requirements.length > 6) {
         throw new Error("memory evidence requirements must be a bounded array");
       }
@@ -2699,10 +2233,7 @@ function assertInputFact(value: unknown): void {
       if (requirementChars > 4_096) {
         throw new Error("memory evidence requirements are too large");
       }
-      if (
-        !Array.isArray(fact.coverage) ||
-        fact.coverage.length !== fact.requirements.length
-      ) {
+      if (!Array.isArray(fact.coverage) || fact.coverage.length !== fact.requirements.length) {
         throw new Error("memory evidence coverage must match requirements");
       }
       const coverageRequirementIds = new Set<string>();
@@ -2720,10 +2251,7 @@ function assertInputFact(value: unknown): void {
         for (const id of item.memoryIds) coveredMemoryIds.add(id);
         for (const id of item.topicIds) expandedTopicIds.add(id);
       }
-      if (
-        !Array.isArray(fact.supplementalStates) ||
-        fact.supplementalStates.length > 16
-      ) {
+      if (!Array.isArray(fact.supplementalStates) || fact.supplementalStates.length > 16) {
         throw new Error("memory supplemental states must be a bounded array");
       }
       const supplementalIds = new Set<string>();
@@ -2752,10 +2280,7 @@ function assertInputFact(value: unknown): void {
         assertMemoryRawEvidenceSpan(span);
         if (
           spanRefs.has(span.evidenceRef) ||
-          span.memoryIds.some(
-            (id: unknown) =>
-              typeof id !== "string" || !coveredMemoryIds.has(id),
-          )
+          span.memoryIds.some((id: unknown) => typeof id !== "string" || !coveredMemoryIds.has(id))
         ) {
           throw new Error("memory coverage span is outside covered evidence");
         }
@@ -2776,23 +2301,13 @@ function assertInputFact(value: unknown): void {
           fact.supplementalStates.length > 0 ||
           fact.spans.length > 0)
       ) {
-        throw new Error(
-          "non-completed memory evidence coverage cannot contain a plan",
-        );
+        throw new Error("non-completed memory evidence coverage cannot contain a plan");
       }
-      assertNonNegativeInteger(
-        fact.settledAt,
-        "memory evidence coverage settledAt",
-      );
+      assertNonNegativeInteger(fact.settledAt, "memory evidence coverage settledAt");
       return;
     }
     case "model.dispatch_recorded":
-      assertExactKeys(
-        fact,
-        ["type", "modelCallId", "turn", "requestHash"],
-        [],
-        fact.type,
-      );
+      assertExactKeys(fact, ["type", "modelCallId", "turn", "requestHash"], [], fact.type);
       assertId(fact.modelCallId, "modelCallId");
       assertPositiveInteger(fact.turn, "turn");
       assertNonEmptyString(fact.requestHash, "requestHash");
@@ -2800,14 +2315,7 @@ function assertInputFact(value: unknown): void {
     case "model.settled":
       assertExactKeys(
         fact,
-        [
-          "type",
-          "modelCallId",
-          "turn",
-          "status",
-          "hasToolCalls",
-          "hasVisibleOutput",
-        ],
+        ["type", "modelCallId", "turn", "status", "hasToolCalls", "hasVisibleOutput"],
         ["response", "finishReason", "errorCode"],
         fact.type,
       );
@@ -2815,14 +2323,7 @@ function assertInputFact(value: unknown): void {
       assertPositiveInteger(fact.turn, "turn");
       assertOneOf(
         fact.status,
-        [
-          "completed",
-          "truncated",
-          "failed",
-          "cancelled",
-          "unknown",
-          "rejected",
-        ],
+        ["completed", "truncated", "failed", "cancelled", "unknown", "rejected"],
         "model status",
       );
       assertBoolean(fact.hasToolCalls, "hasToolCalls");
@@ -2840,9 +2341,7 @@ function assertInputFact(value: unknown): void {
         (fact.status === "completed" || fact.status === "truncated") &&
         fact.response === undefined
       ) {
-        throw new Error(
-          `${fact.status} model settlement requires a durable response`,
-        );
+        throw new Error(`${fact.status} model settlement requires a durable response`);
       }
       if (
         (fact.status === "failed" || fact.status === "rejected") &&
@@ -2881,16 +2380,7 @@ function assertInputFact(value: unknown): void {
     case "tool.permission_resolved":
       assertExactKeys(
         fact,
-        [
-          "type",
-          "turn",
-          "sourceIndex",
-          "callId",
-          "tool",
-          "policyVersion",
-          "resolution",
-          "source",
-        ],
+        ["type", "turn", "sourceIndex", "callId", "tool", "policyVersion", "resolution", "source"],
         ["ruleId"],
         fact.type,
       );
@@ -2899,16 +2389,8 @@ function assertInputFact(value: unknown): void {
       assertId(fact.callId, "callId");
       assertNonEmptyString(fact.tool, "tool");
       assertNonEmptyString(fact.policyVersion, "policyVersion");
-      assertOneOf(
-        fact.resolution,
-        ["allow_once", "allow_rule", "deny"],
-        "permission resolution",
-      );
-      assertOneOf(
-        fact.source,
-        ["base_policy", "user_prompt", "run_rule"],
-        "permission source",
-      );
+      assertOneOf(fact.resolution, ["allow_once", "allow_rule", "deny"], "permission resolution");
+      assertOneOf(fact.source, ["base_policy", "user_prompt", "run_rule"], "permission source");
       if (hasOwn(fact, "ruleId")) assertId(fact.ruleId, "ruleId");
       if (fact.resolution === "allow_rule" && !hasOwn(fact, "ruleId")) {
         throw new Error("allow_rule permission requires ruleId");
@@ -2952,9 +2434,7 @@ function assertInputFact(value: unknown): void {
         assertToolObservation(fact.observation, "observation");
         const observation = fact.observation as ToolObservationV1;
         if (fact.status !== "completed" && !observation.isError) {
-          throw new Error(
-            `${fact.status} tool settlement observation must be an error`,
-          );
+          throw new Error(`${fact.status} tool settlement observation must be an error`);
         }
       }
       if (
@@ -3006,12 +2486,7 @@ function assertInputFact(value: unknown): void {
       assertOptionalStringField(fact, "reason");
       return;
     case "runtime.failed":
-      assertExactKeys(
-        fact,
-        ["type", "area", "errorCode", "message", "retryable"],
-        [],
-        fact.type,
-      );
+      assertExactKeys(fact, ["type", "area", "errorCode", "message", "retryable"], [], fact.type);
       assertOneOf(fact.area, ["input", "context", "runtime"], "failure area");
       assertId(fact.errorCode, "errorCode");
       assertNonEmptyString(fact.message, "message");
@@ -3026,11 +2501,7 @@ function assertInputFact(value: unknown): void {
       );
       assertId(fact.policyId, "policyId");
       assertNonEmptyString(fact.policyVersion, "policyVersion");
-      assertOneOf(
-        fact.request,
-        ["continue", "wait", "complete", "incomplete"],
-        "policy request",
-      );
+      assertOneOf(fact.request, ["continue", "wait", "complete", "incomplete"], "policy request");
       assertId(fact.reasonCode, "reasonCode");
       return;
     case "completion.review_claimed":
@@ -3050,17 +2521,10 @@ function assertInputFact(value: unknown): void {
         fact.type,
       );
       assertId(fact.reviewId, "reviewId");
-      if (
-        typeof fact.candidateHash !== "string" ||
-        !/^[0-9a-f]{64}$/u.test(fact.candidateHash)
-      ) {
+      if (typeof fact.candidateHash !== "string" || !/^[0-9a-f]{64}$/u.test(fact.candidateHash)) {
         throw new Error("completion review candidateHash must be sha256 hex");
       }
-      assertExact(
-        fact.policyVersion,
-        COMPLETION_REVIEW_POLICY_VERSION_V1,
-        "policyVersion",
-      );
+      assertExact(fact.policyVersion, COMPLETION_REVIEW_POLICY_VERSION_V1, "policyVersion");
       assertId(fact.reviewerId, "reviewerId");
       if (!Array.isArray(fact.triggers) || fact.triggers.length === 0) {
         throw new Error("completion review triggers must be non-empty");
@@ -3090,15 +2554,7 @@ function assertInputFact(value: unknown): void {
     case "completion.review_settled":
       assertExactKeys(
         fact,
-        [
-          "type",
-          "reviewId",
-          "status",
-          "verdict",
-          "reasonCode",
-          "summary",
-          "settledAt",
-        ],
+        ["type", "reviewId", "status", "verdict", "reasonCode", "summary", "settledAt"],
         ["environmentAudit"],
         fact.type,
       );
@@ -3163,20 +2619,13 @@ function assertInputFact(value: unknown): void {
       assertPositiveInteger(fact.sourceFromSeq, "sourceFromSeq");
       assertPositiveInteger(fact.sourceThroughSeq, "sourceThroughSeq");
       if ((fact.sourceFromSeq as number) > (fact.sourceThroughSeq as number)) {
-        throw new Error(
-          "context checkpoint distillation source range is invalid",
-        );
+        throw new Error("context checkpoint distillation source range is invalid");
       }
       assertSingleLineString(fact.sourceInputHash, "sourceInputHash");
       return;
     }
     case "context.checkpoint_distillation_settled": {
-      assertExactKeys(
-        fact,
-        ["type", "claimId", "status"],
-        ["checkpoint", "errorCode"],
-        fact.type,
-      );
+      assertExactKeys(fact, ["type", "claimId", "status"], ["checkpoint", "errorCode"], fact.type);
       assertId(fact.claimId, "claimId");
       assertOneOf(
         fact.status,
@@ -3192,24 +2641,16 @@ function assertInputFact(value: unknown): void {
       }
       assertOptionalStringField(fact, "errorCode");
       if (fact.status === "completed" && !hasOwn(fact, "checkpoint")) {
-        throw new Error(
-          "completed checkpoint distillation requires checkpoint",
-        );
+        throw new Error("completed checkpoint distillation requires checkpoint");
       }
       if (fact.status !== "completed" && hasOwn(fact, "checkpoint")) {
-        throw new Error(
-          "non-completed checkpoint distillation cannot persist checkpoint",
-        );
+        throw new Error("non-completed checkpoint distillation cannot persist checkpoint");
       }
       if (fact.status !== "completed" && !hasOwn(fact, "errorCode")) {
-        throw new Error(
-          "non-completed checkpoint distillation requires errorCode",
-        );
+        throw new Error("non-completed checkpoint distillation requires errorCode");
       }
       if (fact.status === "completed" && hasOwn(fact, "errorCode")) {
-        throw new Error(
-          "completed checkpoint distillation cannot carry errorCode",
-        );
+        throw new Error("completed checkpoint distillation cannot carry errorCode");
       }
       return;
     }
@@ -3297,11 +2738,7 @@ function assertMemoryCard(value: unknown): void {
   assertExactKeys(scope, ["repositoryId"], ["branch"], "memory card scope");
   assertNonEmptyString(scope.repositoryId, "memory card repositoryId");
   assertOptionalStringField(scope, "branch");
-  if (
-    !Array.isArray(card.sources) ||
-    card.sources.length === 0 ||
-    card.sources.length > 32
-  ) {
+  if (!Array.isArray(card.sources) || card.sources.length === 0 || card.sources.length > 32) {
     throw new Error("memory card sources must be a non-empty bounded array");
   }
   for (const value of card.sources) {
@@ -3348,16 +2785,8 @@ function assertMemoryAtomProposal(value: unknown): void {
     "memory atom schemaVersion",
   );
   assertId(atom.atomId, "memory atomId");
-  assertOneOf(
-    atom.kind,
-    ["semantic", "episodic", "profile", "instruction"],
-    "memory atom kind",
-  );
-  assertOneOf(
-    atom.action,
-    ["store", "update", "merge", "skip"],
-    "memory atom action",
-  );
+  assertOneOf(atom.kind, ["semantic", "episodic", "profile", "instruction"], "memory atom kind");
+  assertOneOf(atom.action, ["store", "update", "merge", "skip"], "memory atom action");
   assertNonEmptyString(atom.statement, "memory atom statement");
   if ((atom.statement as string).length > 4_096) {
     throw new Error("memory atom statement is too large");
@@ -3417,10 +2846,7 @@ function assertMemoryAtomProposal(value: unknown): void {
   if (atom.action === "store" && atom.targetIds.length > 0) {
     throw new Error("store memory atom cannot target existing ids");
   }
-  if (
-    (atom.action === "update" || atom.action === "merge") &&
-    atom.targetIds.length === 0
-  ) {
+  if ((atom.action === "update" || atom.action === "merge") && atom.targetIds.length === 0) {
     throw new Error(`${atom.action as string} memory atom requires targets`);
   }
   assertOptionalStringField(atom, "validFrom");
@@ -3459,37 +2885,21 @@ function assertMemoryTopicProposal(value: unknown): void {
   );
   assertSingleLineString(topic.canonicalName, "memory topic canonicalName");
   assertSingleLineString(topic.normalizedName, "memory topic normalizedName");
-  if (
-    (topic.canonicalName as string).length > 96 ||
-    (topic.normalizedName as string).length > 96
-  ) {
+  if ((topic.canonicalName as string).length > 96 || (topic.normalizedName as string).length > 96) {
     throw new Error("memory topic name is too large");
   }
   if (hasOwn(topic, "targetTopicId")) {
     assertId(topic.targetTopicId, "memory topic targetTopicId");
   }
-  if (
-    !Array.isArray(topic.members) ||
-    topic.members.length === 0 ||
-    topic.members.length > 256
-  ) {
+  if (!Array.isArray(topic.members) || topic.members.length === 0 || topic.members.length > 256) {
     throw new Error("memory topic members must be a non-empty bounded array");
   }
   const memberIds = new Set<string>();
   for (const value of topic.members) {
     const member = expectObject(value, "memory topic member");
-    assertExactKeys(
-      member,
-      ["memoryId", "role", "confidence", "basis"],
-      [],
-      "memory topic member",
-    );
+    assertExactKeys(member, ["memoryId", "role", "confidence", "basis"], [], "memory topic member");
     assertId(member.memoryId, "memory topic member memoryId");
-    assertOneOf(
-      member.role,
-      ["primary", "supporting"],
-      "memory topic member role",
-    );
+    assertOneOf(member.role, ["primary", "supporting"], "memory topic member role");
     assertUnitInterval(member.confidence, "memory topic member confidence");
     assertOneOf(
       member.basis,
@@ -3528,29 +2938,14 @@ function assertMemoryTopicIndexEntry(value: unknown): void {
     ["semantic", "episodic", "profile", "instruction", "mixed"],
     "memory topic index family",
   );
-  assertSingleLineString(
-    entry.canonicalName,
-    "memory topic index canonicalName",
-  );
-  assertSingleLineString(
-    entry.normalizedName,
-    "memory topic index normalizedName",
-  );
-  if (
-    (entry.canonicalName as string).length > 96 ||
-    (entry.normalizedName as string).length > 96
-  ) {
+  assertSingleLineString(entry.canonicalName, "memory topic index canonicalName");
+  assertSingleLineString(entry.normalizedName, "memory topic index normalizedName");
+  if ((entry.canonicalName as string).length > 96 || (entry.normalizedName as string).length > 96) {
     throw new Error("memory topic index name is too large");
   }
   assertNonNegativeInteger(entry.memberCount, "memory topic index memberCount");
-  assertNonNegativeInteger(
-    entry.trajectoryCount,
-    "memory topic index trajectoryCount",
-  );
-  assertNonEmptyString(
-    entry.projectionHash,
-    "memory topic index projectionHash",
-  );
+  assertNonNegativeInteger(entry.trajectoryCount, "memory topic index trajectoryCount");
+  assertNonEmptyString(entry.projectionHash, "memory topic index projectionHash");
 }
 
 function assertMemoryTopicEvidenceState(value: unknown): void {
@@ -3574,11 +2969,7 @@ function assertMemoryTopicEvidenceState(value: unknown): void {
   assertId(state.snapshotId, "memory topic evidence snapshotId");
   assertId(state.trajectoryId, "memory topic evidence trajectoryId");
   assertId(state.memoryId, "memory topic evidence memoryId");
-  assertOneOf(
-    state.state,
-    ["current", "historical"],
-    "memory topic evidence state kind",
-  );
+  assertOneOf(state.state, ["current", "historical"], "memory topic evidence state kind");
   assertNonEmptyString(state.statement, "memory topic evidence statement");
   if ((state.statement as string).length > 4_096) {
     throw new Error("memory topic evidence statement is too large");
@@ -3602,14 +2993,7 @@ function assertMemoryPersonaClaim(value: unknown): void {
   const claim = expectObject(value, "memory persona claim");
   assertExactKeys(
     claim,
-    [
-      "memoryId",
-      "kind",
-      "statement",
-      "confidence",
-      "validFrom",
-      "evidenceRefs",
-    ],
+    ["memoryId", "kind", "statement", "confidence", "validFrom", "evidenceRefs"],
     [],
     "memory persona claim",
   );
@@ -3649,12 +3033,7 @@ function assertMemoryRawEvidenceSpan(value: unknown): void {
   if ((span.evidenceRef as string).length > 1_024) {
     throw new Error("memory raw evidence ref is too large");
   }
-  assertUniqueBoundedIds(
-    span.memoryIds,
-    32,
-    "memory raw evidence memoryIds",
-    true,
-  );
+  assertUniqueBoundedIds(span.memoryIds, 32, "memory raw evidence memoryIds", true);
   assertNonEmptyString(span.content, "memory raw evidence content");
   if ((span.content as string).length > 8_192) {
     throw new Error("memory raw evidence span content is too large");
@@ -3673,10 +3052,7 @@ function assertMemoryEvidenceRequirement(
     "memory evidence requirement",
   );
   assertId(requirement.requirementId, "memory evidence requirementId");
-  assertSingleLineString(
-    requirement.description,
-    "memory evidence requirement description",
-  );
+  assertSingleLineString(requirement.description, "memory evidence requirement description");
   if ((requirement.description as string).length > 1_024) {
     throw new Error("memory evidence requirement description is too large");
   }
@@ -3685,10 +3061,7 @@ function assertMemoryEvidenceRequirement(
     ["required", "supporting"],
     "memory evidence requirement priority",
   );
-  assertPositiveInteger(
-    requirement.minimumEvidence,
-    "memory evidence minimumEvidence",
-  );
+  assertPositiveInteger(requirement.minimumEvidence, "memory evidence minimumEvidence");
   if ((requirement.minimumEvidence as number) > 3) {
     throw new Error("memory evidence minimumEvidence is too large");
   }
@@ -3710,22 +3083,10 @@ function assertMemoryEvidenceCoverageItem(
     ["covered", "partial", "missing"],
     "memory evidence coverage item status",
   );
-  assertUniqueBoundedIds(
-    item.memoryIds,
-    16,
-    "memory evidence coverage memoryIds",
-    false,
-  );
-  assertUniqueBoundedIds(
-    item.topicIds,
-    8,
-    "memory evidence coverage topicIds",
-    false,
-  );
+  assertUniqueBoundedIds(item.memoryIds, 16, "memory evidence coverage memoryIds", false);
+  assertUniqueBoundedIds(item.topicIds, 8, "memory evidence coverage topicIds", false);
   if (item.status === "missing" && item.memoryIds.length > 0) {
-    throw new Error(
-      "missing memory evidence coverage cannot contain memoryIds",
-    );
+    throw new Error("missing memory evidence coverage cannot contain memoryIds");
   }
   if (item.status === "covered" && item.memoryIds.length === 0) {
     throw new Error("covered memory evidence coverage requires memoryIds");
@@ -3756,12 +3117,7 @@ function assertUniqueBoundedIds(
 }
 
 function assertUnitInterval(value: unknown, field: string): void {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value < 0 ||
-    value > 1
-  ) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
     throw new Error(`${field} must be between 0 and 1`);
   }
 }
@@ -3801,8 +3157,7 @@ function assertTaskCheckpoint(value: unknown, field: string): void {
     "verification",
     "unresolved",
   ] as const;
-  let itemCount =
-    hasOwn(checkpoint, "goal") || hasOwn(checkpoint, "nextAction") ? 1 : 0;
+  let itemCount = hasOwn(checkpoint, "goal") || hasOwn(checkpoint, "nextAction") ? 1 : 0;
   for (const listField of listFields) {
     const items = checkpoint[listField];
     if (!Array.isArray(items)) {
@@ -3842,16 +3197,12 @@ function assertCheckpointSourcesInRange(
 ): void {
   for (const item of taskCheckpointItems(checkpoint)) {
     if (item.sourceSeqs.some((seq) => seq < fromSeq || seq > throughSeq)) {
-      throw new Error(
-        "task checkpoint source seq is outside its covered range",
-      );
+      throw new Error("task checkpoint source seq is outside its covered range");
     }
   }
 }
 
-function taskCheckpointItems(
-  checkpoint: TaskCheckpointV1,
-): readonly TaskCheckpointItemV1[] {
+function taskCheckpointItems(checkpoint: TaskCheckpointV1): readonly TaskCheckpointItemV1[] {
   return [
     ...(checkpoint.goal ? [checkpoint.goal] : []),
     ...checkpoint.confirmedFacts,
@@ -3922,9 +3273,7 @@ function assertModelResponse(value: unknown): void {
     response.providerProtocol === "anthropic-compatible" &&
     hasOwn(response, "reasoningPassback")
   ) {
-    throw new Error(
-      "anthropic-compatible model response cannot use string reasoningPassback",
-    );
+    throw new Error("anthropic-compatible model response cannot use string reasoningPassback");
   }
   assertOptionalStringField(response, "finishReason");
   if (hasOwn(response, "usage")) assertModelResponseUsage(response.usage);
@@ -3972,14 +3321,8 @@ function assertModelResponseUsage(value: unknown): void {
   }
 }
 
-function assertModelResponseToolCall(
-  value: unknown,
-  expectedSourceIndex: number,
-): void {
-  const call = expectObject(
-    value,
-    `model response.toolCalls[${expectedSourceIndex}]`,
-  );
+function assertModelResponseToolCall(value: unknown, expectedSourceIndex: number): void {
+  const call = expectObject(value, `model response.toolCalls[${expectedSourceIndex}]`);
   const field = `model response.toolCalls[${expectedSourceIndex}]`;
   assertExactKeys(
     call,
@@ -4008,8 +3351,7 @@ function assertModelResponseToolCall(
       parsed !== null &&
       typeof parsed === "object" &&
       !Array.isArray(parsed) &&
-      (Object.getPrototypeOf(parsed) === Object.prototype ||
-        Object.getPrototypeOf(parsed) === null)
+      (Object.getPrototypeOf(parsed) === Object.prototype || Object.getPrototypeOf(parsed) === null)
     ) {
       parsedObject = parsed as Record<string, unknown>;
     }
@@ -4018,14 +3360,10 @@ function assertModelResponseToolCall(
   }
   if (call.argumentsValid) {
     if (!parsedObject || !jsonValuesEqual(parsedObject, args)) {
-      throw new Error(
-        `${field} valid rawArguments must exactly match normalized args`,
-      );
+      throw new Error(`${field} valid rawArguments must exactly match normalized args`);
     }
   } else if (parsedObject || Object.keys(args).length !== 0) {
-    throw new Error(
-      `${field} invalid arguments must preserve non-object raw input and empty args`,
-    );
+    throw new Error(`${field} invalid arguments must preserve non-object raw input and empty args`);
   }
 }
 
@@ -4050,10 +3388,7 @@ function assertInputAttachments(value: unknown): void {
     assertOneOf(attachment.type, ["image", "file"], "attachment type");
     assertNonEmptyString(attachment.name, `attachments[${index}].name`);
     assertOptionalStringField(attachment, "mimeType");
-    assertDurableJsonPayload(
-      attachment.content,
-      `attachments[${index}].content`,
-    );
+    assertDurableJsonPayload(attachment.content, `attachments[${index}].content`);
     const content = attachment.content as DurableJsonPayloadV1;
     if (content.kind === "inline" && typeof content.value !== "string") {
       throw new Error("inline attachment content must be a string");
@@ -4063,12 +3398,7 @@ function assertInputAttachments(value: unknown): void {
 
 function assertToolObservation(value: unknown, field: string): void {
   const observation = expectObject(value, field);
-  assertExactKeys(
-    observation,
-    ["schemaVersion", "summary", "isError"],
-    ["payload"],
-    field,
-  );
+  assertExactKeys(observation, ["schemaVersion", "summary", "isError"], ["payload"], field);
   assertExact(
     observation.schemaVersion,
     TOOL_OBSERVATION_SCHEMA_VERSION_V1,
@@ -4091,12 +3421,7 @@ function jsonValuesEqual(left: unknown, right: unknown): boolean {
       left.every((item, index) => jsonValuesEqual(item, right[index]))
     );
   }
-  if (
-    left === null ||
-    right === null ||
-    typeof left !== "object" ||
-    typeof right !== "object"
-  ) {
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
     return false;
   }
   const leftRecord = left as Record<string, unknown>;
@@ -4107,8 +3432,7 @@ function jsonValuesEqual(left: unknown, right: unknown): boolean {
     leftKeys.length === rightKeys.length &&
     leftKeys.every(
       (key, index) =>
-        key === rightKeys[index] &&
-        jsonValuesEqual(leftRecord[key], rightRecord[key]),
+        key === rightKeys[index] && jsonValuesEqual(leftRecord[key], rightRecord[key]),
     )
   );
 }
@@ -4118,8 +3442,7 @@ function expectObject(value: unknown, field: string): Record<string, unknown> {
     typeof value !== "object" ||
     value === null ||
     Array.isArray(value) ||
-    (Object.getPrototypeOf(value) !== Object.prototype &&
-      Object.getPrototypeOf(value) !== null)
+    (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
   ) {
     throw new Error(`${field} must be a plain object`);
   }
@@ -4150,10 +3473,7 @@ function assertExact(value: unknown, expected: string, field: string): void {
 }
 
 function assertId(value: unknown, field: string): void {
-  if (
-    typeof value !== "string" ||
-    !/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,511}$/.test(value)
-  ) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,511}$/.test(value)) {
     throw new Error(`${field} must be a stable non-empty id`);
   }
 }
@@ -4185,10 +3505,7 @@ function hasControlCharacter(value: string): boolean {
   return false;
 }
 
-function assertOptionalStringField(
-  value: Record<string, unknown>,
-  field: string,
-): void {
+function assertOptionalStringField(value: Record<string, unknown>, field: string): void {
   if (hasOwn(value, field)) assertNonEmptyString(value[field], field);
 }
 
@@ -4208,11 +3525,7 @@ function assertNonNegativeInteger(value: unknown, field: string): void {
   }
 }
 
-function assertOneOf(
-  value: unknown,
-  expected: readonly string[],
-  field: string,
-): void {
+function assertOneOf(value: unknown, expected: readonly string[], field: string): void {
   if (typeof value !== "string" || !expected.includes(value)) {
     throw new Error(`${field} has an unsupported value`);
   }
@@ -4236,11 +3549,7 @@ function assertDurableJsonPayload(value: unknown, field: string): void {
 }
 
 function assertJsonValue(value: unknown, field: string): void {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return;
   }
   if (typeof value === "number") {

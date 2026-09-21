@@ -15,14 +15,7 @@ export interface MonitorTask {
   dependencies: string[];
   scope: string[];
   acceptance: string[];
-  status:
-    | "waiting"
-    | "running"
-    | "done"
-    | "failed"
-    | "cancelled"
-    | "blocked"
-    | "interrupted";
+  status: "waiting" | "running" | "done" | "failed" | "cancelled" | "blocked" | "interrupted";
   blocker?: string;
   summary?: string;
   audit?: MonitorAudit;

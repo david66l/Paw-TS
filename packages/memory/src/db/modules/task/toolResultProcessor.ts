@@ -40,10 +40,7 @@ const SECRET_PATTERNS: [RegExp, string][] = [
   [/ghp_[a-zA-Z0-9]{36}/g, "GITHUB_TOKEN"],
   [/-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g, "PRIVATE_KEY"],
   [/(?:password|passwd|pwd)\s*[:=]\s*['"][^'"]+['"]/gi, "PASSWORD"],
-  [
-    /eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g,
-    "JWT_TOKEN",
-  ],
+  [/eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g, "JWT_TOKEN"],
   [/(?:mongodb|postgresql|mysql|redis):\/\/[^@\s]+@/gi, "DB_CREDENTIAL"],
 ];
 
@@ -159,9 +156,7 @@ export class ToolResultProcessor {
     parts.push(`[${raw.status}] ${raw.toolName}`);
 
     if (errors.length > 0) {
-      parts.push(
-        `- ${errors.length} error(s): ${errors.map((e) => e.message).join("; ")}`,
-      );
+      parts.push(`- ${errors.length} error(s): ${errors.map((e) => e.message).join("; ")}`);
     }
 
     if (raw.exitCode !== undefined) {
@@ -183,20 +178,15 @@ export class ToolResultProcessor {
     const text = raw.rawOutput;
 
     // 文件路径
-    const fileMatches = text.matchAll(
-      /(?:\/[\w.-]+)+\.(?:ts|js|json|yaml|yml|sql|md|txt)\b/g,
-    );
+    const fileMatches = text.matchAll(/(?:\/[\w.-]+)+\.(?:ts|js|json|yaml|yml|sql|md|txt)\b/g);
     for (const m of fileMatches) {
       if (facts.length < this.maxFactCount) facts.push(m[0]);
     }
 
     // 版本号
-    const verMatches = text.matchAll(
-      /(?:version|v)\s*[:=]?\s*(\d+\.\d+\.\d+)/gi,
-    );
+    const verMatches = text.matchAll(/(?:version|v)\s*[:=]?\s*(\d+\.\d+\.\d+)/gi);
     for (const m of verMatches) {
-      if (m[1] && facts.length < this.maxFactCount)
-        facts.push(`version: ${m[1]}`);
+      if (m[1] && facts.length < this.maxFactCount) facts.push(`version: ${m[1]}`);
     }
 
     return [...new Set(facts)];
@@ -206,9 +196,7 @@ export class ToolResultProcessor {
   private extractWarnings(raw: RawToolResult): string[] {
     const warnings: string[] = [];
     const text = raw.rawOutput;
-    const warnMatches = text.matchAll(
-      /(?:WARN(?:ING)?|DEPRECATED|deprecated|NOTE):?\s*(.+)$/gim,
-    );
+    const warnMatches = text.matchAll(/(?:WARN(?:ING)?|DEPRECATED|deprecated|NOTE):?\s*(.+)$/gim);
     for (const m of warnMatches) {
       if (m[1]) warnings.push(m[1].trim());
     }

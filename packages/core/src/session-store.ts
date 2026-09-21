@@ -213,14 +213,10 @@ export class FileSystemSessionStore implements SessionStore {
         throw new Error(`Session journal line ${index + 1} is not valid JSON`);
       }
       if (!isEnvelope(parsed) || parsed.runId !== runId) {
-        throw new Error(
-          `Session journal line ${index + 1} is not a valid envelope`,
-        );
+        throw new Error(`Session journal line ${index + 1} is not a valid envelope`);
       }
       if (parsed.seq <= priorSeq) {
-        throw new Error(
-          `Session journal sequence must increase at line ${index + 1}`,
-        );
+        throw new Error(`Session journal sequence must increase at line ${index + 1}`);
       }
       priorSeq = parsed.seq;
       out.push(parsed);
@@ -463,9 +459,7 @@ export class FileSystemSessionStore implements SessionStore {
    */
   private maybePrune(): void {
     if (this.maxRuns <= 0) return;
-    const names = fs
-      .readdirSync(this.sessionsDir)
-      .filter((n) => n.endsWith(".jsonl"));
+    const names = fs.readdirSync(this.sessionsDir).filter((n) => n.endsWith(".jsonl"));
     if (names.length <= this.maxRuns) return;
     const files = names
       .map((name) => ({
@@ -551,9 +545,7 @@ function readFirstLineSync(fd: number, maxBytes = 1_048_576): string {
  * 剩下的会一直挂在流对象上，监听器数量随文件块数线性增长。
  * `finally` 保证正常结束、调用方提前 `break`、以及抛异常三条路径都会销毁流。
  */
-async function* replayFile(
-  filePath: string,
-): AsyncGenerator<RunEventEnvelope, void, undefined> {
+async function* replayFile(filePath: string): AsyncGenerator<RunEventEnvelope, void, undefined> {
   const stream = fs.createReadStream(filePath, { encoding: "utf8" });
   let buffer = "";
   try {

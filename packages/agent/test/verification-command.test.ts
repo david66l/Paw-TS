@@ -60,30 +60,20 @@ describe("verification command intent", () => {
   });
 
   test("preserves existing runner families through the shared analyzer", () => {
-    expect(verificationCommandFamily("python -m unittest discover -v")).toBe(
-      "unittest",
-    );
+    expect(verificationCommandFamily("python -m unittest discover -v")).toBe("unittest");
     expect(
       verificationCommandFamily(
         "set PYTHONPATH=.&&python tests\\runtests.py queries.test_q.QCheckTests",
       ),
     ).toBe("python-runner");
-    expect(verificationCommandFamily("python manage.py test app.tests")).toBe(
-      "django",
-    );
+    expect(verificationCommandFamily("python manage.py test app.tests")).toBe("django");
     expect(
-      verificationCommandFamily(
-        "python bin/test sympy/utilities/tests/test_iterables.py",
-      ),
+      verificationCommandFamily("python bin/test sympy/utilities/tests/test_iterables.py"),
     ).toBe("python-runner");
-    expect(
-      verificationCommandFamily(
-        "python bin/doctest sympy/utilities/iterables.py",
-      ),
-    ).toBe("python-runner");
-    expect(verificationCommandFamily("bun test packages/agent")).toBe(
-      "javascript",
+    expect(verificationCommandFamily("python bin/doctest sympy/utilities/iterables.py")).toBe(
+      "python-runner",
     );
+    expect(verificationCommandFamily("bun test packages/agent")).toBe("javascript");
     expect(verificationCommandFamily("node verify-test.js")).toBe("node");
     expect(verificationCommandFamily("go test ./...")).toBe("go");
     expect(verificationCommandFamily("cargo test --workspace")).toBe("cargo");

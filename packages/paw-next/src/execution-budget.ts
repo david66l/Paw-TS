@@ -11,22 +11,16 @@ export interface ExecutionDeadlineV1 {
 type Observation = Extract<InputFactV1, { type: "execution.budget_observed" }>;
 
 export function assertExecutionDeadlineV1(value: ExecutionDeadlineV1): void {
-  if (
-    value.admissionPolicy !== undefined &&
-    value.admissionPolicy !== "recent_round_floor_v1"
-  )
+  if (value.admissionPolicy !== undefined && value.admissionPolicy !== "recent_round_floor_v1")
     throw new Error("Invalid execution admission policy");
   for (const n of [value.deadlineAtMs, value.reserveMs])
-    if (!Number.isSafeInteger(n) || n < 0)
-      throw new Error("Invalid execution deadline");
+    if (!Number.isSafeInteger(n) || n < 0) throw new Error("Invalid execution deadline");
 }
 
 /** Conservative empirical floor, not a latency prediction: the fastest of the
  * last five completed model+tool rounds in this work item. No prior round means
  * no rejection. Persisted clock observations make recovery/replay identical. */
-export function executionRequestFloorMsV1(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): number {
+export function executionRequestFloorMsV1(snapshot: SessionInputSnapshot<InputFactV1>): number {
   const inputId = scope(snapshot);
   const rounds: number[] = [];
   let start: number | undefined;
@@ -48,24 +42,18 @@ export function executionRequestFloorMsV1(
   return rounds.length ? Math.min(...rounds.slice(-5)) : 0;
 }
 
-function scope(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): string | undefined {
+function scope(snapshot: SessionInputSnapshot<InputFactV1>): string | undefined {
   for (let i = snapshot.entries.length - 1; i >= 0; i--) {
     const fact = snapshot.entries[i]!.fact;
     if (fact.type === "work.segment_started") return fact.inputId;
-    if (fact.type === "input.promoted" && fact.delivery === "initial")
-      return fact.inputId;
+    if (fact.type === "input.promoted" && fact.delivery === "initial") return fact.inputId;
   }
 }
 function latest(snapshot: SessionInputSnapshot<InputFactV1>) {
   const id = scope(snapshot);
   for (let i = snapshot.entries.length - 1; i >= 0; i--) {
     const entry = snapshot.entries[i]!;
-    if (
-      entry.fact.type === "execution.budget_observed" &&
-      entry.fact.inputId === id
-    )
+    if (entry.fact.type === "execution.budget_observed" && entry.fact.inputId === id)
       return { ...entry, fact: entry.fact as Observation };
   }
 }
@@ -101,8 +89,7 @@ export function withExecutionBudgetInputV1(
       )
         throw new Error("Execution deadline changed during recovery");
       const inputId = scope(snapshot);
-      if (!inputId)
-        throw new Error("Execution budget requires a promoted work item");
+      if (!inputId) throw new Error("Execution budget requires a promoted work item");
       const current = now();
       if (!Number.isSafeInteger(current) || current < 0)
         throw new Error("Invalid execution budget clock");
@@ -114,14 +101,11 @@ export function withExecutionBudgetInputV1(
             inputId,
             deadlineAtMs: deadline.deadlineAtMs,
             reserveMs: deadline.reserveMs,
-            ...(deadline.admissionPolicy
-              ? { admissionPolicy: deadline.admissionPolicy }
-              : {}),
+            ...(deadline.admissionPolicy ? { admissionPolicy: deadline.admissionPolicy } : {}),
             observedAtMs,
           },
         ]);
-      if (observedAtMs >= deadline.deadlineAtMs)
-        throw new Error("ExecutionDeadlineExceeded");
+      if (observedAtMs >= deadline.deadlineAtMs) throw new Error("ExecutionDeadlineExceeded");
       if (deadline.admissionPolicy === "recent_round_floor_v1") {
         const currentSnapshot = await session.readInputSnapshot();
         const floor = executionRequestFloorMsV1(currentSnapshot);
@@ -140,10 +124,7 @@ export function projectExecutionBudgetV1(
 ): JournalContextAnnotationV1 | undefined {
   const entry = latest(snapshot);
   if (!entry) return;
-  const remainingMs = Math.max(
-    0,
-    entry.fact.deadlineAtMs - entry.fact.observedAtMs,
-  );
+  const remainingMs = Math.max(0, entry.fact.deadlineAtMs - entry.fact.observedAtMs);
   const closeout = remainingMs <= entry.fact.reserveMs;
   return {
     sourceThroughSeq: entry.seq,

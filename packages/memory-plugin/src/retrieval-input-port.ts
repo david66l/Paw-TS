@@ -13,10 +13,7 @@ import {
   type MemoryCardV1,
   type MemoryRetrievalSettledFactV1,
 } from "@paw/protocol";
-import type {
-  ContextTokenEstimatorV1,
-  JournalContextRuntimeV1,
-} from "@paw/runtime";
+import type { ContextTokenEstimatorV1, JournalContextRuntimeV1 } from "@paw/runtime";
 import { withMemoryDeadline } from "./memory-deadline.js";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
@@ -45,11 +42,7 @@ export interface MemoryProviderQueryV1 {
 }
 
 export interface MemorySearchTextV1 {
-  readonly kind:
-    | "current_input"
-    | "initial_goal"
-    | "goal_and_input"
-    | "lexical_anchor";
+  readonly kind: "current_input" | "initial_goal" | "goal_and_input" | "lexical_anchor";
   readonly text: string;
   /** Relative RRF contribution; it is policy, not a model-produced score. */
   readonly weight: number;
@@ -63,10 +56,7 @@ export interface MemoryProviderResultV1 {
 
 export interface MemoryProviderV1 {
   readonly providerVersion: string;
-  retrieve(
-    query: MemoryProviderQueryV1,
-    signal: AbortSignal,
-  ): Promise<MemoryProviderResultV1>;
+  retrieve(query: MemoryProviderQueryV1, signal: AbortSignal): Promise<MemoryProviderResultV1>;
 }
 
 export interface MemoryPluginDiagnosticV1 {
@@ -138,8 +128,7 @@ export function createMemoryRetrievalInputPortV1(
                   profile.providerVersion,
                   "degraded",
                   [],
-                  error instanceof Error &&
-                    error.name === "MemoryContextTimeout"
+                  error instanceof Error && error.name === "MemoryContextTimeout"
                     ? "memory_retrieval_timeout"
                     : "memory_retrieval_failed",
                 );
@@ -177,9 +166,7 @@ export function projectCurrentMemoryQueryV1(
     .find((entry) => entry.fact.type === "work.segment_started");
   const trigger = lastSegment ? "work_segment_start" : "task_start";
   const targetInputId =
-    lastSegment?.fact.type === "work.segment_started"
-      ? lastSegment.fact.inputId
-      : undefined;
+    lastSegment?.fact.type === "work.segment_started" ? lastSegment.fact.inputId : undefined;
   const promoted = [...snapshot.entries]
     .reverse()
     .find(
@@ -191,8 +178,7 @@ export function projectCurrentMemoryQueryV1(
     );
   if (!promoted || promoted.fact.type !== "input.promoted") return undefined;
   const initial = snapshot.entries.find(
-    (entry) =>
-      entry.fact.type === "input.promoted" && entry.fact.delivery === "initial",
+    (entry) => entry.fact.type === "input.promoted" && entry.fact.delivery === "initial",
   );
   const searchTexts = createMemorySearchTextsV1(
     initial?.fact.type === "input.promoted" ? initial.fact.content : undefined,
@@ -236,21 +222,15 @@ export function createMemorySearchTextsV1(
     const normalized = anchor.toLocaleLowerCase("en-US");
     if (seen.has(normalized)) continue;
     seen.add(normalized);
-    variants.push(
-      Object.freeze({ kind: "lexical_anchor", text: anchor, weight: 0.9 }),
-    );
+    variants.push(Object.freeze({ kind: "lexical_anchor", text: anchor, weight: 0.9 }));
   }
   if (goal && goal !== current) {
-    variants.push(
-      Object.freeze({ kind: "initial_goal", text: goal, weight: 0.65 }),
-    );
+    variants.push(Object.freeze({ kind: "initial_goal", text: goal, weight: 0.65 }));
     for (const anchor of lexicalAnchorTextsV1(goal, 1)) {
       const normalized = anchor.toLocaleLowerCase("en-US");
       if (seen.has(normalized)) continue;
       seen.add(normalized);
-      variants.push(
-        Object.freeze({ kind: "lexical_anchor", text: anchor, weight: 0.55 }),
-      );
+      variants.push(Object.freeze({ kind: "lexical_anchor", text: anchor, weight: 0.55 }));
     }
     variants.push(
       Object.freeze({
@@ -325,10 +305,7 @@ const MEMORY_QUERY_STOPWORDS_V1 = new Set([
  * Keep BM25 useful for natural-language questions whose full plainto_tsquery
  * is too restrictive. Anchors are deterministic retrieval keys, never facts.
  */
-export function lexicalAnchorTextsV1(
-  value: string,
-  limit = 2,
-): readonly string[] {
+export function lexicalAnchorTextsV1(value: string, limit = 2): readonly string[] {
   if (!Number.isSafeInteger(limit) || limit < 0 || limit > 4) {
     throw new Error("Memory lexical anchor limit is invalid");
   }
@@ -339,10 +316,8 @@ export function lexicalAnchorTextsV1(
       const first = text.codePointAt(0);
       const capitalized =
         first !== undefined &&
-        String.fromCodePoint(first) ===
-          String.fromCodePoint(first).toUpperCase() &&
-        String.fromCodePoint(first) !==
-          String.fromCodePoint(first).toLowerCase();
+        String.fromCodePoint(first) === String.fromCodePoint(first).toUpperCase() &&
+        String.fromCodePoint(first) !== String.fromCodePoint(first).toLowerCase();
       const numeric = /\p{N}/u.test(text);
       const score =
         (capitalized ? 8 : 0) +
@@ -356,9 +331,7 @@ export function lexicalAnchorTextsV1(
         item.strong &&
         !MEMORY_QUERY_STOPWORDS_V1.has(item.normalized),
     )
-    .sort(
-      (left, right) => right.score - left.score || left.index - right.index,
-    );
+    .sort((left, right) => right.score - left.score || left.index - right.index);
   const selected: string[] = [];
   const seen = new Set<string>();
   for (const candidate of candidates) {
@@ -430,9 +403,7 @@ async function settleRetrieval(input: {
     // Leave a small deterministic guard for receipt-seq growth across a CAS retry.
     const actualHeadroom = Math.max(
       0,
-      contextPlan.tokens.hardHeadroomTokens -
-        Math.max(0, actualTokens - plannedTokens) -
-        16,
+      contextPlan.tokens.hardHeadroomTokens - Math.max(0, actualTokens - plannedTokens) - 16,
     );
     const fitted = fitCardsToRequestBudget(
       cards,
@@ -471,11 +442,7 @@ function fitCardsToRequestBudget(
   maxInjectedTokens: number,
   estimator: ContextTokenEstimatorV1,
 ): readonly MemoryCardV1[] {
-  for (
-    let count = Math.min(cards.length, query.maxCards);
-    count > 0;
-    count -= 1
-  ) {
+  for (let count = Math.min(cards.length, query.maxCards); count > 0; count -= 1) {
     const candidate = cards.slice(0, count);
     const fact = receipt(query, "budget-probe", status, candidate);
     const section = createMemoryContextSectionV1(fact, receiptSeq);
@@ -507,11 +474,7 @@ async function commitReceiptBestEffort(input: {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     if (hasReceipt(snapshot, input.fact.queryId)) return;
     try {
-      if (
-        (await input.commitFacts(snapshot.tailSeq, [input.fact])) ===
-        "committed"
-      )
-        return;
+      if ((await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed") return;
     } catch (error) {
       input.onDiagnostic?.({
         phase: "commit",
@@ -566,9 +529,7 @@ function freezeProviderCards(
         ids.has(card.id) ||
         !Number.isSafeInteger(card.revision) ||
         card.revision <= 0 ||
-        !["semantic", "episodic", "procedural", "profile", "trial"].includes(
-          card.kind,
-        ) ||
+        !["semantic", "episodic", "procedural", "profile", "trial"].includes(card.kind) ||
         typeof card.statement !== "string" ||
         !card.statement.trim() ||
         card.statement.length > 16_384 ||
@@ -590,13 +551,8 @@ function freezeProviderCards(
         throw new Error("Memory provider returned an invalid card");
       }
       const { contentHash: _contentHash, ...content } = card;
-      if (
-        hashCanonicalJsonV1(content as unknown as JsonValue) !==
-        card.contentHash
-      ) {
-        throw new Error(
-          "Memory provider returned a card with an invalid content hash",
-        );
+      if (hashCanonicalJsonV1(content as unknown as JsonValue) !== card.contentHash) {
+        throw new Error("Memory provider returned a card with an invalid content hash");
       }
       ids.add(card.id);
       return Object.freeze({
@@ -612,14 +568,9 @@ function freezeProviderCards(
   );
 }
 
-function hasReceipt(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-  queryId: string,
-): boolean {
+function hasReceipt(snapshot: SessionInputSnapshot<InputFactV1>, queryId: string): boolean {
   return snapshot.entries.some(
-    (entry) =>
-      entry.fact.type === "memory.retrieval_settled" &&
-      entry.fact.queryId === queryId,
+    (entry) => entry.fact.type === "memory.retrieval_settled" && entry.fact.queryId === queryId,
   );
 }
 

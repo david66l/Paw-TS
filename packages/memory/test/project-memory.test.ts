@@ -25,20 +25,14 @@ describe("loadProjectMemory", () => {
   });
 
   it("reads committed memory", () => {
-    writeFileSync(
-      path.join(pawDir, "CLAUDE.md"),
-      "# Project Rules\nUse TypeScript.",
-    );
+    writeFileSync(path.join(pawDir, "CLAUDE.md"), "# Project Rules\nUse TypeScript.");
     const result = loadProjectMemory(tmpDir);
     expect(result.committed).toBe("# Project Rules\nUse TypeScript.");
     expect(result.local).toBeNull();
   });
 
   it("reads local memory", () => {
-    writeFileSync(
-      path.join(pawDir, "CLAUDE.local.md"),
-      "# Local Preferences\nUse 2 spaces.",
-    );
+    writeFileSync(path.join(pawDir, "CLAUDE.local.md"), "# Local Preferences\nUse 2 spaces.");
     const result = loadProjectMemory(tmpDir);
     expect(result.committed).toBeNull();
     expect(result.local).toBe("# Local Preferences\nUse 2 spaces.");

@@ -56,9 +56,7 @@ function statusEnvironmentFromExecution(
       python: "unprobed-in-container",
       shellPersistence: execution.shellPersistence,
       sandboxMode: execution.sandbox.mode,
-      ...(execution.sandbox.image
-        ? { sandboxImage: execution.sandbox.image }
-        : {}),
+      ...(execution.sandbox.image ? { sandboxImage: execution.sandbox.image } : {}),
       recoveryCompatible: execution.recovery.compatible,
       recoveryIssues: execution.recovery.issues,
     });
@@ -69,9 +67,7 @@ function statusEnvironmentFromExecution(
     ...execution.runtime,
     shellPersistence: execution.shellPersistence,
     sandboxMode: execution.sandbox.mode,
-    ...(execution.sandbox.image
-      ? { sandboxImage: execution.sandbox.image }
-      : {}),
+    ...(execution.sandbox.image ? { sandboxImage: execution.sandbox.image } : {}),
     recoveryCompatible: execution.recovery.compatible,
     recoveryIssues: execution.recovery.issues,
   });
@@ -120,27 +116,19 @@ export interface RunStatusTelemetryOptionsV1 {
 }
 
 const PACE_ADVICE: Readonly<Record<StatusPaceV1, string>> = Object.freeze({
-  investigate:
-    "Gather the minimum missing evidence, then choose a concrete change.",
-  implement:
-    "Make the smallest coherent implementation that advances the task.",
+  investigate: "Gather the minimum missing evidence, then choose a concrete change.",
+  implement: "Make the smallest coherent implementation that advances the task.",
   verify: "Run verification against the current source revision.",
   repair: "Use the latest failing evidence to repair the implementation.",
-  stabilize_environment:
-    "Repair the test harness or environment before changing product code.",
-  inspect_diff:
-    "Inspect the current diff and confirm scope before proposing completion.",
-  finish:
-    "Evidence is current; summarize only facts supported by the host state.",
-  change_hypothesis:
-    "Stop repeating the same action; form and test a different hypothesis.",
+  stabilize_environment: "Repair the test harness or environment before changing product code.",
+  inspect_diff: "Inspect the current diff and confirm scope before proposing completion.",
+  finish: "Evidence is current; summarize only facts supported by the host state.",
+  change_hypothesis: "Stop repeating the same action; form and test a different hypothesis.",
 });
 
 function runtimeEnvironment(workspaceRoot: string): StatusEnvironmentV1 {
   const bunVersion =
-    typeof Bun !== "undefined" && typeof Bun.version === "string"
-      ? Bun.version
-      : "unavailable";
+    typeof Bun !== "undefined" && typeof Bun.version === "string" ? Bun.version : "unavailable";
   return Object.freeze({
     cwd: workspaceRoot,
     platform: process.platform,
@@ -193,8 +181,7 @@ export function statusPaceV1(
     .find(
       (result) =>
         (result.mutationRevision ?? 0) === mutationRevision &&
-        (result.executionEnvironmentRevision ?? 0) ===
-          (state.executionEnvironmentRevision ?? 0),
+        (result.executionEnvironmentRevision ?? 0) === (state.executionEnvironmentRevision ?? 0),
     );
   const substantive = latestSubstantiveVerification(state);
   if (substantive && verificationOutcome(substantive) === "code_failed") {
@@ -234,9 +221,7 @@ export class RunStatusTelemetryV1 {
     batchDurationMs: number,
   ): void {
     const perCallDuration =
-      calls.length > 0
-        ? Math.max(0, Math.round(batchDurationMs / calls.length))
-        : 0;
+      calls.length > 0 ? Math.max(0, Math.round(batchDurationMs / calls.length)) : 0;
     for (let index = 0; index < calls.length; index += 1) {
       const call = calls[index];
       const result = results[index];
@@ -267,11 +252,7 @@ export class RunStatusTelemetryV1 {
     taskState: TaskState,
     now = Date.now(),
   ): StatusSnapshotV1 {
-    const pace = statusPaceV1(
-      taskState,
-      this.consecutiveFailures,
-      this.consecutiveExactRepeats,
-    );
+    const pace = statusPaceV1(taskState, this.consecutiveFailures, this.consecutiveExactRepeats);
     const execution = this.options.executionEnvironment?.snapshot();
     const environment: StatusEnvironmentV1 = execution
       ? statusEnvironmentFromExecution(execution)
@@ -304,9 +285,7 @@ export function formatStatusSnapshotV1(snapshot: StatusSnapshotV1): string {
     ? `${snapshot.lastTool.tool} ok=${snapshot.lastTool.ok} duration_ms=${snapshot.lastTool.durationMs} timed_out=${snapshot.lastTool.timedOut}`
     : "none";
   const environmentDetails = [
-    ...(snapshot.environment.scope
-      ? [`scope=${snapshot.environment.scope}`]
-      : []),
+    ...(snapshot.environment.scope ? [`scope=${snapshot.environment.scope}`] : []),
     `cwd=${snapshot.environment.cwd}`,
     ...(snapshot.environment.hostWorkspaceRoot
       ? [`host_workspace=${snapshot.environment.hostWorkspaceRoot}`]
@@ -319,9 +298,7 @@ export function formatStatusSnapshotV1(snapshot: StatusSnapshotV1): string {
     ...(snapshot.environment.shellPersistence
       ? [`shell_persistence=${snapshot.environment.shellPersistence}`]
       : []),
-    ...(snapshot.environment.sandboxMode
-      ? [`sandbox=${snapshot.environment.sandboxMode}`]
-      : []),
+    ...(snapshot.environment.sandboxMode ? [`sandbox=${snapshot.environment.sandboxMode}`] : []),
     ...(snapshot.environment.sandboxImage
       ? [`sandbox_image=${snapshot.environment.sandboxImage}`]
       : []),

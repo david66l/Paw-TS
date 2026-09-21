@@ -43,10 +43,7 @@ export interface MemoryConversationEvidenceV1 {
   readonly evidenceRef: string;
   readonly sourceKind: MemoryRawEvidenceSourceKindV1;
   readonly sourceSeq: number;
-  readonly authority:
-    | "user_asserted"
-    | "user_confirmed_dialogue"
-    | "context_only";
+  readonly authority: "user_asserted" | "user_confirmed_dialogue" | "context_only";
   readonly content: string;
   readonly contentHash: string;
   /** Query-focused text from the matched turn itself, excluding neighbors. */
@@ -63,10 +60,7 @@ export interface MemoryConversationSearchV1 {
 
 export interface MemoryRawEvidenceArchiveV1 {
   readonly scope: PawNextMemoryScopeV1;
-  put(
-    spans: readonly MemoryRawEvidenceArchiveInputV1[],
-    signal: AbortSignal,
-  ): Promise<void>;
+  put(spans: readonly MemoryRawEvidenceArchiveInputV1[], signal: AbortSignal): Promise<void>;
   resolve(
     requests: readonly MemoryRawEvidenceRequestV1[],
     signal: AbortSignal,
@@ -111,20 +105,15 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
   }>,
 ): MemoryRawEvidenceArchiveV1 {
   const scope = Object.freeze({ ...input.scope });
-  const locatorVersion =
-    "paw.memory-postgres-source-local-locator.v3:role-aware-certified-lexical";
+  const locatorVersion = "paw.memory-postgres-source-local-locator.v3:role-aware-certified-lexical";
   const hydratorVersion = "paw.memory-postgres-source-local-hydrator.v1";
-  const rankerVersion =
-    "paw.memory-source-local-ranker.v2:term-coverage-then-lexical-idf";
+  const rankerVersion = "paw.memory-source-local-ranker.v2:term-coverage-then-lexical-idf";
   const resultCache = new Map<string, MemorySourceLocalEvidenceResultV1>();
   return Object.freeze({
     scope,
     locatorVersion,
     hydratorVersion,
-    async put(
-      spans: readonly MemoryRawEvidenceArchiveInputV1[],
-      signal: AbortSignal,
-    ) {
+    async put(spans: readonly MemoryRawEvidenceArchiveInputV1[], signal: AbortSignal) {
       const started = Date.now();
       const sql = getSql();
       const unique = uniqueArchiveInputs(spans);
@@ -177,10 +166,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         durationMs: Date.now() - started,
       });
     },
-    async resolve(
-      requests: readonly MemoryRawEvidenceRequestV1[],
-      signal: AbortSignal,
-    ) {
+    async resolve(requests: readonly MemoryRawEvidenceRequestV1[], signal: AbortSignal) {
       const started = Date.now();
       const sql = getSql();
       const unique = uniqueRequests(requests).slice(0, 16);
@@ -299,10 +285,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
       if (signal.aborted) throw abortError();
       const queryTerms = searchableTerms(normalized);
       const lexicalTerms = [...queryTerms]
-        .sort(
-          (left, right) =>
-            right.length - left.length || left.localeCompare(right),
-        )
+        .sort((left, right) => right.length - left.length || left.localeCompare(right))
         .slice(0, 8);
       // Combine a recent window with an old-evidence aperture. A pure recent
       // LIMIT silently loses long-lived facts; exact terms must be able to
@@ -339,10 +322,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
             `;
       const rows = [
         ...new Map(
-          [...recentRows, ...lexicalRows].map((row) => [
-            String(row.evidence_ref),
-            row,
-          ]),
+          [...recentRows, ...lexicalRows].map((row) => [String(row.evidence_ref), row]),
         ).values(),
       ];
       const candidates = rows.flatMap((row) => {
@@ -383,9 +363,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           (left, right) =>
             right.score - left.score ||
             Number(right.row.source_seq) - Number(left.row.source_seq) ||
-            String(left.row.evidence_ref).localeCompare(
-              String(right.row.evidence_ref),
-            ),
+            String(left.row.evidence_ref).localeCompare(String(right.row.evidence_ref)),
         );
       const result: MemoryConversationEvidenceV1[] = [];
       let usedChars = 0;
@@ -429,10 +407,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
       });
       return Object.freeze(result);
     },
-    async locate(
-      request: MemorySourceLocalEvidenceRequestV1,
-      signal: AbortSignal,
-    ) {
+    async locate(request: MemorySourceLocalEvidenceRequestV1, signal: AbortSignal) {
       const started = Date.now();
       if (signal.aborted) throw abortError();
       const lockedSourceIds = [...new Set(request.lockedSourceIds)];
@@ -445,8 +420,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         throw namedError("MemorySourceLocalEvidenceRequestInvalid");
       }
       const sql = getSql();
-      const cutoff =
-        request.evidenceTimeUpperBound ?? "9999-12-31T23:59:59.999Z";
+      const cutoff = request.evidenceTimeUpperBound ?? "9999-12-31T23:59:59.999Z";
       if (!Number.isFinite(Date.parse(cutoff))) {
         throw namedError("MemorySourceLocalEvidenceTimeInvalid");
       }
@@ -471,8 +445,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         scopeFingerprint: hashCanonicalJsonV1(scope),
         turnIndexRevision,
         request,
-        adjacencyPolicyVersion:
-          PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
+        adjacencyPolicyVersion: PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
         rankerVersion,
       });
       const cached = resultCache.get(cacheKey);
@@ -494,25 +467,17 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           cacheHit: true,
           lexicalCandidateCount: replay.telemetry.lexicalCandidates,
           denseCandidateCount: replay.telemetry.denseCandidates,
-          userAnchorCount: replay.hits.filter(
-            (hit) => hit.sourceKind === "user_input",
-          ).length,
-          assistantAnchorCount: replay.hits.filter(
-            (hit) => hit.sourceKind === "assistant_output",
-          ).length,
+          userAnchorCount: replay.hits.filter((hit) => hit.sourceKind === "user_input").length,
+          assistantAnchorCount: replay.hits.filter((hit) => hit.sourceKind === "assistant_output")
+            .length,
           renderedChars: replay.telemetry.renderedChars,
         });
         return replay;
       }
-      const normalized = request.requirement.searchText
-        .trim()
-        .replace(/\s+/gu, " ");
+      const normalized = request.requirement.searchText.trim().replace(/\s+/gu, " ");
       const queryTerms = searchableTerms(normalized);
       const lexicalTerms = [...queryTerms]
-        .sort(
-          (left, right) =>
-            right.length - left.length || left.localeCompare(right),
-        )
+        .sort((left, right) => right.length - left.length || left.localeCompare(right))
         .slice(0, 8);
       const rows =
         lexicalTerms.length === 0
@@ -578,9 +543,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           (left, right) =>
             right.score - left.score ||
             Number(left.row.source_seq) - Number(right.row.source_seq) ||
-            String(left.row.evidence_ref).localeCompare(
-              String(right.row.evidence_ref),
-            ),
+            String(left.row.evidence_ref).localeCompare(String(right.row.evidence_ref)),
         );
       const perSource = new Map<string, number>();
       const hits = [];
@@ -593,10 +556,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         if (sourceCount >= request.budget.maxAnchorsPerSource) continue;
         const sourceSeq = Number(anchor.row.source_seq);
         const anchorSourceKind = sourceKind(anchor.row.source_kind);
-        if (
-          anchorSourceKind !== "user_input" &&
-          anchorSourceKind !== "assistant_output"
-        ) {
+        if (anchorSourceKind !== "user_input" && anchorSourceKind !== "assistant_output") {
           continue;
         }
         const remaining = request.budget.maxChars - renderedChars;
@@ -639,10 +599,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
           anchorSourceKind === "assistant_output" &&
           (request.requirement.roleConstraint === "any" ||
             request.assistantDialogueCandidate === true) &&
-          !hasMemorySourceLocalDialogueCertificateV1(
-            bundle.includedEvidence,
-            sourceSeq,
-          )
+          !hasMemorySourceLocalDialogueCertificateV1(bundle.includedEvidence, sourceSeq)
         ) {
           continue;
         }
@@ -663,9 +620,8 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
               bundle.includedEvidence.map((turn) => ({
                 ...turn,
                 observedAt: toIso(
-                  validNeighbors.find(
-                    (row) => String(row.evidence_ref) === turn.evidenceRef,
-                  )?.created_at,
+                  validNeighbors.find((row) => String(row.evidence_ref) === turn.evidenceRef)
+                    ?.created_at,
                 ),
               })),
             ),
@@ -678,10 +634,7 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         lexicalCandidates: ranked.length,
         denseCandidates: 0,
         anchorCount: hits.length,
-        includedTurnCount: hits.reduce(
-          (total, hit) => total + hit.includedTurns.length,
-          0,
-        ),
+        includedTurnCount: hits.reduce((total, hit) => total + hit.includedTurns.length, 0),
         renderedChars,
         cacheHit: false,
         durationMs: Date.now() - started,
@@ -713,11 +666,8 @@ export function createPostgresMemoryRawEvidenceArchiveV1(
         cacheHit: false,
         lexicalCandidateCount: ranked.length,
         denseCandidateCount: 0,
-        userAnchorCount: hits.filter((hit) => hit.sourceKind === "user_input")
-          .length,
-        assistantAnchorCount: hits.filter(
-          (hit) => hit.sourceKind === "assistant_output",
-        ).length,
+        userAnchorCount: hits.filter((hit) => hit.sourceKind === "user_input").length,
+        assistantAnchorCount: hits.filter((hit) => hit.sourceKind === "assistant_output").length,
         renderedChars,
       });
       return result;
@@ -785,17 +735,12 @@ function conversationSearchExcerpt(
         String(left.evidence_ref).localeCompare(String(right.evidence_ref)),
     );
   if (neighbors.length <= 1) {
-    const text = focusedSearchExcerpt(
-      String(hit.content ?? ""),
-      queryTerms,
-      maxChars,
-    );
+    const text = focusedSearchExcerpt(String(hit.content ?? ""), queryTerms, maxChars);
     return Object.freeze({
       policyVersion: PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
       text,
       hitSeq,
-      authority:
-        hit.source_kind === "user_input" ? "user_asserted" : "context_only",
+      authority: hit.source_kind === "user_input" ? "user_asserted" : "context_only",
       includedTurns: 1,
       includedEvidence: Object.freeze([
         Object.freeze({
@@ -851,10 +796,7 @@ function termDocumentFrequency(
   for (const term of queryTerms) {
     frequencies.set(
       term,
-      documents.reduce(
-        (count, document) => count + Number(document.has(term)),
-        0,
-      ),
+      documents.reduce((count, document) => count + Number(document.has(term)), 0),
     );
   }
   return frequencies;
@@ -876,16 +818,12 @@ function conversationRelevanceScore(
     if (!input.candidateTerms.has(term)) continue;
     matched.push(term);
     const frequency = input.documentFrequency.get(term) ?? input.documentCount;
-    const inverseFrequency = Math.log(
-      1 + (input.documentCount + 1) / (frequency + 1),
-    );
+    const inverseFrequency = Math.log(1 + (input.documentCount + 1) / (frequency + 1));
     score += inverseFrequency * (1 + Math.min(12, term.length) / 12);
   }
   // Exact multi-word discriminants such as "author signing" outweigh a
   // paragraph that merely repeats persona names and generic event language.
-  const ordered = [...input.queryTerms].filter((term) =>
-    input.query.includes(term),
-  );
+  const ordered = [...input.queryTerms].filter((term) => input.query.includes(term));
   for (let index = 0; index + 1 < ordered.length; index += 1) {
     const phrase = `${ordered[index]} ${ordered[index + 1]}`;
     if (input.candidate.includes(phrase)) score += 6;
@@ -957,9 +895,7 @@ function uniqueArchiveInputs(
     byRef.set(span.evidenceRef, span);
   }
   return Object.freeze(
-    [...byRef.values()].sort((a, b) =>
-      a.evidenceRef.localeCompare(b.evidenceRef),
-    ),
+    [...byRef.values()].sort((a, b) => a.evidenceRef.localeCompare(b.evidenceRef)),
   );
 }
 

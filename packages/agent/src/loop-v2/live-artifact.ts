@@ -9,10 +9,7 @@ import type { LoopV2ShadowReport } from "./shadow-runtime.js";
 
 export const LOOP_V2_LIVE_ARTIFACT_SCHEMA_VERSION = 1 as const;
 
-export function loopV2LiveArtifactPath(
-  workspaceRoot: string,
-  runId: string,
-): string {
+export function loopV2LiveArtifactPath(workspaceRoot: string, runId: string): string {
   if (!workspaceRoot.trim() || !runId.trim()) {
     throw new Error("Loop v2 live artifact path requires workspace and runId");
   }
@@ -78,8 +75,7 @@ export function parseLoopV2LiveCandidateArtifactV1(
 export function assertLoopV2LiveCandidateArtifactV1(
   value: unknown,
 ): asserts value is LoopV2LiveCandidateArtifactV1 {
-  if (!isRecord(value))
-    throw new Error("Loop v2 live artifact is not an object");
+  if (!isRecord(value)) throw new Error("Loop v2 live artifact is not an object");
   if (value.schemaVersion !== LOOP_V2_LIVE_ARTIFACT_SCHEMA_VERSION) {
     throw new Error("Unsupported loop v2 live artifact schema");
   }

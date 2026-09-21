@@ -1,8 +1,4 @@
-import {
-  type JsonValue,
-  hashCanonicalJsonV1,
-  hashTextV1,
-} from "./canonical.js";
+import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import {
   type MemoryConversationTurnKindV1,
   type MemoryEvidenceNotebookHitV1,
@@ -69,10 +65,7 @@ export function memorySourceLocalAnchorKindsV1(
   if (request.requirement.roleConstraint === "assistant") {
     return Object.freeze(["assistant_output"]);
   }
-  if (
-    request.requirement.roleConstraint === "any" ||
-    request.assistantDialogueCandidate === true
-  ) {
+  if (request.requirement.roleConstraint === "any" || request.assistantDialogueCandidate === true) {
     return Object.freeze(["user_input", "assistant_output"]);
   }
   return Object.freeze(["user_input"]);
@@ -85,8 +78,7 @@ export interface MemorySourceLocalIncludedTurnV1 {
   readonly observedAt?: string;
 }
 
-export interface MemorySourceLocalEvidenceHitV1
-  extends MemoryEvidenceNotebookHitV1 {
+export interface MemorySourceLocalEvidenceHitV1 extends MemoryEvidenceNotebookHitV1 {
   readonly sourceKind: "user_input" | "assistant_output";
   readonly anchorEvidenceRef: string;
   readonly includedTurns: readonly MemorySourceLocalIncludedTurnV1[];
@@ -183,15 +175,10 @@ export function validateMemoryDialoguePredecessorVerificationV1(input: {
   readonly verifier: MemoryDialoguePredecessorVerifierV1;
   readonly request: MemoryDialoguePredecessorVerificationRequestV1;
   readonly result: MemoryDialoguePredecessorVerificationResultV1;
-  readonly evidenceRefBelongsToSource?: (
-    sourceId: string,
-    evidenceRef: string,
-  ) => boolean;
+  readonly evidenceRefBelongsToSource?: (sourceId: string, evidenceRef: string) => boolean;
 }): readonly MemoryDialoguePredecessorProofV1[] {
   const targets = new Map(
-    input.request.targets.map(
-      (target) => [target.evidenceRef, target] as const,
-    ),
+    input.request.targets.map((target) => [target.evidenceRef, target] as const),
   );
   const locked = new Set(input.request.lockedSourceIds);
   const cutoff = parseOptionalTimestamp(input.request.evidenceTimeUpperBound);
@@ -211,8 +198,7 @@ export function validateMemoryDialoguePredecessorVerificationV1(input: {
   }
   const belongs =
     input.evidenceRefBelongsToSource ??
-    ((sourceId: string, evidenceRef: string) =>
-      evidenceRefFamily(evidenceRef) === sourceId);
+    ((sourceId: string, evidenceRef: string) => evidenceRefFamily(evidenceRef) === sourceId);
   const certified: MemoryDialoguePredecessorProofV1[] = [];
   const seen = new Set<string>();
   for (const proof of input.result.proofs) {
@@ -241,8 +227,7 @@ export function validateMemoryDialoguePredecessorVerificationV1(input: {
       !proof.assistant.content.trim() ||
       !proof.precedingUser.content.trim() ||
       hashTextV1(proof.assistant.content) !== proof.assistant.contentHash ||
-      hashTextV1(proof.precedingUser.content) !==
-        proof.precedingUser.contentHash
+      hashTextV1(proof.precedingUser.content) !== proof.precedingUser.contentHash
     ) {
       throw namedError("MemoryDialoguePredecessorVerificationInvalid");
     }
@@ -291,10 +276,7 @@ const MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODE_SET_V1 = new Set<string>(
 export function memorySourceLocalEvidenceFailureCodeV1(
   error: unknown,
 ): MemorySourceLocalEvidenceFailureCodeV1 | undefined {
-  if (
-    !(error instanceof Error) ||
-    !error.name.startsWith("MemorySourceLocalEvidence")
-  ) {
+  if (!(error instanceof Error) || !error.name.startsWith("MemorySourceLocalEvidence")) {
     return undefined;
   }
   return MEMORY_SOURCE_LOCAL_EVIDENCE_FAILURE_CODE_SET_V1.has(error.name)
@@ -393,11 +375,7 @@ export function hasMemorySourceLocalDialogueCertificateV1(
 ): boolean {
   return (
     Number.isSafeInteger(anchorTurnOrder) &&
-    turns.some(
-      (turn) =>
-        turn.sourceKind === "user_input" &&
-        turn.turnOrder === anchorTurnOrder - 1,
-    )
+    turns.some((turn) => turn.sourceKind === "user_input" && turn.turnOrder === anchorTurnOrder - 1)
   );
 }
 
@@ -417,8 +395,7 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
   readonly certifiedAssistantDialogueCandidate?: boolean;
 }): boolean {
   const certifiedUserCandidate =
-    input.roleConstraint === "user" &&
-    input.certifiedAssistantDialogueCandidate === true;
+    input.roleConstraint === "user" && input.certifiedAssistantDialogueCandidate === true;
   const dialogueAnswerLeaf = input.requirements.some((requirement) =>
     new Set(["assistant", "any"]).has(requirement.roleConstraint),
   );
@@ -441,8 +418,7 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
   return input.requirements.every((requirement) => {
     const relation = requirement.relation ?? "direct";
     const coverageMode =
-      requirement.coverageMode ??
-      (requirement.temporalMode === "latest" ? "latest" : "any");
+      requirement.coverageMode ?? (requirement.temporalMode === "latest" ? "latest" : "any");
     const minimumEvidence = requirement.minimumEvidence ?? 1;
     return (
       new Set(["user", "assistant", "any"]).has(requirement.roleConstraint) &&
@@ -451,8 +427,7 @@ export function isMemorySourceLocalEvidenceEligibleV1(input: {
       coverageMode !== "convergent" &&
       Number.isSafeInteger(minimumEvidence) &&
       minimumEvidence >= 1 &&
-      minimumEvidence <=
-        DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1.maxAnchors
+      minimumEvidence <= DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1.maxAnchors
     );
   });
 }
@@ -519,9 +494,7 @@ export function evaluateMemorySourceLocalLeafEligibilityV2(input: {
     reasonCode = "selector_missing";
   } else if (!input.routeEligible) {
     reasonCode = "route_ineligible";
-  } else if (
-    !new Set(["user", "assistant", "any"]).has(input.requirement.roleConstraint)
-  ) {
+  } else if (!new Set(["user", "assistant", "any"]).has(input.requirement.roleConstraint)) {
     reasonCode = "role_ineligible";
   } else if (
     !input.temporalBindingRevision.trim() ||
@@ -531,9 +504,7 @@ export function evaluateMemorySourceLocalLeafEligibilityV2(input: {
     reasonCode = "temporal_binding_invalid";
   } else {
     try {
-      assertMemoryEvidenceTemporalConstraintIdentityV1(
-        input.requirement.temporalConstraint,
-      );
+      assertMemoryEvidenceTemporalConstraintIdentityV1(input.requirement.temporalConstraint);
     } catch {
       reasonCode = "temporal_binding_invalid";
     }
@@ -548,8 +519,7 @@ export function evaluateMemorySourceLocalLeafEligibilityV2(input: {
     reasonCode === "eligible" &&
     (!Number.isSafeInteger(minimumEvidence) ||
       minimumEvidence < 1 ||
-      minimumEvidence >
-        DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1.maxAnchors)
+      minimumEvidence > DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1.maxAnchors)
   ) {
     reasonCode = "minimum_evidence_invalid";
   }
@@ -595,10 +565,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     throw namedError("MemorySourceLocalEvidenceResultInvalid");
   }
   const allowed = new Set(input.request.lockedSourceIds);
-  if (
-    allowed.size === 0 ||
-    allowed.size !== input.request.lockedSourceIds.length
-  ) {
+  if (allowed.size === 0 || allowed.size !== input.request.lockedSourceIds.length) {
     throw namedError("MemorySourceLocalEvidenceSourcesInvalid");
   }
   const cutoff = input.request.evidenceTimeUpperBound
@@ -625,8 +592,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       !Number.isSafeInteger(anchorTurnOrder) ||
       (anchorTurnOrder as number) < 1 ||
       hitObservedAt === "invalid" ||
-      (cutoff !== undefined &&
-        (hitObservedAt === undefined || hitObservedAt > cutoff))
+      (cutoff !== undefined && (hitObservedAt === undefined || hitObservedAt > cutoff))
     ) {
       throw namedError("MemorySourceLocalEvidenceHitInvalid");
     }
@@ -644,8 +610,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       !Array.isArray(hit.contextEvidenceRefs) ||
       hit.contextEvidenceRefs.length !== hit.includedTurns.length ||
       hit.contextEvidenceRefs.some(
-        (evidenceRef, index) =>
-          evidenceRef !== hit.includedTurns[index]?.evidenceRef,
+        (evidenceRef, index) => evidenceRef !== hit.includedTurns[index]?.evidenceRef,
       )
     ) {
       throw namedError("MemorySourceLocalEvidenceTraceInvalid");
@@ -660,10 +625,8 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
         !Number.isSafeInteger(turn.turnOrder) ||
         turn.turnOrder < 1 ||
         turnObservedAt === "invalid" ||
-        (cutoff !== undefined &&
-          (turnObservedAt === undefined || turnObservedAt > cutoff)) ||
-        Math.abs(turn.turnOrder - (anchorTurnOrder as number)) >
-          input.request.budget.neighborRadius
+        (cutoff !== undefined && (turnObservedAt === undefined || turnObservedAt > cutoff)) ||
+        Math.abs(turn.turnOrder - (anchorTurnOrder as number)) > input.request.budget.neighborRadius
       ) {
         throw namedError("MemorySourceLocalEvidenceTraceInvalid");
       }
@@ -686,10 +649,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
       hit.sourceKind === "assistant_output" &&
       (input.request.requirement.roleConstraint === "any" ||
         input.request.assistantDialogueCandidate === true) &&
-      !hasMemorySourceLocalDialogueCertificateV1(
-        hit.includedTurns,
-        anchorTurnOrder as number,
-      )
+      !hasMemorySourceLocalDialogueCertificateV1(hit.includedTurns, anchorTurnOrder as number)
     ) {
       throw namedError("MemorySourceLocalEvidenceProvenanceInvalid");
     }
@@ -699,10 +659,7 @@ export function validateMemorySourceLocalEvidenceResultV1(input: {
     input.result.telemetry.anchorCount !== input.result.hits.length ||
     input.result.telemetry.renderedChars !== chars ||
     input.result.telemetry.includedTurnCount !==
-      input.result.hits.reduce(
-        (total, hit) => total + hit.includedTurns.length,
-        0,
-      )
+      input.result.hits.reduce((total, hit) => total + hit.includedTurns.length, 0)
   ) {
     throw namedError("MemorySourceLocalEvidenceTelemetryInvalid");
   }
@@ -724,9 +681,7 @@ export async function hydrateMemorySourceLocalEvidenceResultV1(input: {
   }
   const requestedRefs = [
     ...new Set(
-      input.result.hits.flatMap((hit) =>
-        hit.includedTurns.map((turn) => turn.evidenceRef),
-      ),
+      input.result.hits.flatMap((hit) => hit.includedTurns.map((turn) => turn.evidenceRef)),
     ),
   ];
   if (requestedRefs.length === 0) return input.result;
@@ -765,8 +720,7 @@ export async function hydrateMemorySourceLocalEvidenceResultV1(input: {
     }
     const turns = hit.includedTurns.map((turn) => {
       const item = byRef.get(turn.evidenceRef);
-      if (!item)
-        throw namedError("MemorySourceLocalEvidenceHydrationIncomplete");
+      if (!item) throw namedError("MemorySourceLocalEvidenceHydrationIncomplete");
       if (
         item.sourceKind !== turn.sourceKind ||
         item.turnOrder !== turn.turnOrder ||
@@ -848,17 +802,12 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     throw namedError("MemorySourceLocalEvidenceAcquisitionRevisionInvalid");
   }
   if (input.request.requirement.temporalConstraint) {
-    assertMemoryEvidenceTemporalConstraintIdentityV1(
-      input.request.requirement.temporalConstraint,
-    );
+    assertMemoryEvidenceTemporalConstraintIdentityV1(input.request.requirement.temporalConstraint);
   }
-  const normalizedSearchText = input.request.requirement.searchText
+  const normalizedSearchText = input.request.requirement.searchText.replace(/\s+/gu, " ").trim();
+  const normalizedOriginalQuery = input.request.respondingAssistantMaterialization?.originalQuery
     .replace(/\s+/gu, " ")
     .trim();
-  const normalizedOriginalQuery =
-    input.request.respondingAssistantMaterialization?.originalQuery
-      .replace(/\s+/gu, " ")
-      .trim();
   return hashCanonicalJsonV1({
     schemaVersion: "paw.memory-source-local-evidence-cache-key.v1",
     locatorVersion: input.locatorVersion,
@@ -867,33 +816,22 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     embeddingIdentity: input.embeddingIdentity ?? "none",
     searchTextHash: hashCanonicalJsonV1(normalizedSearchText as JsonValue),
     lockedSourceIds: [...input.request.lockedSourceIds].sort(),
-    sourceAcquisitionRevision:
-      input.request.sourceAcquisitionRevision?.trim() ?? "legacy",
+    sourceAcquisitionRevision: input.request.sourceAcquisitionRevision?.trim() ?? "legacy",
     roleConstraint: input.request.requirement.roleConstraint,
-    assistantDialogueCandidate:
-      input.request.assistantDialogueCandidate === true,
-    respondingAssistantMaterialization: input.request
-      .respondingAssistantMaterialization
+    assistantDialogueCandidate: input.request.assistantDialogueCandidate === true,
+    respondingAssistantMaterialization: input.request.respondingAssistantMaterialization
       ? {
-          originalQueryHash: hashCanonicalJsonV1(
-            normalizedOriginalQuery as JsonValue,
-          ),
+          originalQueryHash: hashCanonicalJsonV1(normalizedOriginalQuery as JsonValue),
           maxPromptAnchorsPerSource:
-            input.request.respondingAssistantMaterialization
-              .maxPromptAnchorsPerSource,
+            input.request.respondingAssistantMaterialization.maxPromptAnchorsPerSource,
           // Source order is a ranking input for source-fair allocation.
-          sourcePriority: [
-            ...input.request.respondingAssistantMaterialization
-              .sourcePriorityIds,
-          ],
-          authorization:
-            input.request.respondingAssistantMaterialization.authorization,
+          sourcePriority: [...input.request.respondingAssistantMaterialization.sourcePriorityIds],
+          authorization: input.request.respondingAssistantMaterialization.authorization,
         }
       : "disabled",
     temporalMode: input.request.requirement.temporalMode,
     temporalConstraintRevision:
-      input.request.requirement.temporalConstraint?.constraintRevision ??
-      "legacy",
+      input.request.requirement.temporalConstraint?.constraintRevision ?? "legacy",
     evidenceTimeUpperBound: input.request.evidenceTimeUpperBound ?? "latest",
     budget: input.request.budget,
     adjacencyPolicyVersion: input.adjacencyPolicyVersion,
@@ -928,9 +866,7 @@ function assertRespondingAssistantMaterialization(
 ): void {
   const materialization = request.respondingAssistantMaterialization;
   if (!materialization) return;
-  const originalQuery = materialization.originalQuery
-    .replace(/\s+/gu, " ")
-    .trim();
+  const originalQuery = materialization.originalQuery.replace(/\s+/gu, " ").trim();
   const sourcePriority = materialization.sourcePriorityIds;
   const locked = new Set(request.lockedSourceIds);
   validateMemoryQueryAnswerOriginAuthorizationV1({
@@ -939,12 +875,10 @@ function assertRespondingAssistantMaterialization(
     requirement: request.requirement,
     assistantDialogueCandidate: request.assistantDialogueCandidate === true,
   });
-  const requestedAnchors =
-    sourcePriority.length * materialization.maxPromptAnchorsPerSource;
+  const requestedAnchors = sourcePriority.length * materialization.maxPromptAnchorsPerSource;
   const roleEligible =
     request.requirement.roleConstraint === "assistant" ||
-    (request.requirement.roleConstraint === "any" &&
-      request.assistantDialogueCandidate === true);
+    (request.requirement.roleConstraint === "any" && request.assistantDialogueCandidate === true);
   if (
     !roleEligible ||
     !originalQuery ||
@@ -973,17 +907,13 @@ function evidenceRefFamily(value: string): string {
   return value.trim() ? evidenceSourceIdV1(value) : "";
 }
 
-function parseOptionalTimestamp(
-  value: string | undefined,
-): number | "invalid" | undefined {
+function parseOptionalTimestamp(value: string | undefined): number | "invalid" | undefined {
   if (value === undefined) return undefined;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : "invalid";
 }
 
-function isConversationTurnKind(
-  value: unknown,
-): value is MemoryConversationTurnKindV1 {
+function isConversationTurnKind(value: unknown): value is MemoryConversationTurnKindV1 {
   return (
     value === "user_input" ||
     value === "assistant_output" ||
@@ -1011,6 +941,5 @@ function isAllowedAnchorAuthority(
   return sourceKind === "user_input"
     ? authority === "user_asserted" || authority === "user_confirmed_dialogue"
     : sourceKind === "assistant_output" &&
-        (authority === "context_only" ||
-          authority === "user_confirmed_dialogue");
+        (authority === "context_only" || authority === "user_confirmed_dialogue");
 }

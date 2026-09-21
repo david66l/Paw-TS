@@ -57,8 +57,7 @@ export async function checkMemoryHealth(opts: {
   readonly closeConnection?: boolean;
 }): Promise<MemoryHealthReport> {
   const messages: string[] = [];
-  const rawUrl =
-    process.env.DATABASE_URL ?? "postgresql://localhost:5432/paw_memory";
+  const rawUrl = process.env.DATABASE_URL ?? "postgresql://localhost:5432/paw_memory";
   const databaseUrlConfigured = Boolean(process.env.DATABASE_URL?.trim());
   const databaseUrlDisplay = redactDatabaseUrl(rawUrl);
   const migrationFiles = listMigrationFiles();
@@ -90,9 +89,7 @@ export async function checkMemoryHealth(opts: {
   try {
     pingOk = await dbPing();
     if (!pingOk) {
-      messages.push(
-        "Postgres ping failed. Check DATABASE_URL and that the server is running.",
-      );
+      messages.push("Postgres ping failed. Check DATABASE_URL and that the server is running.");
     } else {
       messages.push("Postgres ping: ok");
       const sql = getSql();
@@ -103,9 +100,7 @@ export async function checkMemoryHealth(opts: {
         )
       `;
       const rows = await sql`SELECT version FROM _migrations ORDER BY version`;
-      const appliedSet = new Set(
-        rows.map((r) => (r as { version: string }).version),
-      );
+      const appliedSet = new Set(rows.map((r) => (r as { version: string }).version));
       applied = appliedSet.size;
       pendingNames = migrationFiles.filter((n) => !appliedSet.has(n));
       if (pendingNames.length === 0) {
@@ -113,9 +108,7 @@ export async function checkMemoryHealth(opts: {
           `Migrations: all ${totalMigrations} applied (${applied} rows in _migrations).`,
         );
       } else {
-        messages.push(
-          `Migrations: ${pendingNames.length} pending. Run: bun run memory:migrate`,
-        );
+        messages.push(`Migrations: ${pendingNames.length} pending. Run: bun run memory:migrate`);
         for (const n of pendingNames.slice(0, 8)) {
           messages.push(`  - ${n}`);
         }
@@ -126,9 +119,7 @@ export async function checkMemoryHealth(opts: {
     }
   } catch (e) {
     pingOk = false;
-    messages.push(
-      `Memory health check error: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    messages.push(`Memory health check error: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     if (opts.closeConnection !== false) {
       try {

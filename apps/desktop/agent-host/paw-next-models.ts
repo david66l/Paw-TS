@@ -19,14 +19,12 @@ export function desktopAgentModels(
       parseAgentMarkdown(createInputToMarkdown(seed), seed.id),
     ]),
   );
-  for (const spec of loadAgentRegistryReadonly(workspaceRoot).list())
-    specs.set(spec.id, spec);
+  for (const spec of loadAgentRegistryReadonly(workspaceRoot).list()) specs.set(spec.id, spec);
   let flash: LanguageModel | undefined;
   const choose = (preference: string) => {
     if (preference !== "flash") return main;
     // The selected GLM Flash also satisfies worker/root Flash preferences.
-    if (main.runtimeProfile?.model.toLowerCase() === "glm-5.3-flash")
-      return main;
+    if (main.runtimeProfile?.model.toLowerCase() === "glm-5.3-flash") return main;
     flash ??= createDeepSeekFlashModel(workspaceRoot) ?? main;
     return flash;
   };
@@ -38,13 +36,9 @@ export function desktopAgentModels(
       // inherit uses the selected root model in the new runtime.
       if (spec.model !== "inherit") models[spec.id] = choose(spec.model);
     }
-  const mode =
-    settings.agent_mode ??
-    (settings as Record<string, unknown>).collaboration_mode;
+  const mode = settings.agent_mode ?? (settings as Record<string, unknown>).collaboration_mode;
   const root =
-    mode === "orchestrated" || mode === "team" || mode === "multi"
-      ? specs.get("lihua")
-      : undefined;
+    mode === "orchestrated" || mode === "team" || mode === "multi" ? specs.get("lihua") : undefined;
   return {
     model: root ? choose(root.model) : main,
     models,

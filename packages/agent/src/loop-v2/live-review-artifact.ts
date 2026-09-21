@@ -32,14 +32,9 @@ export interface LoopV2LiveReviewArtifactV1 {
   readonly artifactHash: string;
 }
 
-export function loopV2LiveReviewArtifactPath(
-  workspaceRoot: string,
-  runId: string,
-): string {
+export function loopV2LiveReviewArtifactPath(workspaceRoot: string, runId: string): string {
   if (!workspaceRoot.trim() || !runId.trim()) {
-    throw new Error(
-      "Loop v2 live review artifact path requires workspace and runId",
-    );
+    throw new Error("Loop v2 live review artifact path requires workspace and runId");
   }
   return path.join(
     path.resolve(workspaceRoot),
@@ -63,10 +58,7 @@ export function buildLoopV2LiveReviewArtifactV1(
     candidateArtifact.assessment.policy,
   );
   const normalized = validateSemanticReviewRecordV2(record, payload);
-  const reviewKey = semanticReviewKeyV2(
-    payload.input.mutationRevision,
-    payload.candidateInputHash,
-  );
+  const reviewKey = semanticReviewKeyV2(payload.input.mutationRevision, payload.candidateInputHash);
   if (reuse) {
     if (!reuse.fromReviewKey.trim() || reuse.fromReviewKey === reviewKey) {
       throw new Error("Loop v2 semantic review reuse source is invalid");

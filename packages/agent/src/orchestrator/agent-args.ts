@@ -21,13 +21,7 @@ import type { SharedContext } from "./types.js";
  */
 export type AgentType = "simple" | "research" | "coding" | "planning" | "relay";
 
-const AGENT_TYPES = new Set<AgentType>([
-  "simple",
-  "research",
-  "coding",
-  "planning",
-  "relay",
-]);
+const AGENT_TYPES = new Set<AgentType>(["simple", "research", "coding", "planning", "relay"]);
 
 /** 根据 agent 类型生成 role 描述。 */
 export function buildRole(agentType: AgentType): string {
@@ -70,9 +64,7 @@ export function buildOutputFormat(agentType: AgentType): string {
  *
  * @param args 工具调用参数
  */
-export function parseAgentType(
-  args: Record<string, unknown> | undefined,
-): AgentType {
+export function parseAgentType(args: Record<string, unknown> | undefined): AgentType {
   const raw = args?.agent_type ?? args?.agentType ?? args?.type ?? args?.kind;
   if (typeof raw === "string" && AGENT_TYPES.has(raw as AgentType)) {
     return raw as AgentType;

@@ -63,9 +63,7 @@ export function validateMemoryEvidenceClosureAuditBoundaryV1(input: {
   }
   const deficiencies = boundedDeficiencies(audit.deficiencies);
   const requirementIds = new Set(
-    input.auditInput.requirements.map(
-      (requirement) => requirement.requirementId,
-    ),
+    input.auditInput.requirements.map((requirement) => requirement.requirementId),
   );
   const suppliedRefs = new Set(
     input.auditInput.selectedEvidence.map((evidence) => evidence.evidenceRef),
@@ -79,9 +77,7 @@ export function validateMemoryEvidenceClosureAuditBoundaryV1(input: {
         !requirementIds.has(deficiency.targetRequirementId),
     ) ||
     rejectedEvidenceRefs.length !== audit.rejectedEvidenceRefs.length ||
-    rejectedEvidenceRefs.some(
-      (evidenceRef) => !suppliedRefs.has(evidenceRef),
-    ) ||
+    rejectedEvidenceRefs.some((evidenceRef) => !suppliedRefs.has(evidenceRef)) ||
     (audit.decision === "pass" && rejectedEvidenceRefs.length > 0)
   ) {
     throw namedError("MemoryEvidenceClosureAuditBoundaryInvalid");
@@ -106,17 +102,13 @@ export function createJsonMemoryEvidenceClosureAuditorV1(input: {
   if (!input.model || typeof input.model.complete !== "function") {
     throw namedError("MemoryEvidenceClosureAuditorModelInvalid");
   }
-  const auditorVersion =
-    input.auditorVersion ?? PAW_MEMORY_EVIDENCE_CLOSURE_AUDITOR_VERSION_V1;
+  const auditorVersion = input.auditorVersion ?? PAW_MEMORY_EVIDENCE_CLOSURE_AUDITOR_VERSION_V1;
   if (!auditorVersion.trim()) {
     throw namedError("MemoryEvidenceClosureAuditorVersionInvalid");
   }
   return Object.freeze({
     auditorVersion,
-    async audit(
-      auditInput: MemoryEvidenceClosureAuditInputV1,
-      signal: AbortSignal,
-    ) {
+    async audit(auditInput: MemoryEvidenceClosureAuditInputV1, signal: AbortSignal) {
       assertAuditInput(auditInput);
       if (signal.aborted) throw abortError();
       const result = await input.model.complete(
@@ -192,8 +184,7 @@ export function buildMemoryEvidenceClosureAuditRequestV1(
             : [requirement.roleConstraint]),
         relation: requirement.relation ?? "direct",
         coverageMode:
-          requirement.coverageMode ??
-          (requirement.temporalMode === "latest" ? "latest" : "any"),
+          requirement.coverageMode ?? (requirement.temporalMode === "latest" ? "latest" : "any"),
         minimumEvidence: requirement.minimumEvidence ?? 1,
         dependencyRelation: requirement.dependencyRelation ?? "independent",
         dependsOnRequirementIds: requirement.dependsOnRequirementIds ?? [],
@@ -226,8 +217,7 @@ export function parseMemoryEvidenceClosureAuditV1(
   assertAuditInput(input);
   const parsed = extractJsonObject(text);
   if (
-    Object.keys(parsed).sort().join("\0") !==
-      "decision\0deficiencies\0rejectedEvidenceRefs" ||
+    Object.keys(parsed).sort().join("\0") !== "decision\0deficiencies\0rejectedEvidenceRefs" ||
     !new Set(["pass", "incomplete"]).has(String(parsed.decision)) ||
     !Array.isArray(parsed.deficiencies) ||
     parsed.deficiencies.length > PAW_MEMORY_EVIDENCE_MAX_DEFICIENCIES_V1 ||
@@ -261,8 +251,7 @@ export function parseMemoryEvidenceClosureAuditV1(
   const rejectedEvidenceRefs: string[] = [];
   const seenRejected = new Set<string>();
   for (const rawRef of parsed.rejectedEvidenceRefs) {
-    const evidenceRef =
-      typeof rawRef === "string" ? evidenceRefs.get(rawRef) : undefined;
+    const evidenceRef = typeof rawRef === "string" ? evidenceRefs.get(rawRef) : undefined;
     if (!evidenceRef || seenRejected.has(evidenceRef)) {
       throw namedError("MemoryEvidenceClosureAuditAddressInvalid");
     }
@@ -301,8 +290,7 @@ function boundedDeficiencies(
     const reason = raw.reason as MemoryEvidencePlanningDeficiencyReasonV1;
     if (
       raw.targetRequirementId !== null &&
-      (typeof raw.targetRequirementId !== "string" ||
-        !raw.targetRequirementId.trim())
+      (typeof raw.targetRequirementId !== "string" || !raw.targetRequirementId.trim())
     ) {
       throw namedError("MemoryEvidenceClosureAuditDeficiencyInvalid");
     }
@@ -310,9 +298,7 @@ function boundedDeficiencies(
       Object.freeze({
         reason,
         targetRequirementId:
-          raw.targetRequirementId === null
-            ? null
-            : raw.targetRequirementId.trim(),
+          raw.targetRequirementId === null ? null : raw.targetRequirementId.trim(),
       }),
     );
   }
@@ -336,11 +322,7 @@ function assertAuditInput(input: MemoryEvidenceClosureAuditInputV1): void {
       512,
       "MemoryEvidenceClosureAuditEvidenceInvalid",
     );
-    boundedText(
-      evidence.content,
-      8_192,
-      "MemoryEvidenceClosureAuditEvidenceInvalid",
-    );
+    boundedText(evidence.content, 8_192, "MemoryEvidenceClosureAuditEvidenceInvalid");
     if (refs.has(evidenceRef)) {
       throw namedError("MemoryEvidenceClosureAuditEvidenceDuplicate");
     }
@@ -365,11 +347,7 @@ function extractJsonObject(text: string): Record<string, unknown> {
   return value;
 }
 
-function boundedText(
-  value: unknown,
-  maximum: number,
-  errorName: string,
-): string {
+function boundedText(value: unknown, maximum: number, errorName: string): string {
   if (typeof value !== "string") throw namedError(errorName);
   const normalized = value.trim().replace(/\s+/gu, " ");
   if (!normalized || normalized.length > maximum) throw namedError(errorName);

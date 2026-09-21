@@ -44,16 +44,11 @@ export function projectMemoryAspectStateLineageV1(
 ): MemoryAspectStateLineageProjectionV1 {
   measureMemoryAspectGraphV1(input.snapshot);
   const asOf = canonicalIso(input.asOf);
-  const anchorClaimIds = stableIds(
-    input.anchorClaimIds,
-    "MemoryAspectStateLineageAnchorInvalid",
-  );
+  const anchorClaimIds = stableIds(input.anchorClaimIds, "MemoryAspectStateLineageAnchorInvalid");
   if (anchorClaimIds.length === 0) {
     throw namedError("MemoryAspectStateLineageAnchorInvalid");
   }
-  const claims = new Map(
-    input.snapshot.claims.map((claim) => [claim.id, claim]),
-  );
+  const claims = new Map(input.snapshot.claims.map((claim) => [claim.id, claim]));
   for (const anchorClaimId of anchorClaimIds) {
     if (!claims.has(anchorClaimId)) {
       throw namedError("MemoryAspectStateLineageAnchorUnknown");
@@ -67,12 +62,9 @@ export function projectMemoryAspectStateLineageV1(
   const memberships = activeMemberships(input.snapshot, asOf).filter(
     (membership) =>
       activeAspectIds.has(membership.aspectId) &&
-      (input.aspectId === undefined ||
-        membership.aspectId === input.aspectId) &&
-      (input.subjectKey === undefined ||
-        membership.subjectKey === input.subjectKey) &&
-      (input.contextKey === undefined ||
-        membership.contextKey === input.contextKey),
+      (input.aspectId === undefined || membership.aspectId === input.aspectId) &&
+      (input.subjectKey === undefined || membership.subjectKey === input.subjectKey) &&
+      (input.contextKey === undefined || membership.contextKey === input.contextKey),
   );
   const scopeByKey = new Map<string, MemoryAspectStateScopeV1>();
   const scopesByAnchor = new Map<string, Set<string>>();
@@ -127,9 +119,7 @@ export function projectMemoryAspectStateLineageV1(
       scopedClaimIds.has(edge.toClaimId),
   );
   const stateClaimIds = new Set(
-    [...rolesByClaim]
-      .filter(([, roles]) => hasStateRole(roles))
-      .map(([claimId]) => claimId),
+    [...rolesByClaim].filter(([, roles]) => hasStateRole(roles)).map(([claimId]) => claimId),
   );
   const adjacency = new Map<string, Set<string>>();
   for (const edge of activeEdges) {
@@ -141,10 +131,7 @@ export function projectMemoryAspectStateLineageV1(
     ) {
       continue;
     }
-    if (
-      !stateClaimIds.has(edge.fromClaimId) ||
-      !stateClaimIds.has(edge.toClaimId)
-    ) {
+    if (!stateClaimIds.has(edge.fromClaimId) || !stateClaimIds.has(edge.toClaimId)) {
       continue;
     }
     addUndirected(adjacency, edge.fromClaimId, edge.toClaimId);
@@ -156,18 +143,11 @@ export function projectMemoryAspectStateLineageV1(
       continue;
     }
     for (const edge of activeEdges) {
-      if (edge.edgeType !== "supports" && edge.edgeType !== "caused_by")
-        continue;
-      if (
-        edge.fromClaimId === anchorClaimId &&
-        stateClaimIds.has(edge.toClaimId)
-      ) {
+      if (edge.edgeType !== "supports" && edge.edgeType !== "caused_by") continue;
+      if (edge.fromClaimId === anchorClaimId && stateClaimIds.has(edge.toClaimId)) {
         seeds.add(edge.toClaimId);
       }
-      if (
-        edge.toClaimId === anchorClaimId &&
-        stateClaimIds.has(edge.fromClaimId)
-      ) {
+      if (edge.toClaimId === anchorClaimId && stateClaimIds.has(edge.fromClaimId)) {
         seeds.add(edge.fromClaimId);
       }
     }
@@ -202,8 +182,7 @@ export function projectMemoryAspectStateLineageV1(
       futureClaimIds.push(claimId);
     } else if (
       superseded.has(claimId) ||
-      (claim.validTo !== undefined &&
-        Date.parse(claim.validTo) <= Date.parse(asOf))
+      (claim.validTo !== undefined && Date.parse(claim.validTo) <= Date.parse(asOf))
     ) {
       historicalClaimIds.push(claimId);
     } else {
@@ -212,15 +191,9 @@ export function projectMemoryAspectStateLineageV1(
   }
   const relatedEvidenceIds = new Set<string>();
   for (const edge of activeEdges) {
-    if (
-      lineageClaimIds.has(edge.fromClaimId) &&
-      !lineageClaimIds.has(edge.toClaimId)
-    )
+    if (lineageClaimIds.has(edge.fromClaimId) && !lineageClaimIds.has(edge.toClaimId))
       relatedEvidenceIds.add(edge.toClaimId);
-    if (
-      lineageClaimIds.has(edge.toClaimId) &&
-      !lineageClaimIds.has(edge.fromClaimId)
-    )
+    if (lineageClaimIds.has(edge.toClaimId) && !lineageClaimIds.has(edge.fromClaimId))
       relatedEvidenceIds.add(edge.fromClaimId);
   }
   const eventClaimIds: string[] = [];
@@ -241,18 +214,12 @@ export function projectMemoryAspectStateLineageV1(
   const selectedEdges = Object.freeze(
     activeEdges
       .filter(
-        (edge) =>
-          selectedClaimIds.has(edge.fromClaimId) ||
-          selectedClaimIds.has(edge.toClaimId),
+        (edge) => selectedClaimIds.has(edge.fromClaimId) || selectedClaimIds.has(edge.toClaimId),
       )
       .sort(compareEdges),
   );
   const neighborClaimIds = Object.freeze(
-    [
-      ...new Set(
-        selectedEdges.flatMap((edge) => [edge.fromClaimId, edge.toClaimId]),
-      ),
-    ]
+    [...new Set(selectedEdges.flatMap((edge) => [edge.fromClaimId, edge.toClaimId]))]
       .filter((claimId) => !selectedClaimIds.has(claimId))
       .sort(),
   );
@@ -268,9 +235,7 @@ export function projectMemoryAspectStateLineageV1(
     stateScope,
     anchorClaimIds: Object.freeze(anchorClaimIds),
     lineageClaimIds: Object.freeze([...lineageClaimIds].sort()),
-    projectionRevision: hashCanonicalJsonV1(
-      revisionInput as unknown as JsonValue,
-    ),
+    projectionRevision: hashCanonicalJsonV1(revisionInput as unknown as JsonValue),
     currentClaimIds: Object.freeze(currentClaimIds),
     historicalClaimIds: Object.freeze(historicalClaimIds),
     futureClaimIds: Object.freeze(futureClaimIds),
@@ -282,23 +247,18 @@ export function projectMemoryAspectStateLineageV1(
   });
 }
 
-function activeMemberships(
-  snapshot: MemoryAspectGraphSnapshotV1,
-  asOf: string,
-) {
+function activeMemberships(snapshot: MemoryAspectGraphSnapshotV1, asOf: string) {
   const retracted = new Set(
     snapshot.lifecycleEvents
       .filter(
         (event) =>
-          event.targetKind === "membership" &&
-          Date.parse(event.occurredAt) <= Date.parse(asOf),
+          event.targetKind === "membership" && Date.parse(event.occurredAt) <= Date.parse(asOf),
       )
       .map((event) => event.targetId),
   );
   return snapshot.memberships.filter(
     (membership) =>
-      Date.parse(membership.createdAt) <= Date.parse(asOf) &&
-      !retracted.has(membership.id),
+      Date.parse(membership.createdAt) <= Date.parse(asOf) && !retracted.has(membership.id),
   );
 }
 
@@ -309,9 +269,7 @@ function activeEdgesAt(
   const retracted = new Set(
     snapshot.lifecycleEvents
       .filter(
-        (event) =>
-          event.targetKind === "edge" &&
-          Date.parse(event.occurredAt) <= Date.parse(asOf),
+        (event) => event.targetKind === "edge" && Date.parse(event.occurredAt) <= Date.parse(asOf),
       )
       .map((event) => event.targetId),
   );
@@ -340,11 +298,7 @@ function component(
   return visited;
 }
 
-function addUndirected(
-  adjacency: Map<string, Set<string>>,
-  left: string,
-  right: string,
-): void {
+function addUndirected(adjacency: Map<string, Set<string>>, left: string, right: string): void {
   const leftNeighbors = adjacency.get(left) ?? new Set<string>();
   leftNeighbors.add(right);
   adjacency.set(left, leftNeighbors);
@@ -357,10 +311,7 @@ function hasStateRole(roles: ReadonlySet<MemoryAspectClaimRoleV1>): boolean {
   return roles.has("state") || roles.has("fact");
 }
 
-function sameSet(
-  left: ReadonlySet<string>,
-  right: ReadonlySet<string>,
-): boolean {
+function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   return left.size === right.size && [...left].every((item) => right.has(item));
 }
 
@@ -403,10 +354,7 @@ function compareClaims(
   );
 }
 
-function compareEdges(
-  left: MemoryEvidenceEdgeV1,
-  right: MemoryEvidenceEdgeV1,
-): number {
+function compareEdges(left: MemoryEvidenceEdgeV1, right: MemoryEvidenceEdgeV1): number {
   return (
     left.edgeType.localeCompare(right.edgeType) ||
     left.fromClaimId.localeCompare(right.fromClaimId) ||
@@ -417,8 +365,7 @@ function compareEdges(
 
 function required<T>(map: ReadonlyMap<string, T>, id: string): T {
   const value = map.get(id);
-  if (value === undefined)
-    throw namedError("MemoryAspectStateLineageClaimUnknown");
+  if (value === undefined) throw namedError("MemoryAspectStateLineageClaimUnknown");
   return value;
 }
 

@@ -5,10 +5,7 @@ import {
   createModelCheckpointSemanticVerifierV1,
   projectCheckpointEvidenceV1,
 } from "../src/index.js";
-import {
-  sourceEntries,
-  validCheckpoint,
-} from "./support/checkpoint-fixture.js";
+import { sourceEntries, validCheckpoint } from "./support/checkpoint-fixture.js";
 
 describe("model checkpoint semantic verifier", () => {
   test("settles a model that ignores the semantic verification deadline", async () => {

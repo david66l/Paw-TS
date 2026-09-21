@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { checkAcceptanceCriteria } from "../src/lifecycle/acceptance-gate.js";
-import {
-  createBudgetAbort,
-  resolveLifecycleBudget,
-} from "../src/lifecycle/budget.js";
+import { createBudgetAbort, resolveLifecycleBudget } from "../src/lifecycle/budget.js";
 import {
   EMPTY_CODING_PHASE_STATE,
   advanceCodingPhase,
@@ -25,10 +22,7 @@ import {
   updateFailureSignatures,
 } from "../src/lifecycle/tool-recovery.js";
 import { checkVerification } from "../src/lifecycle/verification-gate.js";
-import {
-  type TaskState,
-  formatCompletionReadiness,
-} from "../src/task-state.js";
+import { type TaskState, formatCompletionReadiness } from "../src/task-state.js";
 
 function baseState(over: Partial<TaskState> = {}): TaskState {
   return {
@@ -153,9 +147,7 @@ describe("CompletionPolicy", () => {
 
   test("file lock conflicts appear in evidence", () => {
     const state = baseState({ fileLockConflicts: ["src/a.ts"] });
-    expect(evidenceFromTaskState(state).fileLockConflicts).toEqual([
-      "src/a.ts",
-    ]);
+    expect(evidenceFromTaskState(state).fileLockConflicts).toEqual(["src/a.ts"]);
   });
 
   test("structured verification failures survive the run evidence boundary", () => {
@@ -500,9 +492,7 @@ describe("VerificationGate", () => {
       ok: true,
       mode: "tests_passed",
     });
-    expect(formatCompletionReadiness(state)).toContain(
-      "- Verification: passed for r2",
-    );
+    expect(formatCompletionReadiness(state)).toContain("- Verification: passed for r2");
   });
 
   test("later harness failure does not hide a current-revision code failure", () => {
@@ -583,9 +573,7 @@ describe("VerificationGate", () => {
     );
     expect(v.ok).toBe(false);
     if (!v.ok) {
-      expect(v.nudge).toContain(
-        "does not prove its verification runner passed",
-      );
+      expect(v.nudge).toContain("does not prove its verification runner passed");
       expect(v.nudge).toContain("Run the verification directly");
       expect(v.nudge).not.toContain("did not execute");
     }
@@ -609,8 +597,7 @@ describe("VerificationGate", () => {
       policy: { authority: "external" },
     });
     expect(beforeDiff.ok).toBe(false);
-    if (!beforeDiff.ok)
-      expect(beforeDiff.nudge).toContain("Inspect the final diff");
+    if (!beforeDiff.ok) expect(beforeDiff.nudge).toContain("Inspect the final diff");
     const afterDiff = checkVerification(
       { ...failed, diffInspectedRevision: 1 },
       { policy: { authority: "external" } },
@@ -638,8 +625,7 @@ describe("VerificationGate", () => {
       policy: { authority: "external" },
     });
     expect(pendingRetry.ok).toBe(false);
-    if (!pendingRetry.ok)
-      expect(pendingRetry.nudge).toContain("materially simpler direct command");
+    if (!pendingRetry.ok) expect(pendingRetry.nudge).toContain("materially simpler direct command");
 
     const exhausted = checkVerification(
       { ...once, testResults: [retryable, retryable] },
@@ -792,12 +778,10 @@ describe("CodingPhase locate → edit → verify budget", () => {
       Array.from({ length: 4 }, () => call("workspace.read_file")),
       Array.from({ length: 4 }, () => ({ ok: true })),
     );
-    expect(
-      codingPhaseBlockReason(call("workspace.grep"), fourteen.state),
-    ).toContain("CodingPhase:locate_limit");
-    expect(
-      codingPhaseBlockReason(call("workspace.edit_file"), fourteen.state),
-    ).toBeNull();
+    expect(codingPhaseBlockReason(call("workspace.grep"), fourteen.state)).toContain(
+      "CodingPhase:locate_limit",
+    );
+    expect(codingPhaseBlockReason(call("workspace.edit_file"), fourteen.state)).toBeNull();
   });
 
   test("an edit triggers verification nudge and blocks post-edit browsing", () => {
@@ -812,9 +796,9 @@ describe("CodingPhase locate → edit → verify budget", () => {
       Array.from({ length: 4 }, () => call("workspace.read_file")),
       Array.from({ length: 4 }, () => ({ ok: true })),
     );
-    expect(
-      codingPhaseBlockReason(call("workspace.grep"), browsed.state),
-    ).toContain("CodingPhase:verify_limit");
+    expect(codingPhaseBlockReason(call("workspace.grep"), browsed.state)).toContain(
+      "CodingPhase:verify_limit",
+    );
     expect(
       codingPhaseBlockReason(
         call("workspace.run_shell", { command: "pytest tests/test_x.py -q" }),
@@ -862,9 +846,5 @@ describe("LifecycleBudget", () => {
 
 test("is opt-in rather than affecting every mutation task", () => {
   expect(goalUsesCodingPhaseBudget("fix bug [require_mutation]")).toBe(false);
-  expect(
-    goalUsesCodingPhaseBudget(
-      "fix bug [require_mutation] [coding_phase_budget]",
-    ),
-  ).toBe(true);
+  expect(goalUsesCodingPhaseBudget("fix bug [require_mutation] [coding_phase_budget]")).toBe(true);
 });

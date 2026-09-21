@@ -17,9 +17,7 @@ describe("typed evidence origin", () => {
         roleConstraint: "assistant",
       }),
     ).toBe("assistant_report");
-    expect(
-      classifyMemoryEvidenceUseV1({ ...common, roleConstraint: "any" }),
-    ).toBeUndefined();
+    expect(classifyMemoryEvidenceUseV1({ ...common, roleConstraint: "any" })).toBeUndefined();
     expect(
       classifyMemoryEvidenceUseV1({
         ...common,
@@ -34,9 +32,7 @@ describe("typed evidence origin", () => {
         dialogueCertified: true,
       }),
     ).toBe("shared_dialogue_artifact");
-    expect(
-      classifyMemoryEvidenceUseV1({ ...common, roleConstraint: "user" }),
-    ).toBeUndefined();
+    expect(classifyMemoryEvidenceUseV1({ ...common, roleConstraint: "user" })).toBeUndefined();
     expect(
       classifyMemoryEvidenceUseV1({
         roleConstraint: "assistant",
@@ -78,9 +74,7 @@ describe("typed evidence origin", () => {
         evidenceUse: "assistant_report",
       },
     ]);
-    expect(notebook.sources[0]?.text).toContain(
-      "evidence_use=assistant_report",
-    );
+    expect(notebook.sources[0]?.text).toContain("evidence_use=assistant_report");
     expect(notebook.sources[0]?.text).toContain("authority=context_only");
   });
 

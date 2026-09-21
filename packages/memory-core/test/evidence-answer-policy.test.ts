@@ -42,12 +42,7 @@ describe("evidence answer policy", () => {
         requirementCount: 2,
         evidenceStatus: "partial",
       }).operations,
-    ).toEqual([
-      "bind_requirements",
-      "enforce_role",
-      "order_events",
-      "deduplicate_entities",
-    ]);
+    ).toEqual(["bind_requirements", "enforce_role", "order_events", "deduplicate_entities"]);
   });
 
   test("separates latest-state and preference operations", () => {

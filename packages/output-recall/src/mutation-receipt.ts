@@ -12,9 +12,7 @@ export function projectMutationReceiptV1(
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const value = raw as Readonly<Record<string, JsonValue>>;
   if (
-    !["workspace_write_file", "workspace_edit_file"].includes(
-      observation.tool,
-    ) ||
+    !["workspace_write_file", "workspace_edit_file"].includes(observation.tool) ||
     observation.status !== "completed" ||
     observation.isError ||
     observation.payload.kind !== "artifact_ref" ||

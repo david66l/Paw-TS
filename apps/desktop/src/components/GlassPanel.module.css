@@ -10,8 +10,8 @@
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
     brightness(var(--glass-brightness));
-  -webkit-backdrop-filter: blur(var(--glass-blur))
-    saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
+    brightness(var(--glass-brightness));
   box-shadow: var(--glass-highlight), var(--glass-shadow);
   overflow: hidden;
 }
@@ -96,8 +96,7 @@
 
 :global(:root[data-material-theme="lens"]) .variant_subtle {
   background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 5px 14px
-    rgba(29, 38, 54, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 5px 14px rgba(29, 38, 54, 0.05);
 }
 
 :global(:root[data-material-theme="lens"]) .variant_subtle::before,
@@ -149,10 +148,7 @@
 }
 
 /* 无 backdrop-filter 时保证可读 */
-@supports not (
-    (backdrop-filter: blur(1px)) or
-    (-webkit-backdrop-filter: blur(1px))
-  ) {
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .panel {
     background: rgba(255, 255, 255, 0.88);
   }

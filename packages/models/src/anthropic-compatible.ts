@@ -24,10 +24,7 @@ import {
 import { type ModelTokenUsage, isNativeToolTurnV2 } from "@paw/core";
 
 import type { LanguageModel, ModelCapabilities } from "./language-model.js";
-import {
-  type AnthropicContentBlock,
-  buildAnthropicUserContent,
-} from "./message-content.js";
+import { type AnthropicContentBlock, buildAnthropicUserContent } from "./message-content.js";
 import {
   type ModelCompleteOptions,
   type ToolDefinition,
@@ -88,9 +85,7 @@ function toAnthropicMessages(messages: readonly ChatMessage[]): {
     } else if (isNativeToolTurnV2(m.nativeToolTurn)) {
       const turn = m.nativeToolTurn;
       if (turn.reasoningPassback !== undefined) {
-        throw new Error(
-          "Anthropic-compatible history cannot replay string reasoningPassback",
-        );
+        throw new Error("Anthropic-compatible history cannot replay string reasoningPassback");
       }
       const assistant: AnthropicRequestContentBlock[] = [];
       if (turn.assistantContent) {
@@ -103,14 +98,8 @@ function toAnthropicMessages(messages: readonly ChatMessage[]): {
         } catch {
           throw new Error(`Native tool call ${call.callId} has invalid JSON`);
         }
-        if (
-          input === null ||
-          typeof input !== "object" ||
-          Array.isArray(input)
-        ) {
-          throw new Error(
-            `Native tool call ${call.callId} arguments must be an object`,
-          );
+        if (input === null || typeof input !== "object" || Array.isArray(input)) {
+          throw new Error(`Native tool call ${call.callId} arguments must be an object`);
         }
         assistant.push({
           type: "tool_use",
@@ -130,9 +119,7 @@ function toAnthropicMessages(messages: readonly ChatMessage[]): {
         })),
       });
     } else if (m.reasoningPassback !== undefined) {
-      throw new Error(
-        "Anthropic-compatible history cannot replay string reasoningPassback",
-      );
+      throw new Error("Anthropic-compatible history cannot replay string reasoningPassback");
     } else {
       out.push({ role: "assistant", content: m.content });
     }
@@ -169,10 +156,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
 
   constructor(opts: AnthropicCompatibleOptions) {
     this.apiKey = opts.apiKey;
-    this.baseUrl = (opts.baseUrl ?? "https://api.anthropic.com/v1").replace(
-      /\/$/,
-      "",
-    );
+    this.baseUrl = (opts.baseUrl ?? "https://api.anthropic.com/v1").replace(/\/$/, "");
     this.model = opts.model;
     this.label = `anthropic:${opts.model}`;
     this.capabilities = opts.capabilities;
@@ -180,9 +164,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
       protocol: "anthropic-compatible",
       model: opts.model,
       baseUrl: this.baseUrl,
-      ...(opts.reasoningEffort !== undefined
-        ? { reasoningEffort: opts.reasoningEffort }
-        : {}),
+      ...(opts.reasoningEffort !== undefined ? { reasoningEffort: opts.reasoningEffort } : {}),
     };
   }
 
@@ -199,9 +181,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     messages: readonly ChatMessage[],
     options?: ModelCompleteOptions,
   ): AsyncIterable<ModelStreamChunk> {
-    return observeModelStream(this, options, (observed) =>
-      this.streamRequest(messages, observed),
-    );
+    return observeModelStream(this, options, (observed) => this.streamRequest(messages, observed));
   }
 
   private async completeRequest(
@@ -224,8 +204,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     };
     if (
       options?.thinkingEnabled !== false &&
-      (options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort) !==
-        undefined
+      (options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort) !== undefined
     ) {
       body.output_config = {
         effort: options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort,
@@ -253,12 +232,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
       {
         type: "request",
         streaming: false,
-        maxOutputTokens:
-          typeof body.max_tokens === "number" ? body.max_tokens : undefined,
+        maxOutputTokens: typeof body.max_tokens === "number" ? body.max_tokens : undefined,
         reasoningEffort:
-          options?.thinkingEnabled === false
-            ? undefined
-            : this.runtimeProfile.reasoningEffort,
+          options?.thinkingEnabled === false ? undefined : this.runtimeProfile.reasoningEffort,
       },
     );
     const raw = await res.text();
@@ -272,13 +248,10 @@ export class AnthropicCompatibleModel implements LanguageModel {
       throw new Error("Anthropic: invalid JSON body");
     }
     const root =
-      parsed !== null && typeof parsed === "object"
-        ? (parsed as Record<string, unknown>)
-        : null;
+      parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
     const { text, thinking, toolCalls } = extractAnthropicContent(root);
     const usage = parseAnthropicUsage(root?.usage);
-    const finishReason =
-      typeof root?.stop_reason === "string" ? root.stop_reason : undefined;
+    const finishReason = typeof root?.stop_reason === "string" ? root.stop_reason : undefined;
     const result: ModelCompletionResult = {
       text,
       ...(toolCalls.length > 0 ? { nativeAssistantContent: text } : {}),
@@ -311,8 +284,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     };
     if (
       options?.thinkingEnabled !== false &&
-      (options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort) !==
-        undefined
+      (options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort) !== undefined
     ) {
       body.output_config = {
         effort: options?.reasoningEffort ?? this.runtimeProfile.reasoningEffort,
@@ -341,19 +313,14 @@ export class AnthropicCompatibleModel implements LanguageModel {
       {
         type: "request",
         streaming: true,
-        maxOutputTokens:
-          typeof body.max_tokens === "number" ? body.max_tokens : undefined,
+        maxOutputTokens: typeof body.max_tokens === "number" ? body.max_tokens : undefined,
         reasoningEffort:
-          options?.thinkingEnabled === false
-            ? undefined
-            : this.runtimeProfile.reasoningEffort,
+          options?.thinkingEnabled === false ? undefined : this.runtimeProfile.reasoningEffort,
       },
     );
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(
-        `Anthropic stream HTTP ${res.status}: ${errText.slice(0, 500)}`,
-      );
+      throw new Error(`Anthropic stream HTTP ${res.status}: ${errText.slice(0, 500)}`);
     }
     const reader = res.body?.getReader();
     if (!reader) {
@@ -405,9 +372,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
       if (part.toolUseStart) {
         const { blockIndex, id, name, initialInput } = part.toolUseStart;
         if (toolUseByBlockIndex.has(blockIndex)) {
-          throw new Error(
-            `Anthropic duplicate tool_use block index ${blockIndex}`,
-          );
+          throw new Error(`Anthropic duplicate tool_use block index ${blockIndex}`);
         }
         toolUseByBlockIndex.set(blockIndex, {
           id,
@@ -420,9 +385,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
         const { blockIndex, partialJson } = part.toolUseDelta;
         const toolUse = toolUseByBlockIndex.get(blockIndex);
         if (!toolUse || toolUse.stopped) {
-          throw new Error(
-            `Anthropic orphan tool_use delta at block index ${blockIndex}`,
-          );
+          throw new Error(`Anthropic orphan tool_use delta at block index ${blockIndex}`);
         }
         toolUse.input += partialJson;
       }
@@ -492,9 +455,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
       reader.releaseLock();
     }
     if (!sawMessageStop && !lastFinishReason) {
-      throw new Error(
-        "Anthropic stream ended without message_stop or stop_reason",
-      );
+      throw new Error("Anthropic stream ended without message_stop or stop_reason");
     }
     const completedToolUses = [...toolUseByBlockIndex.entries()].sort(
       ([left], [right]) => left - right,
@@ -507,9 +468,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
         !toolUse.name.trim() ||
         callIds.has(toolUse.id)
       ) {
-        throw new Error(
-          `Anthropic invalid tool_use identity at source index ${sourceIndex}`,
-        );
+        throw new Error(`Anthropic invalid tool_use identity at source index ${sourceIndex}`);
       }
       callIds.add(toolUse.id);
       emitModelObservation(options, { type: "tool_assembled" });
@@ -524,9 +483,7 @@ export class AnthropicCompatibleModel implements LanguageModel {
     yield {
       type: "done",
       ...(lastUsage !== undefined ? { usage: lastUsage } : {}),
-      ...(lastFinishReason !== undefined
-        ? { finishReason: lastFinishReason }
-        : {}),
+      ...(lastFinishReason !== undefined ? { finishReason: lastFinishReason } : {}),
     };
   }
 }
@@ -566,9 +523,7 @@ function extractAnthropicContent(root: Record<string, unknown> | null): {
           );
         }
         callIds.add(id);
-        toolCalls.push(
-          toNativeToolCall(id, name, b.input, toolCalls.length, "complete"),
-        );
+        toolCalls.push(toNativeToolCall(id, name, b.input, toolCalls.length, "complete"));
       }
     }
   }
@@ -610,9 +565,7 @@ function toNativeToolCall(
     }
   }
   const argumentsValid =
-    parsedInput !== null &&
-    typeof parsedInput === "object" &&
-    !Array.isArray(parsedInput);
+    parsedInput !== null && typeof parsedInput === "object" && !Array.isArray(parsedInput);
   return {
     id,
     name,
@@ -630,18 +583,12 @@ function parseAnthropicUsage(raw: unknown): ModelTokenUsage | undefined {
   const u = raw as Record<string, unknown>;
   const inputTokens = pickNum(u.input_tokens ?? u.promptTokens);
   const outputTokens = pickNum(u.output_tokens ?? u.completionTokens);
-  const cachedPromptTokens = pickNum(
-    u.cache_read_input_tokens ?? u.cachedPromptTokens,
-  );
+  const cachedPromptTokens = pickNum(u.cache_read_input_tokens ?? u.cachedPromptTokens);
   const totalTokens =
     inputTokens !== undefined && outputTokens !== undefined
       ? inputTokens + outputTokens
       : undefined;
-  if (
-    inputTokens === undefined &&
-    outputTokens === undefined &&
-    cachedPromptTokens === undefined
-  ) {
+  if (inputTokens === undefined && outputTokens === undefined && cachedPromptTokens === undefined) {
     return undefined;
   }
   return {
@@ -657,10 +604,8 @@ function mergeAnthropicUsage(
   incoming: ModelTokenUsage,
 ): ModelTokenUsage {
   const promptTokens = incoming.promptTokens ?? current?.promptTokens;
-  const completionTokens =
-    incoming.completionTokens ?? current?.completionTokens;
-  const cachedPromptTokens =
-    incoming.cachedPromptTokens ?? current?.cachedPromptTokens;
+  const completionTokens = incoming.completionTokens ?? current?.completionTokens;
+  const cachedPromptTokens = incoming.cachedPromptTokens ?? current?.cachedPromptTokens;
   const totalTokens =
     incoming.totalTokens ??
     (promptTokens !== undefined && completionTokens !== undefined
@@ -839,7 +784,5 @@ function pickNum(v: unknown): number | undefined {
 }
 
 function pickNonNegativeInteger(v: unknown): number | undefined {
-  return typeof v === "number" && Number.isSafeInteger(v) && v >= 0
-    ? v
-    : undefined;
+  return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
 }

@@ -71,16 +71,12 @@ export function assertPawNextExistingIdentityV1(
     first.goalHash !== goalHash ||
     second.contentHash !== goalHash
   ) {
-    throw new Error(
-      "Existing Paw Next attempt identity or configHash mismatch",
-    );
+    throw new Error("Existing Paw Next attempt identity or configHash mismatch");
   }
   return canonical;
 }
 
-function assertUniqueBootstrapFacts(
-  canonical: readonly RunJournalEnvelopeV1[],
-): {
+function assertUniqueBootstrapFacts(canonical: readonly RunJournalEnvelopeV1[]): {
   readonly first: AttemptStartedFactV1;
   readonly second: InputPromotedFactV1;
 } {
@@ -106,9 +102,7 @@ function assertUniqueBootstrapFacts(
     );
   }
   const attempts = canonical.filter(
-    (item) =>
-      item.record.kind === "input_fact" &&
-      item.record.fact.type === "attempt.started",
+    (item) => item.record.kind === "input_fact" && item.record.fact.type === "attempt.started",
   );
   const initials = canonical.filter(
     (item) =>
@@ -172,9 +166,7 @@ export function assertPawNextInlinePayloadPreflightV1(
       }
       case "tool.settled":
         if (fact.result !== undefined || fact.resultHash !== undefined) {
-          throw new Error(
-            "Existing Paw Next run contains unsupported legacy tool result evidence",
-          );
+          throw new Error("Existing Paw Next run contains unsupported legacy tool result evidence");
         }
         if (fact.observation?.payload) {
           assertInlinePayload(fact.observation.payload, "tool observation");
@@ -182,15 +174,11 @@ export function assertPawNextInlinePayloadPreflightV1(
         break;
       case "context.checkpoint_distillation_settled":
         if (fact.checkpoint) {
-          parseTaskCheckpointV1(
-            assertInlinePayload(fact.checkpoint, "distilled checkpoint"),
-          );
+          parseTaskCheckpointV1(assertInlinePayload(fact.checkpoint, "distilled checkpoint"));
         }
         break;
       case "context.checkpoint_recorded":
-        parseTaskCheckpointV1(
-          assertInlinePayload(fact.checkpoint, "context checkpoint"),
-        );
+        parseTaskCheckpointV1(assertInlinePayload(fact.checkpoint, "context checkpoint"));
         break;
     }
   }
@@ -230,10 +218,7 @@ function assertAttachmentsInline(
   }
 }
 
-function assertInlinePayload(
-  payload: DurableJsonPayloadV1,
-  label: string,
-): JsonValue {
+function assertInlinePayload(payload: DurableJsonPayloadV1, label: string): JsonValue {
   if (payload.kind !== "inline") {
     throw new Error(`Existing Paw Next ${label} requires an artifact resolver`);
   }
@@ -252,35 +237,23 @@ function assertModelObservations(
     readonly args: JsonValue;
   }[],
   seq: number,
-  status:
-    | "completed"
-    | "truncated"
-    | "failed"
-    | "cancelled"
-    | "unknown"
-    | "rejected",
+  status: "completed" | "truncated" | "failed" | "cancelled" | "unknown" | "rejected",
 ): void {
   if (status === "truncated") {
     if (observed.length !== 0) {
-      throw new Error(
-        `Truncated native calls cannot have observations at journal seq ${seq}`,
-      );
+      throw new Error(`Truncated native calls cannot have observations at journal seq ${seq}`);
     }
     return;
   }
   const invalid = response.toolCalls.some((call) => !call.argumentsValid);
   if (invalid) {
     if (observed.length !== 0) {
-      throw new Error(
-        `Invalid native calls cannot have observations at journal seq ${seq}`,
-      );
+      throw new Error(`Invalid native calls cannot have observations at journal seq ${seq}`);
     }
     return;
   }
   if (response.toolCalls.length !== observed.length) {
-    throw new Error(
-      `Model response/observation count mismatch at journal seq ${seq}`,
-    );
+    throw new Error(`Model response/observation count mismatch at journal seq ${seq}`);
   }
   for (const [index, call] of response.toolCalls.entries()) {
     const item = observed[index];
@@ -291,9 +264,7 @@ function assertModelObservations(
       item.order !== call.sourceIndex ||
       hashCanonicalJsonV1(item.args) !== hashCanonicalJsonV1(call.args)
     ) {
-      throw new Error(
-        `Model response/observation identity mismatch at journal seq ${seq}`,
-      );
+      throw new Error(`Model response/observation identity mismatch at journal seq ${seq}`);
     }
   }
 }

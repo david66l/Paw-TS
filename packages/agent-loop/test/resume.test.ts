@@ -64,9 +64,7 @@ describe("Agent Loop canonical resume", () => {
         tools: 0,
       });
       expect(harness.session.decisionCommitCalls).toBe(1);
-      expect(harness.trace.at(-1)).toBe(
-        `decision:${decisionAction(decision).kind}`,
-      );
+      expect(harness.trace.at(-1)).toBe(`decision:${decisionAction(decision).kind}`);
     }
   });
 
@@ -171,9 +169,7 @@ describe("Agent Loop canonical resume", () => {
       decide: () => terminal,
     });
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "decision",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("decision");
     expect(harness.session.appendedDecisions).toHaveLength(0);
     expect(harness.externalCalls()).toEqual({
       boundaries: 0,
@@ -260,9 +256,7 @@ describe("Agent Loop canonical resume", () => {
 
   test("fails closed before external work when inline response calls do not match the settled observed batch", async () => {
     const facts = toolTurn(1);
-    const settledIndex = facts.findIndex(
-      (fact) => fact.type === "model.settled",
-    );
+    const settledIndex = facts.findIndex((fact) => fact.type === "model.settled");
     const settled = facts[settledIndex];
     if (!settled || settled.type !== "model.settled") {
       throw new Error("expected model settlement fixture");
@@ -276,10 +270,7 @@ describe("Agent Loop canonical resume", () => {
           providerProtocol: "openai-compatible",
           assistantContent: "",
           finishReason: "tool_calls",
-          toolCalls: [
-            providerToolCall("call-1-0", 0),
-            providerToolCall("call-1-1", 1),
-          ],
+          toolCalls: [providerToolCall("call-1-0", 0), providerToolCall("call-1-1", 1)],
         },
         hash: "response-two-calls",
       },
@@ -306,9 +297,7 @@ describe("Agent Loop canonical resume", () => {
 
   test("fails closed on artifact-backed tool history when startup cannot prove the tool boundary", async () => {
     const facts = toolTurn(1);
-    const settledIndex = facts.findIndex(
-      (fact) => fact.type === "model.settled",
-    );
+    const settledIndex = facts.findIndex((fact) => fact.type === "model.settled");
     const settled = facts[settledIndex];
     if (!settled || settled.type !== "model.settled") {
       throw new Error("expected model settlement fixture");
@@ -367,8 +356,7 @@ describe("Agent Loop canonical resume", () => {
           snapshot,
           carrierSeq: 2,
           modelCallId: "model-1",
-          payload:
-            facts[1]?.type === "model.settled" ? facts[1].response : undefined,
+          payload: facts[1]?.type === "model.settled" ? facts[1].response : undefined,
           response,
         });
       },
@@ -534,9 +522,7 @@ describe("Agent Loop canonical resume", () => {
     const harness = createHarness({
       facts,
       decide(currentFacts) {
-        const abort = currentFacts.find(
-          (fact) => fact.type === "abort.requested",
-        );
+        const abort = currentFacts.find((fact) => fact.type === "abort.requested");
         return abort
           ? { kind: "aborted", reason: abort.reason ?? "loader-abort" }
           : { kind: "continue" };
@@ -561,9 +547,9 @@ describe("Agent Loop canonical resume", () => {
 
     expect(state.decision).toEqual({ kind: "aborted", reason: "loader-abort" });
     expect(evidenceLoads).toBe(1);
-    expect(
-      harness.session.appendedDecisions.map((decision) => decision.action.kind),
-    ).toEqual(["abort"]);
+    expect(harness.session.appendedDecisions.map((decision) => decision.action.kind)).toEqual([
+      "abort",
+    ]);
     expect(harness.session.inputCommitCalls).toBe(1);
     expect(harness.externalCalls()).toEqual({
       boundaries: 0,
@@ -581,9 +567,7 @@ describe("Agent Loop canonical resume", () => {
       decide: () => ({ kind: "continue" }),
     });
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "runtime.failed",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("runtime.failed");
     expect(harness.session.decisionCommitCalls).toBe(0);
     expect(harness.externalCalls().boundaries).toBe(0);
   });
@@ -603,9 +587,7 @@ describe("Agent Loop canonical resume", () => {
       decide: () => ({ kind: "continue" }),
     });
 
-    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-      "no resumable safe boundary",
-    );
+    await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("no resumable safe boundary");
     expect(harness.session.decisionCommitCalls).toBe(0);
     expect(harness.externalCalls()).toEqual({
       boundaries: 0,
@@ -657,9 +639,7 @@ describe("Agent Loop canonical resume", () => {
 
   test("deep response identity checks only the latest continuing frontier", async () => {
     const oldToolTurn = toolTurn(1);
-    const oldSettlementIndex = oldToolTurn.findIndex(
-      (fact) => fact.type === "model.settled",
-    );
+    const oldSettlementIndex = oldToolTurn.findIndex((fact) => fact.type === "model.settled");
     const oldSettlement = oldToolTurn[oldSettlementIndex];
     if (!oldSettlement || oldSettlement.type !== "model.settled") {
       throw new Error("expected model settlement fixture");
@@ -704,11 +684,9 @@ describe("Agent Loop canonical resume", () => {
       trailingDecision: derivedDecision(state, 1),
       decide(facts) {
         expect(facts).toEqual([attemptStarted()]);
-        expect(
-          facts.some(
-            (fact) => (fact as { type: string }).type === "control.decided",
-          ),
-        ).toBe(false);
+        expect(facts.some((fact) => (fact as { type: string }).type === "control.decided")).toBe(
+          false,
+        );
         return terminal;
       },
     });
@@ -734,11 +712,7 @@ describe("Agent Loop canonical resume", () => {
       kind: "completed",
       reason: "already-done",
     });
-    expect(
-      harness.session.inputFacts.some(
-        (fact) => fact.type === "abort.requested",
-      ),
-    ).toBe(false);
+    expect(harness.session.inputFacts.some((fact) => fact.type === "abort.requested")).toBe(false);
     expect(harness.externalCalls()).toEqual({
       boundaries: 0,
       inputs: 0,
@@ -774,13 +748,11 @@ describe("Agent Loop canonical resume", () => {
       reason: "caller-aborted-before-invalid-resume",
     });
     expect(
-      harness.session.inputFacts.filter(
-        (fact) => fact.type === "abort.requested",
-      ),
+      harness.session.inputFacts.filter((fact) => fact.type === "abort.requested"),
     ).toHaveLength(1);
-    expect(
-      harness.session.appendedDecisions.map((decision) => decision.action.kind),
-    ).toEqual(["abort"]);
+    expect(harness.session.appendedDecisions.map((decision) => decision.action.kind)).toEqual([
+      "abort",
+    ]);
     expect(harness.session.inputCommitCalls).toBe(1);
     expect(evidenceLoads).toBe(0);
     expect(harness.externalCalls()).toEqual({
@@ -820,13 +792,11 @@ describe("Agent Loop canonical resume", () => {
     expect(inserted).toBe(true);
     expect(state.decision).toEqual({ kind: "aborted", reason: "raced-abort" });
     expect(
-      harness.session.inputFacts.filter(
-        (fact) => fact.type === "abort.requested",
-      ),
+      harness.session.inputFacts.filter((fact) => fact.type === "abort.requested"),
     ).toHaveLength(1);
-    expect(
-      harness.session.appendedDecisions.map((decision) => decision.action.kind),
-    ).toEqual(["abort"]);
+    expect(harness.session.appendedDecisions.map((decision) => decision.action.kind)).toEqual([
+      "abort",
+    ]);
     expect(harness.session.inputCommitCalls).toBe(1);
     expect(harness.externalCalls()).toEqual({
       boundaries: 0,
@@ -845,9 +815,7 @@ describe("Agent Loop canonical resume", () => {
     const harness = createHarness({
       facts: [attemptStarted()],
       decide(facts) {
-        return facts.some(
-          (fact) => fact.type === "model.settled" && fact.status === "unknown",
-        )
+        return facts.some((fact) => fact.type === "model.settled" && fact.status === "unknown")
           ? { kind: "incomplete", reason: "repaired-model-unknown" }
           : oldState.decision;
       },
@@ -943,9 +911,7 @@ describe("Agent Loop canonical resume", () => {
         trailingDecision: item.trailing,
         decide: () => item.decide,
       });
-      await expect(runAgentLoop(harness.dependencies)).rejects.toThrow(
-        "decision",
-      );
+      await expect(runAgentLoop(harness.dependencies)).rejects.toThrow("decision");
       expect(harness.session.appendedDecisions, item.name).toHaveLength(0);
       expect(harness.externalCalls().models, item.name).toBe(0);
     }
@@ -975,9 +941,9 @@ describe("Agent Loop canonical resume", () => {
       kind: "aborted",
       reason: "raced-abort",
     });
-    expect(
-      harness.session.appendedDecisions.map((decision) => decision.action.kind),
-    ).toEqual(["abort"]);
+    expect(harness.session.appendedDecisions.map((decision) => decision.action.kind)).toEqual([
+      "abort",
+    ]);
     expect(harness.externalCalls().models).toBe(0);
   });
 
@@ -990,9 +956,7 @@ describe("Agent Loop canonical resume", () => {
     const session = new ResumeSession([attemptStarted()], existing, []);
 
     await expect(
-      session.commitDecisionAndInputFacts(session.tailSeq, existing, [
-        toolDispatch(1, 0),
-      ]),
+      session.commitDecisionAndInputFacts(session.tailSeq, existing, [toolDispatch(1, 0)]),
     ).rejects.toThrow("trailing decision");
     expect(session.tailSeq).toBe(2);
     expect(session.inputFacts).toEqual([attemptStarted()]);
@@ -1025,9 +989,7 @@ describe("Agent Loop canonical resume", () => {
     expect(await session.commitDerivedDecision(1, decision)).toBe("committed");
     const firstTail = (await session.readInputSnapshot()).tailSeq;
 
-    expect(await session.commitDerivedDecision(firstTail, decision)).toBe(
-      "committed",
-    );
+    expect(await session.commitDerivedDecision(firstTail, decision)).toBe("committed");
     expect((await session.readInputSnapshot()).tailSeq).toBe(firstTail);
     expect(session.derivedDecisions).toHaveLength(1);
     await expect(
@@ -1037,9 +999,7 @@ describe("Agent Loop canonical resume", () => {
       }),
     ).rejects.toThrow("conflicting derived decision");
     await expect(
-      session.commitDecisionAndInputFacts(firstTail, decision, [
-        modelDispatch(1),
-      ]),
+      session.commitDecisionAndInputFacts(firstTail, decision, [modelDispatch(1)]),
     ).rejects.toThrow("derived decision");
     expect((await session.readInputSnapshot()).tailSeq).toBe(firstTail);
   });
@@ -1280,9 +1240,7 @@ class ResumeSession implements Session<InputFactV1, DerivedDecisionV1> {
     if (this.journalSeq !== expectedTailSeq) return "conflict";
     if (this.trailingDecision) {
       if (JSON.stringify(this.trailingDecision) !== JSON.stringify(decision)) {
-        throw new Error(
-          "Trailing derived decision differs from replay decision",
-        );
+        throw new Error("Trailing derived decision differs from replay decision");
       }
       this.reusedDecisions += 1;
       this.trace.push(`decision:${decision.action.kind}`);
@@ -1302,9 +1260,7 @@ class ResumeSession implements Session<InputFactV1, DerivedDecisionV1> {
   ): Promise<"committed" | "conflict"> {
     if (this.journalSeq !== expectedTailSeq) return "conflict";
     if (this.trailingDecision) {
-      throw new Error(
-        "Decision-and-input commit cannot reuse a trailing decision",
-      );
+      throw new Error("Decision-and-input commit cannot reuse a trailing decision");
     }
     this.journalSeq += 1;
     this.appendedDecisions.push(decision);
@@ -1313,10 +1269,7 @@ class ResumeSession implements Session<InputFactV1, DerivedDecisionV1> {
     return "committed";
   }
 
-  seedDecisionThenFacts(
-    decision: DerivedDecisionV1,
-    facts: readonly InputFactV1[],
-  ): void {
+  seedDecisionThenFacts(decision: DerivedDecisionV1, facts: readonly InputFactV1[]): void {
     this.journalSeq += 1;
     this.trailingDecision = decision;
     this.trailingDecision = undefined;
@@ -1347,10 +1300,7 @@ function modelTurn(
   modelCallId = `model-${turn}`,
   hasToolCalls = false,
 ): InputFactV1[] {
-  return [
-    modelDispatch(turn, modelCallId),
-    modelSettlement(turn, hasToolCalls, modelCallId),
-  ];
+  return [modelDispatch(turn, modelCallId), modelSettlement(turn, hasToolCalls, modelCallId)];
 }
 
 function invalidArgumentsModelTurn(): InputFactV1[] {
@@ -1483,9 +1433,7 @@ function artifactBackedToolTurn(turn: number): InputFactV1[] {
   return facts;
 }
 
-function requiredModelPayload(
-  facts: readonly InputFactV1[],
-): DurableJsonPayloadV1 {
+function requiredModelPayload(facts: readonly InputFactV1[]): DurableJsonPayloadV1 {
   const settled = facts.find((fact) => fact.type === "model.settled");
   if (!settled || settled.type !== "model.settled" || !settled.response) {
     throw new Error("expected durable model response payload");
@@ -1591,10 +1539,7 @@ function hashState(state: TestState): string {
   return JSON.stringify(state);
 }
 
-function derivedDecision(
-  state: TestState,
-  inputThroughSeq: number,
-): DerivedDecisionV1 {
+function derivedDecision(state: TestState, inputThroughSeq: number): DerivedDecisionV1 {
   return {
     type: "control.decided",
     reducerVersion: "resume-test-v1",

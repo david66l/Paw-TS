@@ -14,20 +14,12 @@ export function buildMemoryEvidenceRequirementLedgerV1(input: {
   readonly assessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
   readonly packetSources: MemoryEvidenceResolutionV1["packetSources"];
 }): MemoryEvidenceResolutionV1["requirementEvidence"] {
-  const visible = new Set(
-    input.packetSources.flatMap((source) => source.evidenceRefs),
-  );
+  const visible = new Set(input.packetSources.flatMap((source) => source.evidenceRefs));
   const coverageByRequirement = new Map(
-    input.notebook.coverage.map((coverage) => [
-      coverage.requirementId,
-      coverage,
-    ]),
+    input.notebook.coverage.map((coverage) => [coverage.requirementId, coverage]),
   );
   const assessmentByRequirement = new Map(
-    input.assessments.map((assessment) => [
-      assessment.requirementId,
-      assessment,
-    ]),
+    input.assessments.map((assessment) => [assessment.requirementId, assessment]),
   );
   return Object.freeze(
     input.requirements.map((requirement) => {
@@ -47,15 +39,9 @@ export function buildMemoryEvidenceRequirementLedgerV1(input: {
       ).filter((evidenceRef) => !supporting.has(evidenceRef));
       const contradicting = new Set(contradictingEvidenceRefs);
       const candidateEvidenceRefs = visibleUniqueEvidenceRefs(
-        [
-          ...coverage.unresolvedEvidenceRefs,
-          ...(assessment?.unknownEvidenceRefs ?? []),
-        ],
+        [...coverage.unresolvedEvidenceRefs, ...(assessment?.unknownEvidenceRefs ?? [])],
         visible,
-      ).filter(
-        (evidenceRef) =>
-          !supporting.has(evidenceRef) && !contradicting.has(evidenceRef),
-      );
+      ).filter((evidenceRef) => !supporting.has(evidenceRef) && !contradicting.has(evidenceRef));
       return Object.freeze({
         requirementId: requirement.requirementId,
         supportingEvidenceRefs: Object.freeze(supportingEvidenceRefs),
@@ -70,9 +56,7 @@ function visibleUniqueEvidenceRefs(
   evidenceRefs: readonly string[],
   visible: ReadonlySet<string>,
 ): string[] {
-  return [...new Set(evidenceRefs)].filter((evidenceRef) =>
-    visible.has(evidenceRef),
-  );
+  return [...new Set(evidenceRefs)].filter((evidenceRef) => visible.has(evidenceRef));
 }
 
 function namedError(name: string): Error {

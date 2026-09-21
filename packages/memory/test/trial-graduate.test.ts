@@ -8,10 +8,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { closeSql, getSql, ping } from "../src/db/connection.js";
 import { queryOpLog } from "../src/longterm/observability/op-log.js";
 import { TriggeredRetriever } from "../src/longterm/retrieval/triggered.js";
-import type {
-  EpisodicExperience,
-  SemanticFact,
-} from "../src/longterm/store/engine.js";
+import type { EpisodicExperience, SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 import { MemoryDistiller } from "../src/longterm/write/distiller.js";
@@ -23,8 +20,7 @@ import {
   listTrialLessons,
 } from "../src/longterm/write/trial.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -143,8 +139,7 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
           if (prompt.includes("失败复盘") || prompt.includes("试用教训")) {
             return JSON.stringify({
               lesson: "我不该在没有锁定依赖版本时升级核心包。",
-              whenToUse:
-                "When JadePeerDependencyError appears after a core package upgrade",
+              whenToUse: "When JadePeerDependencyError appears after a core package upgrade",
               keywords: ["JadePeerDependencyError", "peer", "upgrade"],
             });
           }
@@ -180,15 +175,12 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     });
     const pkg = await retriever.retrieve({
       type: "action_failed",
-      errorOutput:
-        "JadePeerDependencyError: unmet peer dependency\n    at install (pkg.ts:12:3)",
+      errorOutput: "JadePeerDependencyError: unmet peer dependency\n    at install (pkg.ts:12:3)",
       lastActionSummary: "bun install (exit 1)",
       repo: REPO,
       runId: successRun,
     });
-    expect(pkg.items.some((i) => i.kind === "trial" && i.id === trialId)).toBe(
-      true,
-    );
+    expect(pkg.items.some((i) => i.kind === "trial" && i.id === trialId)).toBe(true);
     const trialLogs = await queryOpLog({
       runId: successRun,
       op: "read.inject.trial",
@@ -258,8 +250,7 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     });
     await retriever.retrieve({
       type: "action_failed",
-      errorOutput:
-        "QuartzTimeoutError: exceeded 5000ms\n    at wait (test.ts:4:1)",
+      errorOutput: "QuartzTimeoutError: exceeded 5000ms\n    at wait (test.ts:4:1)",
       lastActionSummary: "bun test (exit 1)",
       repo: REPO,
       runId: againRun,
@@ -279,9 +270,7 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     const still = await getTrialLesson(trial.id);
     expect(still).not.toBeNull();
     expect(still!.attemptsLeft).toBe(2);
-    expect(
-      await queryOpLog({ runId: againRun, op: "write.graduated" }),
-    ).toHaveLength(0);
+    expect(await queryOpLog({ runId: againRun, op: "write.graduated" })).toHaveLength(0);
   });
 
   it("无反馈信号的成功不转正（禁止盲改）", async () => {
@@ -294,9 +283,7 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
       distilled: true,
     });
 
-    const filler = makeSemantic(
-      "TopazBlindError is a synthetic keyword for graduation gating",
-    );
+    const filler = makeSemantic("TopazBlindError is a synthetic keyword for graduation gating");
     await engine.put(filler);
     createdIds.push(deriveEntryId(filler));
 
@@ -324,8 +311,6 @@ describe("闭环：失败试用 → 注入 → 验证成功转正", () => {
     });
     expect(r.status).toBe("rejected");
     expect(await getTrialLesson(trial.id)).not.toBeNull();
-    expect(
-      await queryOpLog({ runId: blindRun, op: "write.graduated" }),
-    ).toHaveLength(0);
+    expect(await queryOpLog({ runId: blindRun, op: "write.graduated" })).toHaveLength(0);
   });
 });

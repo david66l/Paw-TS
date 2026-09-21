@@ -7,15 +7,7 @@ import {
 
 const [mode, workspaceRoot, sessionId, runId, readyPath, goPath, claimedPath] =
   process.argv.slice(2);
-if (
-  !mode ||
-  !workspaceRoot ||
-  !sessionId ||
-  !runId ||
-  !readyPath ||
-  !goPath ||
-  !claimedPath
-) {
+if (!mode || !workspaceRoot || !sessionId || !runId || !readyPath || !goPath || !claimedPath) {
   throw new Error("session lease transition child arguments are missing");
 }
 
@@ -67,8 +59,7 @@ if (mode === "takeover") {
       if (attempt.kind !== "claim") pauseAtTransition();
     },
   });
-  if (acquired.status !== "acquired")
-    throw new Error("owner failed to acquire");
+  if (acquired.status !== "acquired") throw new Error("owner failed to acquire");
   fs.writeFileSync(claimedPath, "claimed\n", "utf8");
   await waitForFile(`${claimedPath}.act`);
   now = 99;
@@ -80,9 +71,7 @@ if (mode === "takeover") {
       process.stdout.write(`${JSON.stringify({ status: "lost" })}\n`);
     }
   } else if (mode === "release") {
-    process.stdout.write(
-      `${JSON.stringify({ status: await acquired.lease.release() })}\n`,
-    );
+    process.stdout.write(`${JSON.stringify({ status: await acquired.lease.release() })}\n`);
   } else if (mode === "commit") {
     const artifactHash = "c".repeat(64);
     const result = await acquired.lease.linearizeJournalBatch({

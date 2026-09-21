@@ -4,10 +4,7 @@ import {
   PAW_MEMORY_CONVERSATION_BUNDLE_POLICY_VERSION_V1,
   type SelectedMemoryConversationBundlesV1,
 } from "./evidence-contracts.js";
-import {
-  conversationTerms,
-  focusedConversationExcerpt,
-} from "./evidence-text.js";
+import { conversationTerms, focusedConversationExcerpt } from "./evidence-text.js";
 
 /**
  * Returns true only when the current question explicitly asks about an earlier
@@ -52,11 +49,7 @@ export function buildMemoryConversationTurnBundleV1(input: {
   }
   const turnsByIdentity = new Map<string, MemoryConversationTurnV1>();
   for (const turn of input.turns) {
-    if (
-      !Number.isSafeInteger(turn.sourceSeq) ||
-      turn.sourceSeq < 0 ||
-      !turn.content.trim()
-    ) {
+    if (!Number.isSafeInteger(turn.sourceSeq) || turn.sourceSeq < 0 || !turn.content.trim()) {
       continue;
     }
     const key = `${turn.sourceSeq}\0${turn.sourceKind}`;
@@ -67,8 +60,7 @@ export function buildMemoryConversationTurnBundleV1(input: {
   }
   const turns = [...turnsByIdentity.values()].sort(
     (left, right) =>
-      left.sourceSeq - right.sourceSeq ||
-      left.sourceKind.localeCompare(right.sourceKind),
+      left.sourceSeq - right.sourceSeq || left.sourceKind.localeCompare(right.sourceKind),
   );
   const hits = turns.filter((turn) => turn.hit);
   if (hits.length !== 1) {
@@ -77,8 +69,7 @@ export function buildMemoryConversationTurnBundleV1(input: {
   const hit = hits[0];
   if (!hit) throw namedError("MemoryConversationTurnBundleHitInvalid");
   const previousAssistant = turns.some(
-    (turn) =>
-      turn.sourceKind === "assistant_output" && turn.sourceSeq < hit.sourceSeq,
+    (turn) => turn.sourceKind === "assistant_output" && turn.sourceSeq < hit.sourceSeq,
   );
   const nextUserConfirmation = turns.some(
     (turn) =>
@@ -102,16 +93,9 @@ export function buildMemoryConversationTurnBundleV1(input: {
   const queryTerms = conversationTerms(query);
   const parts: string[] = [];
   for (const turn of turns) {
-    const relation = turn.hit
-      ? "hit"
-      : turn.sourceSeq < hit.sourceSeq
-        ? "previous"
-        : "next";
+    const relation = turn.hit ? "hit" : turn.sourceSeq < hit.sourceSeq ? "previous" : "next";
     const label = `[${turn.sourceKind} ${relation}] `;
-    const available = Math.max(
-      1,
-      (turn.hit ? hitBudget : neighborBudget) - label.length,
-    );
+    const available = Math.max(1, (turn.hit ? hitBudget : neighborBudget) - label.length);
     const confirmed =
       turn.sourceKind === "user_input" &&
       turn.sourceSeq > hit.sourceSeq &&
@@ -150,9 +134,7 @@ function preferConversationTurn(
   right: MemoryConversationTurnV1,
 ): number {
   if (left.hit !== right.hit) return left.hit ? -1 : 1;
-  const evidenceOrder = (left.evidenceRef ?? "").localeCompare(
-    right.evidenceRef ?? "",
-  );
+  const evidenceOrder = (left.evidenceRef ?? "").localeCompare(right.evidenceRef ?? "");
   return evidenceOrder || left.content.localeCompare(right.content);
 }
 

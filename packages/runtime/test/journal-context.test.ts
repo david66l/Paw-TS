@@ -52,11 +52,7 @@ describe("journal context", () => {
     const fixture = canonicalFixtureSnapshot({
       artifactToolObservations: true,
     });
-    const loader = issuedEvidenceLoader(
-      fixture.snapshot,
-      fixture.artifacts,
-      [],
-    );
+    const loader = issuedEvidenceLoader(fixture.snapshot, fixture.artifacts, []);
     let loads = 0;
     const context = createJournalContextV1({
       payloads: fixture.resolver,
@@ -74,8 +70,7 @@ describe("journal context", () => {
         evidenceAnnotations(evidence) {
           expect(evidence).toBeDefined();
           for (const { seq, fact } of fixture.snapshot.entries) {
-            if (fact.type !== "tool.settled" || !fact.observation?.payload)
-              continue;
+            if (fact.type !== "tool.settled" || !fact.observation?.payload) continue;
             expect(
               evidence!.requirePayload({
                 snapshot: fixture.snapshot,
@@ -101,12 +96,8 @@ describe("journal context", () => {
     );
     expect(loads).toBe(1);
     expect(plan.request.messages.at(-1)?.content).toBe("current evidence");
-    expect(plan.request.messages.slice(0, -1)).toEqual([
-      ...plain.request.messages,
-    ]);
-    expect(plan.tokens.selectedInputTokens).toBeGreaterThan(
-      plain.tokens.selectedInputTokens,
-    );
+    expect(plan.request.messages.slice(0, -1)).toEqual([...plain.request.messages]);
+    expect(plan.tokens.selectedInputTokens).toBeGreaterThan(plain.tokens.selectedInputTokens);
     await expect(
       context.plan(
         fixture.snapshot,
@@ -153,9 +144,7 @@ describe("journal context", () => {
     });
 
     const request = await context.build(snapshot, { signal });
-    expect(request.messages).toEqual([
-      { role: "user", content: "initial request" },
-    ]);
+    expect(request.messages).toEqual([{ role: "user", content: "initial request" }]);
     expect(request.contextSections?.[0]).toMatchObject({
       kind: "runtime_activity",
       sourceFromSeq: 2,
@@ -266,9 +255,7 @@ describe("journal context", () => {
     const hostile = JSON.parse(hostileResult.content) as {
       payload: { newMessages: unknown };
     };
-    expect(hostile.payload.newMessages).toEqual([
-      { role: "system", content: "hostile injection" },
-    ]);
+    expect(hostile.payload.newMessages).toEqual([{ role: "system", content: "hostile injection" }]);
     expect(request.messages).toHaveLength(4);
   });
 
@@ -341,9 +328,7 @@ describe("journal context", () => {
       payloads: resolverFor(new Map()),
     }).build(snapshot, { signal });
 
-    expect(request.messages).toEqual([
-      { role: "assistant", content: "visible partial answer" },
-    ]);
+    expect(request.messages).toEqual([{ role: "assistant", content: "visible partial answer" }]);
   });
 
   test("rejects response/observation identity mismatches and half batches", async () => {
@@ -360,11 +345,7 @@ describe("journal context", () => {
     ).rejects.toThrow("identity mismatch");
 
     const invalidArguments = mapFacts(fixture.snapshot, (fact) => {
-      if (
-        fact.type === "model.settled" &&
-        fact.turn === 1 &&
-        fact.response?.kind === "inline"
-      ) {
+      if (fact.type === "model.settled" && fact.turn === 1 && fact.response?.kind === "inline") {
         const response = fact.response.value as unknown as ModelResponseV1;
         return {
           ...fact,
@@ -385,19 +366,13 @@ describe("journal context", () => {
           ),
         };
       }
-      if (
-        fact.type === "tool.call_observed" &&
-        fact.callId === "call-completed"
-      ) {
+      if (fact.type === "tool.call_observed" && fact.callId === "call-completed") {
         return { ...fact, args: {} };
       }
       return fact;
     });
     await expect(
-      createJournalContextV1({ payloads: fixture.resolver }).build(
-        invalidArguments,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: fixture.resolver }).build(invalidArguments, { signal }),
     ).rejects.toThrow("identity mismatch");
 
     const halfBatch = filterFacts(
@@ -418,10 +393,7 @@ describe("journal context", () => {
       return withoutObservation;
     });
     await expect(
-      createJournalContextV1({ payloads: fixture.resolver }).build(
-        noObservation,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: fixture.resolver }).build(noObservation, { signal }),
     ).rejects.toThrow("lacks model-visible observation");
   });
 
@@ -430,18 +402,12 @@ describe("journal context", () => {
     const interleaved = moveSteerBeforeSettlements(fixture.snapshot);
 
     await expect(
-      createJournalContextV1({ payloads: fixture.resolver }).build(
-        interleaved,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: fixture.resolver }).build(interleaved, { signal }),
     ).rejects.toThrow("inside unsettled tool batch");
 
     const interleavedModel = moveSecondModelBeforeSettlements(fixture.snapshot);
     await expect(
-      createJournalContextV1({ payloads: fixture.resolver }).build(
-        interleavedModel,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: fixture.resolver }).build(interleavedModel, { signal }),
     ).rejects.toThrow("inside unsettled tool batch");
   });
 
@@ -485,10 +451,7 @@ describe("journal context", () => {
     ]);
 
     await expect(
-      createJournalContextV1({ payloads: resolverFor(new Map()) }).build(
-        snapshot,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: resolverFor(new Map()) }).build(snapshot, { signal }),
     ).rejects.toThrow("inside active model call");
   });
 
@@ -496,10 +459,7 @@ describe("journal context", () => {
     const fixture = canonicalFixtureSnapshot({ artifactModelResponse: true });
     const request = await createJournalContextV1({
       payloads: fixture.resolver,
-      loadPayloadEvidence: issuedEvidenceLoader(
-        fixture.snapshot,
-        fixture.artifacts,
-      ),
+      loadPayloadEvidence: issuedEvidenceLoader(fixture.snapshot, fixture.artifacts),
     }).build(fixture.snapshot, { signal });
     expect(request.messages[1]?.nativeToolTurn).toBeDefined();
 
@@ -508,10 +468,7 @@ describe("journal context", () => {
       omitModelArtifact: true,
     });
     await expect(
-      createJournalContextV1({ payloads: missing.resolver }).build(
-        missing.snapshot,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: missing.resolver }).build(missing.snapshot, { signal }),
     ).rejects.toThrow("exact canonical evidence");
 
     const drifted = mapFacts(fixture.snapshot, (fact) =>
@@ -545,11 +502,7 @@ describe("journal context", () => {
     const locations: CanonicalDurableJsonPayloadLocationV1[] = [];
     const mixedRequest = await createJournalContextV1({
       payloads: mixed.resolver,
-      loadPayloadEvidence: issuedEvidenceLoader(
-        mixed.snapshot,
-        mixed.artifacts,
-        locations,
-      ),
+      loadPayloadEvidence: issuedEvidenceLoader(mixed.snapshot, mixed.artifacts, locations),
     }).build(mixed.snapshot, { signal });
 
     expect(JSON.stringify(mixedRequest)).toBe(JSON.stringify(inlineRequest));
@@ -585,10 +538,7 @@ describe("journal context", () => {
     const projected: ToolObservationProjectionInputV1[] = [];
     const request = await createJournalContextV1({
       payloads: fixture.resolver,
-      loadPayloadEvidence: issuedEvidenceLoader(
-        fixture.snapshot,
-        fixture.artifacts,
-      ),
+      loadPayloadEvidence: issuedEvidenceLoader(fixture.snapshot, fixture.artifacts),
       toolObservationProjector: {
         project(input) {
           projected.push(input);
@@ -600,9 +550,7 @@ describe("journal context", () => {
     }).build(fixture.snapshot, { signal });
 
     expect(projected).toHaveLength(statusCases.length);
-    const completed = projected.find(
-      (input) => input.callId === "call-completed",
-    );
+    const completed = projected.find((input) => input.callId === "call-completed");
     expect(completed?.payload.kind).toBe("artifact_ref");
     expect(completed?.value).toEqual({ evidence: "completed-evidence" });
     const completedResult = request.messages
@@ -680,10 +628,7 @@ describe("journal context", () => {
         fact.type === "model.settled" && fact.turn === 1 ? mutate(fact) : fact,
       );
       await expect(
-        createJournalContextV1({ payloads: inlineFixture.resolver }).build(
-          inlineDrift,
-          { signal },
-        ),
+        createJournalContextV1({ payloads: inlineFixture.resolver }).build(inlineDrift, { signal }),
       ).rejects.toThrow();
 
       const artifactFixture = canonicalFixtureSnapshot({
@@ -695,10 +640,7 @@ describe("journal context", () => {
       await expect(
         createJournalContextV1({
           payloads: artifactFixture.resolver,
-          loadPayloadEvidence: issuedEvidenceLoader(
-            artifactDrift,
-            artifactFixture.artifacts,
-          ),
+          loadPayloadEvidence: issuedEvidenceLoader(artifactDrift, artifactFixture.artifacts),
         }).build(artifactDrift, { signal }),
       ).rejects.toThrow();
     }
@@ -707,16 +649,11 @@ describe("journal context", () => {
   test("rejects provider-native replay across the run's frozen protocol", async () => {
     const fixture = fixtureSnapshot();
     const mismatched = mapFacts(fixture.snapshot, (fact) => {
-      if (
-        fact.type !== "model.settled" ||
-        fact.turn !== 1 ||
-        fact.response?.kind !== "inline"
-      ) {
+      if (fact.type !== "model.settled" || fact.turn !== 1 || fact.response?.kind !== "inline") {
         return fact;
       }
       const response = fact.response.value as unknown as ModelResponseV1;
-      const { reasoningPassback: _reasoningPassback, ...portableResponse } =
-        response;
+      const { reasoningPassback: _reasoningPassback, ...portableResponse } = response;
       return {
         ...fact,
         response: inline(
@@ -832,9 +769,7 @@ describe("journal context task checkpoints", () => {
       sourceFromSeq: 2,
       sourceThroughSeq: 3,
     });
-    expect(request.contextSections?.[0]?.content).toContain(
-      "old assistant was inspected",
-    );
+    expect(request.contextSections?.[0]?.content).toContain("old assistant was inspected");
     const providerMessages = materializeModelRequestMessagesV1(request);
     expect(providerMessages.map((message) => message.role)).toEqual([
       "system",
@@ -844,9 +779,7 @@ describe("journal context task checkpoints", () => {
       "assistant",
     ]);
     expect(
-      providerMessages.filter((message) =>
-        message.content.includes("[Paw Task Checkpoint]"),
-      ),
+      providerMessages.filter((message) => message.content.includes("[Paw Task Checkpoint]")),
     ).toHaveLength(1);
     expect(JSON.stringify(request)).not.toContain("old assistant answer");
   });
@@ -859,26 +792,18 @@ describe("journal context task checkpoints", () => {
         : fact,
     );
     await expect(
-      createJournalContextV1({ payloads: resolverFor(new Map()) }).build(
-        drifted,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: resolverFor(new Map()) }).build(drifted, { signal }),
     ).rejects.toThrow("source input hash mismatch");
 
     const missingReference = mapFacts(snapshot, (fact) => {
-      if (
-        fact.type !== "context.checkpoint_recorded" ||
-        fact.checkpoint.kind !== "inline"
-      ) {
+      if (fact.type !== "context.checkpoint_recorded" || fact.checkpoint.kind !== "inline") {
         return fact;
       }
       return {
         ...fact,
         sourceThroughSeq: 4,
         sourceInputHash: checkpointSourceHash(snapshot, 2, 4),
-        checkpoint: inline(
-          checkpointValue(4, "reference points at a derived-decision gap"),
-        ),
+        checkpoint: inline(checkpointValue(4, "reference points at a derived-decision gap")),
       };
     });
     const sparse = {
@@ -886,10 +811,7 @@ describe("journal context task checkpoints", () => {
       entries: missingReference.entries.filter((entry) => entry.seq !== 4),
     };
     await expect(
-      createJournalContextV1({ payloads: resolverFor(new Map()) }).build(
-        sparse,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: resolverFor(new Map()) }).build(sparse, { signal }),
     ).rejects.toThrow("references missing input fact seq 4");
   });
 
@@ -938,9 +860,7 @@ describe("journal context task checkpoints", () => {
         ),
       }).build(fixture.snapshot, { signal });
 
-      expect(request.contextSections?.[0]?.id, String(distilled)).toBe(
-        "checkpoint-old-turn",
-      );
+      expect(request.contextSections?.[0]?.id, String(distilled)).toBe("checkpoint-old-turn");
       expect(locations, String(distilled)).toEqual([
         {
           kind: "task_checkpoint",
@@ -962,19 +882,10 @@ describe("journal context task checkpoints", () => {
       promoted("current input", "steer"),
     ];
     const partialBase = snapshotOf(toolFacts);
-    const partialFact: InputFactV1 = checkpointFact(
-      partialBase,
-      3,
-      4,
-      3,
-      "partial tool turn",
-    );
+    const partialFact: InputFactV1 = checkpointFact(partialBase, 3, 4, 3, "partial tool turn");
     const partial = snapshotOf([...toolFacts, partialFact]);
     await expect(
-      createJournalContextV1({ payloads: resolverFor(new Map()) }).build(
-        partial,
-        { signal },
-      ),
+      createJournalContextV1({ payloads: resolverFor(new Map()) }).build(partial, { signal }),
     ).rejects.toThrow("partially covers a timeline unit");
 
     const protectedBase = checkpointedPlainSnapshot();
@@ -982,13 +893,7 @@ describe("journal context task checkpoints", () => {
       .map((entry) => entry.fact)
       .filter((fact) => fact.type !== "context.checkpoint_recorded");
     const source = snapshotOf(facts);
-    const protectedCheckpoint = checkpointFact(
-      source,
-      1,
-      1,
-      1,
-      "attempt to replace initial goal",
-    );
+    const protectedCheckpoint = checkpointFact(source, 1, 1, 1, "attempt to replace initial goal");
     await expect(
       createJournalContextV1({ payloads: resolverFor(new Map()) }).build(
         snapshotOf([...facts, protectedCheckpoint]),
@@ -1047,14 +952,10 @@ describe("journal context plan", () => {
         },
       );
       expect(
-        plan.request.messages.filter((message) =>
-          message.content.startsWith("active"),
-        ),
+        plan.request.messages.filter((message) => message.content.startsWith("active")),
       ).toHaveLength(1);
       expect(plan.tokens.selectedInputTokens).toBe(
-        budget.estimator.countMessages(
-          materializeModelRequestMessagesV1(plan.request),
-        ),
+        budget.estimator.countMessages(materializeModelRequestMessagesV1(plan.request)),
       );
       expect(
         plan.tokens.selectedInputTokens + plan.tokens.reservedOutputTokens,
@@ -1103,14 +1004,10 @@ describe("journal context plan", () => {
     expect(plan.tokens.selectedInputTokens).toBe(30);
     expect(plan.tokens.hardHeadroomTokens).toBe(0);
     expect(reported).toBe(
-      budget.estimator.countMessages(
-        materializeModelRequestMessagesV1(plan.request),
-      ),
+      budget.estimator.countMessages(materializeModelRequestMessagesV1(plan.request)),
     );
     expect(plan.request.options?.maxOutputTokens).toBe(5);
-    expect(
-      await planner.plan(structuredClone(snapshot), { signal }, projection),
-    ).toEqual(plan);
+    expect(await planner.plan(structuredClone(snapshot), { signal }, projection)).toEqual(plan);
   });
 
   test("keeps only active fallback guidance when a checkpoint covers the anchor", async () => {
@@ -1131,11 +1028,7 @@ describe("journal context plan", () => {
       { annotations: [active] },
     );
     expect(plan.request.messages.at(-1)?.content).toBe(active.fallbackContent);
-    expect(
-      plan.request.messages.some(
-        (message) => message.content === active.content,
-      ),
-    ).toBe(false);
+    expect(plan.request.messages.some((message) => message.content === active.content)).toBe(false);
     expect(plan.selection.checkpointCoveredUnitSourceSeqs).toEqual([3]);
     const resolved = await planner.plan(
       checkpointedPlainSnapshot(),
@@ -1165,14 +1058,8 @@ describe("journal context plan", () => {
       content: "old optional reminder",
       placement: "after_unit" as const,
     };
-    const plan = await planner.plan(
-      snapshot,
-      { signal },
-      { annotations: [optional] },
-    );
-    expect(plan.request.messages.map((message) => message.content)).toEqual([
-      "goal",
-    ]);
+    const plan = await planner.plan(snapshot, { signal }, { annotations: [optional] });
+    expect(plan.request.messages.map((message) => message.content)).toEqual(["goal"]);
     await expect(
       planner.plan(
         snapshot,
@@ -1193,30 +1080,16 @@ describe("journal context plan", () => {
         startedAt: 1,
       },
     ]);
-    const budget = weightedBudget(35, (message) =>
-      message.role === "system" ? 1 : 10,
-    );
+    const budget = weightedBudget(35, (message) => (message.role === "system" ? 1 : 10));
     const plan = await createJournalContextPlannerV1({
       payloads: resolverFor(new Map()),
       providerProtocol: "openai-compatible",
       budget,
-    }).plan(
-      snapshot,
-      { signal },
-      { runtimeActivityContent: () => "untrusted runtime evidence" },
-    );
+    }).plan(snapshot, { signal }, { runtimeActivityContent: () => "untrusted runtime evidence" });
     expect(plan.request.contextSections).toBeUndefined();
-    expect(plan.request.messages.map((message) => message.role)).toEqual([
-      "user",
-      "user",
-    ]);
+    expect(plan.request.messages.map((message) => message.role)).toEqual(["user", "user"]);
     expect(plan.tokens.selectedInputTokens).toBe(20);
-    expect(
-      plan.tokens.categories?.reduce(
-        (sum, category) => sum + category.tokens,
-        0,
-      ),
-    ).toBe(20);
+    expect(plan.tokens.categories?.reduce((sum, category) => sum + category.tokens, 0)).toBe(20);
   });
 
   test("annotations never split native tool exchanges or mutate canonical history", async () => {
@@ -1227,9 +1100,7 @@ describe("journal context plan", () => {
       budget: generousBudget(),
     });
     const plain = await planner.plan(fixture.snapshot, { signal });
-    const unit = plain.selection.eligibleUnits.find(
-      (item) => item.kind === "model",
-    )!;
+    const unit = plain.selection.eligibleUnits.find((item) => item.kind === "model")!;
     const before = JSON.stringify(fixture.snapshot);
     const plan = await planner.plan(
       fixture.snapshot,
@@ -1245,14 +1116,10 @@ describe("journal context plan", () => {
         ],
       },
     );
-    expect(
-      plan.request.messages.filter((message) => message.nativeToolTurn),
-    ).toEqual(
+    expect(plan.request.messages.filter((message) => message.nativeToolTurn)).toEqual(
       plain.request.messages.filter((message) => message.nativeToolTurn),
     );
-    const hint = plan.request.messages.findIndex(
-      (message) => message.content === "hint",
-    );
+    const hint = plan.request.messages.findIndex((message) => message.content === "hint");
     expect(plan.request.messages[hint - 1]?.nativeToolTurn).toBeDefined();
     expect(JSON.stringify(fixture.snapshot)).toBe(before);
   });
@@ -1324,10 +1191,7 @@ describe("journal context plan", () => {
       ["newer expensive evidence", 50],
       ["latest input", 5],
     ]);
-    const budget = weightedBudget(
-      35,
-      (message) => weights.get(message.content) ?? 0,
-    );
+    const budget = weightedBudget(35, (message) => weights.get(message.content) ?? 0);
     const snapshot = snapshotOf([
       promoted("initial goal", "initial"),
       promoted("older cheap evidence", "steer"),
@@ -1404,9 +1268,7 @@ describe("journal context plan", () => {
       ...draftToolTurn(1, "old"),
       promoted("current input", "steer"),
     ]);
-    const modelSeq = snapshot.entries.find(
-      (entry) => entry.fact.type === "model.settled",
-    )?.seq;
+    const modelSeq = snapshot.entries.find((entry) => entry.fact.type === "model.settled")?.seq;
     const toolThroughSeq = snapshot.entries.find(
       (entry) => entry.fact.type === "tool.settled",
     )?.seq;
@@ -1420,9 +1282,7 @@ describe("journal context plan", () => {
       budget: generousBudget(),
     }).plan(snapshot, { signal });
 
-    expect(
-      plan.selection.eligibleUnits.find((unit) => unit.kind === "model"),
-    ).toMatchObject({
+    expect(plan.selection.eligibleUnits.find((unit) => unit.kind === "model")).toMatchObject({
       sourceFromSeq: modelSeq,
       sourceThroughSeq: toolThroughSeq,
     });
@@ -1440,8 +1300,7 @@ describe("journal context atomic budget", () => {
       fixture.snapshot,
       (fact) =>
         !(
-          (fact.type === "model.dispatch_recorded" ||
-            fact.type === "model.settled") &&
+          (fact.type === "model.dispatch_recorded" || fact.type === "model.settled") &&
           fact.turn === 2
         ),
     );
@@ -1485,12 +1344,8 @@ describe("journal context atomic budget", () => {
       message.nativeToolTurn ? [message.nativeToolTurn] : [],
     );
     expect(nativeTurns).toHaveLength(1);
-    expect(nativeTurns[0]?.calls.map((call) => call.callId)).toEqual([
-      "new-call",
-    ]);
-    expect(nativeTurns[0]?.results.map((result) => result.callId)).toEqual([
-      "new-call",
-    ]);
+    expect(nativeTurns[0]?.calls.map((call) => call.callId)).toEqual(["new-call"]);
+    expect(nativeTurns[0]?.results.map((result) => result.callId)).toEqual(["new-call"]);
   });
 
   test("fails closed when fixed system, tools, and output reserve already exceed the window", async () => {
@@ -1530,9 +1385,9 @@ describe("journal context atomic budget", () => {
     });
 
     const artifactSnapshot = fixtureSnapshot({ artifactModelResponse: true });
-    await expect(
-      context.build(artifactSnapshot.snapshot, { signal }),
-    ).rejects.toThrow("fixed context budget exceeds window");
+    await expect(context.build(artifactSnapshot.snapshot, { signal })).rejects.toThrow(
+      "fixed context budget exceeds window",
+    );
     expect(resolverCalls).toBe(0);
   });
 
@@ -1559,8 +1414,7 @@ describe("journal context atomic budget", () => {
       fixture.snapshot,
       (fact) =>
         !(
-          (fact.type === "model.dispatch_recorded" ||
-            fact.type === "model.settled") &&
+          (fact.type === "model.dispatch_recorded" || fact.type === "model.settled") &&
           fact.turn === 2
         ),
     );
@@ -1583,10 +1437,7 @@ describe("journal context atomic budget", () => {
       ["newer expensive evidence", 50],
       ["latest input", 5],
     ]);
-    const budget = weightedBudget(
-      35,
-      (message) => weights.get(message.content) ?? 0,
-    );
+    const budget = weightedBudget(35, (message) => weights.get(message.content) ?? 0);
     const snapshot = snapshotOf([
       promoted("initial goal", "initial"),
       promoted("older cheap evidence", "steer"),
@@ -1622,18 +1473,14 @@ describe("journal context atomic budget", () => {
         status: "completed",
         hasToolCalls: false,
         hasVisibleOutput: true,
-        response: inline(
-          asJson(modelResponse(1, "latest assistant answer", false)),
-        ),
+        response: inline(asJson(modelResponse(1, "latest assistant answer", false))),
         finishReason: "stop",
       },
     ]);
     const request = await createJournalContextBaseV1({
       payloads: resolverFor(new Map()),
       providerProtocol: "openai-compatible",
-      budget: weightedBudget(45, (message) =>
-        message.role === "assistant" ? 25 : 15,
-      ),
+      budget: weightedBudget(45, (message) => (message.role === "assistant" ? 25 : 15)),
     }).build(snapshot, { signal });
 
     expect(request.messages.map((message) => message.content)).toEqual([
@@ -1677,9 +1524,7 @@ describe("journal context atomic budget", () => {
       providerProtocol: "openai-compatible",
       budget: weightedBudget(15, () => 10),
     }).build(snapshot, { signal });
-    expect(request.messages.map((message) => message.content)).toEqual([
-      "only goal",
-    ]);
+    expect(request.messages.map((message) => message.content)).toEqual(["only goal"]);
   });
 
   test("measures the final projected request including tools, attachments, passback, calls, and results", async () => {
@@ -1727,9 +1572,7 @@ describe("journal context atomic budget", () => {
     expect(finalMeasurement).toContain("call-completed");
     expect(finalMeasurement).toContain('{\\"index\\":0}');
     expect(finalMeasurement).toContain("completed summary");
-    expect(measuredTools.some((text) => text.includes("schema evidence"))).toBe(
-      true,
-    );
+    expect(measuredTools.some((text) => text.includes("schema evidence"))).toBe(true);
     expect(request.options?.maxOutputTokens).toBe(1_000);
   });
 });
@@ -1955,10 +1798,7 @@ function canonicalFixtureSnapshot(options: FixtureOptions = {}): {
   const fixture = fixtureSnapshot(options);
   const facts: InputFactV1[] = [];
   for (const entry of fixture.snapshot.entries) {
-    if (
-      entry.fact.type === "input.promoted" &&
-      entry.fact.delivery === "steer"
-    ) {
+    if (entry.fact.type === "input.promoted" && entry.fact.delivery === "steer") {
       facts.push({
         type: "input.accepted",
         inputId: entry.fact.inputId,
@@ -1966,9 +1806,7 @@ function canonicalFixtureSnapshot(options: FixtureOptions = {}): {
         content: entry.fact.content,
         contentHash: entry.fact.contentHash,
         callerId: "journal-context-test",
-        ...(entry.fact.attachments === undefined
-          ? {}
-          : { attachments: entry.fact.attachments }),
+        ...(entry.fact.attachments === undefined ? {} : { attachments: entry.fact.attachments }),
       });
     }
     facts.push(entry.fact);
@@ -1976,11 +1814,7 @@ function canonicalFixtureSnapshot(options: FixtureOptions = {}): {
   return { ...fixture, snapshot: snapshotOf(facts) };
 }
 
-function modelResponse(
-  turn: number,
-  content: string,
-  tools: boolean,
-): ModelResponseV1 {
+function modelResponse(turn: number, content: string, tools: boolean): ModelResponseV1 {
   return {
     schemaVersion: MODEL_RESPONSE_SCHEMA_VERSION_V1,
     providerProtocol: "openai-compatible",
@@ -2020,16 +1854,12 @@ function toolSettlements(
         isError: status !== "completed",
         payload: payloadFor?.(item.callId, payload) ?? inline(payload),
       },
-      ...(status === "failed" || status === "rejected"
-        ? { errorCode: `error-${status}` }
-        : {}),
+      ...(status === "failed" || status === "rejected" ? { errorCode: `error-${status}` } : {}),
     };
   });
 }
 
-function resolverFor(
-  artifacts: ReadonlyMap<string, JsonValue>,
-): DurablePayloadResolverV1 {
+function resolverFor(artifacts: ReadonlyMap<string, JsonValue>): DurablePayloadResolverV1 {
   return {
     async resolve(payload, receivedSignal) {
       if (receivedSignal.aborted) throw new Error("resolver aborted");
@@ -2140,10 +1970,7 @@ function stableStringify(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${stableStringify(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key] as JsonValue)}`)
     .join(",")}}`;
 }
 
@@ -2151,9 +1978,7 @@ function asJson(value: ModelResponseV1): JsonValue {
   return value as unknown as JsonValue;
 }
 
-function snapshotOf(
-  facts: readonly InputFactV1[],
-): SessionInputSnapshot<InputFactV1> {
+function snapshotOf(facts: readonly InputFactV1[]): SessionInputSnapshot<InputFactV1> {
   return {
     entries: facts.map((fact, index) => ({ seq: index + 1, fact })),
     tailSeq: facts.length,
@@ -2199,10 +2024,7 @@ function checkpointedPlainSnapshot(): SessionInputSnapshot<InputFactV1> {
     },
   ];
   const base = snapshotOf(facts);
-  return snapshotOf([
-    ...facts,
-    checkpointFact(base, 2, 3, 3, "old assistant was inspected"),
-  ]);
+  return snapshotOf([...facts, checkpointFact(base, 2, 3, 3, "old assistant was inspected")]);
 }
 
 function canonicalCheckpointArtifactFixture(distilled: boolean): {
@@ -2322,11 +2144,7 @@ function checkpointFact(
     policyVersion: "checkpoint-policy-v1",
     sourceFromSeq,
     sourceThroughSeq,
-    sourceInputHash: checkpointSourceHash(
-      snapshot,
-      sourceFromSeq,
-      sourceThroughSeq,
-    ),
+    sourceInputHash: checkpointSourceHash(snapshot, sourceFromSeq, sourceThroughSeq),
     checkpoint: inline(checkpointValue(citedSeq, statement)),
   };
 }
@@ -2392,9 +2210,7 @@ function moveSteerBeforeSettlements(
   const steerIndex = facts.findIndex(
     (fact) => fact.type === "input.promoted" && fact.delivery === "steer",
   );
-  const firstSettlement = facts.findIndex(
-    (fact) => fact.type === "tool.settled",
-  );
+  const firstSettlement = facts.findIndex((fact) => fact.type === "tool.settled");
   const [steer] = facts.splice(steerIndex, 1);
   if (!steer || firstSettlement < 0) throw new Error("fixture is incomplete");
   facts.splice(firstSettlement, 0, steer);
@@ -2407,21 +2223,16 @@ function moveSecondModelBeforeSettlements(
   const facts = snapshot.entries.map((entry) => entry.fact);
   const nextModelFacts = facts.filter(
     (fact) =>
-      (fact.type === "model.dispatch_recorded" ||
-        fact.type === "model.settled") &&
-      fact.turn === 2,
+      (fact.type === "model.dispatch_recorded" || fact.type === "model.settled") && fact.turn === 2,
   );
   const remaining = facts.filter(
     (fact) =>
       !(
-        (fact.type === "model.dispatch_recorded" ||
-          fact.type === "model.settled") &&
+        (fact.type === "model.dispatch_recorded" || fact.type === "model.settled") &&
         fact.turn === 2
       ),
   );
-  const firstSettlement = facts.findIndex(
-    (fact) => fact.type === "tool.settled",
-  );
+  const firstSettlement = facts.findIndex((fact) => fact.type === "tool.settled");
   if (nextModelFacts.length !== 2 || firstSettlement < 0) {
     throw new Error("fixture is incomplete");
   }
@@ -2503,8 +2314,7 @@ function weightedBudget(
     estimatorVersion: "1",
     estimator: {
       count: () => 0,
-      countMessages: (messages) =>
-        messages.reduce((total, message) => total + weight(message), 0),
+      countMessages: (messages) => messages.reduce((total, message) => total + weight(message), 0),
     },
   };
 }

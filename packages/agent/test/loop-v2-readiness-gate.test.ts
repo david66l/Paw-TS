@@ -185,8 +185,7 @@ describe("Loop Kernel v2 readiness repair identity", () => {
           gaps: [
             {
               code: "verification_code_failed",
-              message:
-                "Current authoritative verification reports a code failure.",
+              message: "Current authoritative verification reports a code failure.",
             },
           ],
           localVerification: "code_failed",
@@ -213,9 +212,7 @@ describe("Loop Kernel v2 readiness repair identity", () => {
     if (codeFailed.type !== "feedback") throw new Error("expected feedback");
     expect(codeFailed.message).toContain("failure=test_failure");
     expect(codeFailed.message).toContain("current-revision failures");
-    expect(codeFailed.message).toContain(
-      "do not assume external or hidden tests",
-    );
+    expect(codeFailed.message).toContain("do not assume external or hidden tests");
     expect(codeFailed.requirement).toEqual({
       kind: "material_change",
       afterRevision: 1,

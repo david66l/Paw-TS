@@ -108,11 +108,7 @@ export type LoopV2Event =
       readonly candidateId: string;
       readonly mutationRevision: number;
       readonly probeKey: string;
-      readonly outcome:
-        | "clear"
-        | "candidate_defect"
-        | "inconclusive"
-        | "interrupted";
+      readonly outcome: "clear" | "candidate_defect" | "inconclusive" | "interrupted";
       readonly semanticReviewKey?: string;
       readonly semanticReviewNotRequired?: true;
       readonly externalVerification: "not_configured" | "pending";
@@ -264,10 +260,7 @@ export interface CandidateRecordV2 {
   readonly candidateInputHash: string;
   readonly proposedAtSeq: number;
   /** Migration provenance; only legacy_final_answer is explicit agent intent. */
-  readonly source?:
-    | "legacy_final_answer"
-    | "natural_stop_adapter"
-    | "host_stable_checkpoint";
+  readonly source?: "legacy_final_answer" | "natural_stop_adapter" | "host_stable_checkpoint";
 }
 
 export interface EvidenceRecordV2 {
@@ -392,9 +385,7 @@ export function resolveLoopKernelVersion(
  * Validate an untrusted JSON value before it reaches the projector.  The
  * projector is intentionally typed, while durable event logs are not.
  */
-export function assertLoopV2Envelope(
-  value: unknown,
-): asserts value is LoopV2Envelope {
+export function assertLoopV2Envelope(value: unknown): asserts value is LoopV2Envelope {
   assertRecord(value, "loop v2 envelope");
   assertExact(value.schemaVersion, LOOP_V2_SCHEMA_VERSION, "schemaVersion");
   assertNonEmptyString(value.runId, "runId");
@@ -452,17 +443,9 @@ export function assertLoopV2Envelope(
       return;
     case "semantic_review.recorded":
       assertNonEmptyString(value.event.candidateId, "event.candidateId");
-      assertSafeInteger(
-        value.event.mutationRevision,
-        "event.mutationRevision",
-        0,
-      );
+      assertSafeInteger(value.event.mutationRevision, "event.mutationRevision", 0);
       assertNonEmptyString(value.event.reviewKey, "event.reviewKey");
-      assertOneOf(
-        value.event.verdict,
-        ["pass", "fail", "partial"],
-        "event.verdict",
-      );
+      assertOneOf(value.event.verdict, ["pass", "fail", "partial"], "event.verdict");
       if (value.event.verificationProbe !== undefined) {
         assertOneOf(
           value.event.verificationProbe,
@@ -478,11 +461,7 @@ export function assertLoopV2Envelope(
       return;
     case "verification_probe.recorded":
       assertNonEmptyString(value.event.candidateId, "event.candidateId");
-      assertSafeInteger(
-        value.event.mutationRevision,
-        "event.mutationRevision",
-        0,
-      );
+      assertSafeInteger(value.event.mutationRevision, "event.mutationRevision", 0);
       assertNonEmptyString(value.event.probeKey, "event.probeKey");
       assertOneOf(
         value.event.outcome,
@@ -490,25 +469,16 @@ export function assertLoopV2Envelope(
         "event.outcome",
       );
       if (value.event.semanticReviewKey !== undefined) {
-        assertNonEmptyString(
-          value.event.semanticReviewKey,
-          "event.semanticReviewKey",
-        );
+        assertNonEmptyString(value.event.semanticReviewKey, "event.semanticReviewKey");
       }
       if (value.event.semanticReviewNotRequired !== undefined) {
-        assertExact(
-          value.event.semanticReviewNotRequired,
-          true,
-          "event.semanticReviewNotRequired",
-        );
+        assertExact(value.event.semanticReviewNotRequired, true, "event.semanticReviewNotRequired");
       }
       if (
         (value.event.semanticReviewKey === undefined) ===
         (value.event.semanticReviewNotRequired !== true)
       ) {
-        throw new Error(
-          "event verification probe must bind exactly one semantic provenance",
-        );
+        throw new Error("event verification probe must bind exactly one semantic provenance");
       }
       assertOneOf(
         value.event.externalVerification,
@@ -517,11 +487,7 @@ export function assertLoopV2Envelope(
       );
       return;
     case "context.compacted":
-      assertSafeInteger(
-        value.event.summarizedSeqThrough,
-        "event.summarizedSeqThrough",
-        0,
-      );
+      assertSafeInteger(value.event.summarizedSeqThrough, "event.summarizedSeqThrough", 0);
       assertStringArray(value.event.artifactRefs, "event.artifactRefs");
       return;
     default:
@@ -549,11 +515,7 @@ function assertCriterion(value: unknown): void {
     `${label}.source`,
   );
   assertOneOf(value.authority, ["agent", "external"], `${label}.authority`);
-  assertOneOf(
-    value.status,
-    ["pending", "satisfied", "blocked", "superseded"],
-    `${label}.status`,
-  );
+  assertOneOf(value.status, ["pending", "satisfied", "blocked", "superseded"], `${label}.status`);
   assertStringArray(value.evidenceRefs, `${label}.evidenceRefs`);
   assertSafeInteger(value.mutationRevision, `${label}.mutationRevision`, 0);
 }
@@ -581,11 +543,7 @@ function assertRisk(value: unknown): void {
   assertIdRecord(value, label);
   assertNonEmptyString(value.statement, `${label}.statement`);
   assertOneOf(value.severity, ["blocking", "warning"], `${label}.severity`);
-  assertOneOf(
-    value.status,
-    ["open", "resolved", "accepted"],
-    `${label}.status`,
-  );
+  assertOneOf(value.status, ["open", "resolved", "accepted"], `${label}.status`);
   assertStringArray(value.evidenceRefs, `${label}.evidenceRefs`);
 }
 
@@ -593,17 +551,9 @@ function assertInvariant(value: unknown): void {
   const label = "event.invariant";
   assertIdRecord(value, label);
   assertNonEmptyString(value.text, `${label}.text`);
-  assertOneOf(
-    value.source,
-    ["user_explicit", "repository_contract"],
-    `${label}.source`,
-  );
+  assertOneOf(value.source, ["user_explicit", "repository_contract"], `${label}.source`);
   assertOneOf(value.authority, ["agent", "external"], `${label}.authority`);
-  assertOneOf(
-    value.status,
-    ["active", "satisfied", "superseded"],
-    `${label}.status`,
-  );
+  assertOneOf(value.status, ["active", "satisfied", "superseded"], `${label}.status`);
   assertStringArray(value.evidenceRefs, `${label}.evidenceRefs`);
   assertSafeInteger(value.mutationRevision, `${label}.mutationRevision`, 0);
 }
@@ -613,11 +563,7 @@ function assertChangeSurface(value: unknown): void {
   assertIdRecord(value, label);
   assertNonEmptyString(value.path, `${label}.path`);
   assertOptionalString(value.symbol, `${label}.symbol`);
-  assertOneOf(
-    value.visibility,
-    ["public", "internal", "unknown"],
-    `${label}.visibility`,
-  );
+  assertOneOf(value.visibility, ["public", "internal", "unknown"], `${label}.visibility`);
   assertStringArray(value.observables, `${label}.observables`);
   assertStringArray(value.criterionIds, `${label}.criterionIds`);
   assertSafeInteger(value.mutationRevision, `${label}.mutationRevision`, 0);
@@ -628,10 +574,7 @@ function assertNextAction(value: unknown): void {
   assertRecord(value, label);
   assertNonEmptyString(value.intent, `${label}.intent`);
   assertOptionalString(value.closesEvidenceGap, `${label}.closesEvidenceGap`);
-  assertOptionalString(
-    value.falsifiesHypothesis,
-    `${label}.falsifiesHypothesis`,
-  );
+  assertOptionalString(value.falsifiesHypothesis, `${label}.falsifiesHypothesis`);
 }
 
 function assertMutation(value: unknown): void {
@@ -665,11 +608,7 @@ function assertVerification(value: unknown): void {
   assertNonEmptyString(value.cwd, `${label}.cwd`);
   assertStringArray(value.scope, `${label}.scope`);
   assertSafeInteger(value.mutationRevision, `${label}.mutationRevision`, 0);
-  assertOneOf(
-    value.outcome,
-    ["passed", "code_failed", "harness_failed"],
-    `${label}.outcome`,
-  );
+  assertOneOf(value.outcome, ["passed", "code_failed", "harness_failed"], `${label}.outcome`);
   if (value.exitCode !== undefined) {
     assertSafeInteger(value.exitCode, `${label}.exitCode`, 0);
   }
@@ -677,11 +616,7 @@ function assertVerification(value: unknown): void {
     assertRecord(value.assertions, `${label}.assertions`);
     for (const key of ["passed", "failed", "total"] as const) {
       if (value.assertions[key] !== undefined) {
-        assertSafeInteger(
-          value.assertions[key],
-          `${label}.assertions.${key}`,
-          0,
-        );
+        assertSafeInteger(value.assertions[key], `${label}.assertions.${key}`, 0);
       }
     }
   }
@@ -710,11 +645,7 @@ function assertReadiness(value: Record<string, unknown>): void {
   assertNonEmptyString(value.candidateId, `${label}.candidateId`);
   assertSafeInteger(value.mutationRevision, `${label}.mutationRevision`, 0);
   assertRecord(value.result, `${label}.result`);
-  assertOneOf(
-    value.result.kind,
-    ["ready", "repair_required"],
-    `${label}.result.kind`,
-  );
+  assertOneOf(value.result.kind, ["ready", "repair_required"], `${label}.result.kind`);
   if (value.result.kind === "ready") {
     if (value.result.semanticReview !== undefined) {
       assertOneOf(
@@ -747,31 +678,18 @@ function assertReadiness(value: Record<string, unknown>): void {
     `${label}.result.requirement.kind`,
   );
   if (requirement.kind === "direct_verification") {
-    assertSafeInteger(
-      requirement.revision,
-      `${label}.result.requirement.revision`,
-      0,
-    );
-    assertNonEmptyString(
-      requirement.runnerFamily,
-      `${label}.result.requirement.runnerFamily`,
-    );
+    assertSafeInteger(requirement.revision, `${label}.result.requirement.revision`, 0);
+    assertNonEmptyString(requirement.runnerFamily, `${label}.result.requirement.runnerFamily`);
     assertStringArray(requirement.scope, `${label}.result.requirement.scope`);
     return;
   }
-  assertSafeInteger(
-    requirement.afterRevision,
-    `${label}.result.requirement.afterRevision`,
-    0,
-  );
+  assertSafeInteger(requirement.afterRevision, `${label}.result.requirement.afterRevision`, 0);
   if (requirement.scope !== undefined) {
     assertStringArray(requirement.scope, `${label}.result.requirement.scope`);
   }
 }
 
-export function parseLoopV2EventLog(
-  serialized: string,
-): readonly LoopV2Envelope[] {
+export function parseLoopV2EventLog(serialized: string): readonly LoopV2Envelope[] {
   const trimmed = serialized.trim();
   if (!trimmed) return [];
   let values: unknown[];
@@ -803,20 +721,13 @@ export function parseLoopV2EventLog(
 function assertEvidenceObservation(value: unknown): void {
   assertRecord(value, "event.observation");
   assertNonEmptyString(value.kind, "event.observation.kind");
-  assertNonEmptyString(
-    value.repositoryRevision,
-    "event.observation.repositoryRevision",
-  );
+  assertNonEmptyString(value.repositoryRevision, "event.observation.repositoryRevision");
   assertOptionalString(value.artifactRef, "event.observation.artifactRef");
   switch (value.kind) {
     case "read":
       assertNonEmptyString(value.path, "event.observation.path");
       assertSafeInteger(value.start, "event.observation.start", 0);
-      assertSafeInteger(
-        value.endExclusive,
-        "event.observation.endExclusive",
-        1,
-      );
+      assertSafeInteger(value.endExclusive, "event.observation.endExclusive", 1);
       if (value.endExclusive <= value.start) {
         throw new Error("event.observation.endExclusive must exceed start");
       }
@@ -826,26 +737,19 @@ function assertEvidenceObservation(value: unknown): void {
       assertNonEmptyString(value.root, "event.observation.root");
       assertNonEmptyString(value.query, "event.observation.query");
       assertNonEmptyString(value.resultHash, "event.observation.resultHash");
-      if (value.options !== undefined)
-        assertRecord(value.options, "event.observation.options");
+      if (value.options !== undefined) assertRecord(value.options, "event.observation.options");
       return;
     case "diagnostic":
       assertStringArray(value.argv, "event.observation.argv");
       assertNonEmptyString(value.cwd, "event.observation.cwd");
-      assertNonEmptyString(
-        value.outcomeSignature,
-        "event.observation.outcomeSignature",
-      );
+      assertNonEmptyString(value.outcomeSignature, "event.observation.outcomeSignature");
       return;
     default:
       throw new Error(`Unsupported evidence observation kind: ${value.kind}`);
   }
 }
 
-function assertIdRecord(
-  value: unknown,
-  label: string,
-): asserts value is Record<string, unknown> {
+function assertIdRecord(value: unknown, label: string): asserts value is Record<string, unknown> {
   assertRecord(value, label);
   assertNonEmptyString(value.id, `${label}.id`);
 }
@@ -854,10 +758,7 @@ function assertOptionalString(value: unknown, label: string): void {
   if (value !== undefined) assertNonEmptyString(value, label);
 }
 
-function assertBoolean(
-  value: unknown,
-  label: string,
-): asserts value is boolean {
+function assertBoolean(value: unknown, label: string): asserts value is boolean {
   if (typeof value !== "boolean") throw new Error(`${label} must be a boolean`);
 }
 
@@ -871,19 +772,13 @@ function assertOneOf<T extends string>(
   }
 }
 
-function assertRecord(
-  value: unknown,
-  label: string,
-): asserts value is Record<string, unknown> {
+function assertRecord(value: unknown, label: string): asserts value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
   }
 }
 
-function assertNonEmptyString(
-  value: unknown,
-  label: string,
-): asserts value is string {
+function assertNonEmptyString(value: unknown, label: string): asserts value is string {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${label} must be a non-empty string`);
   }
@@ -899,28 +794,17 @@ function assertSafeInteger(
   }
 }
 
-function assertFiniteNumber(
-  value: unknown,
-  label: string,
-): asserts value is number {
+function assertFiniteNumber(value: unknown, label: string): asserts value is number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new Error(`${label} must be a finite number`);
   }
 }
 
-function assertExact<T>(
-  value: unknown,
-  expected: T,
-  label: string,
-): asserts value is T {
-  if (value !== expected)
-    throw new Error(`${label} must equal ${String(expected)}`);
+function assertExact<T>(value: unknown, expected: T, label: string): asserts value is T {
+  if (value !== expected) throw new Error(`${label} must equal ${String(expected)}`);
 }
 
-function assertStringArray(
-  value: unknown,
-  label: string,
-): asserts value is string[] {
+function assertStringArray(value: unknown, label: string): asserts value is string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new Error(`${label} must be an array of strings`);
   }

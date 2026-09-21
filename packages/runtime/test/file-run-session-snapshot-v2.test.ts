@@ -130,9 +130,7 @@ describe("FileRunSession recovery snapshot v2", () => {
       artifactId: event.snapshotId,
       artifactContentHash: event.snapshotId,
     });
-    expect(event?.artifactFileName).toBe(
-      `snapshot-0000000000000004-${event.snapshotId}.json`,
-    );
+    expect(event?.artifactFileName).toBe(`snapshot-0000000000000004-${event.snapshotId}.json`);
     expect(session.readRecoveryInfo()).toEqual({
       mode: "snapshot_plus_tail",
       snapshotThroughSeq: 4,
@@ -153,9 +151,7 @@ describe("FileRunSession recovery snapshot v2", () => {
       snapshotThroughSeq: 4,
       tailEnvelopeCount: 1,
     });
-    expect(await session.commitDerivedDecision(5, replayDecision(5))).toBe(
-      "committed",
-    );
+    expect(await session.commitDerivedDecision(5, replayDecision(5))).toBe("committed");
     const firstSnapshotFiles = snapshotFiles(root);
     expect(firstSnapshotFiles).toHaveLength(1);
     expect(await session.createRecoverySnapshot()).toMatchObject({
@@ -163,12 +159,8 @@ describe("FileRunSession recovery snapshot v2", () => {
       throughSeq: 6,
     });
     expect(snapshotFiles(root)).toHaveLength(2);
-    expect(snapshotFiles(root)).toEqual(
-      expect.arrayContaining(firstSnapshotFiles),
-    );
-    expect(journalArtifactBytes(root)).toEqual(
-      journalArtifactBytesFromIndex(root),
-    );
+    expect(snapshotFiles(root)).toEqual(expect.arrayContaining(firstSnapshotFiles));
+    expect(journalArtifactBytes(root)).toEqual(journalArtifactBytesFromIndex(root));
     const expectedPrefix = await session.readCanonicalPrefix();
     const [olderSnapshot, latestSnapshot] = snapshotFiles(root);
     if (!olderSnapshot || !latestSnapshot) {
@@ -239,9 +231,7 @@ describe("FileRunSession recovery snapshot v2", () => {
     await session.appendInputFacts([attemptStarted()]);
     const expectedPrefix = await session.readCanonicalPrefix();
 
-    await expect(session.createRecoverySnapshot()).rejects.toThrow(
-      crash.message,
-    );
+    await expect(session.createRecoverySnapshot()).rejects.toThrow(crash.message);
     expect(snapshotEventCount(root)).toBe(1);
     expect(commitIndex(root).latestRecoverySnapshot).toBeDefined();
 
@@ -284,10 +274,7 @@ describe("FileRunSession recovery snapshot v2", () => {
       } else if (mutation === "tampered") {
         fs.appendFileSync(snapshot, " ", "utf8");
       } else {
-        fs.linkSync(
-          snapshot,
-          path.join(tempRoot(), `snapshot-${mutation}.json`),
-        );
+        fs.linkSync(snapshot, path.join(tempRoot(), `snapshot-${mutation}.json`));
       }
       expect(() => open(fixture.root, fixture.lease)).toThrow();
     }
@@ -296,21 +283,12 @@ describe("FileRunSession recovery snapshot v2", () => {
     const snapshots = snapshotDirectory(redirected.root);
     const external = path.join(tempRoot(), "foreign-snapshots");
     fs.renameSync(snapshots, external);
-    fs.symlinkSync(
-      external,
-      snapshots,
-      process.platform === "win32" ? "junction" : "dir",
-    );
+    fs.symlinkSync(external, snapshots, process.platform === "win32" ? "junction" : "dir");
     expect(() => open(redirected.root, redirected.lease)).toThrow();
   });
 
   test("snapshot envelope identity, sequence, and prefix drift fail closed", async () => {
-    for (const mutation of [
-      "cross_session",
-      "cross_run",
-      "sequence",
-      "prefix",
-    ] as const) {
+    for (const mutation of ["cross_session", "cross_run", "sequence", "prefix"] as const) {
       const root = tempRoot();
       const lease = acquire(root);
       const session = open(root, lease);
@@ -403,9 +381,7 @@ describe("FileRunSession recovery snapshot v2", () => {
       snapshotThroughSeq: 1,
       tailEnvelopeCount: 1,
     });
-    expect(
-      (await session.readCanonicalPrefix()).map((item) => item.seq),
-    ).toEqual([1, 2]);
+    expect((await session.readCanonicalPrefix()).map((item) => item.seq)).toEqual([1, 2]);
     session.close();
   });
 });
@@ -416,9 +392,7 @@ interface ReplayState extends LoopControlState {
 
 async function createReplayFixture(withSnapshot: boolean): Promise<{
   readonly prefix: readonly RunJournalEnvelopeV1[];
-  readonly inputSnapshot: Awaited<
-    ReturnType<FileRunSessionV1["readInputSnapshot"]>
-  >;
+  readonly inputSnapshot: Awaited<ReturnType<FileRunSessionV1["readInputSnapshot"]>>;
   readonly recoveryInfo: ReturnType<FileRunSessionV1["readRecoveryInfo"]>;
 }> {
   const root = tempRoot();
@@ -427,9 +401,7 @@ async function createReplayFixture(withSnapshot: boolean): Promise<{
   await appendReplayPrefixThroughFirstDecision(session);
   if (withSnapshot) await session.createRecoverySnapshot();
   await session.appendInputFacts([abortRequested()]);
-  expect(await session.commitDerivedDecision(5, replayDecision(5))).toBe(
-    "committed",
-  );
+  expect(await session.commitDerivedDecision(5, replayDecision(5))).toBe("committed");
   session.close();
   session = open(root, lease);
   const result = {
@@ -441,17 +413,11 @@ async function createReplayFixture(withSnapshot: boolean): Promise<{
   return result;
 }
 
-async function appendReplayPrefixThroughFirstDecision(
-  session: FileRunSessionV1,
-): Promise<void> {
+async function appendReplayPrefixThroughFirstDecision(session: FileRunSessionV1): Promise<void> {
   await session.appendInputFacts([attemptStarted()]);
-  expect(await session.commitDerivedDecision(1, replayDecision(1))).toBe(
-    "committed",
-  );
+  expect(await session.commitDerivedDecision(1, replayDecision(1))).toBe("committed");
   await session.appendInputFacts([promoted()]);
-  expect(await session.commitDerivedDecision(3, replayDecision(3))).toBe(
-    "committed",
-  );
+  expect(await session.commitDerivedDecision(3, replayDecision(3))).toBe("committed");
 }
 
 function replayVerification(): ReplayVerificationV1<
@@ -492,9 +458,7 @@ function replayDecision(inputThroughSeq: number): DerivedDecisionV1 {
 }
 
 function reduceReplayFacts(facts: readonly InputFactV1[]): ReplayState {
-  const abort = [...facts]
-    .reverse()
-    .find((fact) => fact.type === "abort.requested");
+  const abort = [...facts].reverse().find((fact) => fact.type === "abort.requested");
   return {
     inputCount: facts.length,
     decision: abort
@@ -627,24 +591,16 @@ function commitIndex(root: string) {
 function journalArtifactBytes(root: string): Readonly<Record<string, string>> {
   return Object.freeze(
     Object.fromEntries(
-      journalArtifactFiles(root).map((file) => [
-        path.basename(file),
-        fs.readFileSync(file, "hex"),
-      ]),
+      journalArtifactFiles(root).map((file) => [path.basename(file), fs.readFileSync(file, "hex")]),
     ),
   );
 }
 
-function journalArtifactBytesFromIndex(
-  root: string,
-): Readonly<Record<string, string>> {
+function journalArtifactBytesFromIndex(root: string): Readonly<Record<string, string>> {
   return Object.freeze(
     Object.fromEntries(
       commitIndex(root).commits.map((commit) => {
-        const file = path.join(
-          journalArtifactDirectory(root),
-          commit.artifactFileName,
-        );
+        const file = path.join(journalArtifactDirectory(root), commit.artifactFileName);
         return [commit.artifactFileName, fs.readFileSync(file, "hex")];
       }),
     ),
@@ -676,15 +632,10 @@ function snapshotEventCount(root: string): number {
 }
 
 function snapshotEvents(root: string): Array<Record<string, unknown>> {
-  return allFiles(root, (name) => /^\d{16}\.json$/.test(name)).flatMap(
-    (file) => {
-      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as Record<
-        string,
-        unknown
-      >;
-      return parsed.type === "recovery_snapshot_commit" ? [parsed] : [];
-    },
-  );
+  return allFiles(root, (name) => /^\d{16}\.json$/.test(name)).flatMap((file) => {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+    return parsed.type === "recovery_snapshot_commit" ? [parsed] : [];
+  });
 }
 
 async function linearizeForgedSnapshot(
@@ -700,8 +651,7 @@ async function linearizeForgedSnapshot(
     schemaVersion: "paw.file-run-session.recovery-snapshot.v2",
     sessionId: mutation === "cross_session" ? "foreign-session" : SESSION_ID,
     runId: mutation === "cross_run" ? "foreign-run" : RUN_ID,
-    throughSeq:
-      mutation === "sequence" ? index.head.tailSeq + 1 : index.head.tailSeq,
+    throughSeq: mutation === "sequence" ? index.head.tailSeq + 1 : index.head.tailSeq,
     prefixHash: mutation === "prefix" ? "f".repeat(64) : index.head.prefixHash,
     envelopes: prefix,
   };
@@ -709,11 +659,7 @@ async function linearizeForgedSnapshot(
   const hash = hashBytes(content);
   const artifactFileName = `snapshot-${String(index.head.tailSeq).padStart(16, "0")}-${hash}.json`;
   fs.mkdirSync(snapshotDirectory(root), { recursive: true });
-  fs.writeFileSync(
-    path.join(snapshotDirectory(root), artifactFileName),
-    content,
-    "utf8",
-  );
+  fs.writeFileSync(path.join(snapshotDirectory(root), artifactFileName), content, "utf8");
   const result = await lease.linearizeRecoverySnapshot({
     snapshotId: hash,
     journalCommitId: journalCommit.commitId,

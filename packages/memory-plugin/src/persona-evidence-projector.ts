@@ -32,9 +32,7 @@ export function projectMemoryPersonaEvidenceV1(
   const deferred: Candidate[] = [];
   const seenSources = new Set<string>();
   for (const candidate of candidates) {
-    const unseen = candidate.sourceKeys.find(
-      (source) => !seenSources.has(source),
-    );
+    const unseen = candidate.sourceKeys.find((source) => !seenSources.has(source));
     if (unseen) {
       diverse.push(candidate);
       for (const source of candidate.sourceKeys) seenSources.add(source);
@@ -46,18 +44,14 @@ export function projectMemoryPersonaEvidenceV1(
   let chars = 0;
   for (const candidate of [...diverse, ...deferred]) {
     if (selected.length >= input.maxClaims) break;
-    const claimChars = canonicalJsonStringifyV1(
-      candidate.claim as unknown as JsonValue,
-    ).length;
+    const claimChars = canonicalJsonStringifyV1(candidate.claim as unknown as JsonValue).length;
     const nextChars = chars + claimChars;
     if (nextChars > input.maxChars) continue;
     selected.push(candidate);
     chars = nextChars;
   }
   const claims = Object.freeze(selected.map((candidate) => candidate.claim));
-  const sources = new Set(
-    selected.flatMap((candidate) => candidate.sourceKeys),
-  );
+  const sources = new Set(selected.flatMap((candidate) => candidate.sourceKeys));
   const projectionKey = hashCanonical({
     projectionRevision,
     claims,
@@ -81,15 +75,8 @@ const EVOLUTION_SIGNALS = [
   /放弃|改变|变化|不再|重新考虑|重新评估|恢复|转变|停止|曾经/u,
 ] as const;
 
-function toCandidate(
-  entry: MemoryEntry,
-  minimumConfidence: number,
-): readonly Candidate[] {
-  if (
-    entry.tInvalid !== null ||
-    entry.confidence < minimumConfidence ||
-    entry.kind !== "profile"
-  ) {
+function toCandidate(entry: MemoryEntry, minimumConfidence: number): readonly Candidate[] {
+  if (entry.tInvalid !== null || entry.confidence < minimumConfidence || entry.kind !== "profile") {
     return [];
   }
   const statement = entry.insight;
@@ -97,9 +84,7 @@ function toCandidate(
   const evidenceRefs = Object.freeze(
     [...new Set(entry.evidence.filter((ref) => ref.trim()))].sort(),
   );
-  const sourceKeys = Object.freeze(
-    [...new Set(evidenceRefs.map(sourceKey))].sort(),
-  );
+  const sourceKeys = Object.freeze([...new Set(evidenceRefs.map(sourceKey))].sort());
   return [
     Object.freeze({
       claim: Object.freeze({
@@ -110,10 +95,7 @@ function toCandidate(
         validFrom: entry.tValid,
         evidenceRefs,
       }),
-      sourceKeys:
-        sourceKeys.length > 0
-          ? sourceKeys
-          : Object.freeze([`authority:${entry.source}`]),
+      sourceKeys: sourceKeys.length > 0 ? sourceKeys : Object.freeze([`authority:${entry.source}`]),
       evolution: EVOLUTION_SIGNALS.some((pattern) => pattern.test(statement)),
     }),
   ];
@@ -123,8 +105,7 @@ function compareCandidates(left: Candidate, right: Candidate): number {
   if (left.evolution !== right.evolution) return left.evolution ? -1 : 1;
   const confidence = right.claim.confidence - left.claim.confidence;
   if (confidence !== 0) return confidence;
-  const validFrom =
-    Date.parse(right.claim.validFrom) - Date.parse(left.claim.validFrom);
+  const validFrom = Date.parse(right.claim.validFrom) - Date.parse(left.claim.validFrom);
   if (Number.isFinite(validFrom) && validFrom !== 0) return validFrom;
   return left.claim.memoryId.localeCompare(right.claim.memoryId);
 }

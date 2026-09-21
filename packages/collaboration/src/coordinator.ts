@@ -1,11 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
-import type {
-  InputFactV1,
-  JsonValue,
-  RuntimeActivitySettledFactV1,
-} from "@paw/protocol";
+import type { InputFactV1, JsonValue, RuntimeActivitySettledFactV1 } from "@paw/protocol";
 
 import {
   COLLABORATION_COORDINATOR_POLICY_VERSION_V1,
@@ -26,10 +22,8 @@ import {
 } from "./roster.js";
 
 export const COLLABORATION_ACTIVITY_KIND_V1 = "collaboration_child" as const;
-export const COLLABORATION_TASK_SCHEMA_VERSION_V1 =
-  "paw.collaboration-task.v2" as const;
-const LEGACY_COLLABORATION_TASK_SCHEMA_VERSION_V1 =
-  "paw.collaboration-task.v1" as const;
+export const COLLABORATION_TASK_SCHEMA_VERSION_V1 = "paw.collaboration-task.v2" as const;
+const LEGACY_COLLABORATION_TASK_SCHEMA_VERSION_V1 = "paw.collaboration-task.v1" as const;
 const LEGACY_COLLABORATION_ROSTER_VERSION_V1 =
   "paw.collaboration-roster.v3:typed-capabilities" as const;
 
@@ -77,9 +71,7 @@ export function createDurableCollaborationCoordinatorV1(input: {
   ) {
     throw new TypeError("Collaboration coordinator Journal port is invalid");
   }
-  const policy = freezeCollaborationPolicyV1(
-    input.policy ?? DEFAULT_COLLABORATION_POLICY_V1,
-  );
+  const policy = freezeCollaborationPolicyV1(input.policy ?? DEFAULT_COLLABORATION_POLICY_V1);
   const clock = input.clock ?? Date.now;
   const roster = input.roster ?? DEFAULT_COLLABORATION_ROSTER_V1;
 
@@ -91,24 +83,14 @@ export function createDurableCollaborationCoordinatorV1(input: {
     const callId = options?.agentId?.trim();
     const parentRunId = options?.parentRunId?.trim();
     if (!callId || !parentRunId) {
-      throw new Error(
-        "Durable collaboration requires stable parent run and tool call ids",
-      );
+      throw new Error("Durable collaboration requires stable parent run and tool call ids");
     }
     const normalizedGoal = goal.trim();
     const steps = maxSteps ?? policy.defaultMaxSteps;
     const agent = agentFromArgs(options?.args, roster);
-    const identity = taskIdentity(
-      parentRunId,
-      callId,
-      normalizedGoal,
-      steps,
-      agent,
-    );
+    const identity = taskIdentity(parentRunId, callId, normalizedGoal, steps, agent);
     const before = projectCollaborationTasksV1(await input.journal.readFacts());
-    const existing = before.tasks.find(
-      (task) => task.taskId === identity.taskId,
-    );
+    const existing = before.tasks.find((task) => task.taskId === identity.taskId);
     if (existing) assertSameTask(existing, identity);
     else {
       await input.journal.record([
@@ -124,11 +106,7 @@ export function createDurableCollaborationCoordinatorV1(input: {
     }
 
     try {
-      const result = await input.delegate.launch(
-        normalizedGoal,
-        steps,
-        options,
-      );
+      const result = await input.delegate.launch(normalizedGoal, steps, options);
       await settleOnce(
         input.journal,
         identity.taskId,
@@ -140,22 +118,14 @@ export function createDurableCollaborationCoordinatorV1(input: {
       return withTaskLocator(result, identity);
     } catch (error) {
       const status = options?.signal?.aborted ? "cancelled" : "failed";
-      await settleOnce(
-        input.journal,
-        identity.taskId,
-        status,
-        describeError(error),
-        clock,
-      );
+      await settleOnce(input.journal, identity.taskId, status, describeError(error), clock);
       throw error;
     }
   };
 
   return Object.freeze({
     launch,
-    async launchStreaming(
-      options: Parameters<SubAgentLauncher["launchStreaming"]>[0],
-    ) {
+    async launchStreaming(options: Parameters<SubAgentLauncher["launchStreaming"]>[0]) {
       return launch(options.goal, options.maxSteps, {
         args: options.args,
         sharedContext: options.sharedContext,
@@ -247,17 +217,14 @@ function parseTaskMetadata(value: JsonValue | undefined) {
   }
   const record = value as Readonly<Record<string, JsonValue>>;
   const keys = Object.keys(record).sort().join("\0");
-  const legacy =
-    record.schemaVersion === LEGACY_COLLABORATION_TASK_SCHEMA_VERSION_V1;
+  const legacy = record.schemaVersion === LEGACY_COLLABORATION_TASK_SCHEMA_VERSION_V1;
   const expectedKeys = legacy
     ? "agentId\0agentSpecHash\0callId\0childPolicy\0coordinatorPolicyVersion\0goalHash\0maxSteps\0parentRunId\0role\0rosterVersion\0schemaVersion\0taskId"
     : "agentId\0agentSpecHash\0callId\0childPolicy\0coordinatorPolicyVersion\0effectProfile\0goalHash\0maxSteps\0parentRunId\0role\0rosterVersion\0schemaVersion\0taskId";
   if (
     keys !== expectedKeys ||
-    (!legacy &&
-      record.schemaVersion !== COLLABORATION_TASK_SCHEMA_VERSION_V1) ||
-    record.coordinatorPolicyVersion !==
-      COLLABORATION_COORDINATOR_POLICY_VERSION_V1 ||
+    (!legacy && record.schemaVersion !== COLLABORATION_TASK_SCHEMA_VERSION_V1) ||
+    record.coordinatorPolicyVersion !== COLLABORATION_COORDINATOR_POLICY_VERSION_V1 ||
     (legacy
       ? record.rosterVersion !== LEGACY_COLLABORATION_ROSTER_VERSION_V1
       : record.rosterVersion !== COLLABORATION_ROSTER_VERSION_V1) ||
@@ -268,8 +235,7 @@ function parseTaskMetadata(value: JsonValue | undefined) {
     typeof record.role !== "string" ||
     typeof record.agentSpecHash !== "string" ||
     !/^[0-9a-f]{64}$/.test(record.agentSpecHash) ||
-    (record.childPolicy !== "read_only" &&
-      record.childPolicy !== "read_write") ||
+    (record.childPolicy !== "read_only" && record.childPolicy !== "read_write") ||
     (!legacy &&
       record.effectProfile !== "inspect" &&
       record.effectProfile !== "execute" &&
@@ -334,9 +300,9 @@ async function settleOnce(
   clock: () => number,
   result?: JsonValue,
 ): Promise<void> {
-  const task = projectCollaborationTasksV1(
-    await journal.readFacts(),
-  ).tasks.find((item) => item.taskId === taskId);
+  const task = projectCollaborationTasksV1(await journal.readFacts()).tasks.find(
+    (item) => item.taskId === taskId,
+  );
   if (!task) throw new Error(`Collaboration task start is missing: ${taskId}`);
   if (task.settlement) return;
   await journal.record([
@@ -382,11 +348,9 @@ function agentFromArgs(
     if (
       args.agent_spec_hash !== collaborationAgentSpecHashV1(agent) ||
       args.agent_id !== agent.id ||
-      (args.effect_profile !== undefined &&
-        args.effect_profile !== agent.effect) ||
+      (args.effect_profile !== undefined && args.effect_profile !== agent.effect) ||
       args.child_policy !== agent.childPolicy ||
-      collaborationAgentSpecHashV1(selected) !==
-        collaborationAgentSpecHashV1(agent)
+      collaborationAgentSpecHashV1(selected) !== collaborationAgentSpecHashV1(agent)
     ) {
       throw new Error("Collaboration AgentSpec binding is invalid");
     }
@@ -401,9 +365,7 @@ function taskLabel(agentId: string, role: string, goal: string): string {
 
 function singleLine(value: string, limit: number): string {
   const normalized = value.replace(/[\r\n\t]+/g, " ").trim() || "No summary";
-  return normalized.length <= limit
-    ? normalized
-    : `${normalized.slice(0, limit - 14)} [truncated]`;
+  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit - 14)} [truncated]`;
 }
 
 function describeError(error: unknown): string {

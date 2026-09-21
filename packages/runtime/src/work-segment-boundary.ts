@@ -41,9 +41,7 @@ export function projectLatestWorkSegmentBoundaryV1(
   return latest;
 }
 
-function assertSnapshotOrder(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): void {
+function assertSnapshotOrder(snapshot: SessionInputSnapshot<InputFactV1>): void {
   let previousSeq = 0;
   for (const entry of snapshot.entries) {
     if (entry.seq <= previousSeq || entry.seq > snapshot.tailSeq) {
@@ -51,10 +49,7 @@ function assertSnapshotOrder(
     }
     previousSeq = entry.seq;
   }
-  if (
-    snapshot.latestInputSeq !== previousSeq ||
-    snapshot.tailSeq < snapshot.latestInputSeq
-  ) {
+  if (snapshot.latestInputSeq !== previousSeq || snapshot.tailSeq < snapshot.latestInputSeq) {
     throw new Error("Work segment snapshot metadata is invalid");
   }
 }

@@ -37,8 +37,7 @@ function fixture() {
   const store: MemoryJobStore = {
     async put(id, job) {
       if (!available) throw new Error("db unavailable");
-      if (!jobs.has(id))
-        jobs.set(id, { ...job, id, token: "token", attempts: 1 });
+      if (!jobs.has(id)) jobs.set(id, { ...job, id, token: "token", attempts: 1 });
     },
     async claim() {
       if (claimed) return undefined;
@@ -78,9 +77,7 @@ test("durable ingress survives DB failure, restart and duplicate enqueue without
     },
   };
   f.offline();
-  await expect(createDesktopMemoryWorker(options).tick()).rejects.toThrow(
-    "db unavailable",
-  );
+  await expect(createDesktopMemoryWorker(options).tick()).rejects.toThrow("db unavailable");
   expect(fs.existsSync(path.join(f.directory, `${id}.json`))).toBe(true);
   f.online();
   const worker = createDesktopMemoryWorker(options);

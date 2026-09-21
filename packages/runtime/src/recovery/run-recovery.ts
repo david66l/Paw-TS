@@ -1,7 +1,4 @@
-import type {
-  SessionInputSnapshot,
-  VerifiedModelResponseEvidenceV1,
-} from "@paw/agent-loop";
+import type { SessionInputSnapshot, VerifiedModelResponseEvidenceV1 } from "@paw/agent-loop";
 import {
   type InputFactV1,
   type JsonValue,
@@ -46,9 +43,7 @@ export interface RepairRunRecoveryOptionsV1 {
   readonly loadModelResponseEvidence?: (
     prefix: readonly RunJournalEnvelopeV1[],
     signal?: AbortSignal,
-  ) =>
-    | VerifiedModelResponseEvidenceV1
-    | Promise<VerifiedModelResponseEvidenceV1>;
+  ) => VerifiedModelResponseEvidenceV1 | Promise<VerifiedModelResponseEvidenceV1>;
 }
 
 export interface ClassifyRunRecoveryOptionsV1 {
@@ -107,16 +102,14 @@ export function classifyRunRecoveryV1(
         break;
       case "model.settled": {
         const model = models.get(fact.modelCallId);
-        if (!model)
-          throw new Error("Protocol parser accepted ghost model settlement");
+        if (!model) throw new Error("Protocol parser accepted ghost model settlement");
         model.settlement = fact;
         model.settlementSeq = envelope.seq;
         break;
       }
       case "tool.call_observed": {
         const model = models.get(fact.modelCallId);
-        if (!model)
-          throw new Error("Protocol parser accepted orphan tool observation");
+        if (!model) throw new Error("Protocol parser accepted orphan tool observation");
         model.observed.push(fact);
         tools.set(fact.callId, {
           observed: fact,
@@ -159,13 +152,10 @@ export function classifyRunRecoveryV1(
 
   const orderedTools = [...tools.values()].sort(
     (left, right) =>
-      left.observedSeq - right.observedSeq ||
-      left.observed.order - right.observed.order,
+      left.observedSeq - right.observedSeq || left.observed.order - right.observed.order,
   );
   const repairModelIds = new Set(
-    orderedTools
-      .filter((tool) => !tool.settled)
-      .map((tool) => tool.observed.modelCallId),
+    orderedTools.filter((tool) => !tool.settled).map((tool) => tool.observed.modelCallId),
   );
   for (const modelCallId of repairModelIds) {
     const model = models.get(modelCallId);
@@ -218,14 +208,11 @@ export async function repairRunRecoveryV1(
   ) {
     throw new Error("Recovery model response evidence loader is invalid");
   }
-  const loadModelResponseEvidence =
-    options.loadModelResponseEvidence?.bind(options);
+  const loadModelResponseEvidence = options.loadModelResponseEvidence?.bind(options);
   for (;;) {
     throwIfAborted(signal);
     const prefix = immutableCanonicalJsonCloneV1(
-      parseRunJournalPrefixV1(
-        await options.session.readCanonicalPrefix(),
-      ) as unknown as JsonValue,
+      parseRunJournalPrefixV1(await options.session.readCanonicalPrefix()) as unknown as JsonValue,
     ) as unknown as readonly RunJournalEnvelopeV1[];
     throwIfAborted(signal);
     const modelResponses = loadModelResponseEvidence
@@ -306,19 +293,14 @@ function toolSettlement(
   };
 }
 
-function requiredTool(
-  tools: ReadonlyMap<string, ToolLifecycle>,
-  callId: string,
-): ToolLifecycle {
+function requiredTool(tools: ReadonlyMap<string, ToolLifecycle>, callId: string): ToolLifecycle {
   const tool = tools.get(callId);
   if (!tool) throw new Error("Protocol parser accepted ghost tool lifecycle");
   return tool;
 }
 
 function immutableInputFact(fact: InputFactV1): InputFactV1 {
-  return immutableCanonicalJsonCloneV1(
-    fact as unknown as JsonValue,
-  ) as InputFactV1;
+  return immutableCanonicalJsonCloneV1(fact as unknown as JsonValue) as InputFactV1;
 }
 
 function assertNoLifecycleOverlap(
@@ -329,9 +311,7 @@ function assertNoLifecycleOverlap(
     throw new Error("Recovery found overlapping model dispatches");
   }
   if ([...tools.values()].some((tool) => !tool.settled)) {
-    throw new Error(
-      "Recovery found a new model dispatch before the prior tool batch settled",
-    );
+    throw new Error("Recovery found a new model dispatch before the prior tool batch settled");
   }
 }
 
@@ -361,9 +341,7 @@ function assertModelObservationEvidence(
       ? parseModelResponseV1(settlement.response.value)
       : undefined;
   if (!response) {
-    throw new Error(
-      `Recovery cannot verify artifact model response: ${model.modelCallId}`,
-    );
+    throw new Error(`Recovery cannot verify artifact model response: ${model.modelCallId}`);
   }
   assertModelResponseToolFlag(model, settlement, response);
   if (settlement.status !== "completed") {
@@ -397,8 +375,7 @@ function assertModelObservationEvidence(
       nativeCall.name !== observed.tool ||
       nativeCall.sourceIndex !== observed.order ||
       nativeCall.argumentsValid !== true ||
-      canonicalJsonStringifyV1(nativeCall.args) !==
-        canonicalJsonStringifyV1(observed.args)
+      canonicalJsonStringifyV1(nativeCall.args) !== canonicalJsonStringifyV1(observed.args)
     ) {
       throw new Error(
         `Recovery native tool identity mismatch: ${observed?.callId ?? nativeCall?.callId ?? index}`,
@@ -420,9 +397,7 @@ function assertModelResponseToolFlag(
   response: ModelResponseV1,
 ): void {
   if (settlement.hasToolCalls !== response.toolCalls.length > 0) {
-    throw new Error(
-      `Recovery model response tool-call flag mismatch: ${model.modelCallId}`,
-    );
+    throw new Error(`Recovery model response tool-call flag mismatch: ${model.modelCallId}`);
   }
 }
 
@@ -450,7 +425,5 @@ function validateRepairedPrefix(
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (!signal?.aborted) return;
   if (signal.reason instanceof Error) throw signal.reason;
-  throw new Error(
-    `Run recovery aborted: ${String(signal.reason ?? "aborted")}`,
-  );
+  throw new Error(`Run recovery aborted: ${String(signal.reason ?? "aborted")}`);
 }

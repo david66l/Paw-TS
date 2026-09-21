@@ -36,9 +36,7 @@ describe("ContextManager", () => {
     cm.addUser("[Context Package]\none");
     cm.addAssistant("ok");
     cm.upsertUserByPrefix("[Context Package]", "[Context Package]\ntwo");
-    const packages = cm
-      .buildMessages()
-      .filter((m) => m.content.startsWith("[Context Package]"));
+    const packages = cm.buildMessages().filter((m) => m.content.startsWith("[Context Package]"));
     expect(packages).toHaveLength(1);
     expect(packages[0]?.content).toContain("two");
   });
@@ -52,9 +50,7 @@ describe("ContextManager", () => {
     cm.upsertUserByPrefixBeforeLatest("[Status]", "[Status]\ntwo");
 
     const messages = cm.buildMessages();
-    expect(
-      messages.filter((message) => message.content.startsWith("[Status]")),
-    ).toHaveLength(1);
+    expect(messages.filter((message) => message.content.startsWith("[Status]"))).toHaveLength(1);
     expect(messages.at(-2)?.content).toBe("[Status]\ntwo");
     expect(messages.at(-1)?.content).toContain("read_file");
   });
@@ -81,9 +77,7 @@ describe("ContextManager", () => {
     const messages = cm.buildMessages();
     expect(messages).toHaveLength(2);
     expect(messages[0]?.role).toBe("assistant");
-    expect(messages[1]?.content).toContain(
-      "[Tool workspace.read_file completed]",
-    );
+    expect(messages[1]?.content).toContain("[Tool workspace.read_file completed]");
   });
 
   test("maxMessages keeps the latest tool unit even beside an old constraint", () => {
@@ -119,17 +113,11 @@ describe("ContextManager", () => {
     const raw = new ContextManager({ maxMessages: 3 });
     raw.setHistoryRaw(history);
     raw.truncateNow();
-    expect(raw.buildMessages().map((message) => message.content)).toEqual([
-      "D",
-      "E",
-    ]);
+    expect(raw.buildMessages().map((message) => message.content)).toEqual(["D", "E"]);
 
     const replaced = new ContextManager({ maxMessages: 3 });
     replaced.replaceHistory(history);
-    expect(replaced.buildMessages().map((message) => message.content)).toEqual([
-      "D",
-      "E",
-    ]);
+    expect(replaced.buildMessages().map((message) => message.content)).toEqual(["D", "E"]);
   });
 
   test("an oversized latest tool turn soft-exceeds the character budget", () => {
@@ -164,11 +152,7 @@ describe("ContextManager", () => {
     cm.addUser("A".repeat(30));
     cm.addAssistant("B".repeat(30));
     const msgs = cm.buildMessages();
-    expect(msgs.map((message) => message.content)).toEqual([
-      "Sys",
-      "A".repeat(30),
-      "B".repeat(30),
-    ]);
+    expect(msgs.map((message) => message.content)).toEqual(["Sys", "A".repeat(30), "B".repeat(30)]);
     expect(cm.charCount).toBeGreaterThan(50);
   });
 
@@ -221,9 +205,7 @@ describe("ContextManager", () => {
   test("legacy history is stripped of audit thinking before truncation", () => {
     const cm = new ContextManager({ maxMessages: 100, maxChars: 20 });
     cm.setSystem("sys");
-    cm.replaceHistory([
-      { role: "assistant", content: "hi", thinking: "long thinking text" },
-    ]);
+    cm.replaceHistory([{ role: "assistant", content: "hi", thinking: "long thinking text" }]);
     const msgs = cm.buildMessages();
     expect(msgs.length).toBe(2);
     expect(msgs[1]?.thinking).toBeUndefined();
@@ -232,13 +214,9 @@ describe("ContextManager", () => {
 
   test("raw resume history is stripped of audit thinking", () => {
     const cm = new ContextManager();
-    cm.setHistoryRaw([
-      { role: "assistant", content: "legacy", thinking: "old audit" },
-    ]);
+    cm.setHistoryRaw([{ role: "assistant", content: "legacy", thinking: "old audit" }]);
 
-    expect(cm.buildMessages()).toEqual([
-      { role: "assistant", content: "legacy" },
-    ]);
+    expect(cm.buildMessages()).toEqual([{ role: "assistant", content: "legacy" }]);
   });
 
   test("24 turns do not grow the request budget with audit thinking", () => {
@@ -277,12 +255,8 @@ describe("ContextManager", () => {
 
     const messages = cm.buildMessages();
     expect(messages).toHaveLength(1);
-    expect(
-      messages[0]?.nativeToolTurn?.calls.map((call) => call.callId),
-    ).toEqual(["a", "b"]);
-    expect(
-      messages[0]?.nativeToolTurn?.results.map((result) => result.callId),
-    ).toEqual(["a", "b"]);
+    expect(messages[0]?.nativeToolTurn?.calls.map((call) => call.callId)).toEqual(["a", "b"]);
+    expect(messages[0]?.nativeToolTurn?.results.map((result) => result.callId)).toEqual(["a", "b"]);
     expect(messages[0]?.thinking).toBeUndefined();
     expect(cm.charCount).toBeGreaterThan("reasoning passback".length);
   });

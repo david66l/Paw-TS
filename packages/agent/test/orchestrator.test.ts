@@ -1,19 +1,9 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  InMemoryAppStateStore,
-  type RunEventEnvelope,
-  type SessionStore,
-} from "@paw/core";
+import { InMemoryAppStateStore, type RunEventEnvelope, type SessionStore } from "@paw/core";
 import { CORE_MODEL_EXECUTABLE_TOOLS, resetPolicyConfig } from "@paw/harness";
 import { FakeLanguageModel } from "@paw/models";
 
@@ -43,11 +33,7 @@ describe("AgentOrchestrator", () => {
     expect(r.status).toBe("completed");
     expect(events.some((e) => e.event.type === "agent.action")).toBe(true);
     expect(
-      events.some(
-        (e) =>
-          e.event.type === "agent.action" &&
-          e.event.action.type === "tool_call",
-      ),
+      events.some((e) => e.event.type === "agent.action" && e.event.action.type === "tool_call"),
     ).toBe(true);
     expect(events.some((e) => e.event.type === "tool.result")).toBe(true);
     const tr = events.find((e) => e.event.type === "tool.result");
@@ -84,14 +70,10 @@ describe("AgentOrchestrator", () => {
 
     expect(
       events.some(
-        (event) =>
-          event.event.type === "tool.call" &&
-          event.event.tool === "workspace.list_dir",
+        (event) => event.event.type === "tool.call" && event.event.tool === "workspace.list_dir",
       ),
     ).toBe(false);
-    const inventory = events.find(
-      (event) => event.event.type === "capability.inventory",
-    );
+    const inventory = events.find((event) => event.event.type === "capability.inventory");
     expect(inventory?.event.type).toBe("capability.inventory");
     if (inventory?.event.type === "capability.inventory") {
       expect(inventory.event.fullToolCount).toBe(3);
@@ -113,9 +95,7 @@ describe("AgentOrchestrator", () => {
   });
 
   test("rejects a hidden tool from the native tool-call channel", async () => {
-    const dir = mkdtempSync(
-      path.join(tmpdir(), "paw-orch-native-capability-deny-"),
-    );
+    const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-native-capability-deny-"));
     const events: RunEventEnvelope[] = [];
     const o = new AgentOrchestrator({
       allowedTools: CORE_MODEL_EXECUTABLE_TOOLS,
@@ -147,9 +127,7 @@ describe("AgentOrchestrator", () => {
 
     expect(
       events.some(
-        (event) =>
-          event.event.type === "tool.call" &&
-          event.event.tool === "workspace.list_dir",
+        (event) => event.event.type === "tool.call" && event.event.tool === "workspace.list_dir",
       ),
     ).toBe(false);
   });
@@ -250,8 +228,7 @@ describe("AgentOrchestrator", () => {
             ? {
                 text: "display lines are not durable protocol content",
                 nativeAssistantContent: "I will read twice.",
-                thinking:
-                  "inline audit plus provider-exact reasoning for diagnostics",
+                thinking: "inline audit plus provider-exact reasoning for diagnostics",
                 reasoningPassback: "provider-exact reasoning",
                 finishReason: "tool_calls",
                 toolCalls: [
@@ -285,36 +262,25 @@ describe("AgentOrchestrator", () => {
 
     expect(
       events.filter(
-        (event) =>
-          event.event.type === "tool.result" &&
-          event.event.tool === "workspace.read_file",
+        (event) => event.event.type === "tool.result" && event.event.tool === "workspace.read_file",
       ),
     ).toHaveLength(2);
-    const turn = requests[1]?.find(
-      (message) => message.nativeToolTurn,
-    )?.nativeToolTurn;
+    const turn = requests[1]?.find((message) => message.nativeToolTurn)?.nativeToolTurn;
     expect(turn?.assistantContent).toBe("I will read twice.");
     expect(turn?.reasoningPassback).toBe("provider-exact reasoning");
     const audited = events.find(
-      (event) =>
-        event.event.type === "model.done" && event.event.thinking !== undefined,
+      (event) => event.event.type === "model.done" && event.event.thinking !== undefined,
     );
     expect(audited?.event.type).toBe("model.done");
     if (audited?.event.type === "model.done") {
       expect(audited.event.thinking).toContain("inline audit");
     }
-    expect(turn?.calls.map((call) => call.callId)).toEqual([
-      "provider-a",
-      "provider-b",
-    ]);
+    expect(turn?.calls.map((call) => call.callId)).toEqual(["provider-a", "provider-b"]);
     expect(turn?.calls.map((call) => call.rawArguments)).toEqual([
       '{ "path": "note.txt" }',
       '{"path":"note.txt"}',
     ]);
-    expect(turn?.results.map((result) => result.callId)).toEqual([
-      "provider-a",
-      "provider-b",
-    ]);
+    expect(turn?.results.map((result) => result.callId)).toEqual(["provider-a", "provider-b"]);
   });
 
   test("closes every provider id when one native call makes the batch invalid", async () => {
@@ -375,22 +341,13 @@ describe("AgentOrchestrator", () => {
       maxSteps: 2,
     });
 
-    const toolResults = events.filter(
-      (event) => event.event.type === "tool.result",
-    );
+    const toolResults = events.filter((event) => event.event.type === "tool.result");
     expect(toolResults).toHaveLength(2);
     expect(
-      toolResults.every(
-        (event) => event.event.type === "tool.result" && !event.event.ok,
-      ),
+      toolResults.every((event) => event.event.type === "tool.result" && !event.event.ok),
     ).toBe(true);
-    const turn = requests[1]?.find(
-      (message) => message.nativeToolTurn,
-    )?.nativeToolTurn;
-    expect(turn?.calls.map((call) => call.callId)).toEqual([
-      "valid-sibling",
-      "malformed-call",
-    ]);
+    const turn = requests[1]?.find((message) => message.nativeToolTurn)?.nativeToolTurn;
+    expect(turn?.calls.map((call) => call.callId)).toEqual(["valid-sibling", "malformed-call"]);
     expect(turn?.results.map((result) => result.callId)).toEqual([
       "valid-sibling",
       "malformed-call",
@@ -443,12 +400,8 @@ describe("AgentOrchestrator", () => {
       maxSteps: 1,
     });
 
-    expect(events.some((event) => event.event.type === "tool.call")).toBe(
-      false,
-    );
-    expect(
-      events.filter((event) => event.event.type === "tool.result"),
-    ).toHaveLength(2);
+    expect(events.some((event) => event.event.type === "tool.call")).toBe(false);
+    expect(events.filter((event) => event.event.type === "tool.result")).toHaveLength(2);
   });
 
   test("v1 keeps a native run_agent and read sibling in one ordered envelope", async () => {
@@ -496,8 +449,7 @@ describe("AgentOrchestrator", () => {
                       goal: "inspect note",
                       child_policy: "read_only",
                     },
-                    rawArguments:
-                      '{"goal":"inspect note","child_policy":"read_only"}',
+                    rawArguments: '{"goal":"inspect note","child_policy":"read_only"}',
                   },
                   {
                     id: "read-call",
@@ -525,21 +477,11 @@ describe("AgentOrchestrator", () => {
     expect(
       events
         .filter((event) => event.event.type === "tool.result")
-        .map((event) =>
-          event.event.type === "tool.result" ? event.event.tool : "",
-        ),
+        .map((event) => (event.event.type === "tool.result" ? event.event.tool : "")),
     ).toEqual(["workspace.run_agent", "workspace.read_file"]);
-    const turn = requests[1]?.find(
-      (message) => message.nativeToolTurn,
-    )?.nativeToolTurn;
-    expect(turn?.calls.map((call) => call.callId)).toEqual([
-      "child-call",
-      "read-call",
-    ]);
-    expect(turn?.results.map((result) => result.callId)).toEqual([
-      "child-call",
-      "read-call",
-    ]);
+    const turn = requests[1]?.find((message) => message.nativeToolTurn)?.nativeToolTurn;
+    expect(turn?.calls.map((call) => call.callId)).toEqual(["child-call", "read-call"]);
+    expect(turn?.results.map((result) => result.callId)).toEqual(["child-call", "read-call"]);
   });
 
   test("records capability shadow choices without pruning real tool schemas", async () => {
@@ -573,22 +515,16 @@ describe("AgentOrchestrator", () => {
     });
 
     expect(result.status).toBe("completed");
-    const inventory = events.find(
-      (event) => event.event.type === "capability.inventory",
-    );
+    const inventory = events.find((event) => event.event.type === "capability.inventory");
     expect(inventory?.event.type).toBe("capability.inventory");
     if (inventory?.event.type === "capability.inventory") {
       expect(inventory.event.mode).toBe("shadow");
-      expect(inventory.event.suggestedToolCount).toBeLessThanOrEqual(
-        inventory.event.fullToolCount,
-      );
+      expect(inventory.event.suggestedToolCount).toBeLessThanOrEqual(inventory.event.fullToolCount);
       // null explicitly restores the full provider schema.
       expect(exposedTools).toBeLessThanOrEqual(inventory.event.fullToolCount);
       expect(exposedTools).toBeGreaterThan(0);
     }
-    const selection = events.find(
-      (event) => event.event.type === "capability.selection",
-    );
+    const selection = events.find((event) => event.event.type === "capability.selection");
     expect(selection?.event.type).toBe("capability.selection");
     if (selection?.event.type === "capability.selection") {
       expect(selection.event.actualTools).toEqual(["workspace.list_dir"]);
@@ -608,13 +544,9 @@ describe("AgentOrchestrator", () => {
         async complete(messages) {
           calls += 1;
           if (calls === 1) {
-            const system = messages.find(
-              (message) => message.role === "system",
-            );
+            const system = messages.find((message) => message.role === "system");
             expect(system?.content).toContain("<project-guidance");
-            expect(system?.content).toContain(
-              'instruction_authority="task_guidance_only"',
-            );
+            expect(system?.content).toContain('instruction_authority="task_guidance_only"');
             expect(system?.content).toContain('permission_authority="none"');
             return {
               text: '{"tool":"workspace.read_file","args":{"path":"note.txt"}}',
@@ -622,8 +554,7 @@ describe("AgentOrchestrator", () => {
           }
           const result = messages.find(
             (message) =>
-              message.role === "user" &&
-              message.content.startsWith("[Tool workspace.read_file"),
+              message.role === "user" && message.content.startsWith("[Tool workspace.read_file"),
           );
           expect(result?.content).toContain("[Observation Provenance v1]");
           expect(result?.content).toContain("source=workspace");
@@ -647,9 +578,7 @@ describe("AgentOrchestrator", () => {
     });
 
     expect(result.status).toBe("completed");
-    const toolResult = events.find(
-      (event) => event.event.type === "tool.result",
-    );
+    const toolResult = events.find((event) => event.event.type === "tool.result");
     expect(toolResult?.event.type).toBe("tool.result");
     if (toolResult?.event.type === "tool.result") {
       expect(toolResult.event.provenance?.source).toBe("workspace");
@@ -716,9 +645,7 @@ describe("AgentOrchestrator", () => {
     if (tr?.event.type === "tool.result") {
       expect(tr.event.detail ?? tr.event.summary).toMatch(/bytes|written/i);
     }
-    expect(readFileSync(path.join(dir, "hello.txt"), "utf8")).toBe(
-      "hello world",
-    );
+    expect(readFileSync(path.join(dir, "hello.txt"), "utf8")).toBe("hello world");
   });
 
   test("last-turn plain text after tools is incomplete (no soft-complete)", async () => {
@@ -854,11 +781,7 @@ describe("AgentOrchestrator", () => {
     expect(r.status).toBe("completed");
     expect(r.message).toBe("Shipped.");
     expect(
-      events.some(
-        (e) =>
-          e.event.type === "agent.action" &&
-          e.event.action.type === "final_answer",
-      ),
+      events.some((e) => e.event.type === "agent.action" && e.event.action.type === "final_answer"),
     ).toBe(true);
   });
 
@@ -904,16 +827,12 @@ describe("AgentOrchestrator", () => {
             };
           }
           const packageMessage = messages.find(
-            (message) =>
-              message.role === "user" &&
-              message.content.startsWith("[Host State v1]"),
+            (message) => message.role === "user" && message.content.startsWith("[Host State v1]"),
           );
           expect(packageMessage?.content).toContain("Mutation revision: 1");
           expect(packageMessage?.content).toContain("Verification: missing");
           expect(
-            messages.some((message) =>
-              message.content.includes("[Convergence checkpoint]"),
-            ),
+            messages.some((message) => message.content.includes("[Convergence checkpoint]")),
           ).toBe(true);
           return {
             text: '{"action":"final_answer","summary":"Done. [skip_verify: fixture]"}',
@@ -953,9 +872,7 @@ describe("AgentOrchestrator", () => {
             };
           }
           expect(
-            messages.some((message) =>
-              message.content.includes("[Implementation checkpoint]"),
-            ),
+            messages.some((message) => message.content.includes("[Implementation checkpoint]")),
           ).toBe(true);
           return {
             text: '{"action":"final_answer","summary":"Evidence gathered."}',
@@ -976,15 +893,7 @@ describe("AgentOrchestrator", () => {
 
   test("repeat-loop guidance is advisory and preserves the task budget", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-loop-policy-"));
-    for (const file of [
-      "a.txt",
-      "b.txt",
-      "c.txt",
-      "d.txt",
-      "e.txt",
-      "f.txt",
-      "g.txt",
-    ]) {
+    for (const file of ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt", "g.txt"]) {
       writeFileSync(path.join(dir, file), file);
     }
     let calls = 0;
@@ -1042,9 +951,7 @@ describe("AgentOrchestrator", () => {
     expect(
       events
         .filter((event) => event.event.type === "tool.call")
-        .map((event) =>
-          event.event.type === "tool.call" ? event.event.tool : "",
-        ),
+        .map((event) => (event.event.type === "tool.call" ? event.event.tool : "")),
     ).toEqual([
       "workspace.read_file",
       "workspace.read_file",
@@ -1054,8 +961,7 @@ describe("AgentOrchestrator", () => {
     expect(
       events.find(
         (event) =>
-          event.event.type === "tool.result" &&
-          event.event.tool === "workspace.write_file",
+          event.event.type === "tool.result" && event.event.tool === "workspace.write_file",
       ),
     ).toMatchObject({ event: { ok: true } });
     expect(sawRepeatReminder).toBe(true);
@@ -1277,14 +1183,11 @@ describe("AgentOrchestrator", () => {
               text: '{"action":"acceptance_update","reason":"visible regression","add":[{"text":"Keep legacy output","source":"repository","ref":"tests/test_cli.py::test_simple"}],"updates":[]}',
             };
           }
-          const lastUser = messages
-            .filter((message) => message.role === "user")
-            .at(-1);
+          const lastUser = messages.filter((message) => message.role === "user").at(-1);
           expect(
             messages.filter(
               (message) =>
-                message.role === "user" &&
-                message.content.startsWith("Acceptance ledger updated:"),
+                message.role === "user" && message.content.startsWith("Acceptance ledger updated:"),
             ),
           ).toHaveLength(0);
           if (calls === 2) {
@@ -1406,8 +1309,7 @@ describe("AgentOrchestrator", () => {
     expect(
       events.filter(
         (event) =>
-          event.event.type === "tool.call" &&
-          event.event.tool === "workspace.acceptance_update",
+          event.event.type === "tool.call" && event.event.tool === "workspace.acceptance_update",
       ),
     ).toHaveLength(2);
   });
@@ -1575,9 +1477,7 @@ describe("AgentOrchestrator", () => {
             expect(lastUser?.content).toContain('"workflow_id":"snap-run"');
             expect(lastUser?.content).toContain("plan-001");
             expect(
-              userMsgs.filter((message) =>
-                message.content.startsWith("Plan updated:"),
-              ),
+              userMsgs.filter((message) => message.content.startsWith("Plan updated:")),
             ).toHaveLength(0);
           }
           if (calls === 1) {
@@ -1723,9 +1623,7 @@ describe("AgentOrchestrator", () => {
         label: "plan-resume-second",
         async complete(messages) {
           resumedRequest =
-            messages.find((message) =>
-              message.content.includes("[Plan Snapshot]"),
-            )?.content ?? "";
+            messages.find((message) => message.content.includes("[Plan Snapshot]"))?.content ?? "";
           return { text: '{"action":"final_answer","summary":"done"}' };
         },
       },
@@ -1882,9 +1780,7 @@ describe("AgentOrchestrator", () => {
     const result = await o.run({
       runId: "ask-unresolved",
       goal: "x",
-      workspaceRoot: mkdtempSync(
-        path.join(tmpdir(), "paw-orch-ask-unresolved-"),
-      ),
+      workspaceRoot: mkdtempSync(path.join(tmpdir(), "paw-orch-ask-unresolved-")),
       maxSteps: 2,
     });
     expect(result).toMatchObject({
@@ -2005,22 +1901,17 @@ describe("AgentOrchestrator", () => {
     });
     expect(result.status).toBe("completed");
     expect(liveThinking).toBe(2_000);
-    expect(saved.some((event) => event.event.type === "model.thinking")).toBe(
-      false,
-    );
+    expect(saved.some((event) => event.event.type === "model.thinking")).toBe(false);
     const done = saved.filter((event) => event.event.type === "model.done");
     expect(done).toHaveLength(1);
-    expect(
-      done[0]?.event.type === "model.done" && done[0].event.thinking,
-    ).toHaveLength(2_000);
+    expect(done[0]?.event.type === "model.done" && done[0].event.thinking).toHaveLength(2_000);
     expect(report?.diagnostics.length).toBeLessThan(100);
     expect(JSON.stringify(report).length).toBeLessThan(100_000);
   });
 
   test("keeps thinking in model.done audit but out of the next model request", async () => {
     const saved: RunEventEnvelope[] = [];
-    const seenRequests: Array<readonly import("@paw/models").ChatMessage[]> =
-      [];
+    const seenRequests: Array<readonly import("@paw/models").ChatMessage[]> = [];
     const dir = mkdtempSync(path.join(tmpdir(), "paw-orch-thinking-audit-"));
     writeFileSync(path.join(dir, "note.txt"), "audit boundary");
     let calls = 0;
@@ -2117,9 +2008,7 @@ describe("AgentOrchestrator", () => {
     if (tr?.event.type === "tool.result") {
       expect(tr.event.tool).toBe("workspace.run_shell");
       expect(tr.event.ok).toBe(true);
-      expect(tr.event.detail ?? tr.event.summary).toMatch(
-        /paw-orch-shell|exit/s,
-      );
+      expect(tr.event.detail ?? tr.event.summary).toMatch(/paw-orch-shell|exit/s);
     }
   });
 
@@ -2490,10 +2379,7 @@ describe("AgentOrchestrator", () => {
     if (process.platform === "win32") {
       const toolDir = path.join(dir, "tools with spaces");
       mkdirSync(toolDir);
-      writeFileSync(
-        path.join(toolDir, "bun.cmd"),
-        `@"${process.execPath}" %*\r\n`,
-      );
+      writeFileSync(path.join(toolDir, "bun.cmd"), `@"${process.execPath}" %*\r\n`);
     }
     for (const args of [
       ["init"],
@@ -2584,9 +2470,7 @@ describe("AgentOrchestrator", () => {
       outcome: "passed",
     });
     expect(
-      result.evidence?.commandsRun.some(
-        (entry) => entry.command === "python -m pytest --version",
-      ),
+      result.evidence?.commandsRun.some((entry) => entry.command === "python -m pytest --version"),
     ).toBe(true);
     expect(calls).toBe(5);
   });
@@ -2602,10 +2486,7 @@ describe("AgentOrchestrator", () => {
       path.join(dir, "display-helper.js"),
       'process.stdin.resume(); process.stdin.on("end", () => console.log("display complete"));\n',
     );
-    writeFileSync(
-      path.join(dir, "passing-verify-test.js"),
-      'console.log("1 test passed");\n',
-    );
+    writeFileSync(path.join(dir, "passing-verify-test.js"), 'console.log("1 test passed");\n');
     for (const args of [
       ["init"],
       ["config", "user.email", "paw-test@example.invalid"],
@@ -2621,8 +2502,7 @@ describe("AgentOrchestrator", () => {
       expect(git.exitCode).toBe(0);
     }
 
-    const maskedCommand =
-      "node failing-verify-test.js | node display-helper.js";
+    const maskedCommand = "node failing-verify-test.js | node display-helper.js";
     const directCommand = "node passing-verify-test.js";
     let calls = 0;
     const orchestrator = new AgentOrchestrator({
@@ -2891,12 +2771,8 @@ describe("AgentOrchestrator", () => {
     expect(r.status).toBe("completed");
     const results = events.filter((e) => e.event.type === "tool.result");
     expect(results.length).toBe(2);
-    const okResults = results.filter(
-      (e) => e.event.type === "tool.result" && e.event.ok,
-    );
-    const failResults = results.filter(
-      (e) => e.event.type === "tool.result" && !e.event.ok,
-    );
+    const okResults = results.filter((e) => e.event.type === "tool.result" && e.event.ok);
+    const failResults = results.filter((e) => e.event.type === "tool.result" && !e.event.ok);
     expect(okResults.length).toBe(1);
     expect(failResults.length).toBe(1);
   });
@@ -2918,9 +2794,7 @@ describe("AgentOrchestrator streaming shell", () => {
       maxSteps: 8,
     });
     expect(r.status).toBe("completed");
-    const chunkEvents = events.filter(
-      (e) => e.event.type === "tool.result.chunk",
-    );
+    const chunkEvents = events.filter((e) => e.event.type === "tool.result.chunk");
     expect(chunkEvents.length).toBeGreaterThan(0);
     const firstChunk = chunkEvents[0];
     if (firstChunk?.event.type === "tool.result.chunk") {

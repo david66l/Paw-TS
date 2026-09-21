@@ -60,8 +60,7 @@ function fixture() {
     ]),
   });
   const slot = slots[0] as MemoryStateSlotSpecV2;
-  const content =
-    "My old home was Rome. My current home is Paris. My sister lives in Berlin.";
+  const content = "My old home was Rome. My current home is Paris. My sister lives in Berlin.";
   const sourceLock = compileMemoryStateSourceLockV2([
     {
       sourceId: "source-1",
@@ -139,20 +138,14 @@ describe("host-compiled state binding certificate v1", () => {
       PAW_MEMORY_STATE_BINDING_CERTIFICATE_POLICY_V1,
     );
     expect(candidate.certificate.slotBinding.slotId).toBe(slot.slotId);
-    expect(candidate.certificate.claimBinding.supportSpan.text).toBe(
-      "My current home is Paris.",
-    );
+    expect(candidate.certificate.claimBinding.supportSpan.text).toBe("My current home is Paris.");
     expect(candidate.certificate.claimBinding.subject).toEqual({
       referent: "query_user",
       basis: "speaker_deictic",
     });
-    expect(candidate.certificate.claimBinding.value.exactSpans[0]?.text).toBe(
-      "Paris",
-    );
+    expect(candidate.certificate.claimBinding.value.exactSpans[0]?.text).toBe("Paris");
     expect(candidate.certificate.semanticAttestation.decision).toBe("accepted");
-    expect(validateMemoryStateBindingCertificateV1(candidate, input)).toBe(
-      candidate,
-    );
+    expect(validateMemoryStateBindingCertificateV1(candidate, input)).toBe(candidate);
   });
 
   test("fails closed when a caller tampers with a host-derived claim field", async () => {
@@ -177,9 +170,9 @@ describe("host-compiled state binding certificate v1", () => {
         },
       },
     };
-    expect(() =>
-      validateMemoryStateBindingCertificateV1(tampered, input),
-    ).toThrow("MemoryStateBindingCertificateBoundaryInvalid");
+    expect(() => validateMemoryStateBindingCertificateV1(tampered, input)).toThrow(
+      "MemoryStateBindingCertificateBoundaryInvalid",
+    );
   });
 
   test("rejects incomplete or overlapping verifier partitions", () => {
@@ -199,9 +192,7 @@ describe("host-compiled state binding certificate v1", () => {
 
   test("projects subject, exact value offsets, and only the local supporting sentence to the verifier", () => {
     const data = fixture();
-    const request = buildMemoryStateObservationVerificationRequestV2(
-      data.verificationInput,
-    );
+    const request = buildMemoryStateObservationVerificationRequestV2(data.verificationInput);
     const payload = JSON.parse(request.user) as {
       observations: readonly Readonly<{
         typedClaim: Readonly<{
@@ -298,8 +289,7 @@ describe("host-compiled state binding certificate v1", () => {
       sourceLock,
       proposedObservations: [oldObservation, newObservation],
     };
-    const request =
-      buildMemoryStateObservationVerificationRequestV2(verificationInput);
+    const request = buildMemoryStateObservationVerificationRequestV2(verificationInput);
     const payload = JSON.parse(request.user) as {
       observations: readonly Readonly<{
         typedClaim: Readonly<{
@@ -343,9 +333,7 @@ describe("host-compiled state binding certificate v1", () => {
       ...verificationInput,
       verification,
     });
-    expect(
-      validated[1]?.certificate.claimBinding.lifecycle.target,
-    ).toMatchObject({
+    expect(validated[1]?.certificate.claimBinding.lifecycle.target).toMatchObject({
       observationId: oldObservation.observationId,
       bindingRevision: oldObservation.bindingRevision,
       slotId: slot.slotId,

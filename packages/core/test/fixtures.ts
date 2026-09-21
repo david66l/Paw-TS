@@ -4,9 +4,7 @@
 
 import type { LegacyMemoryRecordV1 } from "@paw/protocol";
 
-export function makeRecord(
-  overrides: Partial<LegacyMemoryRecordV1> = {},
-): LegacyMemoryRecordV1 {
+export function makeRecord(overrides: Partial<LegacyMemoryRecordV1> = {}): LegacyMemoryRecordV1 {
   return {
     id: "test",
     source: "auto",

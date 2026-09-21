@@ -14,21 +14,10 @@ export function desktopFileChanges(
   const rows = Array.isArray(value.results) ? value.results : [value];
   return rows.flatMap((raw) => {
     const row = record(raw);
-    if (
-      row.ok === false ||
-      row.changed === false ||
-      typeof row.path !== "string"
-    )
-      return [];
-    if (
-      typeof row.linesAdded !== "number" &&
-      typeof row.linesRemoved !== "number"
-    )
-      return [];
+    if (row.ok === false || row.changed === false || typeof row.path !== "string") return [];
+    if (typeof row.linesAdded !== "number" && typeof row.linesRemoved !== "number") return [];
     const file = (
-      path.isAbsolute(row.path)
-        ? path.relative(workspaceRoot, row.path)
-        : row.path
+      path.isAbsolute(row.path) ? path.relative(workspaceRoot, row.path) : row.path
     ).replace(/\\/g, "/");
     const patch = record(args).patch;
     let diff = typeof row.diff === "string" ? row.diff : undefined;
@@ -36,9 +25,7 @@ export function desktopFileChanges(
       const sections = patch.split(/(?=^--- )/m);
       diff = sections.find((section) => {
         const headers = [...section.matchAll(/^(?:---|\+\+\+) (.+)$/gm)];
-        return headers.some(
-          (match) => match[1]?.trim().replace(/^[ab]\//, "") === file,
-        );
+        return headers.some((match) => match[1]?.trim().replace(/^[ab]\//, "") === file);
       });
     }
     return [

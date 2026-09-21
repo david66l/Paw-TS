@@ -22,20 +22,13 @@ import type {
 } from "./atom-extractor.js";
 import type { MemoryAtomWriterStoreV1 } from "./atom-store.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 import type {
   MemoryRawEvidenceArchiveInputV1,
   MemoryRawEvidenceArchiveV1,
 } from "./raw-evidence-archive.js";
 
-export type MemoryWriterTerminalOutcomeV1 =
-  | "completed"
-  | "failed"
-  | "incomplete"
-  | "cancelled";
+export type MemoryWriterTerminalOutcomeV1 = "completed" | "failed" | "incomplete" | "cancelled";
 
 export type MemoryWriterEventTypeV1 =
   | "claim"
@@ -94,9 +87,7 @@ export interface MemoryWriterControllerOptionsV1 {
   readonly now?: () => number;
   readonly onEvent?: (event: MemoryWriterEventV1) => void;
   /** Frozen by the product manifest; rechecked before applying staged writes. */
-  readonly sourceAdmission?: (
-    snapshot: SessionInputSnapshot<InputFactV1>,
-  ) => ReadonlySet<number>;
+  readonly sourceAdmission?: (snapshot: SessionInputSnapshot<InputFactV1>) => ReadonlySet<number>;
   /** Host-supplied separation of a current user statement from imported context. */
   readonly userInputContent?: (content: string) => string;
 }
@@ -105,10 +96,7 @@ export function createMemoryWriterControllerV1(
   options: MemoryWriterControllerOptionsV1,
 ): MemoryWriterControllerV1 {
   if (!options.runId.trim()) throw new Error("Memory writer runId is invalid");
-  if (
-    !options.extractor?.extract ||
-    !options.extractor.extractorVersion.trim()
-  ) {
+  if (!options.extractor?.extract || !options.extractor.extractorVersion.trim()) {
     throw new Error("Memory writer extractor is invalid");
   }
   if (!options.store?.recall || !options.store.apply) {
@@ -126,11 +114,7 @@ export function createMemoryWriterControllerV1(
   if (!Number.isSafeInteger(maxAtoms) || maxAtoms < 1 || maxAtoms > 16) {
     throw new Error("Memory writer maxAtoms is invalid");
   }
-  if (
-    !Number.isSafeInteger(maxSourceChars) ||
-    maxSourceChars < 1_024 ||
-    maxSourceChars > 128_000
-  ) {
+  if (!Number.isSafeInteger(maxSourceChars) || maxSourceChars < 1_024 || maxSourceChars > 128_000) {
     throw new Error("Memory writer maxSourceChars is invalid");
   }
 
@@ -150,9 +134,7 @@ export function createMemoryWriterControllerV1(
                 snapshot: admitted
                   ? {
                       ...snapshot,
-                      entries: snapshot.entries.filter((entry) =>
-                        admitted.has(entry.seq),
-                      ),
+                      entries: snapshot.entries.filter((entry) => admitted.has(entry.seq)),
                     }
                   : snapshot,
                 runId: options.runId,
@@ -187,9 +169,7 @@ export function createMemoryWriterControllerV1(
       if (options.signal.aborted) return undefined;
 
       const snapshot = await readSnapshot();
-      const retry = options.retryFailedUnstaged
-        ? retryableMemorySource(snapshot)
-        : undefined;
+      const retry = options.retryFailedUnstaged ? retryableMemorySource(snapshot) : undefined;
       const source = projectMemoryWriteSourceV1(
         snapshot,
         outcome,
@@ -217,11 +197,8 @@ export function createMemoryWriterControllerV1(
         sourceInputHash: source.sourceInputHash,
         policyVersion: MEMORY_WRITE_POLICY_VERSION_V1,
         extractorVersion: options.extractor.extractorVersion,
-        conflictResolverVersion:
-          options.conflictResolver?.resolverVersion ?? "not_configured",
-        ...(retry
-          ? { retryOf: retry.claim.writeId, attempt: retry.attempt }
-          : {}),
+        conflictResolverVersion: options.conflictResolver?.resolverVersion ?? "not_configured",
+        ...(retry ? { retryOf: retry.claim.writeId, attempt: retry.attempt } : {}),
       } as JsonValue);
       const claimedAt = now();
       const claim: MemoryWriteClaimedFactV1 = Object.freeze({
@@ -269,18 +246,13 @@ export function createMemoryWriterControllerV1(
           conflicts,
           maxAtoms,
         });
-        const extractedAtoms = await options.extractor.extract(
-          extractionInput,
-          options.signal,
-        );
+        const extractedAtoms = await options.extractor.extract(extractionInput, options.signal);
         const reconciliationStart = now();
         const reconciliation = await reconcileMemoryAtomsV1({
           atoms: extractedAtoms,
           seedCandidates: conflicts,
           store: options.store,
-          ...(options.conflictResolver === undefined
-            ? {}
-            : { resolver: options.conflictResolver }),
+          ...(options.conflictResolver === undefined ? {} : { resolver: options.conflictResolver }),
           observedAt: new Date(claimedAt).toISOString(),
           signal: options.signal,
         });
@@ -358,9 +330,7 @@ function retryableMemorySource(snapshot: SessionInputSnapshot<InputFactV1>) {
   );
   const settlements = new Map(
     snapshot.entries.flatMap(({ fact }) =>
-      fact.type === "memory.write_settled"
-        ? [[fact.writeId, fact] as const]
-        : [],
+      fact.type === "memory.write_settled" ? [[fact.writeId, fact] as const] : [],
     ),
   );
   const staged = new Set(
@@ -378,17 +348,12 @@ function retryableMemorySource(snapshot: SessionInputSnapshot<InputFactV1>) {
     );
     if (
       attempts.length >= 3 ||
-      attempts.some(
-        (attempt) =>
-          staged.has(attempt.writeId) || !settlements.has(attempt.writeId),
-      )
+      attempts.some((attempt) => staged.has(attempt.writeId) || !settlements.has(attempt.writeId))
     )
       continue;
     if (
       attempts.every((attempt) =>
-        ["failed", "interrupted"].includes(
-          settlements.get(attempt.writeId)!.status,
-        ),
+        ["failed", "interrupted"].includes(settlements.get(attempt.writeId)!.status),
       )
     )
       return { claim, attempt: attempts.length + 1 };
@@ -415,16 +380,13 @@ export function projectMemoryWriteSourceV1(
   | undefined {
   const lastThrough = snapshot.entries.reduce(
     (max, entry) =>
-      entry.fact.type === "memory.write_claimed"
-        ? Math.max(max, entry.fact.sourceThroughSeq)
-        : max,
+      entry.fact.type === "memory.write_claimed" ? Math.max(max, entry.fact.sourceThroughSeq) : max,
     0,
   );
   const sourceEntries = snapshot.entries.filter(
     (entry) =>
       (sourceRange
-        ? entry.seq >= sourceRange.sourceFromSeq &&
-          entry.seq <= sourceRange.sourceThroughSeq
+        ? entry.seq >= sourceRange.sourceFromSeq && entry.seq <= sourceRange.sourceThroughSeq
         : entry.seq > lastThrough) && !entry.fact.type.startsWith("memory."),
   );
   const [firstSourceEntry] = sourceEntries;
@@ -450,16 +412,12 @@ export function projectMemoryWriteSourceV1(
   const explicit = projected.some(
     (item) => item.kind === "user_input" && explicitMemorySignal(item.content),
   );
-  const hasVerification = projected.some(
-    (item) => item.kind === "verification",
-  );
+  const hasVerification = projected.some((item) => item.kind === "verification");
   const hasMutationEvidence = sourceEntries.some(
     (entry) => entry.fact.type === "tool.effect_checkpoint_allocated",
   );
   const verifiedTerminal =
-    outcome === "completed" &&
-    hasVerification &&
-    (admitted !== undefined || hasMutationEvidence);
+    outcome === "completed" && hasVerification && (admitted !== undefined || hasMutationEvidence);
   if (!explicit && !verifiedTerminal) return undefined;
 
   const boundedItems: MemoryWriterSourceItemV1[] = [];
@@ -481,9 +439,7 @@ export function projectMemoryWriteSourceV1(
     trigger: explicit
       ? "explicit_user_request"
       : snapshot.entries.some(
-            (entry) =>
-              entry.seq >= sourceFromSeq &&
-              entry.fact.type === "work.segment_started",
+            (entry) => entry.seq >= sourceFromSeq && entry.fact.type === "work.segment_started",
           )
         ? "work_segment_terminal"
         : "task_terminal",
@@ -507,16 +463,13 @@ async function recoverUnsettledWriteV1(input: {
   readonly now: () => number;
 }): Promise<MemoryWriteSettledFactV1 | undefined> {
   const snapshot = await input.readSnapshot();
-  const claims = snapshot.entries.filter(
-    (entry) => entry.fact.type === "memory.write_claimed",
-  );
+  const claims = snapshot.entries.filter((entry) => entry.fact.type === "memory.write_claimed");
   for (const entry of claims) {
     if (entry.fact.type !== "memory.write_claimed") continue;
     const claim = entry.fact;
     const settled = snapshot.entries.some(
       (candidate) =>
-        candidate.fact.type === "memory.write_settled" &&
-        candidate.fact.writeId === claim.writeId,
+        candidate.fact.type === "memory.write_settled" && candidate.fact.writeId === claim.writeId,
     );
     if (settled) continue;
     const stagedEntry = snapshot.entries.find(
@@ -562,9 +515,7 @@ async function applyStagedWriteV1(input: {
     if (input.options.sourceAdmission) {
       const snapshot = await input.readSnapshot();
       const admitted = input.options.sourceAdmission(snapshot);
-      const kinds = new Map(
-        snapshot.entries.map((entry) => [entry.seq, entry.fact.type]),
-      );
+      const kinds = new Map(snapshot.entries.map((entry) => [entry.seq, entry.fact.type]));
       if (
         input.staged.atoms.some(
           (atom) =>
@@ -766,19 +717,14 @@ async function settleWithoutStageV1(input: {
 
 async function commitUniqueMemoryFactV1(input: {
   readonly initialSnapshot: SessionInputSnapshot<InputFactV1>;
-  readonly fact:
-    | MemoryWriteClaimedFactV1
-    | MemoryCandidateStagedFactV1
-    | MemoryWriteSettledFactV1;
+  readonly fact: MemoryWriteClaimedFactV1 | MemoryCandidateStagedFactV1 | MemoryWriteSettledFactV1;
   readonly readSnapshot: () => Promise<SessionInputSnapshot<InputFactV1>>;
   readonly commitFacts: MemoryWriterControllerOptionsV1["session"]["commitInputFacts"];
 }): Promise<boolean> {
   let snapshot = input.initialSnapshot;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     if (hasEquivalentMemoryFact(snapshot, input.fact)) return false;
-    if (
-      (await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed"
-    ) {
+    if ((await input.commitFacts(snapshot.tailSeq, [input.fact])) === "committed") {
       return true;
     }
     snapshot = await input.readSnapshot();
@@ -788,23 +734,14 @@ async function commitUniqueMemoryFactV1(input: {
 
 function hasEquivalentMemoryFact(
   snapshot: SessionInputSnapshot<InputFactV1>,
-  fact:
-    | MemoryWriteClaimedFactV1
-    | MemoryCandidateStagedFactV1
-    | MemoryWriteSettledFactV1,
+  fact: MemoryWriteClaimedFactV1 | MemoryCandidateStagedFactV1 | MemoryWriteSettledFactV1,
 ): boolean {
   return snapshot.entries.some((entry) => {
     if (entry.fact.type !== fact.type) return false;
-    if (
-      entry.fact.type === "memory.write_claimed" &&
-      fact.type === "memory.write_claimed"
-    ) {
+    if (entry.fact.type === "memory.write_claimed" && fact.type === "memory.write_claimed") {
       return entry.fact.writeId === fact.writeId;
     }
-    if (
-      entry.fact.type === "memory.candidate_staged" &&
-      fact.type === "memory.candidate_staged"
-    ) {
+    if (entry.fact.type === "memory.candidate_staged" && fact.type === "memory.candidate_staged") {
       return entry.fact.writeId === fact.writeId;
     }
     return (
@@ -823,11 +760,7 @@ function projectSourceItem(
   userInputContent?: (content: string) => string,
 ): MemoryWriterSourceItemV1 | undefined {
   if (fact.type === "input.promoted") {
-    return sanitizedSourceItem(
-      seq,
-      "user_input",
-      userInputContent?.(fact.content) ?? fact.content,
-    );
+    return sanitizedSourceItem(seq, "user_input", userInputContent?.(fact.content) ?? fact.content);
   }
   const assistant = assistantSourceItem(seq, fact, 1_600);
   if (assistant) return assistant;
@@ -866,11 +799,7 @@ function projectArchiveSourceItem(
   userInputContent?: (content: string) => string,
 ): MemoryWriterSourceItemV1 | undefined {
   if (fact.type === "input.promoted") {
-    return sanitizedSourceItem(
-      seq,
-      "user_input",
-      userInputContent?.(fact.content) ?? fact.content,
-    );
+    return sanitizedSourceItem(seq, "user_input", userInputContent?.(fact.content) ?? fact.content);
   }
   const assistant = assistantSourceItem(seq, fact, 8_192);
   if (assistant) return assistant;
@@ -927,11 +856,7 @@ function assistantSourceItem(
   try {
     const response = parseModelResponseV1(fact.response.value);
     if (!response.assistantContent.trim()) return undefined;
-    const sanitized = sanitizedSourceItem(
-      seq,
-      "assistant_output",
-      response.assistantContent,
-    );
+    const sanitized = sanitizedSourceItem(seq, "assistant_output", response.assistantContent);
     return Object.freeze({
       ...sanitized,
       content: compactAssistantContext(sanitized.content, maxChars),
@@ -949,10 +874,7 @@ function compactAssistantContext(content: string, maxChars: number): string {
   return `${content.slice(0, headChars)}${marker}${content.slice(-tailChars)}`;
 }
 
-function assertExactScope(
-  actual: PawNextMemoryScopeV1,
-  expected: PawNextMemoryScopeV1,
-): void {
+function assertExactScope(actual: PawNextMemoryScopeV1, expected: PawNextMemoryScopeV1): void {
   if (
     actual.tenantId !== expected.tenantId ||
     actual.userId !== expected.userId ||
@@ -970,11 +892,7 @@ function sanitizedSourceItem(
 ): MemoryWriterSourceItemV1 {
   const scan = scanForSecrets(content);
   const safe =
-    scan.action === "reject"
-      ? "[SECRET_BLOCKED]"
-      : scan.action === "redact"
-        ? scan.text
-        : content;
+    scan.action === "reject" ? "[SECRET_BLOCKED]" : scan.action === "redact" ? scan.text : content;
   return Object.freeze({ seq, kind, content: safe.slice(0, 8_192) });
 }
 
@@ -987,8 +905,7 @@ function explicitMemorySignal(text: string): boolean {
 function stableReasonCode(error: unknown): string {
   const name = error instanceof Error ? error.name : "Unknown";
   return (
-    `MemoryWriter_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160) ||
-    "MemoryWriter_Unknown"
+    `MemoryWriter_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160) || "MemoryWriter_Unknown"
   );
 }
 

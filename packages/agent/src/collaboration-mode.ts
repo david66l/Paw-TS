@@ -6,10 +6,7 @@
  * orchestrated: 狸花 + 花名册调度（显式 /team 或 settings）。
  */
 
-import {
-  DEFAULT_LIFECYCLE_BUDGET,
-  type LifecycleBudget,
-} from "./lifecycle/budget.js";
+import { DEFAULT_LIFECYCLE_BUDGET, type LifecycleBudget } from "./lifecycle/budget.js";
 
 export type CollaborationMode = "coding" | "orchestrated";
 
@@ -68,9 +65,7 @@ export function resolveCollaborationMode(input: {
   readonly rootAgentId?: string;
   readonly settings?: Record<string, unknown>;
 }): ResolvedCollaboration {
-  const fromSettings = parseMode(
-    input.settings?.agent_mode ?? input.settings?.collaboration_mode,
-  );
+  const fromSettings = parseMode(input.settings?.agent_mode ?? input.settings?.collaboration_mode);
   const mode: CollaborationMode =
     input.collaborationMode ??
     fromSettings ??

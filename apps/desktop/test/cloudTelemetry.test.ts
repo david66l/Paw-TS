@@ -25,9 +25,7 @@ afterEach(async () => {
   for (const trace of traces.splice(0)) trace.finish("interrupted");
   for (const provider of providers.splice(0)) await provider.shutdown();
   for (const root of roots.splice(0)) {
-    if (
-      !path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-cloud-test-"))
-    )
+    if (!path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-cloud-test-")))
       throw new Error("Unsafe fixture path");
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -42,11 +40,7 @@ function fixture() {
   traces.push(monitor);
   return { monitor, exporter, provider };
 }
-function fact(
-  runId: string,
-  seq: number,
-  fact: InputFactV1,
-): RunJournalEnvelopeV1 {
+function fact(runId: string, seq: number, fact: InputFactV1): RunJournalEnvelopeV1 {
   return {
     schemaVersion: 1,
     sessionId: "private-session",
@@ -71,13 +65,9 @@ test("cloud config is opt-in, validates HTTPS and credentials, and bounds sampli
     "https://user:pass@cloud.langfuse.com",
     "https://cloud.langfuse.com/?key=secret",
   ]) {
-    expect(() =>
-      cloudTelemetryConfig({ ...valid, LANGFUSE_BASE_URL: url }),
-    ).toThrow();
+    expect(() => cloudTelemetryConfig({ ...valid, LANGFUSE_BASE_URL: url })).toThrow();
   }
-  expect(() =>
-    cloudTelemetryConfig({ ...valid, PAW_TELEMETRY_SAMPLE_RATE: "1.5" }),
-  ).toThrow();
+  expect(() => cloudTelemetryConfig({ ...valid, PAW_TELEMETRY_SAMPLE_RATE: "1.5" })).toThrow();
 });
 
 test("cloud timeline links model generations, attempts, tools and child runs without private payloads", async () => {
@@ -109,8 +99,7 @@ test("cloud timeline links model generations, attempts, tools and child runs wit
     reasoningEffort: "max",
   });
   response?.event({ type: "headers", status: 200 });
-  for (let i = 0; i < 10_000; i++)
-    response?.event({ type: "delta", kind: "thinking", count: 5 });
+  for (let i = 0; i < 10_000; i++) response?.event({ type: "delta", kind: "thinking", count: 5 });
   monitor.heartbeat();
   response?.event({ type: "tool_assembled" });
   response?.event({
@@ -160,17 +149,13 @@ test("cloud timeline links model generations, attempts, tools and child runs wit
   expect(new Set(spans.map((s) => s.spanContext().traceId)).size).toBe(1);
   const turn = spans.find((s) => s.name === "model.turn");
   const generation = spans.find((s) => s.name === "model.generation");
-  expect(generation?.parentSpanContext?.spanId).toBe(
+  expect(generation?.parentSpanContext?.spanId).toBe(turn?.spanContext().spanId);
+  expect(spans.find((s) => s.name === "tool.read_file")?.parentSpanContext?.spanId).toBe(
     turn?.spanContext().spanId,
   );
-  expect(
-    spans.find((s) => s.name === "tool.read_file")?.parentSpanContext?.spanId,
-  ).toBe(turn?.spanContext().spanId);
   expect(generation?.attributes["paw.thinking_chars"]).toBe(50_000);
   expect(spans.filter((s) => s.name === "provider.request")).toHaveLength(2);
-  expect(spans.filter((s) => s.name === "model.first_thinking")).toHaveLength(
-    1,
-  );
+  expect(spans.filter((s) => s.name === "model.first_thinking")).toHaveLength(1);
   expect(spans.length).toBeLessThan(25);
   expect(
     JSON.stringify(
@@ -185,24 +170,19 @@ test("cloud timeline links model generations, attempts, tools and child runs wit
 
 test("active observations are bounded and cancelled calls close without fabricating usage", () => {
   const { monitor, exporter } = fixture();
-  const opened = Array.from({ length: 200 }, () =>
-    monitor.start({ model: "glm-5.3-flash" }),
-  );
+  const opened = Array.from({ length: 200 }, () => monitor.start({ model: "glm-5.3-flash" }));
   expect(opened.filter(Boolean)).toHaveLength(128);
   opened[0]?.end("cancelled");
   monitor.finish("cancelled");
-  const generations = exporter
-    .getFinishedSpans()
-    .filter((s) => s.name === "model.generation");
+  const generations = exporter.getFinishedSpans().filter((s) => s.name === "model.generation");
   expect(generations).toHaveLength(128);
+  expect(generations.every((s) => s.attributes["gen_ai.usage.output_tokens"] === undefined)).toBe(
+    true,
+  );
   expect(
-    generations.every(
-      (s) => s.attributes["gen_ai.usage.output_tokens"] === undefined,
-    ),
-  ).toBe(true);
-  expect(
-    exporter.getFinishedSpans().find((s) => s.name === "Paw desktop task")
-      ?.attributes["paw.dropped_observations"],
+    exporter.getFinishedSpans().find((s) => s.name === "Paw desktop task")?.attributes[
+      "paw.dropped_observations"
+    ],
   ).toBe(72);
 });
 
@@ -237,8 +217,7 @@ test("real desktop host associates provider observations with journal model turn
   expect(
     spans.some(
       (s) =>
-        s.name === "model.turn" &&
-        s.spanContext().spanId === generation?.parentSpanContext?.spanId,
+        s.name === "model.turn" && s.spanContext().spanId === generation?.parentSpanContext?.spanId,
     ),
   ).toBe(true);
 }, 30_000);
@@ -324,9 +303,7 @@ test("a failing collector does not delay inference and flush has a bounded timeo
     ) as typeof fetch;
     const started = performance.now();
     const result = await monitor.run(() =>
-      new OpenAICompatibleModel({ model: "test", apiKey: "SECRET" }).complete(
-        [],
-      ),
+      new OpenAICompatibleModel({ model: "test", apiKey: "SECRET" }).complete([]),
     );
     expect(result.text).toBe("ok");
     expect(performance.now() - started).toBeLessThan(1_000);

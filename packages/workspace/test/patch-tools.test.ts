@@ -52,12 +52,8 @@ describe("applyWorkspacePatch", () => {
     expect(r.results[0]?.path).toBe("a.ts");
     expect(r.results[1]?.path).toBe("b.ts");
 
-    expect(readFileSync(path.join(root, "a.ts"), "utf8")).toBe(
-      "alpha_modified\n",
-    );
-    expect(readFileSync(path.join(root, "b.ts"), "utf8")).toBe(
-      "beta_modified\n",
-    );
+    expect(readFileSync(path.join(root, "a.ts"), "utf8")).toBe("alpha_modified\n");
+    expect(readFileSync(path.join(root, "b.ts"), "utf8")).toBe("beta_modified\n");
   });
 
   test("rolls back on partial failure", () => {

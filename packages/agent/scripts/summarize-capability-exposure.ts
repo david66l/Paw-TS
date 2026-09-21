@@ -10,8 +10,7 @@ import {
 
 const workspaceRoot = path.resolve(process.argv[2] ?? process.cwd());
 const runsRoot = path.resolve(
-  process.argv[3] ??
-    path.join(workspaceRoot, "benchmarks", "swe-compare", "runs"),
+  process.argv[3] ?? path.join(workspaceRoot, "benchmarks", "swe-compare", "runs"),
 );
 const outputPath = process.argv[4] ? path.resolve(process.argv[4]) : undefined;
 const observations: CapabilityExposureRunObservationV1[] = [];
@@ -24,9 +23,7 @@ for (const tracePath of findFiles(runsRoot, "trace.json")) {
       parseCapabilityExposureTraceV1({
         tracePath: relativePortable(workspaceRoot, tracePath),
         traceRaw: fs.readFileSync(tracePath, "utf8"),
-        resultRaw: fs.existsSync(resultPath)
-          ? fs.readFileSync(resultPath, "utf8")
-          : undefined,
+        resultRaw: fs.existsSync(resultPath) ? fs.readFileSync(resultPath, "utf8") : undefined,
       }),
     );
   } catch (error) {

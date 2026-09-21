@@ -1,11 +1,7 @@
 import type { ToolDefinition } from "@paw/core";
 import type { InputFactV1 } from "@paw/protocol";
 
-import {
-  CONTEXT_COMPACT,
-  type ToolRunResult,
-  toolDefinitions,
-} from "@paw/harness";
+import { CONTEXT_COMPACT, type ToolRunResult, toolDefinitions } from "@paw/harness";
 import {
   type RuntimeToolPluginEntryV1,
   type RuntimeToolPluginV1,
@@ -16,8 +12,7 @@ import {
 export const CONTEXT_COMPACT_PROVIDER_TOOL_V1 = "context_compact" as const;
 
 export const CONTEXT_COMPACT_TOOL_PLUGIN_ID_V1 = "paw.context-compact" as const;
-export const CONTEXT_COMPACT_TOOL_PLUGIN_VERSION_V1 =
-  "paw.context-compact.v1" as const;
+export const CONTEXT_COMPACT_TOOL_PLUGIN_VERSION_V1 = "paw.context-compact.v1" as const;
 
 /**
  * True when a successfully executed context_compact call sits after the
@@ -25,9 +20,7 @@ export const CONTEXT_COMPACT_TOOL_PLUGIN_VERSION_V1 =
  * yet. Failed or cancelled requests never count; any later checkpoint
  * (whatever produced it) consumes the request.
  */
-export function projectPendingContextCompactRequestV1(
-  facts: readonly InputFactV1[],
-): boolean {
+export function projectPendingContextCompactRequestV1(facts: readonly InputFactV1[]): boolean {
   const settledOk = new Set<string>();
   for (const fact of facts) {
     if (fact.type === "tool.settled" && fact.status === "completed") {

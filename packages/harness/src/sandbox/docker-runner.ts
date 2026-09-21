@@ -127,24 +127,17 @@ export function containerPathToHostPath(
   containerWorkspaceRoot = "/workspace",
 ): string | undefined {
   const containerRoot = resolveContainerWorkspaceRoot(containerWorkspaceRoot);
-  if ("error" in containerRoot || containerPath.includes("\0"))
-    return undefined;
+  if ("error" in containerRoot || containerPath.includes("\0")) return undefined;
 
   const normalized = path.posix.normalize(containerPath);
   if (!path.posix.isAbsolute(containerPath)) return undefined;
   const relative = path.posix.relative(containerRoot.root, normalized);
-  if (
-    relative === ".." ||
-    relative.startsWith("../") ||
-    path.posix.isAbsolute(relative)
-  ) {
+  if (relative === ".." || relative.startsWith("../") || path.posix.isAbsolute(relative)) {
     return undefined;
   }
 
   const hostRoot = path.resolve(workspaceRoot);
-  const hostPath = relative
-    ? path.resolve(hostRoot, ...relative.split("/"))
-    : hostRoot;
+  const hostPath = relative ? path.resolve(hostRoot, ...relative.split("/")) : hostRoot;
   const hostRelative = path.relative(hostRoot, hostPath);
   if (
     hostRelative === ".." ||
@@ -199,9 +192,7 @@ export function buildDockerShellExecSpec(
     readonly command: string;
   },
 ): DockerShellExecSpec | { readonly error: string } {
-  const containerRoot = resolveContainerWorkspaceRoot(
-    config.containerWorkspaceRoot,
-  );
+  const containerRoot = resolveContainerWorkspaceRoot(config.containerWorkspaceRoot);
   if ("error" in containerRoot) return containerRoot;
 
   // An explicit runtime is an execution choice, not a discovery hint. Avoid
@@ -209,8 +200,7 @@ export function buildDockerShellExecSpec(
   const runtime = config.runtime ?? detectContainerRuntime();
   if (!runtime) {
     return {
-      error:
-        "shell sandbox is enabled but neither docker nor podman is available",
+      error: "shell sandbox is enabled but neither docker nor podman is available",
     };
   }
 
@@ -315,16 +305,13 @@ export function buildDockerSessionSpawnSpecV1(
     readonly sessionKey: string;
   },
 ): DockerShellSessionSpawnSpecV1 | { readonly error: string } {
-  const containerRoot = resolveContainerWorkspaceRoot(
-    config.containerWorkspaceRoot,
-  );
+  const containerRoot = resolveContainerWorkspaceRoot(config.containerWorkspaceRoot);
   if ("error" in containerRoot) return containerRoot;
 
   const runtime = config.runtime ?? detectContainerRuntime();
   if (!runtime) {
     return {
-      error:
-        "shell sandbox is enabled but neither docker nor podman is available",
+      error: "shell sandbox is enabled but neither docker nor podman is available",
     };
   }
 
@@ -337,9 +324,7 @@ export function buildDockerSessionSpawnSpecV1(
   const cpus = config.cpus ?? 2;
   // Docker names allow [a-zA-Z0-9][a-zA-Z0-9_.-]*; session keys are
   // `${sessionId}:${runId}` so fold anything else into a stable slug.
-  const keySlug = input.sessionKey
-    .replace(/[^a-zA-Z0-9_.-]+/g, "-")
-    .slice(0, 48);
+  const keySlug = input.sessionKey.replace(/[^a-zA-Z0-9_.-]+/g, "-").slice(0, 48);
   const containerName = `paw-session-${process.pid}-${keySlug}-${randomUUID().slice(0, 8)}`;
 
   const args: string[] = [

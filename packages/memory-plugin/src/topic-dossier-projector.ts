@@ -1,7 +1,4 @@
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 import type { MemoryTopicDossierStoreV1 } from "./topic-dossier-store.js";
 import {
   type MemoryTopicDossierExtractorV1,
@@ -15,13 +12,7 @@ import type { MemoryTopicEvidenceCatalogItemV1 } from "./topic-evidence-planner.
 
 export interface MemoryTopicDossierProjectorEventV1 {
   readonly schemaVersion: "paw.memory-topic-dossier-projector-event.v1";
-  readonly type:
-    | "cache_hit"
-    | "deterministic"
-    | "extract"
-    | "fallback"
-    | "commit"
-    | "failed";
+  readonly type: "cache_hit" | "deterministic" | "extract" | "fallback" | "commit" | "failed";
   readonly topicId: string;
   readonly projectionHash: string;
   readonly selectedCurrent?: number;
@@ -68,10 +59,7 @@ export function createMemoryTopicDossierProjectorV1(
   const now = input.now ?? Date.now;
 
   return Object.freeze({
-    async project(
-      source: MemoryTopicEvidenceCatalogItemV1,
-      signal: AbortSignal,
-    ) {
+    async project(source: MemoryTopicEvidenceCatalogItemV1, signal: AbortSignal) {
       const started = now();
       const { topic, snapshot } = source.projection;
       try {
@@ -104,11 +92,9 @@ export function createMemoryTopicDossierProjectorV1(
           maxConflicts,
         };
         const extractionStarted = now();
-        const complete =
-          createCompleteMemoryTopicDossierProposalV1(extractionInput);
+        const complete = createCompleteMemoryTopicDossierProposalV1(extractionInput);
         let proposal = complete;
-        let proposalEvent: "deterministic" | "extract" | "fallback" =
-          "deterministic";
+        let proposalEvent: "deterministic" | "extract" | "fallback" = "deterministic";
         let fallbackReason: string | undefined;
         if (!proposal) {
           try {
@@ -118,8 +104,7 @@ export function createMemoryTopicDossierProjectorV1(
             if (signal.aborted || stableReasonCode(error) === "AbortError") {
               throw error;
             }
-            proposal =
-              createBoundedMemoryTopicDossierProposalV1(extractionInput);
+            proposal = createBoundedMemoryTopicDossierProposalV1(extractionInput);
             proposalEvent = "fallback";
             fallbackReason = stableReasonCode(error);
           }
@@ -132,9 +117,7 @@ export function createMemoryTopicDossierProjectorV1(
           selectedCurrent: proposal.currentMemoryIds.length,
           selectedEvolutions: proposal.evolutionRelationIds.length,
           selectedConflicts: proposal.conflictRelationIds.length,
-          ...(fallbackReason === undefined
-            ? {}
-            : { reasonCode: fallbackReason }),
+          ...(fallbackReason === undefined ? {} : { reasonCode: fallbackReason }),
           durationMs: Math.max(0, now() - extractionStarted),
         });
         const dossier = materializeMemoryTopicDossierV1({
@@ -146,9 +129,7 @@ export function createMemoryTopicDossierProjectorV1(
         });
         const commitStarted = now();
         const committed = await input.store.put(dossier, signal);
-        const durable = committed.inserted
-          ? dossier
-          : await input.store.getExact(exactKey, signal);
+        const durable = committed.inserted ? dossier : await input.store.getExact(exactKey, signal);
         if (!durable) {
           throw namedError("MemoryTopicDossierCommitWinnerMissing");
         }

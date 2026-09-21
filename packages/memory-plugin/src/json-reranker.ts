@@ -1,10 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { PawNextMemoryRerankerIdentityV1 } from "./profile.js";
-import type {
-  MemoryRerankCandidateV1,
-  MemoryRerankerV1,
-} from "./rrf-provider.js";
+import type { MemoryRerankCandidateV1, MemoryRerankerV1 } from "./rrf-provider.js";
 
 export interface MemoryRerankerEventV1 {
   readonly schemaVersion: "paw.memory-reranker-event.v1";
@@ -29,10 +26,7 @@ export function createJsonMemoryRerankerV1(input: {
   }
   return Object.freeze({
     identity,
-    async rerank(
-      request: Parameters<MemoryRerankerV1["rerank"]>[0],
-      signal: AbortSignal,
-    ) {
+    async rerank(request: Parameters<MemoryRerankerV1["rerank"]>[0], signal: AbortSignal) {
       if (signal.aborted) throw abortError();
       const prompt = buildMemoryRerankPromptV1(
         request.queryText,
@@ -44,11 +38,7 @@ export function createJsonMemoryRerankerV1(input: {
       try {
         const raw = await input.complete(prompt, signal);
         if (signal.aborted) throw abortError();
-        const ids = parseMemoryRerankOutputV1(
-          raw,
-          request.candidates,
-          request.maxResults,
-        );
+        const ids = parseMemoryRerankOutputV1(raw, request.candidates, request.maxResults);
         emit(
           input,
           identity,
@@ -60,15 +50,7 @@ export function createJsonMemoryRerankerV1(input: {
         );
         return ids;
       } catch (error) {
-        emit(
-          input,
-          identity,
-          "failed",
-          promptHash,
-          request.candidates.length,
-          0,
-          startedAt,
-        );
+        emit(input, identity, "failed", promptHash, request.candidates.length, 0, startedAt);
         throw error;
       }
     },
@@ -120,14 +102,11 @@ export function parseMemoryRerankOutputV1(
     seen.add(id);
     ids.push(id);
   }
-  if (ids.length === 0)
-    throw new Error("Memory reranker selected no candidates");
+  if (ids.length === 0) throw new Error("Memory reranker selected no candidates");
   return Object.freeze(ids);
 }
 
-function freezeIdentity(
-  value: PawNextMemoryRerankerIdentityV1,
-): PawNextMemoryRerankerIdentityV1 {
+function freezeIdentity(value: PawNextMemoryRerankerIdentityV1): PawNextMemoryRerankerIdentityV1 {
   const keys = Object.keys(value).sort().join("\0");
   if (keys !== ["model", "provider", "revision"].join("\0")) {
     throw new Error("Memory reranker identity fields are invalid");

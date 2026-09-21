@@ -4,11 +4,7 @@ import { executeTool } from "../src/registry/index.js";
 
 describe("run_agent tool", () => {
   test("returns error when launcher not configured", async () => {
-    const r = await executeTool(
-      { workspaceRoot: "/tmp" },
-      "workspace.run_agent",
-      { goal: "test" },
-    );
+    const r = await executeTool({ workspaceRoot: "/tmp" }, "workspace.run_agent", { goal: "test" });
     expect(r.ok).toBe(false);
     expect(r.summary).toContain("not configured");
   });
@@ -39,11 +35,7 @@ describe("run_agent tool", () => {
     let launched = false;
     let launchedAgentId: string | undefined;
     const launcher = {
-      launch: async (
-        goal: string,
-        _maxSteps?: number,
-        options?: { readonly agentId?: string },
-      ) => {
+      launch: async (goal: string, _maxSteps?: number, options?: { readonly agentId?: string }) => {
         launched = true;
         launchedAgentId = options?.agentId;
         return {

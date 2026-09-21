@@ -50,9 +50,7 @@ export interface ScanAndResumePawNextRunsOptionsV1 {
 export interface PawNextStartupCatalogExecutionV1 {
   readonly signal?: AbortSignal;
   readonly leaseScheduler?: import("@paw/runtime").SessionLeaseSchedulerV1;
-  readonly onModelStreamEvent?: (
-    event: ModelStreamChunk,
-  ) => void | Promise<void>;
+  readonly onModelStreamEvent?: (event: ModelStreamChunk) => void | Promise<void>;
 }
 
 export interface ScanAndResumePawNextRunsWithCatalogOptionsV1 {
@@ -117,12 +115,7 @@ interface MutableRunReportV1 {
   reason?: string;
 }
 
-type FailureStage =
-  | "prefix"
-  | "resolve"
-  | "classify"
-  | "authority_recheck"
-  | "execute";
+type FailureStage = "prefix" | "resolve" | "classify" | "authority_recheck" | "execute";
 
 interface StartupProductAdapterV1<TResolved> {
   readonly resolve: (
@@ -201,9 +194,7 @@ export async function scanAndResumePawNextRunsWithCatalogV1(
         return classifyPawNextExistingPrefixV2({
           prefix,
           resolution: resolved,
-          ...(execution.signal === undefined
-            ? {}
-            : { signal: execution.signal }),
+          ...(execution.signal === undefined ? {} : { signal: execution.signal }),
         });
       }
       if (resolved.productVersion === "v3") {
@@ -214,10 +205,7 @@ export async function scanAndResumePawNextRunsWithCatalogV1(
     execute(candidate) {
       if (candidate.resolved.productVersion === "v1") {
         return runDiscoveredPawNextTaskV1({
-          options: withCatalogExecutionV1(
-            candidate.resolved.options,
-            execution,
-          ),
+          options: withCatalogExecutionV1(candidate.resolved.options, execution),
           expectedHead: candidate.expectedHead,
           expectedInventoryHash: candidate.expectedInventoryHash,
         });
@@ -249,9 +237,7 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
   requestedWorkspaceRoot: string,
   adapter: StartupProductAdapterV1<TResolved>,
 ): Promise<PawNextStartupScanReportV1> {
-  const workspaceRoot = fs.realpathSync.native(
-    path.resolve(requestedWorkspaceRoot),
-  );
+  const workspaceRoot = fs.realpathSync.native(path.resolve(requestedWorkspaceRoot));
   const discovery = discoverFileSessionAuthoritiesV1({ workspaceRoot });
   const issues = discovery.entries.flatMap((entry) =>
     entry.status === "corrupt"
@@ -269,12 +255,7 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
         : [],
     )
     .sort((left, right) =>
-      compareIdentity(
-        left.sessionId,
-        left.run.runId,
-        right.sessionId,
-        right.run.runId,
-      ),
+      compareIdentity(left.sessionId, left.run.runId, right.sessionId, right.run.runId),
     );
   const reports: MutableRunReportV1[] = [];
   const candidates: ActionableCandidateV1<TResolved>[] = [];
@@ -314,14 +295,7 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
         configHash: bootstrap.configHash,
       });
     } catch (error) {
-      if (
-        !postClassificationAnchorIsCurrent(
-          workspaceRoot,
-          discovered,
-          report,
-          adapter,
-        )
-      ) {
+      if (!postClassificationAnchorIsCurrent(workspaceRoot, discovered, report, adapter)) {
         blockedSessions.add(discovered.sessionId);
         continue;
       }
@@ -331,14 +305,7 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
       continue;
     }
     if (!resolved) {
-      if (
-        !postClassificationAnchorIsCurrent(
-          workspaceRoot,
-          discovered,
-          report,
-          adapter,
-        )
-      ) {
+      if (!postClassificationAnchorIsCurrent(workspaceRoot, discovered, report, adapter)) {
         blockedSessions.add(discovered.sessionId);
         continue;
       }
@@ -349,22 +316,10 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
 
     let classification: PawNextStartupClassificationV1;
     try {
-      adapter.assertIdentity(
-        workspaceRoot,
-        discovered.sessionId,
-        discovered.run.runId,
-        resolved,
-      );
+      adapter.assertIdentity(workspaceRoot, discovered.sessionId, discovered.run.runId, resolved);
       classification = await adapter.classify(prefix, resolved);
     } catch (error) {
-      if (
-        !postClassificationAnchorIsCurrent(
-          workspaceRoot,
-          discovered,
-          report,
-          adapter,
-        )
-      ) {
+      if (!postClassificationAnchorIsCurrent(workspaceRoot, discovered, report, adapter)) {
         blockedSessions.add(discovered.sessionId);
         continue;
       }
@@ -372,14 +327,7 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
       blockedSessions.add(discovered.sessionId);
       continue;
     }
-    if (
-      !postClassificationAnchorIsCurrent(
-        workspaceRoot,
-        discovered,
-        report,
-        adapter,
-      )
-    ) {
+    if (!postClassificationAnchorIsCurrent(workspaceRoot, discovered, report, adapter)) {
       blockedSessions.add(discovered.sessionId);
       continue;
     }
@@ -410,10 +358,7 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
     }
   }
 
-  const candidatesBySession = new Map<
-    string,
-    ActionableCandidateV1<TResolved>[]
-  >();
+  const candidatesBySession = new Map<string, ActionableCandidateV1<TResolved>[]>();
   for (const candidate of candidates) {
     const values = candidatesBySession.get(candidate.sessionId) ?? [];
     values.push(candidate);
@@ -447,8 +392,7 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
       } else if (error instanceof PawNextSessionInventoryStaleError) {
         report.status = "inventory_stale";
       } else if (error instanceof PawNextPendingInputBlockedError) {
-        report.status =
-          error.kind === "pending" ? "blocked_pending" : "blocked_unconsumed";
+        report.status = error.kind === "pending" ? "blocked_pending" : "blocked_unconsumed";
         report.inputIds = error.inputIds;
       } else {
         report.status = "failed";
@@ -465,9 +409,7 @@ async function scanAndResumePawNextRunsInternal<TResolved>(
           sessionId: report.sessionId,
           runId: report.runId,
           status: report.status,
-          ...(report.inputIds
-            ? { inputIds: Object.freeze([...report.inputIds]) }
-            : {}),
+          ...(report.inputIds ? { inputIds: Object.freeze([...report.inputIds]) } : {}),
           ...(report.tailSeq === undefined ? {} : { tailSeq: report.tailSeq }),
           ...(report.reason === undefined ? {} : { reason: report.reason }),
         }),
@@ -492,9 +434,7 @@ function postClassificationAnchorIsCurrent<TResolved>(
       workspaceRoot,
       sessionId: discovered.sessionId,
     });
-    const run = current.runs.find(
-      (candidate) => candidate.runId === discovered.run.runId,
-    );
+    const run = current.runs.find((candidate) => candidate.runId === discovered.run.runId);
     if (!run) {
       report.status = "inventory_stale";
       return false;
@@ -526,8 +466,7 @@ function classifyReadFailure<TResolved>(
   stage: FailureStage,
 ): void {
   if (error instanceof CommittedFileRunPrefixStaleError) {
-    report.status =
-      error.reason === "head" ? "anchor_conflict" : "inventory_stale";
+    report.status = error.reason === "head" ? "anchor_conflict" : "inventory_stale";
   } else {
     report.status = "invalid";
     report.reason = adapter.describeFailure(stage, error);
@@ -562,12 +501,9 @@ function assertResolvedProductIdentity(
       resolved.productVersion !== "v2" &&
       resolved.productVersion !== "v3")
   ) {
-    throw new Error(
-      "Paw Next startup product resolver returned an invalid product",
-    );
+    throw new Error("Paw Next startup product resolver returned an invalid product");
   }
-  const identity =
-    resolved.productVersion === "v1" ? resolved.options : resolved.taskOptions;
+  const identity = resolved.productVersion === "v1" ? resolved.options : resolved.taskOptions;
   assertRunIdentity(
     workspaceRoot,
     sessionId,
@@ -580,10 +516,7 @@ function assertResolvedProductIdentity(
 
 async function classifyV3StartupPrefix(
   prefix: ReturnType<typeof readCommittedFileRunPrefixV1>,
-  resolved: Extract<
-    PawNextProductProfileCatalogResolutionV3,
-    { productVersion: "v3" }
-  >,
+  resolved: Extract<PawNextProductProfileCatalogResolutionV3, { productVersion: "v3" }>,
   signal: AbortSignal | undefined,
 ): Promise<PawNextStartupClassificationV1> {
   const classification = await classifyPawNextExistingPrefixV3({
@@ -622,17 +555,13 @@ function assertRunIdentity(
   resolvedSessionId: string,
   resolvedRunId: string,
 ): void {
-  const resolvedRoot = fs.realpathSync.native(
-    path.resolve(resolvedWorkspaceRoot),
-  );
+  const resolvedRoot = fs.realpathSync.native(path.resolve(resolvedWorkspaceRoot));
   if (
     resolvedRoot !== workspaceRoot ||
     resolvedSessionId !== sessionId ||
     resolvedRunId !== runId
   ) {
-    throw new Error(
-      "Paw Next startup config resolver returned another run identity",
-    );
+    throw new Error("Paw Next startup config resolver returned another run identity");
   }
 }
 
@@ -644,30 +573,19 @@ function freezeCatalogExecution(
     throw new TypeError("Paw Next startup catalog execution seams are invalid");
   }
   for (const key of Object.keys(value)) {
-    if (
-      key !== "signal" &&
-      key !== "leaseScheduler" &&
-      key !== "onModelStreamEvent"
-    ) {
-      throw new TypeError(
-        "Paw Next startup catalog execution seams are invalid",
-      );
+    if (key !== "signal" && key !== "leaseScheduler" && key !== "onModelStreamEvent") {
+      throw new TypeError("Paw Next startup catalog execution seams are invalid");
     }
   }
   if (value.signal !== undefined && !(value.signal instanceof AbortSignal)) {
     throw new TypeError("Paw Next startup catalog signal is invalid");
   }
-  if (
-    value.onModelStreamEvent !== undefined &&
-    typeof value.onModelStreamEvent !== "function"
-  ) {
+  if (value.onModelStreamEvent !== undefined && typeof value.onModelStreamEvent !== "function") {
     throw new TypeError("Paw Next startup stream observer is invalid");
   }
   return Object.freeze({
     ...(value.signal === undefined ? {} : { signal: value.signal }),
-    ...(value.leaseScheduler === undefined
-      ? {}
-      : { leaseScheduler: value.leaseScheduler }),
+    ...(value.leaseScheduler === undefined ? {} : { leaseScheduler: value.leaseScheduler }),
     ...(value.onModelStreamEvent === undefined
       ? {}
       : { onModelStreamEvent: value.onModelStreamEvent }),
@@ -686,8 +604,7 @@ function requiredReport<TResolved>(
   identity: Pick<ActionableCandidateV1<TResolved>, "sessionId" | "runId">,
 ): MutableRunReportV1 {
   const report = reports.find(
-    (value) =>
-      value.sessionId === identity.sessionId && value.runId === identity.runId,
+    (value) => value.sessionId === identity.sessionId && value.runId === identity.runId,
   );
   if (!report) throw new Error("Paw Next startup report identity is missing");
   return report;
@@ -706,7 +623,5 @@ function compareIdentity(
 }
 
 function describeError(error: unknown): string {
-  return error instanceof Error
-    ? `${error.name}: ${error.message}`
-    : String(error);
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }

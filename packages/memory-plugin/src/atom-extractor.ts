@@ -14,8 +14,7 @@ export type { MemoryWriterModelV1 } from "./model-port.js";
 
 export const PAW_MEMORY_ATOM_EXTRACTOR_VERSION_V1 =
   "paw.memory-atom-extractor.json.v5:atomic-state" as const;
-export const PAW_MEMORY_ATOM_REPAIR_POLICY_VERSION_V1 =
-  "paw.memory-atom-repair-once.v1" as const;
+export const PAW_MEMORY_ATOM_REPAIR_POLICY_VERSION_V1 = "paw.memory-atom-repair-once.v1" as const;
 export const PAW_MEMORY_ATOMIC_STATE_MAX_CHARS_V1 = 320 as const;
 
 export interface MemoryWriterSourceItemV1 {
@@ -65,8 +64,7 @@ export function createJsonMemoryAtomExtractorV1(input: {
   if (!input.model || typeof input.model.complete !== "function") {
     throw new Error("Memory atom extractor model is invalid");
   }
-  const extractorVersion =
-    input.extractorVersion ?? PAW_MEMORY_ATOM_EXTRACTOR_VERSION_V1;
+  const extractorVersion = input.extractorVersion ?? PAW_MEMORY_ATOM_EXTRACTOR_VERSION_V1;
   if (!extractorVersion.trim()) {
     throw new Error("Memory atom extractor version is invalid");
   }
@@ -77,10 +75,9 @@ export function createJsonMemoryAtomExtractorV1(input: {
       signal: AbortSignal,
     ): Promise<readonly MemoryAtomProposalV1[]> {
       if (signal.aborted) throw abortError();
-      const result = await input.model.complete(
-        buildMemoryAtomExtractionRequestV1(extraction),
-        { signal },
-      );
+      const result = await input.model.complete(buildMemoryAtomExtractionRequestV1(extraction), {
+        signal,
+      });
       if (signal.aborted || result.status === "cancelled") throw abortError();
       if (result.status !== "completed") {
         throw stableExtractorError(result.errorCode);
@@ -93,8 +90,7 @@ export function createJsonMemoryAtomExtractorV1(input: {
           buildMemoryAtomRepairRequestV1(extraction, validationReason(error)),
           { signal },
         );
-        if (signal.aborted || repaired.status === "cancelled")
-          throw abortError();
+        if (signal.aborted || repaired.status === "cancelled") throw abortError();
         if (repaired.status !== "completed") {
           throw stableExtractorError(repaired.errorCode);
         }
@@ -166,13 +162,9 @@ export function parseMemoryAtomExtractionV1(
   }
   const allowedSeqs = new Set(input.source.map((item) => item.seq));
   const userSeqs = new Set(
-    input.source
-      .filter((item) => item.kind === "user_input")
-      .map((item) => item.seq),
+    input.source.filter((item) => item.kind === "user_input").map((item) => item.seq),
   );
-  const hasVerification = input.source.some(
-    (item) => item.kind === "verification",
-  );
+  const hasVerification = input.source.some((item) => item.kind === "verification");
   const allowedTargets = new Set(input.conflicts.map((item) => item.id));
   // JSON-constrained models sometimes pad a repaired response to maxAtoms with
   // explicit empty `skip` rows. Those rows carry no proposal or evidence and
@@ -248,11 +240,7 @@ function freezeAtom(
       : kind === "instruction"
         ? 512
         : 1_024;
-  let statement = boundedString(
-    raw.statement,
-    "memory atom statement",
-    statementLimit,
-  );
+  let statement = boundedString(raw.statement, "memory atom statement", statementLimit);
   const secret = scanForSecrets(statement);
   if (secret.action === "reject") {
     throw new Error("Memory atom contains a blocked secret pattern");
@@ -264,33 +252,17 @@ function freezeAtom(
     ["user_asserted", "agent_verified", "agent_inferred"],
     "memory atom authority",
   );
-  const sourceSeqs = boundedSourceSeqs(
-    raw.sourceSeqs,
-    "memory atom sourceSeqs",
-  );
-  if (
-    sourceSeqs.length === 0 ||
-    sourceSeqs.some((seq) => !context.allowedSeqs.has(seq))
-  ) {
-    throw new Error(
-      "Memory atom sourceSeqs are outside the extraction evidence",
-    );
+  const sourceSeqs = boundedSourceSeqs(raw.sourceSeqs, "memory atom sourceSeqs");
+  if (sourceSeqs.length === 0 || sourceSeqs.some((seq) => !context.allowedSeqs.has(seq))) {
+    throw new Error("Memory atom sourceSeqs are outside the extraction evidence");
   }
-  if (
-    authority === "user_asserted" &&
-    !sourceSeqs.some((seq) => context.userSeqs.has(seq))
-  ) {
+  if (authority === "user_asserted" && !sourceSeqs.some((seq) => context.userSeqs.has(seq))) {
     authority = "agent_inferred";
   }
   if (authority === "agent_verified" && !context.hasVerification) {
     authority = "agent_inferred";
   }
-  const targetIds = boundedStringArray(
-    raw.targetIds ?? [],
-    "memory atom targetIds",
-    16,
-    256,
-  );
+  const targetIds = boundedStringArray(raw.targetIds ?? [], "memory atom targetIds", 16, 256);
   if (targetIds.some((id) => !context.allowedTargets.has(id))) {
     throw new Error("Memory atom targets an unrecognized memory id");
   }
@@ -300,12 +272,7 @@ function freezeAtom(
   if ((action === "update" || action === "merge") && targetIds.length === 0) {
     throw new Error(`${action} memory atom requires targetIds`);
   }
-  const confidence = boundedNumber(
-    raw.confidence,
-    "memory atom confidence",
-    0,
-    1,
-  );
+  const confidence = boundedNumber(raw.confidence, "memory atom confidence", 0, 1);
   const priority = normalizedPriority(raw.priority);
   const validFrom = optionalIsoString(raw.validFrom, "memory atom validFrom");
   const validTo = optionalIsoString(raw.validTo, "memory atom validTo");
@@ -341,15 +308,11 @@ function extractJsonObject(text: string): Record<string, unknown> {
   if (start < 0 || end <= start) {
     throw new Error("Memory extractor output is not JSON");
   }
-  return objectRecord(
-    JSON.parse(text.slice(start, end + 1)),
-    "memory extractor output",
-  );
+  return objectRecord(JSON.parse(text.slice(start, end + 1)), "memory extractor output");
 }
 
 function validationReason(error: unknown): "too_many_atoms" | "invalid_schema" {
-  return error instanceof Error &&
-    error.message === "Memory extractor returned too many atoms"
+  return error instanceof Error && error.message === "Memory extractor returned too many atoms"
     ? "too_many_atoms"
     : "invalid_schema";
 }
@@ -361,11 +324,7 @@ function objectRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function oneOf<T extends string>(
-  value: unknown,
-  values: readonly T[],
-  label: string,
-): T {
+function oneOf<T extends string>(value: unknown, values: readonly T[], label: string): T {
   if (typeof value !== "string" || !values.includes(value as T)) {
     throw new Error(`${label} is invalid`);
   }
@@ -403,17 +362,11 @@ function boundedKeywordArray(value: unknown): string[] {
   if (!Array.isArray(value) || value.length > 128) {
     throw new Error("memory atom keywords must be a bounded array");
   }
-  const normalized = value.map((item) =>
-    boundedString(item, "memory atom keywords", 128),
-  );
+  const normalized = value.map((item) => boundedString(item, "memory atom keywords", 128));
   return [...new Set(normalized)].slice(0, 12);
 }
 
-function positiveIntegerArray(
-  value: unknown,
-  label: string,
-  maxItems: number,
-): number[] {
+function positiveIntegerArray(value: unknown, label: string, maxItems: number): number[] {
   if (!Array.isArray(value) || value.length > maxItems) {
     throw new Error(`${label} must be a bounded array`);
   }
@@ -432,18 +385,8 @@ function boundedSourceSeqs(value: unknown, label: string): number[] {
   return [...sourceSeqs.slice(0, 16), ...sourceSeqs.slice(-16)];
 }
 
-function boundedNumber(
-  value: unknown,
-  label: string,
-  min: number,
-  max: number,
-): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value < min ||
-    value > max
-  ) {
+function boundedNumber(value: unknown, label: string, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
     throw new Error(`${label} is outside its range`);
   }
   return value;
@@ -462,24 +405,17 @@ function normalizedPriority(value: unknown): number {
 function optionalIsoString(value: unknown, label: string): string | undefined {
   // JSON-schema constrained models commonly materialize an omitted optional
   // field as null. Treat both representations as absence.
-  if (
-    value === undefined ||
-    value === null ||
-    (typeof value === "string" && !value.trim())
-  ) {
+  if (value === undefined || value === null || (typeof value === "string" && !value.trim())) {
     return undefined;
   }
   const text = boundedString(value, label, 128);
-  if (Number.isNaN(Date.parse(text)))
-    throw new Error(`${label} must be ISO-8601`);
+  if (Number.isNaN(Date.parse(text))) throw new Error(`${label} must be ISO-8601`);
   return new Date(text).toISOString();
 }
 
 function stableExtractorError(code: string): Error {
   const error = new Error("Memory atom extraction failed");
-  error.name =
-    code.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 120) ||
-    "MemoryExtractorFailed";
+  error.name = code.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 120) || "MemoryExtractorFailed";
   return error;
 }
 

@@ -10,10 +10,7 @@ export interface MemoryQueryExpansionPlanV1 {
 
 export interface MemoryQueryExpanderV1 {
   readonly plannerVersion: typeof PAW_MEMORY_QUERY_EXPANDER_VERSION_V1;
-  expand(
-    query: string,
-    signal: AbortSignal,
-  ): Promise<MemoryQueryExpansionPlanV1>;
+  expand(query: string, signal: AbortSignal): Promise<MemoryQueryExpansionPlanV1>;
 }
 
 /** Opens the optional model planner only for questions likely to need several sources. */
@@ -78,10 +75,7 @@ export function parseMemoryQueryExpansionV1(
   } catch {
     throw namedError("MemoryQueryExpansionJsonInvalid");
   }
-  if (
-    !isRecord(parsed) ||
-    Object.keys(parsed).some((key) => key !== "searches")
-  ) {
+  if (!isRecord(parsed) || Object.keys(parsed).some((key) => key !== "searches")) {
     throw namedError("MemoryQueryExpansionShapeInvalid");
   }
   if (!Array.isArray(parsed.searches) || parsed.searches.length > 4) {
@@ -121,9 +115,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function stableName(value: string): string {
-  return /^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(value)
-    ? value
-    : "MemoryQueryExpanderFailed";
+  return /^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(value) ? value : "MemoryQueryExpanderFailed";
 }
 
 function namedError(name: string): Error {

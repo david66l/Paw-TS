@@ -32,9 +32,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** Prompt 文件存放目录，通过 import.meta.dirname 推导运行时路径 */
-const PROMPT_DIR = join(
-  import.meta.dirname ?? join(process.cwd(), "packages/core/src/prompt"),
-);
+const PROMPT_DIR = join(import.meta.dirname ?? join(process.cwd(), "packages/core/src/prompt"));
 
 /**
  * 根据给定的模型 ID 解析对应的系统提示词文本。

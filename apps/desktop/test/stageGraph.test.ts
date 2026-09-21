@@ -9,8 +9,7 @@ import type { DesktopMonitorSnapshot } from "../src/agent/monitorTypes.js";
 setDefaultTimeout(90_000);
 const roots: string[] = [];
 afterEach(() => {
-  for (const root of roots.splice(0))
-    fs.rmSync(root, { recursive: true, force: true });
+  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 const final = (text: string): ModelCompletionResult => ({
   text,
@@ -18,10 +17,7 @@ const final = (text: string): ModelCompletionResult => ({
   finishReason: "stop",
 });
 let sequence = 0;
-const tool = (
-  name: string,
-  args: Record<string, unknown>,
-): ModelCompletionResult => ({
+const tool = (name: string, args: Record<string, unknown>): ModelCompletionResult => ({
   text: "",
   nativeAssistantContent: "",
   finishReason: "tool_calls",
@@ -37,9 +33,7 @@ const tool = (
   ],
 });
 function fixture(repairConsumers: boolean) {
-  const root = fs.mkdtempSync(
-    path.join(os.tmpdir(), "paw-stage-graph-desktop-"),
-  );
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-stage-graph-desktop-"));
   roots.push(root);
   fs.mkdirSync(path.join(root, ".paw", "agents"), { recursive: true });
   fs.writeFileSync(
@@ -66,9 +60,7 @@ Paw graph executor. Implement the assigned contract only.
   const snapshots: DesktopMonitorSnapshot[] = [];
   const managerInputs: string[] = [];
   const ref = (tag: string) => {
-    const value = snapshots
-      .at(-1)
-      ?.tasks.find((task) => task.name.startsWith(tag))?.stageRef;
+    const value = snapshots.at(-1)?.tasks.find((task) => task.name.startsWith(tag))?.stageRef;
     if (!value) throw new Error(`Missing durable stage reference: ${tag}`);
     return value;
   };
@@ -81,9 +73,7 @@ Paw graph executor. Implement the assigned contract only.
       scope: [file],
       acceptance: [`${file} is nonempty and matches the current interface`],
       max_steps: 4,
-      stage_links: [
-        { task_id: "task", requires, ...(replaces ? { replaces } : {}) },
-      ],
+      stage_links: [{ task_id: "task", requires, ...(replaces ? { replaces } : {}) }],
     });
   };
   const model: LanguageModel = {
@@ -168,8 +158,7 @@ test("desktop invalidates consumers across plans and requires explicit replaceme
   expect(
     f.snapshots.some((snapshot) =>
       snapshot.tasks.some(
-        (task) =>
-          task.name.startsWith("EXEC_B1") && task.freshness?.status === "stale",
+        (task) => task.name.startsWith("EXEC_B1") && task.freshness?.status === "stale",
       ),
     ),
   ).toBeTrue();
@@ -182,21 +171,15 @@ test("desktop invalidates consumers across plans and requires explicit replaceme
   ]);
   expect(tasks[3]?.dependencies).toEqual([tasks[2]?.id as string]);
   expect(
-    f.managerInputs.some(
-      (text) => text.includes("Stage ledger") && text.includes("stale"),
-    ),
+    f.managerInputs.some((text) => text.includes("Stage ledger") && text.includes("stale")),
   ).toBeTrue();
-  expect(fs.readFileSync(path.join(f.root, "b.txt"), "utf8")).toBe(
-    "version-two",
-  );
+  expect(fs.readFileSync(path.join(f.root, "b.txt"), "utf8")).toBe("version-two");
   const counts = f.counts();
   await runDesktopNext("", { ...f.options, intent: "recover" });
   expect(f.counts()).toEqual(counts);
-  expect(
-    readDesktopMonitor(f.root, "graph")?.tasks.map(
-      (task) => task.freshness?.status,
-    ),
-  ).toEqual(tasks.map((task) => task.freshness?.status));
+  expect(readDesktopMonitor(f.root, "graph")?.tasks.map((task) => task.freshness?.status)).toEqual(
+    tasks.map((task) => task.freshness?.status),
+  );
 });
 
 test("a successful latest plan cannot hide a stale consumer at final acceptance", async () => {
@@ -209,26 +192,20 @@ test("a successful latest plan cannot hide a stale consumer at final acceptance"
   expect(f.executorTurns.get("EXEC_B1")).toBe(2);
   expect(f.executorTurns.has("EXEC_B2")).toBeFalse();
   expect(
-    readDesktopMonitor(f.root, "graph")?.tasks.find((task) =>
-      task.name.startsWith("EXEC_B1"),
-    )?.status,
+    readDesktopMonitor(f.root, "graph")?.tasks.find((task) => task.name.startsWith("EXEC_B1"))
+      ?.status,
   ).toBe("blocked");
 });
 
 test("recovery rechecks external file changes and does not replay completed executors", async () => {
   const f = fixture(true);
-  await runDesktopNext(
-    "Build an interface and its consumer, then update both",
-    f.options,
-  );
+  await runDesktopNext("Build an interface and its consumer, then update both", f.options);
   fs.writeFileSync(path.join(f.root, "a.txt"), "external edit");
   const turns = [...f.executorTurns];
   const result = await runDesktopNext("", { ...f.options, intent: "recover" });
   expect(JSON.parse(result.text).acceptance).toBe("unverified");
   expect([...f.executorTurns]).toEqual(turns);
   expect(
-    readDesktopMonitor(f.root, "graph")?.tasks.filter(
-      (task) => task.freshness?.status === "stale",
-    ),
+    readDesktopMonitor(f.root, "graph")?.tasks.filter((task) => task.freshness?.status === "stale"),
   ).toHaveLength(2);
 });

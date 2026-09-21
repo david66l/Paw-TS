@@ -17,17 +17,12 @@ export function canonicalJsonStringifyV1(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalJsonStringifyV1(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${canonicalJsonStringifyV1(record[key] as JsonValue)}`)
     .join(",")}}`;
 }
 
 export function hashCanonicalJsonV1(value: JsonValue): string {
-  return createHash("sha256")
-    .update(canonicalJsonStringifyV1(value))
-    .digest("hex");
+  return createHash("sha256").update(canonicalJsonStringifyV1(value)).digest("hex");
 }
 
 export function hashTextV1(value: string): string {

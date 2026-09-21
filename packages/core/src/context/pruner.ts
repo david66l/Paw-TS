@@ -69,24 +69,13 @@ const DEFAULT_PROTECTED_TOOLS = [
   "workspace.acceptance_update",
 ];
 
-function isProtectedTool(
-  tool: string,
-  protectedSet: ReadonlySet<string>,
-): boolean {
+function isProtectedTool(tool: string, protectedSet: ReadonlySet<string>): boolean {
   return protectedSet.has(tool);
 }
 
 /** 将单个工具块持久化到磁盘，返回预览内容 */
-function persistBlock(
-  toolResultsDir: string,
-  id: string,
-  parsed: ParsedToolResult,
-): string {
-  const filepath = persistToolResultToDisk(
-    toolResultsDir,
-    id,
-    parsed.originalContent,
-  );
+function persistBlock(toolResultsDir: string, id: string, parsed: ParsedToolResult): string {
+  const filepath = persistToolResultToDisk(toolResultsDir, id, parsed.originalContent);
   return buildPersistedToolResultContent({
     tool: parsed.tool,
     ok: parsed.ok,
@@ -158,10 +147,7 @@ function processMessageToolBlocks(
     // 持久化：写入磁盘，上下文中保留预览
     const id = `${msgIndex}-${blockIdx}-${parsed.tool}`;
     const persisted = persistBlock(opts.toolResultsDir, id, parsed);
-    freed += Math.max(
-      0,
-      opts.estimator.count(block) - opts.estimator.count(persisted),
-    );
+    freed += Math.max(0, opts.estimator.count(block) - opts.estimator.count(persisted));
     changed = true;
     nextBlocks.push(persisted);
   }
@@ -204,10 +190,7 @@ function collectToolSlots(
 }
 
 /** 构建保留集合：最近 N 个可压缩工具结果的 globalIndex */
-function buildKeepSet(
-  slots: readonly ToolSlot[],
-  keepRecentTools: number,
-): Set<number> {
+function buildKeepSet(slots: readonly ToolSlot[], keepRecentTools: number): Set<number> {
   const compactable = slots.filter((s) => s.compactable);
   const keep = compactable.slice(-Math.max(1, keepRecentTools));
   return new Set(keep.map((s) => s.globalIndex));
@@ -219,10 +202,7 @@ function buildKeepSet(
  * 1. 阶段 A：持久化超大的工具结果（字节限制）
  * 2. 阶段 B：持久化超出最近 N 个可压缩工具的结果
  */
-export function pruneToolResults(
-  messages: ChatMessage[],
-  config?: PruneConfig,
-): PruneResult {
+export function pruneToolResults(messages: ChatMessage[], config?: PruneConfig): PruneResult {
   const toolResultsDir = config?.toolResultsDir;
   // 没有持久化目录 → L1 为 no-op
   if (!toolResultsDir) {
@@ -230,11 +210,8 @@ export function pruneToolResults(
   }
 
   const keepRecentTools = config?.keepRecentTools ?? DEFAULT_KEEP_RECENT_TOOLS;
-  const maxToolOutputBytes =
-    config?.maxToolOutputBytes ?? DEFAULT_MAX_TOOL_OUTPUT_BYTES;
-  const protectedTools = new Set(
-    config?.protectedTools ?? DEFAULT_PROTECTED_TOOLS,
-  );
+  const maxToolOutputBytes = config?.maxToolOutputBytes ?? DEFAULT_MAX_TOOL_OUTPUT_BYTES;
+  const protectedTools = new Set(config?.protectedTools ?? DEFAULT_PROTECTED_TOOLS);
   // P1.4 估算统一：释放量按调用方注入的估算器（默认 chars/4 外观层兼容旧行为）
   const estimator = config?.estimator ?? {
     count: (text: string) => estimateTokens(text),
@@ -256,19 +233,14 @@ export function pruneToolResults(
       continue;
     }
 
-    const { content, changed, freed } = processMessageToolBlocks(
-      msgIndex,
-      msg.content,
-      {
-        toolResultsDir,
-        maxToolOutputBytes,
-        protectedTools,
-        shouldEvict: (_tool, globalIndex) =>
-          !keepGlobalIndices.has(globalIndex),
-        toolCounter,
-        estimator,
-      },
-    );
+    const { content, changed, freed } = processMessageToolBlocks(msgIndex, msg.content, {
+      toolResultsDir,
+      maxToolOutputBytes,
+      protectedTools,
+      shouldEvict: (_tool, globalIndex) => !keepGlobalIndices.has(globalIndex),
+      toolCounter,
+      estimator,
+    });
 
     if (changed) {
       pruned = true;

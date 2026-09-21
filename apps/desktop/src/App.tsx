@@ -30,9 +30,7 @@ function readWidth(key: string, fallback: number): number {
 }
 
 export function App() {
-  const [colorTheme, setColorTheme] = useState<ColorTheme>(
-    () => readAppearance().color,
-  );
+  const [colorTheme, setColorTheme] = useState<ColorTheme>(() => readAppearance().color);
   const [materialTheme, setMaterialTheme] = useState<MaterialTheme>(
     () => readAppearance().material,
   );
@@ -40,12 +38,8 @@ export function App() {
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [rightTab, setRightTab] = useState<RightTabId>("plan");
-  const [sidebarWidth, setSidebarWidth] = useState(() =>
-    readWidth("paw.width.sidebar", 230),
-  );
-  const [rightWidth, setRightWidth] = useState(() =>
-    readWidth("paw.width.right", 280),
-  );
+  const [sidebarWidth, setSidebarWidth] = useState(() => readWidth("paw.width.sidebar", 230));
+  const [rightWidth, setRightWidth] = useState(() => readWidth("paw.width.right", 280));
   const agent = useAgentRun();
   const panelData = useRightPanelData(agent.runtimeSessionId, agent.hostReady);
 
@@ -64,54 +58,47 @@ export function App() {
   }, [rightWidth]);
 
   /** 分隔条拖拽：left=侧栏，right=右栏；动态 clamp 保证 chat ≥ CHAT_MIN */
-  const startResize =
-    (which: "left" | "right") => (e: ReactPointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startSidebar = sidebarWidth;
-      const startRight = rightWidth;
-      const onMove = (ev: PointerEvent) => {
-        const vw = window.innerWidth;
-        if (which === "left") {
-          const max = Math.max(200, vw - startRight - CHAT_MIN);
-          setSidebarWidth(
-            Math.min(max, Math.max(200, startSidebar + (ev.clientX - startX))),
-          );
-        } else {
-          const max = Math.max(240, vw - startSidebar - CHAT_MIN);
-          setRightWidth(
-            Math.min(max, Math.max(240, startRight - (ev.clientX - startX))),
-          );
-        }
-      };
-      const onUp = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        document.body.style.removeProperty("cursor");
-        document.body.style.removeProperty("user-select");
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    };
-
-  /** 键盘可达：左右方向键各微调 16px */
-  const onResizerKey =
-    (which: "left" | "right") => (e: ReactKeyboardEvent<HTMLDivElement>) => {
-      const step =
-        e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
-      if (!step) return;
-      e.preventDefault();
+  const startResize = (which: "left" | "right") => (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startSidebar = sidebarWidth;
+    const startRight = rightWidth;
+    const onMove = (ev: PointerEvent) => {
       const vw = window.innerWidth;
       if (which === "left") {
-        const max = Math.max(200, vw - rightWidth - CHAT_MIN);
-        setSidebarWidth((w) => Math.min(max, Math.max(200, w + step)));
+        const max = Math.max(200, vw - startRight - CHAT_MIN);
+        setSidebarWidth(Math.min(max, Math.max(200, startSidebar + (ev.clientX - startX))));
       } else {
-        const max = Math.max(240, vw - sidebarWidth - CHAT_MIN);
-        setRightWidth((w) => Math.min(max, Math.max(240, w - step)));
+        const max = Math.max(240, vw - startSidebar - CHAT_MIN);
+        setRightWidth(Math.min(max, Math.max(240, startRight - (ev.clientX - startX))));
       }
     };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  /** 键盘可达：左右方向键各微调 16px */
+  const onResizerKey = (which: "left" | "right") => (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const vw = window.innerWidth;
+    if (which === "left") {
+      const max = Math.max(200, vw - rightWidth - CHAT_MIN);
+      setSidebarWidth((w) => Math.min(max, Math.max(200, w + step)));
+    } else {
+      const max = Math.max(240, vw - sidebarWidth - CHAT_MIN);
+      setRightWidth((w) => Math.min(max, Math.max(240, w - step)));
+    }
+  };
 
   return (
     <div
@@ -154,8 +141,7 @@ export function App() {
         key={agent.activeSessionId}
         context={panelData.context}
         onCompressContext={async () => {
-          if (!window.pawDesktop)
-            return { ok: false, message: "请在桌面端使用上下文压缩。" };
+          if (!window.pawDesktop) return { ok: false, message: "请在桌面端使用上下文压缩。" };
           const result = await window.pawDesktop.compactContext({
             conversationId: agent.runtimeSessionId,
           });

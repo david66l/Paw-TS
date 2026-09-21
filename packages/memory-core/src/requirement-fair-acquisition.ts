@@ -16,16 +16,15 @@ export const PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_VERSION_V1 =
  * gives every requirement one source opportunity per round before any leaf can
  * consume a second opportunity. Remaining slots are filled by global RRF.
  */
-export const PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_REVISION_V1 =
-  hashCanonicalJsonV1({
-    policyVersion: PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_VERSION_V1,
-    originalReservation: "top-1",
-    requirementAllocation: "round-robin-by-plan-order",
-    requirementLaneOrdering: "global-rrf-within-lane-eligible-sources",
-    remainder: "global-rrf",
-    sourceCap: "caller-owned",
-    evidenceCap: "per-source-caller-owned",
-  });
+export const PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_REVISION_V1 = hashCanonicalJsonV1({
+  policyVersion: PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_VERSION_V1,
+  originalReservation: "top-1",
+  requirementAllocation: "round-robin-by-plan-order",
+  requirementLaneOrdering: "global-rrf-within-lane-eligible-sources",
+  remainder: "global-rrf",
+  sourceCap: "caller-owned",
+  evidenceCap: "per-source-caller-owned",
+});
 
 export interface MemoryRequirementAcquisitionLaneV1 {
   readonly requirementId: string;
@@ -87,10 +86,7 @@ export function buildMemoryRequirementFairAcquisitionV1(input: {
   const requirementLists = input.requirements.map((lane, laneIndex) =>
     namespacedLists(lane.result.lists, `requirement-${laneIndex}`, 0.8),
   );
-  const allLists = Object.freeze([
-    ...originalLists,
-    ...requirementLists.flat(),
-  ]);
+  const allLists = Object.freeze([...originalLists, ...requirementLists.flat()]);
   const uniqueSourceCount = countUniqueSources(allLists);
   const globalFusion = rankMemoryEvidenceCandidatesV2({
     lists: allLists,
@@ -110,13 +106,9 @@ export function buildMemoryRequirementFairAcquisitionV1(input: {
   // by original + requirement retrieval is not displaced by a leaf-only hit.
   const requirementSourceOrders = requirementLists.map((lists) => {
     const eligible = new Set(
-      lists.flatMap((list) =>
-        list.candidates.map((candidate) => candidate.sourceId.trim()),
-      ),
+      lists.flatMap((list) => list.candidates.map((candidate) => candidate.sourceId.trim())),
     );
-    return globalFusion.sources.filter((source) =>
-      eligible.has(source.sourceId),
-    );
+    return globalFusion.sources.filter((source) => eligible.has(source.sourceId));
   });
 
   const selectedSourceIds: string[] = [];
@@ -161,8 +153,7 @@ export function buildMemoryRequirementFairAcquisitionV1(input: {
     addSource(source.sourceId);
     if (selectedSourceIds.length >= input.maxSources) break;
   }
-  const globallyFilledSourceCount =
-    selectedSourceIds.length - fairSelectedCount;
+  const globallyFilledSourceCount = selectedSourceIds.length - fairSelectedCount;
   const sourceById = new Map(
     globalFusion.sources.map((source) => [source.sourceId, source] as const),
   );
@@ -179,10 +170,7 @@ export function buildMemoryRequirementFairAcquisitionV1(input: {
     telemetry: Object.freeze({
       ...globalFusion.telemetry,
       returnedSourceCount: sources.length,
-      returnedEvidenceCount: sources.reduce(
-        (total, source) => total + source.evidence.length,
-        0,
-      ),
+      returnedEvidenceCount: sources.reduce((total, source) => total + source.evidence.length, 0),
     }),
   }) satisfies MemoryEvidenceCandidateFusionV2;
 
@@ -226,13 +214,9 @@ export function buildMemoryRequirementFairAcquisitionV1(input: {
   const report = Object.freeze({
     policyVersion: PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_VERSION_V1,
     policyRevision: PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_REVISION_V1,
-    acquisitionRevision: hashCanonicalJsonV1(
-      acquisitionIdentity as unknown as JsonValue,
-    ),
+    acquisitionRevision: hashCanonicalJsonV1(acquisitionIdentity as unknown as JsonValue),
     originalLaneMode: input.originalLaneMode,
-    ...(originalReservedSourceId === undefined
-      ? {}
-      : { originalReservedSourceId }),
+    ...(originalReservedSourceId === undefined ? {} : { originalReservedSourceId }),
     requirementContributions,
     selectedSourceIds: Object.freeze([...selectedSourceIds]),
     telemetry: Object.freeze({
@@ -262,19 +246,13 @@ function namespacedLists(
   );
 }
 
-function countUniqueSources(
-  lists: readonly MemoryEvidenceCandidateRankListV2[],
-): number {
+function countUniqueSources(lists: readonly MemoryEvidenceCandidateRankListV2[]): number {
   return new Set(
-    lists.flatMap((list) =>
-      list.candidates.map((candidate) => candidate.sourceId.trim()),
-    ),
+    lists.flatMap((list) => list.candidates.map((candidate) => candidate.sourceId.trim())),
   ).size;
 }
 
-function discoveryListIdentity(
-  lists: readonly MemoryEvidenceCandidateRankListV2[],
-): JsonValue {
+function discoveryListIdentity(lists: readonly MemoryEvidenceCandidateRankListV2[]): JsonValue {
   return lists.map((list) => ({
     channel: list.channel,
     retrieverId: list.retrieverId,

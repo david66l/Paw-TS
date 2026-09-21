@@ -11,9 +11,7 @@ import { TiktokenEstimator } from "@paw/core";
 import { ContextBuilder } from "../src/db/modules/index.js";
 import type { WorkingMemory } from "../src/db/types.js";
 
-function makeWorkingMemory(
-  overrides: Partial<WorkingMemory> = {},
-): WorkingMemory {
+function makeWorkingMemory(overrides: Partial<WorkingMemory> = {}): WorkingMemory {
   return {
     id: "wm-1",
     taskId: "task-1",
@@ -53,14 +51,11 @@ describe("ContextBuilder 估算口径统一（AC-P1-9）", () => {
     // item 级估算 = 注入估算器对渲染内容的计数（非 ascii/4+nonAscii/1.5）
     const hotGoal = result.items.find((i) => i.sourceId === "goal");
     if (!hotGoal) throw new Error("goal hot item missing");
-    expect(hotGoal.estimatedTokens).toBe(
-      estimator.count(`[CURRENT GOAL]\n${goal}`),
-    );
+    expect(hotGoal.estimatedTokens).toBe(estimator.count(`[CURRENT GOAL]\n${goal}`));
 
     // 上报口径 = 注入估算器对渲染结果的计数 + 用户请求
     expect(result.tokenUsage.estimatedUsed).toBe(
-      estimator.count(result.renderedPrompt) +
-        estimator.count(currentUserRequest),
+      estimator.count(result.renderedPrompt) + estimator.count(currentUserRequest),
     );
   });
 
@@ -89,8 +84,6 @@ describe("ContextBuilder 估算口径统一（AC-P1-9）", () => {
     });
     const hotGoal = result.items.find((i) => i.sourceId === "goal");
     if (!hotGoal) throw new Error("goal hot item missing");
-    expect(hotGoal.estimatedTokens).toBe(
-      estimator.count(`[CURRENT GOAL]\n${goal}`),
-    );
+    expect(hotGoal.estimatedTokens).toBe(estimator.count(`[CURRENT GOAL]\n${goal}`));
   });
 });

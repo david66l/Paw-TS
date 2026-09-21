@@ -60,11 +60,7 @@ export function planItemsFromUnknown(items: readonly unknown[]): PlanItem[] {
 
     // 提取 task_id：优先 snake_case，回退 camelCase
     const taskId =
-      typeof o.task_id === "string"
-        ? o.task_id
-        : typeof o.taskId === "string"
-          ? o.taskId
-          : "";
+      typeof o.task_id === "string" ? o.task_id : typeof o.taskId === "string" ? o.taskId : "";
 
     // id 和 task_id 缺一不可
     if (!id || !taskId) {
@@ -73,10 +69,7 @@ export function planItemsFromUnknown(items: readonly unknown[]): PlanItem[] {
 
     // 解析状态：只接受已知状态值，否则默认为 PENDING
     const statusRaw = typeof o.status === "string" ? o.status : "";
-    const status =
-      statusRaw && isPlanItemStatus(statusRaw)
-        ? statusRaw
-        : PlanItemStatus.PENDING;
+    const status = statusRaw && isPlanItemStatus(statusRaw) ? statusRaw : PlanItemStatus.PENDING;
 
     // 解析依赖列表：同时支持 snake_case 和 camelCase，过滤掉非字符串元素
     const dependsRaw = o.depends_on ?? o.dependsOn;

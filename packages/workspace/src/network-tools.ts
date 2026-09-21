@@ -123,9 +123,7 @@ function extractTitle(html: string): string | undefined {
  * @param opts 抓取配置（URL 和可选长度限制）
  * @returns 包含 content、title 或 error 的结果
  */
-export async function fetchWebPage(
-  opts: WebFetchOptions,
-): Promise<WebFetchResult> {
+export async function fetchWebPage(opts: WebFetchOptions): Promise<WebFetchResult> {
   const url = opts.url.trim();
   if (!url) {
     return { error: "missing url" };
@@ -177,9 +175,7 @@ export async function fetchWebPage(
  * @param opts 搜索配置（关键词和可选最大结果数）
  * @returns 包含搜索结果列表或 error 的结果
  */
-export async function searchWeb(
-  opts: WebSearchOptions,
-): Promise<WebSearchResult> {
+export async function searchWeb(opts: WebSearchOptions): Promise<WebSearchResult> {
   const query = opts.query.trim();
   if (!query) {
     return { error: "missing query" };
@@ -190,8 +186,7 @@ export async function searchWeb(
     const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const res = await fetch(searchUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0",
       },
     });
     if (!res.ok) {
@@ -234,13 +229,9 @@ function parseDuckDuckGoResults(
   // 从索引 1 开始，因为 split 的第一个元素是第一个分隔符之前的内容（非结果）
   for (let i = 1; i < resultBlocks.length && results.length < maxResults; i++) {
     const block = resultBlocks[i]!;
-    const titleMatch = block.match(
-      /<a[^>]*class="result__a"[^>]*>([\s\S]*?)<\/a>/,
-    );
+    const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*>([\s\S]*?)<\/a>/);
     const urlMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]*)"/);
-    const snippetMatch = block.match(
-      /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/,
-    );
+    const snippetMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
     if (titleMatch && urlMatch) {
       const title = stripHtml(titleMatch[1]!).trim();
       let url = urlMatch[1]!;

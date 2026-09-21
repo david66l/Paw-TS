@@ -107,11 +107,10 @@ export function parsePawNextProductProfileInternal(
     "estimationMarginTokens",
     "estimator",
   ]);
-  const estimator = exactRecordInternal(
-    budget.estimator,
-    `${label}.budget.estimator`,
-    ["id", "version"],
-  );
+  const estimator = exactRecordInternal(budget.estimator, `${label}.budget.estimator`, [
+    "id",
+    "version",
+  ]);
   const permission = parsePermission(record.permission, `${label}.permission`);
   new FrozenPermissionEngineV1(permission);
   if (record.approval !== "unavailable") {
@@ -124,10 +123,7 @@ export function parsePawNextProductProfileInternal(
     model,
     control: Object.freeze({
       mode: "interactive",
-      maxModelTurns: positiveInteger(
-        control.maxModelTurns,
-        `${label}.control.maxModelTurns`,
-      ),
+      maxModelTurns: positiveInteger(control.maxModelTurns, `${label}.control.maxModelTurns`),
       naturalStop: oneOf(
         control.naturalStop,
         ["complete", "await_user"] as const,
@@ -150,10 +146,7 @@ export function parsePawNextProductProfileInternal(
       ),
       estimator: Object.freeze({
         id: nonEmptyString(estimator.id, `${label}.budget.estimator.id`),
-        version: nonEmptyString(
-          estimator.version,
-          `${label}.budget.estimator.version`,
-        ),
+        version: nonEmptyString(estimator.version, `${label}.budget.estimator.version`),
       }),
     }),
     permission,
@@ -170,9 +163,7 @@ export function buildPawNextTaskOptionsFromProfileInternal(
   input: BuildPawNextTaskOptionsFromProfileInputV1,
 ): RunExistingPawNextTaskOptionsV1 {
   const profile = parsePawNextProductProfileInternal(input.profile, "profile");
-  const workspaceRoot = canonicalPawNextWorkspaceInternal(
-    input.identity.workspaceRoot,
-  );
+  const workspaceRoot = canonicalPawNextWorkspaceInternal(input.identity.workspaceRoot);
   assertIdentity(input.identity);
   if (typeof input.apiKey !== "string" || !input.apiKey.trim()) {
     throw new Error("Named Paw Next credential is empty");
@@ -199,9 +190,7 @@ export function buildPawNextTaskOptionsFromProfileInternal(
     profile.budget.estimator.id !== `core:${model.label}` ||
     profile.budget.estimator.version !== "v1"
   ) {
-    throw new Error(
-      "Paw Next profile must name the exact Core built-in estimator",
-    );
+    throw new Error("Paw Next profile must name the exact Core built-in estimator");
   }
   const profileIdentity: PawNextProductProfileIdentityV1 = Object.freeze({
     profileId: profile.profileId,
@@ -215,10 +204,7 @@ export function buildPawNextTaskOptionsFromProfileInternal(
     goal: input.identity.goal,
     model,
     profileIdentity,
-    credentialBindingHash: hashCredentialBinding(
-      profile.model.credentialSlot,
-      input.apiKey,
-    ),
+    credentialBindingHash: hashCredentialBinding(profile.model.credentialSlot, input.apiKey),
     providerProtocol: profile.model.protocol,
     transport: profile.model.transport,
     permissionConfig: profile.permission,
@@ -231,9 +217,7 @@ export function buildPawNextTaskOptionsFromProfileInternal(
     estimatorId: profile.budget.estimator.id,
     estimatorVersion: profile.budget.estimator.version,
     heartbeatPolicy: profile.heartbeat,
-    ...(profile.shellSandbox === null
-      ? {}
-      : { shellSandbox: profile.shellSandbox }),
+    ...(profile.shellSandbox === null ? {} : { shellSandbox: profile.shellSandbox }),
   });
 }
 
@@ -257,10 +241,7 @@ export function exactRecordInternal(
   return record;
 }
 
-function parseModel(
-  value: unknown,
-  label: string,
-): PawNextProductModelProfileV1 {
+function parseModel(value: unknown, label: string): PawNextProductModelProfileV1 {
   const record = exactRecordInternal(value, label, [
     "protocol",
     "transport",
@@ -284,10 +265,7 @@ function parseModel(
   );
   if (capabilities.imageInput !== undefined && capabilities.imageInput !== true)
     throw new Error("imageInput must be true when declared");
-  const thinkingEnabled = nullableBoolean(
-    record.thinkingEnabled,
-    `${label}.thinkingEnabled`,
-  );
+  const thinkingEnabled = nullableBoolean(record.thinkingEnabled, `${label}.thinkingEnabled`);
   const reasoningEffort = nullableOneOf(
     record.reasoningEffort,
     ["high", "max"] as const,
@@ -301,17 +279,11 @@ function parseModel(
   }
   return Object.freeze({
     protocol,
-    transport: oneOf(
-      record.transport,
-      ["complete", "stream"] as const,
-      `${label}.transport`,
-    ),
+    transport: oneOf(record.transport, ["complete", "stream"] as const, `${label}.transport`),
     model: nonEmptyString(record.model, `${label}.model`),
     baseUrl: absoluteHttpUrl(record.baseUrl, `${label}.baseUrl`),
     capabilities: Object.freeze({
-      ...(capabilities.imageInput === true
-        ? { imageInput: true as const }
-        : {}),
+      ...(capabilities.imageInput === true ? { imageInput: true as const } : {}),
       contextWindow: positiveInteger(
         capabilities.contextWindow,
         `${label}.capabilities.contextWindow`,
@@ -327,15 +299,8 @@ function parseModel(
   });
 }
 
-function parsePermission(
-  value: unknown,
-  label: string,
-): FrozenPermissionConfigV1 {
-  const record = exactRecordInternal(value, label, [
-    "policyVersion",
-    "defaultAction",
-    "rules",
-  ]);
+function parsePermission(value: unknown, label: string): FrozenPermissionConfigV1 {
+  const record = exactRecordInternal(value, label, ["policyVersion", "defaultAction", "rules"]);
   if (!Array.isArray(record.rules)) {
     throw new Error(`${label}.rules must be an array`);
   }
@@ -382,28 +347,14 @@ function parsePermission(
     });
   });
   return Object.freeze({
-    policyVersion: nonEmptyString(
-      record.policyVersion,
-      `${label}.policyVersion`,
-    ),
-    defaultAction: oneOf(
-      record.defaultAction,
-      ["ask", "deny"] as const,
-      `${label}.defaultAction`,
-    ),
+    policyVersion: nonEmptyString(record.policyVersion, `${label}.policyVersion`),
+    defaultAction: oneOf(record.defaultAction, ["ask", "deny"] as const, `${label}.defaultAction`),
     rules: Object.freeze(rules),
   });
 }
 
-function parseHeartbeat(
-  value: unknown,
-  label: string,
-): SessionLeaseHeartbeatPolicyV1 {
-  const record = exactRecordInternal(value, label, [
-    "policyVersion",
-    "ttlMs",
-    "intervalMs",
-  ]);
+function parseHeartbeat(value: unknown, label: string): SessionLeaseHeartbeatPolicyV1 {
+  const record = exactRecordInternal(value, label, ["policyVersion", "ttlMs", "intervalMs"]);
   if (record.policyVersion !== "paw.session-lease-heartbeat.v1") {
     throw new Error(`${label}.policyVersion is unsupported`);
   }
@@ -435,39 +386,16 @@ function parseShellSandbox(value: unknown, label: string): ShellSandboxConfig {
     throw new Error(`${label}.containerWorkspaceRoot must be absolute POSIX`);
   }
   return Object.freeze({
-    mode: oneOf(
-      record.mode,
-      ["off", "workspace", "strict"] as const,
-      `${label}.mode`,
-    ),
-    network: oneOf(
-      record.network,
-      ["deny", "full"] as const,
-      `${label}.network`,
-    ),
+    mode: oneOf(record.mode, ["off", "workspace", "strict"] as const, `${label}.mode`),
+    network: oneOf(record.network, ["deny", "full"] as const, `${label}.network`),
     image: nonEmptyString(record.image, `${label}.image`),
-    runtime: oneOf(
-      record.runtime,
-      ["docker", "podman"] as const,
-      `${label}.runtime`,
-    ),
+    runtime: oneOf(record.runtime, ["docker", "podman"] as const, `${label}.runtime`),
     memoryMb: positiveInteger(record.memoryMb, `${label}.memoryMb`),
     cpus: positiveNumber(record.cpus, `${label}.cpus`),
     containerWorkspaceRoot: workspaceRoot,
-    commandShell: oneOf(
-      record.commandShell,
-      ["sh", "bash"] as const,
-      `${label}.commandShell`,
-    ),
-    pullPolicy: oneOf(
-      record.pullPolicy,
-      ["missing", "never"] as const,
-      `${label}.pullPolicy`,
-    ),
-    workspaceReadOnly: booleanValue(
-      record.workspaceReadOnly,
-      `${label}.workspaceReadOnly`,
-    ),
+    commandShell: oneOf(record.commandShell, ["sh", "bash"] as const, `${label}.commandShell`),
+    pullPolicy: oneOf(record.pullPolicy, ["missing", "never"] as const, `${label}.pullPolicy`),
+    workspaceReadOnly: booleanValue(record.workspaceReadOnly, `${label}.workspaceReadOnly`),
   });
 }
 
@@ -491,8 +419,7 @@ function inspectSafeWorkspaceFile(
   for (const [index, segment] of segments.entries()) {
     current = path.join(current, segment);
     const stat = fs.lstatSync(current);
-    if (stat.isSymbolicLink())
-      throw new Error(`${label} path cannot use links`);
+    if (stat.isSymbolicLink()) throw new Error(`${label} path cannot use links`);
     if (index === segments.length - 1) {
       if (!stat.isFile() || stat.nlink !== 1) {
         throw new Error(`${label} must be a single-link regular file`);
@@ -512,9 +439,7 @@ function inspectSafeWorkspaceFile(
   return Object.freeze({ path: canonical, dev: stat.dev, ino: stat.ino });
 }
 
-function assertIdentity(
-  identity: BuildPawNextTaskOptionsFromProfileInputV1["identity"],
-): void {
+function assertIdentity(identity: BuildPawNextTaskOptionsFromProfileInputV1["identity"]): void {
   for (const [key, value] of [
     ["sessionId", identity.sessionId],
     ["runId", identity.runId],

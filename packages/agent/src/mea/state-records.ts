@@ -9,11 +9,7 @@
 import type { MeaAuditReportV1 } from "./audit-report.js";
 
 export type MeaStateRecordKindV1 = "requirement" | "artifact" | "fact";
-export type MeaStateRecordStatusV1 =
-  | "completed"
-  | "pending"
-  | "blocked"
-  | "untrusted";
+export type MeaStateRecordStatusV1 = "completed" | "pending" | "blocked" | "untrusted";
 
 export interface MeaStateRecordV1 {
   readonly kind: MeaStateRecordKindV1;
@@ -69,9 +65,7 @@ export function meaRecordsFromAuditReport(
     evidence: {
       auditId,
       ...(fact.evidence.files?.length ? { files: fact.evidence.files } : {}),
-      ...(fact.evidence.commands?.length
-        ? { commands: fact.evidence.commands }
-        : {}),
+      ...(fact.evidence.commands?.length ? { commands: fact.evidence.commands } : {}),
       ...(fact.evidence.notes ? { notes: fact.evidence.notes } : {}),
     },
     updatedAt: now,
@@ -114,9 +108,7 @@ export function mergeMeaStateRecords(
       continue;
     }
     const auditUpgrade =
-      record.status === "completed" &&
-      record.evidence?.auditId &&
-      current.status !== "completed";
+      record.status === "completed" && record.evidence?.auditId && current.status !== "completed";
     if (auditUpgrade || current.status === "untrusted") {
       byKey.set(key, { ...record, updatedAt: now });
     }

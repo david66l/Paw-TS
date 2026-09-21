@@ -15,11 +15,7 @@ describe("loadPawMd", () => {
 
   test("reads paw.md from workspace root", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-md-"));
-    writeFileSync(
-      path.join(root, "paw.md"),
-      "# Rules\n\nUse TypeScript.\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "paw.md"), "# Rules\n\nUse TypeScript.\n", "utf8");
     const r = loadPawMd(root);
     expect(r.content).toBe("# Rules\n\nUse TypeScript.\n");
     expect(r.path).toBe("paw.md");

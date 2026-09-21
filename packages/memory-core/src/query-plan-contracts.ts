@@ -6,23 +6,11 @@ export const PAW_MEMORY_EVIDENCE_TEMPORAL_CONSTRAINT_VERSION_V1 =
 export const PAW_MEMORY_EVIDENCE_TEMPORAL_COMPATIBILITY_VERSION_V1 =
   "paw.memory-evidence-temporal-compatibility.v1:leaf-retrieval" as const;
 
-export type MemoryEvidenceAnswerShapeV3 =
-  | "lookup"
-  | "compare"
-  | "aggregate"
-  | "recommend";
+export type MemoryEvidenceAnswerShapeV3 = "lookup" | "compare" | "aggregate" | "recommend";
 
-export type MemoryEvidenceTemporalModeV3 =
-  | "any"
-  | "latest"
-  | "as_of"
-  | "history"
-  | "range";
+export type MemoryEvidenceTemporalModeV3 = "any" | "latest" | "as_of" | "history" | "range";
 
-export type MemoryEvidenceTemporalAnchorPolicyV1 =
-  | "none"
-  | "query_cutoff"
-  | "query_derived_anchor";
+export type MemoryEvidenceTemporalAnchorPolicyV1 = "none" | "query_cutoff" | "query_derived_anchor";
 export type MemoryEvidenceTemporalIntervalPolicyV1 =
   | "unbounded"
   | "latest_at_or_before_cutoff"
@@ -128,19 +116,13 @@ export interface MemoryEvidenceBoundTemporalConstraintV1
 }
 
 export type MemoryEvidenceRoleConstraintV3 = "user" | "assistant" | "any";
-export type MemoryEvidenceRequirementRoleV4 = Exclude<
-  MemoryEvidenceRoleConstraintV3,
-  "any"
->;
+export type MemoryEvidenceRequirementRoleV4 = Exclude<MemoryEvidenceRoleConstraintV3, "any">;
 export type MemoryEvidenceRequirementDependencyV4 =
   | "independent"
   | "depends_on"
   | "responds_to"
   | "supersedes";
-export type MemoryEvidenceIntentAxisV1 =
-  | "answerShape"
-  | "temporalMode"
-  | "roleConstraint";
+export type MemoryEvidenceIntentAxisV1 = "answerShape" | "temporalMode" | "roleConstraint";
 export type MemoryEvidenceIntentAxisAuthorityV1 = "fixed" | "semantic";
 
 /** Code locks explicit cues; a planner may normalize only semantic fallbacks. */
@@ -149,16 +131,8 @@ export interface MemoryEvidenceIntentBoundaryV1 {
   readonly temporalMode: MemoryEvidenceIntentAxisAuthorityV1;
   readonly roleConstraint: MemoryEvidenceIntentAxisAuthorityV1;
 }
-export type MemoryEvidenceRelationV3 =
-  | "direct"
-  | "temporal"
-  | "comparative"
-  | "inferred";
-export type MemoryEvidenceCoverageModeV3 =
-  | "any"
-  | "all"
-  | "latest"
-  | "convergent";
+export type MemoryEvidenceRelationV3 = "direct" | "temporal" | "comparative" | "inferred";
+export type MemoryEvidenceCoverageModeV3 = "any" | "all" | "latest" | "convergent";
 
 /**
  * Query intent is deliberately factored into independent axes. A question can

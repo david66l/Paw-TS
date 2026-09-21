@@ -51,11 +51,7 @@ export interface MemoryMetadata {
 }
 
 /** Rule-based task category used to allocate memory retrieval context. */
-export type TaskProfile =
-  | "refactor_arch"
-  | "bug_fix"
-  | "simple_script"
-  | "general";
+export type TaskProfile = "refactor_arch" | "bug_fix" | "simple_script" | "general";
 
 /**
  * Read-only record consumed by context selection and system-prompt rendering.

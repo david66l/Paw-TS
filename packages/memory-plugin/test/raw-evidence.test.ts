@@ -46,10 +46,7 @@ describe("memory raw evidence hydration", () => {
       signal: new AbortController().signal,
     });
 
-    expect(requested).toEqual([
-      "journal:run-1#input-fact-2",
-      "journal:run-2#input-fact-4",
-    ]);
+    expect(requested).toEqual(["journal:run-1#input-fact-2", "journal:run-2#input-fact-4"]);
     expect(resolution.spans).toHaveLength(2);
     expect(resolution.spans[0]?.memoryIds).toEqual(["memory-card-1"]);
     expect(resolution.spans[1]?.memoryIds).toEqual(["memory-topic-1"]);
@@ -75,21 +72,15 @@ describe("memory raw evidence hydration", () => {
       signal: new AbortController().signal,
     });
 
-    expect(resolution.spans.map((span) => span.content.length)).toEqual([
-      400, 100,
-    ]);
-    expect(
-      resolution.spans.reduce((total, span) => total + span.content.length, 0),
-    ).toBe(500);
+    expect(resolution.spans.map((span) => span.content.length)).toEqual([400, 100]);
+    expect(resolution.spans.reduce((total, span) => total + span.content.length, 0)).toBe(500);
   });
 
   test("settles once at a safe boundary and renders a dynamic final section", async () => {
     const session = new FakeSession(initialSnapshot());
     const query = projectCurrentMemoryQueryV1(session.snapshot, profile);
     if (!query) throw new Error("expected memory query");
-    await session.append([
-      retrievalFact(query.queryId, "journal:prior-run#input-fact-2"),
-    ]);
+    await session.append([retrievalFact(query.queryId, "journal:prior-run#input-fact-2")]);
     let resolves = 0;
     const content = "The original user message contains the exact shared fact.";
     const input = createMemoryRawEvidenceInputPortV1({

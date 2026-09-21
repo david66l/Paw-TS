@@ -39,15 +39,10 @@ describe("source-grounded memory scene projector", () => {
         },
       ],
     });
-    expect(scenes.map((scene) => scene.sourceId)).toEqual([
-      "document-a",
-      "document-b",
-    ]);
+    expect(scenes.map((scene) => scene.sourceId)).toEqual(["document-a", "document-b"]);
     expect(scenes[1]?.atomIds).toEqual(["b-1", "b-2"]);
     expect(scenes[1]?.sourceSeqs).toEqual([3, 8]);
-    expect(scenes[1]?.text.indexOf("Earlier")).toBeLessThan(
-      scenes[1]?.text.indexOf("Later") ?? 0,
-    );
+    expect(scenes[1]?.text.indexOf("Earlier")).toBeLessThan(scenes[1]?.text.indexOf("Later") ?? 0);
   });
 
   test("allocates a fair bounded scene budget per selected source", () => {
@@ -80,9 +75,7 @@ describe("source-grounded memory scene projector", () => {
     });
     expect(scenes).toHaveLength(2);
     expect(scenes[1]?.text).toContain("short second source");
-    expect(
-      scenes.reduce((sum, scene) => sum + scene.text.length, 0),
-    ).toBeLessThanOrEqual(1_024);
+    expect(scenes.reduce((sum, scene) => sum + scene.text.length, 0)).toBeLessThanOrEqual(1_024);
   });
 
   test("rejects duplicate atom identity inside one source", () => {

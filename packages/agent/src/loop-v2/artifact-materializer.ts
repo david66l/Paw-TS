@@ -40,9 +40,7 @@ interface PathTransitionV2 {
   readonly afterContent: string | null;
 }
 
-export function createArtifactContentBlobV2(
-  content: string,
-): ArtifactContentBlobV2 {
+export function createArtifactContentBlobV2(content: string): ArtifactContentBlobV2 {
   const contentHash = artifactContentHashV2(content);
   return {
     ref: `artifact://loop-v2/content/${contentHash.slice("sha256:".length)}`,
@@ -64,22 +62,16 @@ export function renderMutationStepPatchV2(
   for (const transition of transitions) {
     const path = normalizeArtifactPath(transition.path);
     if (!path || paths.has(path)) {
-      throw new Error(
-        `Invalid or duplicate mutation transition: ${transition.path}`,
-      );
+      throw new Error(`Invalid or duplicate mutation transition: ${transition.path}`);
     }
     paths.add(path);
     normalized.push({
       path,
       beforeHash:
-        transition.beforeContent === null
-          ? null
-          : artifactContentHashV2(transition.beforeContent),
+        transition.beforeContent === null ? null : artifactContentHashV2(transition.beforeContent),
       beforeContent: transition.beforeContent,
       afterHash:
-        transition.afterContent === null
-          ? null
-          : artifactContentHashV2(transition.afterContent),
+        transition.afterContent === null ? null : artifactContentHashV2(transition.afterContent),
       afterContent: transition.afterContent,
     });
   }
@@ -89,8 +81,7 @@ export function renderMutationStepPatchV2(
     .map(renderTransitionPatch)
     .filter(Boolean)
     .join("\n");
-  if (!patch.trim())
-    throw new Error("Mutation transition has no content change");
+  if (!patch.trim()) throw new Error("Mutation transition has no content change");
   return patch;
 }
 
@@ -101,8 +92,7 @@ export function materializeCandidateArtifactV2(
 ): MaterializedCandidateArtifactV2 {
   const errors: string[] = [];
   const ordered = [...mutations].sort(
-    (left, right) =>
-      left.mutationRevision - right.mutationRevision || left.seq - right.seq,
+    (left, right) => left.mutationRevision - right.mutationRevision || left.seq - right.seq,
   );
   const blobByRef = new Map<string, ArtifactContentBlobV2>();
   for (const blob of blobs) {
@@ -122,9 +112,7 @@ export function materializeCandidateArtifactV2(
     const mutation = ordered[index];
     if (!mutation) continue;
     if (mutation.mutationRevision !== index + 1) {
-      errors.push(
-        `mutation revisions are not contiguous at r${mutation.mutationRevision}`,
-      );
+      errors.push(`mutation revisions are not contiguous at r${mutation.mutationRevision}`);
     }
     if (!mutation.patch.trim()) {
       errors.push(`mutation r${mutation.mutationRevision} has an empty patch`);
@@ -135,9 +123,7 @@ export function materializeCandidateArtifactV2(
   for (const mutation of ordered) {
     const uniquePaths = new Set(mutation.paths);
     if (uniquePaths.size !== mutation.paths.length || uniquePaths.size === 0) {
-      errors.push(
-        `mutation r${mutation.mutationRevision} has duplicate or empty paths`,
-      );
+      errors.push(`mutation r${mutation.mutationRevision} has duplicate or empty paths`);
     }
     const stepContents = new Map<
       string,
@@ -149,9 +135,7 @@ export function materializeCandidateArtifactV2(
     for (const rawPath of uniquePaths) {
       const path = normalizeArtifactPath(rawPath);
       if (!path) {
-        errors.push(
-          `mutation r${mutation.mutationRevision} has unsafe path: ${rawPath}`,
-        );
+        errors.push(`mutation r${mutation.mutationRevision} has unsafe path: ${rawPath}`);
         continue;
       }
       const before = resolveContent(
@@ -193,9 +177,7 @@ export function materializeCandidateArtifactV2(
   }
 
   if (crossCheck.status === "mismatch") {
-    errors.push(
-      `Git cross-check mismatch${crossCheck.detail ? `: ${crossCheck.detail}` : ""}`,
-    );
+    errors.push(`Git cross-check mismatch${crossCheck.detail ? `: ${crossCheck.detail}` : ""}`);
   }
 
   const transitions = [...terminalByPath.values()].sort((left, right) =>
@@ -205,9 +187,7 @@ export function materializeCandidateArtifactV2(
     (transition) => transition.beforeHash !== transition.afterHash,
   );
   const patch =
-    errors.length === 0
-      ? effective.map(renderTransitionPatch).filter(Boolean).join("\n")
-      : "";
+    errors.length === 0 ? effective.map(renderTransitionPatch).filter(Boolean).join("\n") : "";
   if (errors.length === 0 && !patch.trim()) {
     errors.push("mutation journal has no terminal content change");
   }
@@ -265,10 +245,7 @@ function resolveContent(
     errors.push(`${label} content ref not found for ${path}: ${ref}`);
     return { present: false, hash, content: null };
   }
-  if (
-    blob.contentHash !== hash ||
-    artifactContentHashV2(blob.content) !== hash
-  ) {
+  if (blob.contentHash !== hash || artifactContentHashV2(blob.content) !== hash) {
     errors.push(`${label} content hash mismatch for ${path}`);
     return { present: false, hash, content: null };
   }
@@ -279,10 +256,8 @@ function renderTransitionPatch(transition: PathTransitionV2): string {
   if (transition.beforeContent === null && transition.afterContent === null) {
     return "";
   }
-  const oldName =
-    transition.beforeContent === null ? "/dev/null" : `a/${transition.path}`;
-  const newName =
-    transition.afterContent === null ? "/dev/null" : `b/${transition.path}`;
+  const oldName = transition.beforeContent === null ? "/dev/null" : `a/${transition.path}`;
+  const newName = transition.afterContent === null ? "/dev/null" : `b/${transition.path}`;
   const patch = structuredPatch(
     oldName,
     newName,
@@ -297,19 +272,14 @@ function renderTransitionPatch(transition: PathTransitionV2): string {
 
 function validateFullStepPatch(
   mutation: MutationJournalEntryV2,
-  stepContents: ReadonlyMap<
-    string,
-    Readonly<{ before: string | null; after: string | null }>
-  >,
+  stepContents: ReadonlyMap<string, Readonly<{ before: string | null; after: string | null }>>,
   errors: string[],
 ): void {
   let parsed: ReturnType<typeof parsePatch>;
   try {
     parsed = parsePatch(mutation.patch);
   } catch {
-    errors.push(
-      `mutation r${mutation.mutationRevision} patch is not parseable`,
-    );
+    errors.push(`mutation r${mutation.mutationRevision} patch is not parseable`);
     return;
   }
   const patchByPath = new Map<string, (typeof parsed)[number]>();
@@ -318,13 +288,9 @@ function validateFullStepPatch(
       filePatch.newFileName && filePatch.newFileName !== "/dev/null"
         ? filePatch.newFileName
         : filePatch.oldFileName;
-    const path = rawName
-      ? normalizeArtifactPath(rawName.replace(/^[ab]\//, ""))
-      : undefined;
+    const path = rawName ? normalizeArtifactPath(rawName.replace(/^[ab]\//, "")) : undefined;
     if (!path || patchByPath.has(path)) {
-      errors.push(
-        `mutation r${mutation.mutationRevision} patch has an invalid or duplicate file`,
-      );
+      errors.push(`mutation r${mutation.mutationRevision} patch has an invalid or duplicate file`);
       continue;
     }
     patchByPath.set(path, filePatch);
@@ -335,27 +301,16 @@ function validateFullStepPatch(
       errors.push(`mutation r${mutation.mutationRevision} patch omits ${path}`);
       continue;
     }
-    const applied = applyPatch(
-      normalizePatchContent(contents.before ?? ""),
-      filePatch,
-      {
-        autoConvertLineEndings: true,
-      },
-    );
-    if (
-      applied === false ||
-      applied !== normalizePatchContent(contents.after ?? "")
-    ) {
-      errors.push(
-        `mutation r${mutation.mutationRevision} patch does not reproduce ${path}`,
-      );
+    const applied = applyPatch(normalizePatchContent(contents.before ?? ""), filePatch, {
+      autoConvertLineEndings: true,
+    });
+    if (applied === false || applied !== normalizePatchContent(contents.after ?? "")) {
+      errors.push(`mutation r${mutation.mutationRevision} patch does not reproduce ${path}`);
     }
   }
   for (const path of patchByPath.keys()) {
     if (!stepContents.has(path)) {
-      errors.push(
-        `mutation r${mutation.mutationRevision} patch includes undeclared ${path}`,
-      );
+      errors.push(`mutation r${mutation.mutationRevision} patch includes undeclared ${path}`);
     }
   }
 }

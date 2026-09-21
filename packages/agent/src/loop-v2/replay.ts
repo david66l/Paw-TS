@@ -47,9 +47,7 @@ export function replayLoopV2(
   };
 }
 
-export function createLoopV2Checkpoint(
-  state: WorkingDecisionStateV2,
-): LoopV2Checkpoint {
+export function createLoopV2Checkpoint(state: WorkingDecisionStateV2): LoopV2Checkpoint {
   const detached = structuredClone(state);
   return {
     schemaVersion: LOOP_V2_SCHEMA_VERSION,
@@ -65,9 +63,7 @@ export function restoreLoopV2Checkpoint(
   checkpoint: LoopV2Checkpoint,
 ): WorkingDecisionStateV2 {
   if (checkpoint.schemaVersion !== LOOP_V2_SCHEMA_VERSION) {
-    throw new Error(
-      `Unsupported loop v2 checkpoint schema: ${checkpoint.schemaVersion}`,
-    );
+    throw new Error(`Unsupported loop v2 checkpoint schema: ${checkpoint.schemaVersion}`);
   }
   if (checkpoint.runId !== runId || checkpoint.state.runId !== runId) {
     throw new Error(`Loop v2 checkpoint run mismatch: ${runId}`);

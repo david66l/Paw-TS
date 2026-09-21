@@ -24,14 +24,10 @@ import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine
 
 const root = resolve(import.meta.dir, "../../..");
 const cacheDir =
-  process.env.MAB_HF_CACHE ??
-  resolve(root, "benchmarks/memory-agent-bench/hf-cache");
+  process.env.MAB_HF_CACHE ?? resolve(root, "benchmarks/memory-agent-bench/hf-cache");
 const parquetDir =
-  process.env.MAB_HF_PARQUET ??
-  resolve(root, "benchmarks/memory-agent-bench/hf-dataset/data");
-const outPath =
-  process.argv[2] ??
-  resolve(root, "benchmarks/memory-agent-bench/last-run-hf.json");
+  process.env.MAB_HF_PARQUET ?? resolve(root, "benchmarks/memory-agent-bench/hf-dataset/data");
+const outPath = process.argv[2] ?? resolve(root, "benchmarks/memory-agent-bench/last-run-hf.json");
 
 if (!(await ping())) {
   console.error("Postgres 不可达：请设置 DATABASE_URL");
@@ -56,16 +52,12 @@ if ("error" in cfg) {
 const dimEnv = process.env.MAB_DIMENSIONS?.split(/[,+\s]+/).filter(Boolean) as
   | MabDimension[]
   | undefined;
-const maxSamples = process.env.MAB_MAX_SAMPLES
-  ? Number(process.env.MAB_MAX_SAMPLES)
-  : undefined;
+const maxSamples = process.env.MAB_MAX_SAMPLES ? Number(process.env.MAB_MAX_SAMPLES) : undefined;
 /** 官方单样本可有上百题；默认每样本 5 题，避免全量数千次 LLM */
 const maxQaPerSample = process.env.MAB_MAX_QA_PER_SAMPLE
   ? Number(process.env.MAB_MAX_QA_PER_SAMPLE)
   : 5;
-const chunkSize = process.env.MAB_CHUNK_SIZE
-  ? Number(process.env.MAB_CHUNK_SIZE)
-  : 2048;
+const chunkSize = process.env.MAB_CHUNK_SIZE ? Number(process.env.MAB_CHUNK_SIZE) : 2048;
 /** AR/TTL 默认给更多 chunk；LRU 仍可用环境变量抬到 256 */
 const maxChunks = process.env.MAB_MAX_CHUNKS
   ? Number(process.env.MAB_MAX_CHUNKS)
@@ -74,9 +66,7 @@ const maxChunks = process.env.MAB_MAX_CHUNKS
     : dimEnv?.some((d) => d === "AR" || d === "TTL" || d === "CR")
       ? 192
       : 96;
-const llmBudget = process.env.MAB_LLM_BUDGET
-  ? Number(process.env.MAB_LLM_BUDGET)
-  : 50_000;
+const llmBudget = process.env.MAB_LLM_BUDGET ? Number(process.env.MAB_LLM_BUDGET) : 50_000;
 
 const dimToSplit: Record<string, string> = {
   AR: "Accurate_Retrieval",
@@ -84,9 +74,7 @@ const dimToSplit: Record<string, string> = {
   LRU: "Long_Range_Understanding",
   CR: "Conflict_Resolution",
 };
-const hfSplits = dimEnv?.length
-  ? dimEnv.map((d) => dimToSplit[d]).filter(Boolean)
-  : undefined;
+const hfSplits = dimEnv?.length ? dimEnv.map((d) => dimToSplit[d]).filter(Boolean) : undefined;
 
 console.log(`HF cache: ${cacheDir}`);
 console.log(`HF parquet: ${parquetDir}`);
@@ -114,9 +102,7 @@ if (loaded.samples.length === 0) {
 const wantSf = !dimEnv || dimEnv.includes("SF");
 let samples = [
   ...loaded.samples,
-  ...(wantSf
-    ? BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF")
-    : []),
+  ...(wantSf ? BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF") : []),
 ];
 samples = filterMabSamples(samples, {
   dimensions: dimEnv,

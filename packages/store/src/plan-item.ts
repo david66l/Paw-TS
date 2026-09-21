@@ -26,8 +26,7 @@ export const PlanItemStatus = {
 } as const;
 
 /** 计划条目状态联合类型（从常量对象推导）。 */
-export type PlanItemStatus =
-  (typeof PlanItemStatus)[keyof typeof PlanItemStatus];
+export type PlanItemStatus = (typeof PlanItemStatus)[keyof typeof PlanItemStatus];
 
 /**
  * 工作流计划中的一行任务。

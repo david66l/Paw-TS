@@ -2,32 +2,22 @@ import { afterEach, expect, setDefaultTimeout, spyOn, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type {
-  ChatMessage,
-  LanguageModel,
-  ModelCompletionResult,
-} from "@paw/models";
-import {
-  buildPawNextTaskProfileV3,
-  runFreshPawNextTaskV3,
-} from "@paw/paw-next";
+import type { ChatMessage, LanguageModel, ModelCompletionResult } from "@paw/models";
+import { buildPawNextTaskProfileV3, runFreshPawNextTaskV3 } from "@paw/paw-next";
 import { desktopProfile, fingerprint } from "../agent-host/paw-next-profile.js";
 import { readDesktopMonitor, runDesktopNext } from "../agent-host/paw-next.js";
 
 setDefaultTimeout(60_000);
 const roots: string[] = [];
 afterEach(() => {
-  for (const root of roots.splice(0))
-    fs.rmSync(root, { recursive: true, force: true });
+  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 const final = (text: string): ModelCompletionResult => ({
   text,
   nativeAssistantContent: text,
   finishReason: "stop",
 });
-function greetingResponse(
-  messages: readonly ChatMessage[],
-): ModelCompletionResult {
+function greetingResponse(messages: readonly ChatMessage[]): ModelCompletionResult {
   // The executor's greeting and the tool-free delivery review use different
   // output contracts. Do not send greeting prose to the structured reviewer.
   if (
@@ -47,10 +37,7 @@ function greetingResponse(
   return final("你好！");
 }
 let callSequence = 0;
-const tool = (
-  name: string,
-  args: Record<string, unknown>,
-): ModelCompletionResult => ({
+const tool = (name: string, args: Record<string, unknown>): ModelCompletionResult => ({
   text: "",
   nativeAssistantContent: "",
   finishReason: "tool_calls",
@@ -152,8 +139,7 @@ test.each(["read_then_pass", "repeat_bad_report", "read_then_defect"] as const)(
         if (!text.includes("Paw environment auditor"))
           return f.options.model.complete(messages, options);
         auditCalls++;
-        if (text.includes("Your report was rejected by host validation"))
-          correctionsSeen++;
+        if (text.includes("Your report was rejected by host validation")) correctionsSeen++;
         expect(text).toContain("Auditor-owned file reads");
         if (auditCalls === 2 && outcome !== "repeat_bad_report")
           return tool("workspace_read_file", { path: "note.txt" });
@@ -164,15 +150,11 @@ test.each(["read_then_pass", "repeat_bad_report", "read_then_defect"] as const)(
         return final(
           JSON.stringify({
             completion:
-              outcome === "read_then_defect" && auditCalls >= 3
-                ? "incomplete"
-                : "complete",
+              outcome === "read_then_defect" && auditCalls >= 3 ? "incomplete" : "complete",
             summary: "检查完成",
             evidencePaths: ["note.txt"],
             unmetCriteria:
-              outcome === "read_then_defect" && auditCalls >= 3
-                ? ["内容错误，应为 checked"]
-                : [],
+              outcome === "read_then_defect" && auditCalls >= 3 ? ["内容错误，应为 checked"] : [],
           }),
         );
       },
@@ -183,10 +165,7 @@ test.each(["read_then_pass", "repeat_bad_report", "read_then_defect"] as const)(
       environmentAuditSinglePass: true,
       environmentAuditEvidenceRepair: true,
     };
-    const result = await runDesktopNext(
-      "Create note.txt containing hello",
-      options,
-    );
+    const result = await runDesktopNext("Create note.txt containing hello", options);
     const body = JSON.parse(result.text);
     if (outcome === "read_then_pass") {
       expect(body.acceptance, result.text).toBe("verified");
@@ -220,11 +199,7 @@ test.each(["pass", "turn_limit", "timeout"] as const)(
     let calls = 0;
     let timers = 0;
     const nativeTimeout = globalThis.setTimeout;
-    const timer = spyOn(globalThis, "setTimeout").mockImplementation(((
-      handler,
-      delay,
-      ...args
-    ) => {
+    const timer = spyOn(globalThis, "setTimeout").mockImplementation(((handler, delay, ...args) => {
       if (delay === 240_000) timers++;
       return nativeTimeout(
         handler,
@@ -240,8 +215,7 @@ test.each(["pass", "turn_limit", "timeout"] as const)(
           if (!text.includes("Paw environment auditor"))
             return f.options.model.complete(messages, options);
           calls++;
-          if (calls === 1)
-            return tool("workspace_read_file", { path: "note.txt" });
+          if (calls === 1) return tool("workspace_read_file", { path: "note.txt" });
           if (calls === 3 && outcome === "timeout")
             return new Promise((_resolve, reject) => {
               const signal = options!.signal!;
@@ -254,14 +228,11 @@ test.each(["pass", "turn_limit", "timeout"] as const)(
           if (calls === 3 || (calls > 3 && outcome === "turn_limit"))
             return tool("workspace_read_file", { path: "README.md" });
           if (calls === 4) {
-            expect(text).toContain(
-              "Your report was rejected by host validation",
-            );
+            expect(text).toContain("Your report was rejected by host validation");
             const ledger = messages
               .filter(
                 (m) =>
-                  typeof m.content === "string" &&
-                  m.content.includes("[Auditor-owned file reads]"),
+                  typeof m.content === "string" && m.content.includes("[Auditor-owned file reads]"),
               )
               .at(-1)!.content;
             expect(ledger).toContain("note.txt");
@@ -288,9 +259,7 @@ test.each(["pass", "turn_limit", "timeout"] as const)(
       );
       expect(f.counts().rootCalls).toBe(2);
       expect(timers).toBe(1);
-      expect(calls).toBe(
-        outcome === "pass" ? 4 : outcome === "turn_limit" ? 12 : 3,
-      );
+      expect(calls).toBe(outcome === "pass" ? 4 : outcome === "turn_limit" ? 12 : 3);
       if (outcome === "pass")
         expect(
           readDesktopMonitor(f.root, "audit")
@@ -312,16 +281,8 @@ test.each(["pass", "timeout", "changed"] as const)(
     const nativeTimeout = globalThis.setTimeout;
     // Compress only the audit deadline. Production retains its 120s deadline;
     // all real child setup, cancellation, journaling and recovery still execute.
-    const timer = spyOn(globalThis, "setTimeout").mockImplementation(((
-      handler,
-      delay,
-      ...args
-    ) =>
-      nativeTimeout(
-        handler,
-        delay === 120_000 ? 3000 : delay,
-        ...args,
-      )) as typeof setTimeout);
+    const timer = spyOn(globalThis, "setTimeout").mockImplementation(((handler, delay, ...args) =>
+      nativeTimeout(handler, delay === 120_000 ? 3000 : delay, ...args)) as typeof setTimeout);
     try {
       const model: LanguageModel = {
         ...f.options.model,
@@ -337,18 +298,14 @@ test.each(["pass", "timeout", "changed"] as const)(
             return new Promise((_resolve, reject) => {
               const stop = () => {
                 if (outcome === "changed")
-                  fs.writeFileSync(
-                    path.join(f.root, "note.txt"),
-                    "external change",
-                  );
+                  fs.writeFileSync(path.join(f.root, "note.txt"), "external change");
                 reject(signal.reason);
               };
               if (signal.aborted) stop();
               else signal.addEventListener("abort", stop, { once: true });
             });
           }
-          if (auditCalls % 2 === 1)
-            return tool("workspace_read_file", { path: "note.txt" });
+          if (auditCalls % 2 === 1) return tool("workspace_read_file", { path: "note.txt" });
           return final(
             JSON.stringify({
               completion: "complete",
@@ -366,9 +323,7 @@ test.each(["pass", "timeout", "changed"] as const)(
       expect(JSON.parse(result.text).acceptance).toBe(
         outcome === "pass" ? "verified" : "unverified",
       );
-      expect(JSON.parse(result.text).status).toBe(
-        outcome === "pass" ? "completed" : "incomplete",
-      );
+      expect(JSON.parse(result.text).status).toBe(outcome === "pass" ? "completed" : "incomplete");
       expect(result.ok).toBe(outcome === "pass");
       expect(rootCalls).toBe(2);
       expect(auditCalls).toBe(outcome === "changed" ? 2 : 4);
@@ -376,14 +331,13 @@ test.each(["pass", "timeout", "changed"] as const)(
         outcome === "changed" ? "external change" : "hello",
       );
       if (outcome !== "changed") {
-        expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).toEndWith(
-          "-retry-1",
-        );
+        expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).toEndWith("-retry-1");
         const before = { rootCalls, auditCalls };
-        const recovered = await runDesktopNext(
-          "Create note.txt containing hello",
-          { ...f.options, model, intent: "recover" },
-        );
+        const recovered = await runDesktopNext("Create note.txt containing hello", {
+          ...f.options,
+          model,
+          intent: "recover",
+        });
         expect(JSON.parse(recovered.text).acceptance).toBe(
           outcome === "pass" ? "verified" : "unverified",
         );
@@ -401,11 +355,7 @@ test("single-pass audit has one bounded deadline, preserves evidence and cannot 
   let auditCalls = 0;
   let auditTimers = 0;
   const nativeTimeout = globalThis.setTimeout;
-  const timer = spyOn(globalThis, "setTimeout").mockImplementation(((
-    handler,
-    delay,
-    ...args
-  ) => {
+  const timer = spyOn(globalThis, "setTimeout").mockImplementation(((handler, delay, ...args) => {
     if (delay === 240_000) auditTimers++;
     return nativeTimeout(handler, delay === 240_000 ? 3000 : delay, ...args);
   }) as typeof setTimeout);
@@ -425,8 +375,7 @@ test("single-pass audit has one bounded deadline, preserves evidence and cannot 
         }
         auditCalls++;
         expect(prompt).toContain("at most 240 seconds total wall time");
-        if (auditCalls === 1)
-          return tool("workspace_read_file", { path: "note.txt" });
+        if (auditCalls === 1) return tool("workspace_read_file", { path: "note.txt" });
         return new Promise((_resolve, reject) => {
           const signal = options!.signal!;
           if (signal.aborted) reject(signal.reason);
@@ -438,10 +387,7 @@ test("single-pass audit has one bounded deadline, preserves evidence and cannot 
       },
     };
     const options = { ...f.options, environmentAuditSinglePass: true, model };
-    const result = await runDesktopNext(
-      "Create note.txt containing hello",
-      options,
-    );
+    const result = await runDesktopNext("Create note.txt containing hello", options);
     const body = JSON.parse(result.text);
     expect(body.status).toBe("incomplete");
     expect(body.acceptance).toBe("unverified");
@@ -452,12 +398,8 @@ test("single-pass audit has one bounded deadline, preserves evidence and cannot 
       auditCalls: 2,
       auditTimers: 1,
     });
-    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(
-      "hello",
-    );
-    expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).not.toEndWith(
-      "-retry-1",
-    );
+    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe("hello");
+    expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).not.toEndWith("-retry-1");
     const recovered = await runDesktopNext("Continue", {
       ...options,
       environmentAuditSinglePass: false,
@@ -481,11 +423,9 @@ test("single-pass audit can verify and replay with its frozen identity", async (
     environmentAuditSinglePass: true,
   });
   expect(result.ok, result.text).toBe(true);
-  expect(
-    f.messagesSeen.some((text) =>
-      text.includes("at most 240 seconds total wall time"),
-    ),
-  ).toBe(true);
+  expect(f.messagesSeen.some((text) => text.includes("at most 240 seconds total wall time"))).toBe(
+    true,
+  );
   const before = f.counts();
   const recovered = await runDesktopNext("Continue", {
     ...f.options,
@@ -498,19 +438,14 @@ test("single-pass audit can verify and replay with its frozen identity", async (
 test("single-pass ungrounded report stops unverified without reopening the executor", async () => {
   const f = fixture("false_claim");
   const options = { ...f.options, environmentAuditSinglePass: true };
-  const result = await runDesktopNext(
-    "Create note.txt containing hello",
-    options,
-  );
+  const result = await runDesktopNext("Create note.txt containing hello", options);
   const body = JSON.parse(result.text);
   expect(body.status).toBe("incomplete");
   expect(body.acceptance).toBe("unverified");
   expect(f.counts()).toEqual({ rootCalls: 2, auditCalls: 1 });
   expect(body.message).toContain("独立验收尚未通过");
   expect(body.message).not.toContain("已完成文件任务");
-  expect(readDesktopMonitor(f.root, "audit")?.audit?.summary).toContain(
-    "未成功读取",
-  );
+  expect(readDesktopMonitor(f.root, "audit")?.audit?.summary).toContain("未成功读取");
   const before = f.counts();
   const recovered = await runDesktopNext("Continue", {
     ...options,
@@ -577,10 +512,7 @@ test("pre-retry audited desktop sessions recover with their original identity an
 
 test("desktop independently inspects actual files, persists evidence and reuses a settled audit on recovery", async () => {
   const f = fixture("pass");
-  const result = await runDesktopNext(
-    "Create note.txt containing hello",
-    f.options,
-  );
+  const result = await runDesktopNext("Create note.txt containing hello", f.options);
   expect(JSON.parse(result.text)).toMatchObject({
     status: "completed",
     acceptance: "verified",
@@ -607,10 +539,7 @@ test("desktop independently inspects actual files, persists evidence and reuses 
 
 test("a claimed success with no actual read stays unverified after bounded repair attempts", async () => {
   const f = fixture("false_claim");
-  const result = await runDesktopNext(
-    "Create note.txt containing hello",
-    f.options,
-  );
+  const result = await runDesktopNext("Create note.txt containing hello", f.options);
   expect(JSON.parse(result.text)).toMatchObject({
     status: "incomplete",
     acceptance: "unverified",
@@ -630,11 +559,8 @@ test("read-only auditor recalls a truncated file and accepts its final report af
     async complete(messages) {
       if (JSON.stringify(messages).includes("Paw environment auditor")) {
         auditorCalls++;
-        if (auditorCalls === 1)
-          return tool("workspace_read_file", { path: "note.txt" });
-        const turn = messages.findLast(
-          (message) => message.nativeToolTurn,
-        )?.nativeToolTurn;
+        if (auditorCalls === 1) return tool("workspace_read_file", { path: "note.txt" });
+        const turn = messages.findLast((message) => message.nativeToolTurn)?.nativeToolTurn;
         const lastResult = turn?.results.at(-1);
         const lastTool = lastResult?.content ?? "";
         auditTrace.push(lastTool.slice(0, 1200));
@@ -699,27 +625,19 @@ test("read-only auditor recalls a truncated file and accepts its final report af
 
 test("auditor cannot write even when the desktop user approves executor tools", async () => {
   const f = fixture("denied_write");
-  const result = await runDesktopNext(
-    "Create note.txt containing hello",
-    f.options,
-  );
+  const result = await runDesktopNext("Create note.txt containing hello", f.options);
   expect(result.ok).toBe(false);
   expect(fs.existsSync(path.join(f.root, "forbidden.txt"))).toBe(false);
 });
 
 test("a blocking audit feeds a repair work segment and only a new inspection passes it", async () => {
   const f = fixture("repair");
-  const result = await runDesktopNext(
-    "Create note.txt containing checked",
-    f.options,
-  );
+  const result = await runDesktopNext("Create note.txt containing checked", f.options);
   expect(JSON.parse(result.text)).toMatchObject({
     status: "completed",
     acceptance: "verified",
   });
-  expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(
-    "checked",
-  );
+  expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe("checked");
   expect(f.counts()).toEqual({ rootCalls: 4, auditCalls: 4 });
 });
 
@@ -757,9 +675,7 @@ test.each([false, true])(
     } finally {
       clearTimeout(timer);
     }
-    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(
-      "hello",
-    );
+    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe("hello");
     let resumedRootCalls = 0;
     const resumeModel: LanguageModel = {
       ...f.options.model,
@@ -789,12 +705,8 @@ test.each([false, true])(
     expect(resumedRootCalls).toBe(0);
     expect(f.counts().auditCalls).toBe(2);
     if (retryClaim)
-      expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).toEndWith(
-        "-retry-1",
-      );
-    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe(
-      "hello",
-    );
+      expect(readDesktopMonitor(f.root, "audit")?.audit?.reviewId).toEndWith("-retry-1");
+    expect(fs.readFileSync(path.join(f.root, "note.txt"), "utf8")).toBe("hello");
   },
 );
 

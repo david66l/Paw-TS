@@ -47,10 +47,7 @@ describe("validateCompressionSummary — 规则层", () => {
   });
 
   test("rejects summary missing Constraints when constraints required", () => {
-    const summary = GOOD_SUMMARY.replace(
-      "## Constraints\n- 不要修改 src/index.ts\n",
-      "",
-    );
+    const summary = GOOD_SUMMARY.replace("## Constraints\n- 不要修改 src/index.ts\n", "");
     const r = validateCompressionSummary(summary, {
       requiredConstraints: ["约束：不要修改 src/index.ts"],
     });
@@ -69,10 +66,7 @@ describe("validateCompressionSummary — 实体层（约束整块逐字）", () 
 
   test("constraint paraphrased (semantics kept, wording changed) is REJECTED", () => {
     // 实测失败模式：摘要改写约束（"不要修改"→"不得修改"）→ 必须拒绝
-    const paraphrased = GOOD_SUMMARY.replace(
-      "不要修改 src/index.ts",
-      "不得修改 src/index.ts",
-    );
+    const paraphrased = GOOD_SUMMARY.replace("不要修改 src/index.ts", "不得修改 src/index.ts");
     const r = validateCompressionSummary(paraphrased, {
       requiredConstraints: ["不要修改 src/index.ts"],
     });
@@ -82,10 +76,7 @@ describe("validateCompressionSummary — 实体层（约束整块逐字）", () 
 
   test("semantic flip (forbidden→allowed) is REJECTED", () => {
     // 关键词全在但语义翻转：块匹配必须抓住
-    const flipped = GOOD_SUMMARY.replace(
-      "不要修改 src/index.ts",
-      "允许修改 src/index.ts",
-    );
+    const flipped = GOOD_SUMMARY.replace("不要修改 src/index.ts", "允许修改 src/index.ts");
     const r = validateCompressionSummary(flipped, {
       requiredConstraints: ["不要修改 src/index.ts"],
     });
@@ -105,9 +96,7 @@ describe("validateCompressionSummary — 实体层（锚点）", () => {
   test("file path anchor lost is REJECTED", () => {
     const summary = GOOD_SUMMARY.replace("src/auth/login.ts", "login file");
     const r = validateCompressionSummary(summary, {
-      originalMessages: [
-        { role: "user", content: "检查 src/auth/login.ts 的认证逻辑" },
-      ],
+      originalMessages: [{ role: "user", content: "检查 src/auth/login.ts 的认证逻辑" }],
     });
     expect(r.ok).toBe(false);
     expect(r.reason).toContain("entity anchor lost");

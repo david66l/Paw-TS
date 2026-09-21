@@ -33,10 +33,7 @@ import {
 import { DEFAULT_MODEL_OUTPUT_RECOVERY_POLICY_V1 } from "@paw/model-output-recovery";
 import { MODEL_REQUEST_SUPERVISION_V1 } from "@paw/models";
 import { PROGRESS_ADVISOR_POLICY_VERSION_V1 } from "@paw/progress-advisor";
-import {
-  COMPLETION_REVIEW_POLICY_VERSION_V1,
-  WORK_SEGMENT_POLICY_VERSION_V1,
-} from "@paw/protocol";
+import { COMPLETION_REVIEW_POLICY_VERSION_V1, WORK_SEGMENT_POLICY_VERSION_V1 } from "@paw/protocol";
 import { AUDITED_MEMORY_POLICY_V1 } from "./audited-memory.js";
 import { ENVIRONMENT_AUDIT_POLICY_VERSION_V1 } from "./environment-audit.js";
 import { LONG_HORIZON_POLICY_V1 } from "./long-horizon.js";
@@ -48,13 +45,9 @@ import {
   type PawNextProductManifestV2,
   createPawNextProductManifestV2,
 } from "./product-manifest-v2.js";
-import {
-  hashCanonicalJsonV1,
-  toFrozenJsonValueV1,
-} from "./product-manifest.js";
+import { hashCanonicalJsonV1, toFrozenJsonValueV1 } from "./product-manifest.js";
 
-export const PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V3 =
-  "paw.product-manifest.v3" as const;
+export const PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V3 = "paw.product-manifest.v3" as const;
 export const PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V3 =
   "paw.product-composition.v3.27:journal-working-state" as const;
 
@@ -66,8 +59,7 @@ export const PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1 = Object.freeze({
 export const PAW_NEXT_CONTEXT_COMPACTION_IDENTITY_V1 = Object.freeze({
   plannerPolicyVersion: CONTEXT_COMPACTION_POLICY_VERSION_V1,
   lifecyclePolicyVersion: CONTEXT_COMPACTION_LIFECYCLE_POLICY_VERSION_V1,
-  orchestrationPolicyVersion:
-    CONTEXT_COMPACTION_ORCHESTRATION_POLICY_VERSION_V1,
+  orchestrationPolicyVersion: CONTEXT_COMPACTION_ORCHESTRATION_POLICY_VERSION_V1,
   evidencePolicyVersion: CHECKPOINT_EVIDENCE_POLICY_VERSION_V1,
   distillerPolicyVersion: CHECKPOINT_DISTILLER_POLICY_VERSION_V1,
   semanticVerifierPolicyVersion: CHECKPOINT_SEMANTIC_VERIFIER_POLICY_VERSION_V1,
@@ -76,8 +68,7 @@ export const PAW_NEXT_CONTEXT_COMPACTION_IDENTITY_V1 = Object.freeze({
 export const PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1 = Object.freeze({
   journalPolicyVersion: COMPLETION_REVIEW_POLICY_VERSION_V1,
   triggerPolicyVersion: COMPLETION_REVIEW_TRIGGER_POLICY_VERSION_V1,
-  evidencePacketPolicyVersion:
-    COMPLETION_REVIEW_EVIDENCE_PACKET_POLICY_VERSION_V1,
+  evidencePacketPolicyVersion: COMPLETION_REVIEW_EVIDENCE_PACKET_POLICY_VERSION_V1,
   gatePolicyVersion: COMPLETION_REVIEW_GATE_POLICY_VERSION_V1,
   reviewerPolicyVersion: COMPLETION_REVIEWER_POLICY_VERSION_V1,
   continuationPolicyVersion: COMPLETION_REVIEW_CONTINUATION_POLICY_VERSION_V2,
@@ -103,8 +94,7 @@ export const PAW_NEXT_COLLABORATION_IDENTITY_V1 = Object.freeze({
   childPolicy: "agent_effect_profile_enforced" as const,
   childJournal: "independent_file_session" as const,
   rosterSource: "defaults_plus_workspace_agent_registry" as const,
-  writeConflictPolicy:
-    "mission_mutator_serialization_plus_v3_global_lock" as const,
+  writeConflictPolicy: "mission_mutator_serialization_plus_v3_global_lock" as const,
   maxConcurrentChildren: 3,
   maxChildDepth: 1,
 });
@@ -115,8 +105,7 @@ type PawNextProductManifestCommonV2 = Omit<
 >;
 
 /** Additive file-payload product identity for replayable work segments. */
-export interface PawNextProductManifestV3
-  extends PawNextProductManifestCommonV2 {
+export interface PawNextProductManifestV3 extends PawNextProductManifestCommonV2 {
   readonly schemaVersion: typeof PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V3;
   readonly compositionVersion: typeof PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V3;
   readonly reducerVersion: typeof INTERACTIVE_CONTROL_REDUCER_VERSION_V2;
@@ -145,10 +134,7 @@ export interface PawNextProductManifestV3
 }
 
 export interface CreatePawNextProductManifestInputV3
-  extends Omit<
-    CreatePawNextProductManifestInputV2,
-    "reducerVersion" | "runConfig"
-  > {
+  extends Omit<CreatePawNextProductManifestInputV2, "reducerVersion" | "runConfig"> {
   readonly workSegmentPolicyVersion: typeof WORK_SEGMENT_POLICY_VERSION_V1;
   readonly runConfig: InteractiveControlConfigV2;
   readonly environmentAudit?: true;
@@ -170,10 +156,7 @@ export function createPawNextProductManifestV3(
   if (input.workSegmentPolicyVersion !== WORK_SEGMENT_POLICY_VERSION_V1) {
     throw new Error("Unsupported Paw Next work-segment policy version");
   }
-  if (
-    input.compactMutationReceipts !== undefined &&
-    input.compactMutationReceipts !== true
-  )
+  if (input.compactMutationReceipts !== undefined && input.compactMutationReceipts !== true)
     throw new Error("Unsupported mutation receipt policy");
   if (
     input.environmentAuditRetry !== undefined &&
@@ -182,22 +165,19 @@ export function createPawNextProductManifestV3(
     throw new Error("Audit retry requires environment auditing");
   if (
     input.environmentAuditEvidenceRepair !== undefined &&
-    (input.environmentAuditEvidenceRepair !== true ||
-      input.environmentAuditSinglePass !== true)
+    (input.environmentAuditEvidenceRepair !== true || input.environmentAuditSinglePass !== true)
   )
     throw new Error("Audit evidence repair requires single-pass auditing");
   if (
     input.environmentAuditSinglePass !== undefined &&
-    (input.environmentAuditSinglePass !== true ||
-      input.environmentAudit !== true)
+    (input.environmentAuditSinglePass !== true || input.environmentAudit !== true)
   )
     throw new Error("Single-pass audit requires environment auditing");
   if (input.environmentAudit !== undefined && input.environmentAudit !== true)
     throw new Error("Invalid environment audit policy");
   if (
     input.longHorizon !== undefined &&
-    (!["manager", "executor"].includes(input.longHorizon) ||
-      input.environmentAudit !== true)
+    (!["manager", "executor"].includes(input.longHorizon) || input.environmentAudit !== true)
   )
     throw new Error("Invalid long-task policy");
   if (
@@ -237,9 +217,7 @@ export function createPawNextProductManifestV3(
     modelRuntimeProfile: input.modelRuntimeProfile,
     modelCapabilities: input.modelCapabilities,
     sessionLeaseHeartbeat: input.sessionLeaseHeartbeat,
-    ...(input.profileIdentity === undefined
-      ? {}
-      : { profileIdentity: input.profileIdentity }),
+    ...(input.profileIdentity === undefined ? {} : { profileIdentity: input.profileIdentity }),
     ...(input.credentialBindingHash === undefined
       ? {}
       : { credentialBindingHash: input.credentialBindingHash }),
@@ -268,22 +246,18 @@ export function createPawNextProductManifestV3(
     runConfig,
     contextCompaction: PAW_NEXT_CONTEXT_COMPACTION_IDENTITY_V1,
     completionReview: PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1,
-    ...(input.environmentAudit
-      ? { environmentAudit: ENVIRONMENT_AUDIT_POLICY_VERSION_V1 }
-      : {}),
+    ...(input.environmentAudit ? { environmentAudit: ENVIRONMENT_AUDIT_POLICY_VERSION_V1 } : {}),
     ...(input.environmentAuditRetry
       ? { environmentAuditRetry: "paw.environment-audit-retry.v1" as const }
       : {}),
     ...(input.environmentAuditSinglePass
       ? {
-          environmentAuditSinglePass:
-            "paw.environment-audit-single-pass.v1" as const,
+          environmentAuditSinglePass: "paw.environment-audit-single-pass.v1" as const,
         }
       : {}),
     ...(input.environmentAuditEvidenceRepair
       ? {
-          environmentAuditEvidenceRepair:
-            "paw.environment-audit-evidence-repair.v1" as const,
+          environmentAuditEvidenceRepair: "paw.environment-audit-evidence-repair.v1" as const,
         }
       : {}),
     ...(input.compactMutationReceipts
@@ -291,12 +265,8 @@ export function createPawNextProductManifestV3(
       : {}),
     ...(input.auditedMemory ? { auditedMemory: AUDITED_MEMORY_POLICY_V1 } : {}),
     ...(input.stageGraph ? { stageGraph: STAGE_GRAPH_POLICY_V1 } : {}),
-    ...(input.visualAudit
-      ? { visualAudit: "paw.visual-audit.v1" as const }
-      : {}),
-    ...(input.browserAudit
-      ? { browserAudit: "paw.browser-audit.v1" as const }
-      : {}),
+    ...(input.visualAudit ? { visualAudit: "paw.visual-audit.v1" as const } : {}),
+    ...(input.browserAudit ? { browserAudit: "paw.browser-audit.v1" as const } : {}),
     progressAdvisor: PAW_NEXT_PROGRESS_ADVISOR_IDENTITY_V1,
     collaboration: PAW_NEXT_COLLABORATION_IDENTITY_V1,
     modelOutputRecovery: PAW_NEXT_MODEL_OUTPUT_RECOVERY_IDENTITY_V1,
@@ -308,9 +278,7 @@ export function createPawNextProductManifestV3(
   }) as unknown as PawNextProductManifestV3;
 }
 
-export function hashPawNextProductManifestV3(
-  manifest: PawNextProductManifestV3,
-): string {
+export function hashPawNextProductManifestV3(manifest: PawNextProductManifestV3): string {
   return hashCanonicalJsonV1(manifest);
 }
 
@@ -322,15 +290,9 @@ function freezeInteractiveControlConfigV2(
   }
   if (value.liveSteering !== undefined && value.liveSteering !== true)
     throw new Error("Paw Next live steering config is invalid");
-  if (
-    value.recoverReasoningTimeout !== undefined &&
-    value.recoverReasoningTimeout !== true
-  )
+  if (value.recoverReasoningTimeout !== undefined && value.recoverReasoningTimeout !== true)
     throw new Error("Paw Next reasoning recovery config is invalid");
-  if (
-    value.settleFinalToolBatch !== undefined &&
-    value.settleFinalToolBatch !== true
-  )
+  if (value.settleFinalToolBatch !== undefined && value.settleFinalToolBatch !== true)
     throw new Error("Paw Next final tool batch config is invalid");
   const keys = Object.keys(value)
     .filter(
@@ -341,8 +303,7 @@ function freezeInteractiveControlConfigV2(
     )
     .sort()
     .join("\0");
-  const baseKeys =
-    "maxModelTurns\0maxSegments\0maxTotalModelTurns\0mode\0naturalStop";
+  const baseKeys = "maxModelTurns\0maxSegments\0maxTotalModelTurns\0mode\0naturalStop";
   const softKeys =
     "maxModelTurns\0maxSegments\0maxTotalModelTurns\0mode\0naturalStop\0renewalModelTurns\0softModelTurns\0softNoProgressTurns";
   if (keys !== baseKeys && keys !== softKeys) {
@@ -370,15 +331,11 @@ function freezeInteractiveControlConfigV2(
   }
   return Object.freeze({
     mode: "interactive",
-    ...(value.recoverReasoningTimeout
-      ? { recoverReasoningTimeout: true as const }
-      : {}),
+    ...(value.recoverReasoningTimeout ? { recoverReasoningTimeout: true as const } : {}),
     maxModelTurns: value.maxModelTurns,
     naturalStop: value.naturalStop,
     ...(value.liveSteering === true ? { liveSteering: true as const } : {}),
-    ...(value.settleFinalToolBatch === true
-      ? { settleFinalToolBatch: true as const }
-      : {}),
+    ...(value.settleFinalToolBatch === true ? { settleFinalToolBatch: true as const } : {}),
     maxSegments: value.maxSegments,
     maxTotalModelTurns: value.maxTotalModelTurns,
     ...(keys === softKeys

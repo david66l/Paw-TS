@@ -18,8 +18,7 @@ const scope = {
   workspaceId: "w",
   repositoryId: "r",
 };
-const delay = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -277,9 +276,7 @@ describe("bounded journal-backed memory maintenance", () => {
       ...f.options,
       writer: { ...f.options.writer, retryFailedUnstaged: true as const },
     };
-    await createMemoryMaintenanceControllerV1(options).settleTerminal(
-      "completed",
-    );
+    await createMemoryMaintenanceControllerV1(options).settleTerminal("completed");
     const before = [...f.calls];
     f.session.entries = JSON.parse(JSON.stringify(f.session.entries));
     options.organizer = {
@@ -287,20 +284,14 @@ describe("bounded journal-backed memory maintenance", () => {
       store: {
         ...options.organizer.store,
         async prepare() {
-          throw new Error(
-            "The catalog was already changed by this source write",
-          );
+          throw new Error("The catalog was already changed by this source write");
         },
       },
     };
-    await createMemoryMaintenanceControllerV1(options).settleTerminal(
-      "completed",
-    );
+    await createMemoryMaintenanceControllerV1(options).settleTerminal("completed");
     const modelOrWrite = (call: string) => /extract|apply|put/.test(call);
     expect(f.calls.filter(modelOrWrite)).toEqual(before.filter(modelOrWrite));
-    expect(f.session.facts("memory.topic_organization_settled")).toHaveLength(
-      1,
-    );
+    expect(f.session.facts("memory.topic_organization_settled")).toHaveLength(1);
     f.session.validate();
   });
   test("explicit background retries are capped by durable evidence claims after restart", async () => {
@@ -322,9 +313,7 @@ describe("bounded journal-backed memory maintenance", () => {
       },
     };
     for (let i = 0; i < 6; i++) {
-      await createMemoryMaintenanceControllerV1(options).settleTerminal(
-        "completed",
-      );
+      await createMemoryMaintenanceControllerV1(options).settleTerminal("completed");
       // Rehydrate the persisted facts as a new process would, retaining every failed attempt.
       f.session.entries = JSON.parse(JSON.stringify(f.session.entries));
     }
@@ -365,9 +354,7 @@ describe("bounded journal-backed memory maintenance", () => {
     const f = fixture();
     f.abort.abort(new DOMException("cancel", "AbortError"));
     await expect(
-      createMemoryMaintenanceControllerV1(f.options).settleTerminal(
-        "completed",
-      ),
+      createMemoryMaintenanceControllerV1(f.options).settleTerminal("completed"),
     ).rejects.toMatchObject({ name: "AbortError" });
     expect(f.calls).toEqual([]);
     expect(f.events.at(-1)?.reasonCode).toBe("MemoryMaintenanceCancelled");
@@ -395,9 +382,7 @@ describe("bounded journal-backed memory maintenance", () => {
   ]) {
     test(`bounds ${phase} ignoring cancellation and rejects its late continuation`, async () => {
       const f = fixture(phase);
-      const pending = createMemoryMaintenanceControllerV1(
-        f.options,
-      ).settleTerminal("completed");
+      const pending = createMemoryMaintenanceControllerV1(f.options).settleTerminal("completed");
       // Attach the rejection handler before waiting for the deliberately stalled port.
       const checked = expect(pending).rejects.toMatchObject({
         name: "TimeoutError",
@@ -405,9 +390,7 @@ describe("bounded journal-backed memory maintenance", () => {
       await f.entered.promise;
       await checked;
       const callsAtReturn = [...f.calls];
-      expect(f.events.at(-1)?.reasonCode).toBe(
-        "MemoryMaintenanceDeadlineExceeded",
-      );
+      expect(f.events.at(-1)?.reasonCode).toBe("MemoryMaintenanceDeadlineExceeded");
       f.gate.resolve();
       await delay(5);
       // The in-flight call itself may commit late. It cannot start another port,
@@ -477,10 +460,7 @@ describe("bounded journal-backed memory maintenance", () => {
             ...f.options.writer.store,
             async apply(request, signal) {
               writeIds.push(request.writeId);
-              const result = await f.options.writer.store.apply(
-                request,
-                signal,
-              );
+              const result = await f.options.writer.store.apply(request, signal);
               if (phase === "apply") loseAck();
               return result;
             },
@@ -491,10 +471,7 @@ describe("bounded journal-backed memory maintenance", () => {
           store: {
             ...f.options.organizer.store,
             async apply(request, signal) {
-              const result = await f.options.organizer.store.apply(
-                request,
-                signal,
-              );
+              const result = await f.options.organizer.store.apply(request, signal);
               if (phase === "topic.apply") loseAck();
               return result;
             },
@@ -502,9 +479,7 @@ describe("bounded journal-backed memory maintenance", () => {
         },
       };
       await expect(
-        createMemoryMaintenanceControllerV1(options).settleTerminal(
-          "completed",
-        ),
+        createMemoryMaintenanceControllerV1(options).settleTerminal("completed"),
       ).rejects.toThrow("acknowledgement lost");
       expect(
         f.session.entries.some(
@@ -516,18 +491,12 @@ describe("bounded journal-backed memory maintenance", () => {
       ).toBe(false);
       // Reconstruct the session snapshot and controller as a resumed process would.
       f.session.entries = JSON.parse(JSON.stringify(f.session.entries));
-      await createMemoryMaintenanceControllerV1(options).settleTerminal(
-        "completed",
-      );
+      await createMemoryMaintenanceControllerV1(options).settleTerminal("completed");
       expect(f.calls.filter((call) => call === "extract")).toHaveLength(1);
-      expect(f.calls.filter((call) => call === "topic.extract")).toHaveLength(
-        1,
-      );
+      expect(f.calls.filter((call) => call === "topic.extract")).toHaveLength(1);
       expect(new Set(writeIds).size).toBe(1);
       expect(f.session.facts("memory.write_settled")).toHaveLength(1);
-      expect(f.session.facts("memory.topic_organization_settled")).toHaveLength(
-        1,
-      );
+      expect(f.session.facts("memory.topic_organization_settled")).toHaveLength(1);
       f.session.validate();
     });
   }
@@ -535,16 +504,12 @@ describe("bounded journal-backed memory maintenance", () => {
   test("an interrupted extractor is closed on resume without a hidden model retry", async () => {
     const f = fixture("extract");
     await expect(
-      createMemoryMaintenanceControllerV1(f.options).settleTerminal(
-        "completed",
-      ),
+      createMemoryMaintenanceControllerV1(f.options).settleTerminal("completed"),
     ).rejects.toMatchObject({ name: "TimeoutError" });
     expect(f.session.facts("memory.write_claimed")).toHaveLength(1);
     expect(f.session.facts("memory.candidate_staged")).toHaveLength(0);
     expect(
-      await createMemoryMaintenanceControllerV1(f.options).settleTerminal(
-        "completed",
-      ),
+      await createMemoryMaintenanceControllerV1(f.options).settleTerminal("completed"),
     ).toMatchObject({
       status: "interrupted",
       reasonCode: "memory_write_claim_interrupted_before_stage",
@@ -563,15 +528,11 @@ describe("bounded journal-backed memory maintenance", () => {
       writer: {
         ...f.options.writer,
         sourceAdmission: () =>
-          f.session.facts("memory.candidate_staged").length
-            ? new Set<number>()
-            : new Set([2]),
+          f.session.facts("memory.candidate_staged").length ? new Set<number>() : new Set([2]),
       },
     };
     expect(
-      await createMemoryMaintenanceControllerV1(options).settleTerminal(
-        "completed",
-      ),
+      await createMemoryMaintenanceControllerV1(options).settleTerminal("completed"),
     ).toMatchObject({ status: "failed" });
     expect(f.calls).not.toContain("apply");
     f.session.validate();

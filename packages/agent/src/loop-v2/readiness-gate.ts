@@ -39,9 +39,7 @@ export function evaluateLoopV2ReadinessGateV1(input: {
   const { readiness } = input.assessment;
   if (readiness.readyForSemanticReview) {
     if (readiness.disposition !== "ready_for_review" || readiness.gaps.length) {
-      throw new Error(
-        "Loop v2 readiness assessment is internally inconsistent",
-      );
+      throw new Error("Loop v2 readiness assessment is internally inconsistent");
     }
     return { type: "ready" };
   }
@@ -79,10 +77,7 @@ export function evaluateLoopV2ReadinessGateV1(input: {
     normalizedGaps,
     input.verificationRecords ?? [],
   );
-  const requirement = deriveRepairRequirement(
-    input.assessment,
-    input.verificationRecords ?? [],
-  );
+  const requirement = deriveRepairRequirement(input.assessment, input.verificationRecords ?? []);
   const priorNudges = input.priorKey === key ? (input.priorNudges ?? 0) : 0;
   if (input.noRoomForAnotherTurn) {
     return {
@@ -137,19 +132,15 @@ function deriveRepairRequirement(
   }
 
   if (
-    ![
-      "verification_missing",
-      "verification_scope_missing",
-      "verification_unavailable",
-    ].some((code) => gapCodes.has(code as CandidateReadinessGapCodeV2))
+    !["verification_missing", "verification_scope_missing", "verification_unavailable"].some(
+      (code) => gapCodes.has(code as CandidateReadinessGapCodeV2),
+    )
   ) {
     return undefined;
   }
   const latest = current.at(-1);
   const requiredScopes = assessment.policy.requiredVerificationScopes ?? [];
-  const scope = [
-    ...new Set(latest?.scope.length ? latest.scope : requiredScopes),
-  ]
+  const scope = [...new Set(latest?.scope.length ? latest.scope : requiredScopes)]
     .filter(Boolean)
     .sort();
   return {
@@ -169,9 +160,7 @@ function deriveRepairRequirement(
  * monotonic: a new read/search changes this key, while report rewording and an
  * exact repeated observation do not.
  */
-export function loopV2ReadinessProgressKeyV1(
-  state: WorkingDecisionStateV2,
-): string {
+export function loopV2ReadinessProgressKeyV1(state: WorkingDecisionStateV2): string {
   return sha256Canonical({
     policy: "loop-v2-readiness-progress-v1",
     evidenceFingerprints: Object.keys(state.evidence).sort(),
@@ -182,9 +171,7 @@ export function parseLoopV2ReadinessFeedbackMarker(
   content: unknown,
 ): LoopV2ReadinessFeedbackStateV1 | undefined {
   if (typeof content !== "string") return undefined;
-  const match = content.match(
-    /^\[LoopV2Readiness:(?:needs_work|blocked) key=([a-f0-9]{64})\]/,
-  );
+  const match = content.match(/^\[LoopV2Readiness:(?:needs_work|blocked) key=([a-f0-9]{64})\]/);
   return match?.[1] ? { key: match[1], nudges: 1 } : undefined;
 }
 
@@ -206,10 +193,7 @@ function formatLoopV2ReadinessFeedback(
           : gap.riskId
             ? ` risk=${gap.riskId}`
             : "";
-        const detail = actionableGapDetail(gap, verificationRecords).slice(
-          0,
-          900,
-        );
+        const detail = actionableGapDetail(gap, verificationRecords).slice(0, 900);
         return `- ${gap.code}${subject}: ${detail}`;
       })
     : ["- readiness_unknown: The candidate is not ready for semantic review."];
@@ -232,11 +216,8 @@ function actionableGapDetail(
       (verification) => verification.outcome === "code_failed",
     );
     return [
-      gap.message ||
-        "Current authoritative verification reports a code failure.",
-      failures.length
-        ? `Host facts: ${describeVerificationRecords(failures)}.`
-        : "",
+      gap.message || "Current authoritative verification reports a code failure.",
+      failures.length ? `Host facts: ${describeVerificationRecords(failures)}.` : "",
       "Treat observed current-revision failures as blockers; do not assume external or hidden tests supersede tracked assertions.",
       "Fix the candidate, then run a direct authoritative verification again.",
     ]
@@ -247,16 +228,10 @@ function actionableGapDetail(
     const failures = verificationRecords.filter(
       (verification) => verification.outcome === "harness_failed",
     );
-    if (
-      failures.some(
-        (verification) => verification.failureClass === "untrusted_exit_status",
-      )
-    ) {
+    if (failures.some((verification) => verification.failureClass === "untrusted_exit_status")) {
       return [
         gap.message || "Current authoritative verification is unavailable.",
-        failures.length
-          ? `Host facts: ${describeVerificationRecords(failures)}.`
-          : "",
+        failures.length ? `Host facts: ${describeVerificationRecords(failures)}.` : "",
         "The test runner status was masked by shell control flow. Re-run the same test runner directly without pipes, redirections, fallbacks, or trailing commands; do not claim a pass from the masked exit code.",
       ]
         .filter(Boolean)
@@ -264,9 +239,7 @@ function actionableGapDetail(
     }
     return [
       gap.message || "Current authoritative verification is unavailable.",
-      failures.length
-        ? `Host facts: ${describeVerificationRecords(failures)}.`
-        : "",
+      failures.length ? `Host facts: ${describeVerificationRecords(failures)}.` : "",
       "Repair or simplify the invocation and obtain a direct authoritative result.",
     ]
       .filter(Boolean)
@@ -275,22 +248,16 @@ function actionableGapDetail(
   return gap.message || "Required evidence is missing.";
 }
 
-function describeVerificationRecords(
-  records: readonly VerificationRecordV2[],
-): string {
+function describeVerificationRecords(records: readonly VerificationRecordV2[]): string {
   return records
     .slice(-3)
     .map((verification) => {
-      const failure = verification.failureClass
-        ? ` failure=${verification.failureClass}`
-        : "";
+      const failure = verification.failureClass ? ` failure=${verification.failureClass}` : "";
       const scope = verification.scope.length
         ? ` scope=${verification.scope.slice(0, 4).join(",")}`
         : "";
       const command = verification.argv.join(" ").replace(/\s+/g, " ").trim();
-      const records = renderVerificationFailureRecordsV2(
-        verification.failureRecords ?? [],
-      );
+      const records = renderVerificationFailureRecordsV2(verification.failureRecords ?? []);
       return `${verification.id}${failure}${scope} command=${command || "unknown"}${records ? ` ${records}` : ""}`.slice(
         0,
         720,

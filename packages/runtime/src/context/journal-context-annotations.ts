@@ -20,8 +20,7 @@ export function insertJournalContextAnnotationsV1(
     }
     const anchor =
       item.placement === "after_boundary"
-        ? units.filter((unit) => unit.sourceThroughSeq <= item.sourceThroughSeq)
-            .length - 1
+        ? units.filter((unit) => unit.sourceThroughSeq <= item.sourceThroughSeq).length - 1
         : units.findIndex(
             (unit) =>
               unit.sourceFromSeq <= item.sourceThroughSeq &&
@@ -39,10 +38,7 @@ export function insertJournalContextAnnotationsV1(
   return [
     ...prefix,
     ...(buckets.get(0) ?? []),
-    ...units.flatMap((unit, index) => [
-      unit.message,
-      ...(buckets.get(index + 1) ?? []),
-    ]),
+    ...units.flatMap((unit, index) => [unit.message, ...(buckets.get(index + 1) ?? [])]),
     ...tail,
   ];
 }

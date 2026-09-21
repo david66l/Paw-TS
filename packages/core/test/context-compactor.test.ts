@@ -24,9 +24,7 @@ describe("ContextCompactor", () => {
       expect(check.shouldCompact).toBe(false);
       expect(check.currentTokens).toBeGreaterThan(0);
       // v3 P5.2 单口径：0.8 × 0.68 × window − 10K（纯百分比）
-      expect(check.thresholdTokens).toBe(
-        Math.floor(200_000 * 0.68 * 0.8) - 10_000,
-      );
+      expect(check.thresholdTokens).toBe(Math.floor(200_000 * 0.68 * 0.8) - 10_000);
     });
 
     it("returns shouldCompact=true when over threshold", () => {
@@ -153,9 +151,7 @@ describe("ContextCompactor", () => {
       const small = makeMessages(10, 100);
       const smallBoundaries = compactor.determineBoundaries(small);
       expect(smallBoundaries.pinned).toBeDefined();
-      expect(smallBoundaries.tailStart).toBeGreaterThan(
-        smallBoundaries.headEnd,
-      );
+      expect(smallBoundaries.tailStart).toBeGreaterThan(smallBoundaries.headEnd);
     });
   });
 
@@ -174,23 +170,14 @@ describe("ContextCompactor", () => {
       ];
       const boundaries = { headEnd: 0, tailStart: 7, pinned: [3, 4] };
       expect(
-        compactionMiddleMessagesV1(messages, boundaries).map(
-          (message) => message.content,
-        ),
-      ).toEqual([
-        "old action",
-        "old observation",
-        "another old action",
-        "another old observation",
-      ]);
+        compactionMiddleMessagesV1(messages, boundaries).map((message) => message.content),
+      ).toEqual(["old action", "old observation", "another old action", "another old observation"]);
       const summary = {
         role: "user" as const,
         content: `${CONTEXT_SUMMARY_PREFIX}\nsummary`,
       };
       expect(
-        projectCompactedHistoryV1(messages, boundaries, summary).map(
-          (message) => message.content,
-        ),
+        projectCompactedHistoryV1(messages, boundaries, summary).map((message) => message.content),
       ).toEqual([
         "goal",
         `${CONTEXT_SUMMARY_PREFIX}\nsummary`,
@@ -251,10 +238,7 @@ describe("ContextCompactor", () => {
 
     it("incremental mode keeps anchor prompt", () => {
       const compactor = new ContextCompactor();
-      const prompt = compactor.buildSummaryPrompt(
-        [{ role: "user", content: "Hi" }],
-        "Prev",
-      );
+      const prompt = compactor.buildSummaryPrompt([{ role: "user", content: "Hi" }], "Prev");
       expect(prompt).toContain("## Previous Summary");
       expect(prompt).toContain("Prev");
     });

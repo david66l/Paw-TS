@@ -30,11 +30,7 @@ import {
   runMemoryAgentBench,
   runRedteamSuite,
 } from "./eval/index.js";
-import {
-  parseReplayJsonl,
-  renderReplayReport,
-  runReplay,
-} from "./eval/replay.js";
+import { parseReplayJsonl, renderReplayReport, runReplay } from "./eval/replay.js";
 import { exportMemories } from "./export.js";
 import { collectGarbage } from "./lifecycle/gc.js";
 import {
@@ -46,10 +42,7 @@ import {
 import { migrateV1ToV2 } from "./migrate-v1-to-v2.js";
 import { collectMemoryDiff, renderMemoryDiff } from "./observability/diff.js";
 import { appendOpLog } from "./observability/op-log.js";
-import {
-  collectMemoryStats,
-  renderMemoryStats,
-} from "./observability/stats.js";
+import { collectMemoryStats, renderMemoryStats } from "./observability/stats.js";
 import { collectWhy, renderWhy } from "./observability/why.js";
 import type { MemoryEntry, MemoryKind } from "./store/engine.js";
 import { PostgresMemoryStoreEngine } from "./store/postgres-engine.js";
@@ -125,12 +118,7 @@ export interface MemoryCliResult {
   text: string;
 }
 
-const KINDS: readonly MemoryKind[] = [
-  "semantic",
-  "episodic",
-  "profile",
-  "vault_ref",
-];
+const KINDS: readonly MemoryKind[] = ["semantic", "episodic", "profile", "vault_ref"];
 
 const USAGE = `paw memory — 长期记忆库（spec v2）
 
@@ -165,9 +153,7 @@ Usage:
 需要 DATABASE_URL 指向记忆库（V026+ 迁移）。`;
 
 /** 纯函数：解析 memory 子命令参数 */
-export function parseMemoryArgs(
-  args: readonly string[],
-): MemoryCliArgs | { error: string } {
+export function parseMemoryArgs(args: readonly string[]): MemoryCliArgs | { error: string } {
   const sub = args[0];
   if (sub === undefined || sub === "help" || sub === "--help" || sub === "-h") {
     return { error: USAGE };
@@ -238,19 +224,13 @@ export function parseMemoryArgs(
       const v = args[++i];
       if (!v) return { error: "--data 缺路径" };
       out.data = v;
-    } else if (
-      a === "--dimension" ||
-      a === "--dimensions" ||
-      a === "--suite" ||
-      a === "--suites"
-    ) {
+    } else if (a === "--dimension" || a === "--dimensions" || a === "--suite" || a === "--suites") {
       const v = args[++i];
       if (!v) return { error: "--dimension/--suite 缺值" };
       out.dimensions = v;
     } else if (a === "--chunk-size") {
       const v = Number(args[++i]);
-      if (!Number.isFinite(v) || v <= 0)
-        return { error: "--chunk-size 需为正整数" };
+      if (!Number.isFinite(v) || v <= 0) return { error: "--chunk-size 需为正整数" };
       out.chunkSize = v;
     } else if (a === "--keep") {
       out.keep = true;
@@ -268,8 +248,7 @@ export function parseMemoryArgs(
       out.judgeProvider = v;
     } else if (a === "--max-samples") {
       const v = Number(args[++i]);
-      if (!Number.isFinite(v) || v <= 0)
-        return { error: "--max-samples 需为正整数" };
+      if (!Number.isFinite(v) || v <= 0) return { error: "--max-samples 需为正整数" };
       out.maxSamples = v;
     } else if (a === "--kind") {
       const v = args[++i];
@@ -320,9 +299,7 @@ function summarize(e: MemoryEntry): string {
   }
 }
 
-export async function runMemoryCommand(
-  args: readonly string[],
-): Promise<MemoryCliResult> {
+export async function runMemoryCommand(args: readonly string[]): Promise<MemoryCliResult> {
   const parsed = parseMemoryArgs(args);
   if ("error" in parsed) return { ok: false, text: parsed.error };
 
@@ -339,8 +316,7 @@ export async function runMemoryCommand(
         if (entries.length === 0) return { ok: true, text: "(无条目)" };
         const lines = entries.map((e) => {
           const dead = e.tInvalid ? "  [已失效]" : "";
-          const degraded =
-            (e as { degraded?: boolean }).degraded === true ? "  [降级]" : "";
+          const degraded = (e as { degraded?: boolean }).degraded === true ? "  [降级]" : "";
           const s = summarize(e);
           return `${e.id}  [${e.kind}]  freq=${e.freq} util=${e.utility}  ${s.length > 70 ? `${s.slice(0, 69)}…` : s}${dead}${degraded}`;
         });
@@ -349,8 +325,7 @@ export async function runMemoryCommand(
 
       case "why": {
         const provenance = await collectWhy(engine, parsed.id!);
-        if (!provenance.entry)
-          return { ok: false, text: `条目不存在: ${parsed.id}` };
+        if (!provenance.entry) return { ok: false, text: `条目不存在: ${parsed.id}` };
         return { ok: true, text: renderWhy(provenance) };
       }
 
@@ -380,8 +355,7 @@ export async function runMemoryCommand(
       }
 
       case "diff": {
-        const since =
-          parsed.since ?? new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+        const since = parsed.since ?? new Date(Date.now() - 24 * 3600 * 1000).toISOString();
         const diff = await collectMemoryDiff(since);
         return { ok: true, text: renderMemoryDiff(diff) };
       }
@@ -396,9 +370,7 @@ export async function runMemoryCommand(
           );
           return {
             ok: true,
-            text: [`删除候选复核队列（${rows.length} 条）:`, ...lines].join(
-              "\n",
-            ),
+            text: [`删除候选复核队列（${rows.length} 条）:`, ...lines].join("\n"),
           };
         }
         if (parsed.approve) {
@@ -446,9 +418,7 @@ export async function runMemoryCommand(
           `  待清理（已软失效）: ${report.eligible}`,
         ];
         if (!report.dryRun) {
-          lines.push(
-            `  已归档: ${report.archived}    已物理删除: ${report.deleted}`,
-          );
+          lines.push(`  已归档: ${report.archived}    已物理删除: ${report.deleted}`);
           if (report.exportPath) lines.push(`  导出: ${report.exportPath}`);
         }
         return { ok: true, text: lines.join("\n") };
@@ -456,7 +426,7 @@ export async function runMemoryCommand(
 
       case "replay": {
         const { readFile } = await import("node:fs/promises");
-        let trajectories;
+        let trajectories: ReturnType<typeof parseReplayJsonl>;
         try {
           trajectories = parseReplayJsonl(await readFile(parsed.id!, "utf-8"));
         } catch (e) {
@@ -471,9 +441,7 @@ export async function runMemoryCommand(
         });
         return {
           ok: true,
-          text: parsed.json
-            ? JSON.stringify(report, null, 2)
-            : renderReplayReport(report),
+          text: parsed.json ? JSON.stringify(report, null, 2) : renderReplayReport(report),
         };
       }
 
@@ -488,8 +456,7 @@ export async function runMemoryCommand(
           `导出完成: ${report.dir}`,
           `  扫描: ${report.total}    导出: ${report.exported}    打码: ${report.redacted}    跳过（疑似密钥）: ${report.skippedSecret.length}`,
         ];
-        for (const s of report.skippedSecret)
-          lines.push(`  跳过: ${s.id}（${s.pattern}）`);
+        for (const s of report.skippedSecret) lines.push(`  跳过: ${s.id}（${s.pattern}）`);
         for (const f of report.files) lines.push(`  文件: ${f}`);
         return { ok: true, text: lines.join("\n") };
       }
@@ -508,10 +475,7 @@ export async function runMemoryCommand(
 
       case "redteam": {
         const suite = parsed.id;
-        if (
-          !suite ||
-          !["all", "counterfactual", "noise", "negation"].includes(suite)
-        ) {
+        if (!suite || !["all", "counterfactual", "noise", "negation"].includes(suite)) {
           return {
             ok: false,
             text: `memory redteam 需要 <all|counterfactual|noise|negation>${suite ? `，收到: ${suite}` : ""}`,
@@ -525,24 +489,20 @@ export async function runMemoryCommand(
           estimatedTokens: 0,
         };
         const backboneCfg = resolveLlmConfig({ provider: parsed.provider });
-        if ("error" in backboneCfg)
-          return { ok: false, text: backboneCfg.error };
+        if ("error" in backboneCfg) return { ok: false, text: backboneCfg.error };
         const judgeCfg =
           parsed.judgeProvider && parsed.judgeProvider !== parsed.provider
             ? resolveLlmConfig({ provider: parsed.judgeProvider })
             : backboneCfg;
         if ("error" in judgeCfg) return { ok: false, text: judgeCfg.error };
-        const reports = await runRedteamSuite(
-          suite as RedteamSuiteName | "all",
-          {
-            engine,
-            backbone: new ChatClient(backboneCfg, 60_000, stats),
-            judge: new ChatClient(judgeCfg, 60_000, stats),
-            stats,
-            keep: parsed.keep,
-            maxSamples: parsed.maxSamples,
-          },
-        );
+        const reports = await runRedteamSuite(suite as RedteamSuiteName | "all", {
+          engine,
+          backbone: new ChatClient(backboneCfg, 60_000, stats),
+          judge: new ChatClient(judgeCfg, 60_000, stats),
+          stats,
+          keep: parsed.keep,
+          maxSamples: parsed.maxSamples,
+        });
         const text = parsed.json
           ? JSON.stringify(reports, null, 2)
           : reports.map((r) => renderRedteamReport(r)).join("\n\n");
@@ -558,8 +518,7 @@ export async function runMemoryCommand(
           estimatedTokens: 0,
         };
         const backboneCfg = resolveLlmConfig({ provider: parsed.provider });
-        if ("error" in backboneCfg)
-          return { ok: false, text: backboneCfg.error };
+        if ("error" in backboneCfg) return { ok: false, text: backboneCfg.error };
         const report = await runBackboneSmoke({
           engine,
           backbone: new ChatClient(backboneCfg, 60_000, stats),
@@ -583,9 +542,7 @@ export async function runMemoryCommand(
         const text = parsed.json
           ? JSON.stringify(report, null, 2)
           : renderBackboneSmokeReport(report);
-        return report.passed === true
-          ? { ok: true, text }
-          : { ok: false, text };
+        return report.passed === true ? { ok: true, text } : { ok: false, text };
       }
 
       case "mab": {
@@ -597,22 +554,13 @@ export async function runMemoryCommand(
           estimatedTokens: 0,
         };
         const backboneCfg = resolveLlmConfig({ provider: parsed.provider });
-        if ("error" in backboneCfg)
-          return { ok: false, text: backboneCfg.error };
+        if ("error" in backboneCfg) return { ok: false, text: backboneCfg.error };
 
-        const dimAllowed = new Set<MabDimension>([
-          "AR",
-          "TTL",
-          "LRU",
-          "CR",
-          "SF",
-        ]);
+        const dimAllowed = new Set<MabDimension>(["AR", "TTL", "LRU", "CR", "SF"]);
         let dimensions: MabDimension[] | undefined;
         if (parsed.dimensions) {
           dimensions = [];
-          for (const part of parsed.dimensions
-            .split(/[,+\s]+/)
-            .filter(Boolean)) {
+          for (const part of parsed.dimensions.split(/[,+\s]+/).filter(Boolean)) {
             const d = part.toUpperCase() as MabDimension;
             if (!dimAllowed.has(d)) {
               return {
@@ -627,8 +575,7 @@ export async function runMemoryCommand(
         const warnings: string[] = [];
         let samples = parsed.data
           ? loadMabSamplesFromFile(parsed.data, {
-              defaultDimension:
-                dimensions?.length === 1 ? dimensions[0] : undefined,
+              defaultDimension: dimensions?.length === 1 ? dimensions[0] : undefined,
             })
           : [];
         if (parsed.data && samples.length === 0) {
@@ -640,8 +587,7 @@ export async function runMemoryCommand(
 
         if (parsed.hf) {
           const cacheDir =
-            parsed.hfCache ??
-            join(process.cwd(), "benchmarks", "memory-agent-bench", "hf-cache");
+            parsed.hfCache ?? join(process.cwd(), "benchmarks", "memory-agent-bench", "hf-cache");
           const parquetDir = join(
             process.cwd(),
             "benchmarks",
@@ -649,9 +595,7 @@ export async function runMemoryCommand(
             "hf-dataset",
             "data",
           );
-          const hfDims = (dimensions ?? ["AR", "TTL", "LRU", "CR"]).filter(
-            (d) => d !== "SF",
-          );
+          const hfDims = (dimensions ?? ["AR", "TTL", "LRU", "CR"]).filter((d) => d !== "SF");
           const splits = hfDims
             .map(
               (d) =>
@@ -688,10 +632,7 @@ export async function runMemoryCommand(
           // HF 全量默认仍附带 SF 内置条，否则 SF 断言缺席
           const wantSf = !dimensions || dimensions.includes("SF");
           if (wantSf)
-            samples = [
-              ...samples,
-              ...BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF"),
-            ];
+            samples = [...samples, ...BUILTIN_CODING_FIXTURES.filter((s) => s.dimension === "SF")];
         }
 
         samples = filterMabSamples(samples, {
@@ -705,11 +646,7 @@ export async function runMemoryCommand(
 
         const report = await runMemoryAgentBench({
           samples,
-          backbone: new ChatClient(
-            backboneCfg,
-            parsed.hf ? 180_000 : 60_000,
-            stats,
-          ),
+          backbone: new ChatClient(backboneCfg, parsed.hf ? 180_000 : 60_000, stats),
           engine,
           stats,
           keep: parsed.keep,
@@ -720,31 +657,20 @@ export async function runMemoryCommand(
           dimensions,
         });
         const finalReport =
-          warnings.length > 0
-            ? { ...report, warnings: [...report.warnings, ...warnings] }
-            : report;
+          warnings.length > 0 ? { ...report, warnings: [...report.warnings, ...warnings] } : report;
         const text = parsed.json
           ? JSON.stringify(finalReport, null, 2)
           : renderMabReport(finalReport);
-        return finalReport.passed === true
-          ? { ok: true, text }
-          : { ok: false, text };
+        return finalReport.passed === true ? { ok: true, text } : { ok: false, text };
       }
 
       case "mechanism": {
         resetMemoryV2Core();
-        const allowed = new Set<MechSuiteName>([
-          "trial",
-          "gate",
-          "profile",
-          "cap",
-        ]);
+        const allowed = new Set<MechSuiteName>(["trial", "gate", "profile", "cap"]);
         let suites: MechSuiteName[] | undefined;
         if (parsed.dimensions) {
           suites = [];
-          for (const part of parsed.dimensions
-            .split(/[,+\s]+/)
-            .filter(Boolean)) {
+          for (const part of parsed.dimensions.split(/[,+\s]+/).filter(Boolean)) {
             const s = part.toLowerCase() as MechSuiteName;
             if (!allowed.has(s)) {
               return {
@@ -760,12 +686,8 @@ export async function runMemoryCommand(
           keep: parsed.keep,
         });
         resetMemoryV2Core();
-        const text = parsed.json
-          ? JSON.stringify(report, null, 2)
-          : renderMechReport(report);
-        return report.passed === true
-          ? { ok: true, text }
-          : { ok: false, text };
+        const text = parsed.json ? JSON.stringify(report, null, 2) : renderMechReport(report);
+        return report.passed === true ? { ok: true, text } : { ok: false, text };
       }
 
       case "enable": {
@@ -824,9 +746,7 @@ export async function runMemoryCommand(
         ];
         const byType = Object.entries(result.byType);
         if (byType.length > 0) {
-          lines.push(
-            `按原类型: ${byType.map(([t, n]) => `${t}=${n}`).join(", ")}`,
-          );
+          lines.push(`按原类型: ${byType.map(([t, n]) => `${t}=${n}`).join(", ")}`);
         }
         if (result.failedIds.length > 0) {
           lines.push(`失败条目: ${result.failedIds.join(", ")}`);

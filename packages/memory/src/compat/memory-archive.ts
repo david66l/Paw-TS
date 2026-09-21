@@ -134,11 +134,7 @@ export function shouldArchiveEntry(
   }
 
   // 规则 2：显式有效期已过
-  if (
-    entry.valid_until !== undefined &&
-    entry.valid_until > 0 &&
-    now > entry.valid_until
-  ) {
+  if (entry.valid_until !== undefined && entry.valid_until > 0 && now > entry.valid_until) {
     return true;
   }
 

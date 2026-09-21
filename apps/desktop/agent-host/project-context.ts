@@ -23,12 +23,7 @@ export function desktopProjectContext(
   const paw = ["PAW.md", "paw.md", ".paw/PAW.md", ".paw/paw.md"].find((name) =>
     fs.existsSync(path.join(root, name)),
   );
-  for (const name of [
-    paw,
-    "AGENTS.md",
-    ".paw/CLAUDE.md",
-    ".paw/CLAUDE.local.md",
-  ]) {
+  for (const name of [paw, "AGENTS.md", ".paw/CLAUDE.md", ".paw/CLAUDE.local.md"]) {
     if (!name) continue;
     let fd: number | undefined;
     try {

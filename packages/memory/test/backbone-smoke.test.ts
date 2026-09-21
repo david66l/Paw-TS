@@ -27,9 +27,7 @@ import { scanForSecrets } from "../src/longterm/write/secrets.js";
 // ═══════════════════════════════════════════════════════════════
 
 /** 构造 SmokeItemResult（默认 written 未召回） */
-function item(
-  partial: Partial<SmokeItemResult> & { fixtureId: string },
-): SmokeItemResult {
+function item(partial: Partial<SmokeItemResult> & { fixtureId: string }): SmokeItemResult {
   return {
     status: "written",
     memoryIds: [],
@@ -44,8 +42,7 @@ function item(
 function trigrams(s: string): Set<string> {
   const normalized = s.toLowerCase().replace(/[^a-z0-9一-鿿]/g, " ");
   const out = new Set<string>();
-  for (let i = 0; i <= normalized.length - 3; i++)
-    out.add(normalized.slice(i, i + 3));
+  for (let i = 0; i <= normalized.length - 3; i++) out.add(normalized.slice(i, i + 3));
   return out;
 }
 
@@ -165,15 +162,12 @@ describe("summarizeSmoke", () => {
       item({ fixtureId: "a", status: "degraded", memoryIds: ["d-a"] }),
     ]);
     expect(withId.degradedPathOk).toBe(true);
-    const withoutId = summarizeSmoke([
-      item({ fixtureId: "b", status: "degraded", memoryIds: [] }),
-    ]);
+    const withoutId = summarizeSmoke([item({ fixtureId: "b", status: "degraded", memoryIds: [] })]);
     expect(withoutId.degradedPathOk).toBe(false);
     // 无 degraded → 真空成立
     expect(
-      summarizeSmoke([
-        item({ fixtureId: "c", status: "written", memoryIds: ["m"] }),
-      ]).degradedPathOk,
+      summarizeSmoke([item({ fixtureId: "c", status: "written", memoryIds: ["m"] })])
+        .degradedPathOk,
     ).toBe(true);
   });
 
@@ -196,11 +190,7 @@ describe("summarizeSmoke", () => {
 describe("smokePassed 边界", () => {
   test("阈值恰好命中与跨越", () => {
     expect(
-      smokePassed(
-        SMOKE_SCHEMA_RATE_MIN,
-        SMOKE_RECALL_RATE_MIN,
-        SMOKE_UNVERIFIED_MAX - 0.01,
-      ),
+      smokePassed(SMOKE_SCHEMA_RATE_MIN, SMOKE_RECALL_RATE_MIN, SMOKE_UNVERIFIED_MAX - 0.01),
     ).toBe(true);
     expect(smokePassed(0.79, 1, 0)).toBe(false); // schema 不足
     expect(smokePassed(1, 0.69, 0)).toBe(false); // recall 不足

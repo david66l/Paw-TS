@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConversationTurn } from "./conversationHistory";
-import {
-  formatModelOutputForUi,
-  formatModelTextForUi,
-  mergeThinking,
-} from "./formatModelText";
-import {
-  requestHostStatus,
-  requestSetSettings,
-  requestSettings,
-} from "./harnessClient";
+import { formatModelOutputForUi, formatModelTextForUi, mergeThinking } from "./formatModelText";
+import { requestHostStatus, requestSetSettings, requestSettings } from "./harnessClient";
 import {
   type ChatSession,
   createEmptySession,
@@ -75,12 +67,9 @@ function runAgentSpecId(args: unknown): string | undefined {
 function activitySummaryLine(a: RunActivity): string {
   const ops = a.agents.reduce((n, x) => n + x.toolCount, 0);
   const secs =
-    a.finishedAt && a.startedAt
-      ? Math.max(1, Math.round((a.finishedAt - a.startedAt) / 1000))
-      : 0;
+    a.finishedAt && a.startedAt ? Math.max(1, Math.round((a.finishedAt - a.startedAt) / 1000)) : 0;
   const failed = a.agents.filter((x) => x.status === "failed").length;
-  const label =
-    a.status === "failed" ? "并行执行 · 部分失败" : "并行执行 · 已完成";
+  const label = a.status === "failed" ? "并行执行 · 部分失败" : "并行执行 · 已完成";
   const tail = failed > 0 ? ` · ${failed} 失败` : "";
   return `${label} · ${a.agents.length} 个 Agent · ${ops} 次操作 · ${secs} 秒${tail}`;
 }
@@ -177,14 +166,11 @@ function ensureAssistantId(
 export function useAgentRun() {
   const initial = loadSessionsFromStorage();
   const initialActive =
-    initial.sessions.find((s) => s.id === initial.activeId) ??
-    initial.sessions[0]!;
+    initial.sessions.find((s) => s.id === initial.activeId) ?? initial.sessions[0]!;
 
   const [sessions, setSessions] = useState<ChatSession[]>(initial.sessions);
   const [activeSessionId, setActiveSessionId] = useState(initial.activeId);
-  const [messages, setMessages] = useState<UiMessage[]>([
-    ...initialActive.messages,
-  ]);
+  const [messages, setMessages] = useState<UiMessage[]>([...initialActive.messages]);
   const [status, setStatus] = useState<RunStatus>("idle");
   const [statusText, setStatusText] = useState("等待任务");
   const [repoRoot, setRepoRoot] = useState<string>("");
@@ -204,16 +190,12 @@ export function useAgentRun() {
     }[]
   >([]);
   /** 花名册运行态：id → idle|running|done|failed */
-  const [agentRunStatus, setAgentRunStatus] = useState<
-    Record<string, AgentRunStatus>
-  >({});
+  const [agentRunStatus, setAgentRunStatus] = useState<Record<string, AgentRunStatus>>({});
   /** run_agent callId → 注册表 agent_id，用于 tool.result 收尾 */
   const runAgentSpecByCallRef = useRef<Map<string, string>>(new Map());
 
   /** 待审批队列（根 Agent 与并行子 Agent 共享一条已串行化的审批通道） */
-  const [pendingApprovals, setPendingApprovals] = useState<
-    PendingApprovalItem[]
-  >([]);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApprovalItem[]>([]);
   /** 待回答的模型提问（ask_user，一次一条） */
   const [pendingAsk, setPendingAsk] = useState<PendingAskItem | null>(null);
   const pendingAskRef = useRef<PendingAskItem | null>(null);
@@ -222,9 +204,7 @@ export function useAgentRun() {
 
   /** 工作区设置：审批模式 + 模型预设（来自 settings.local.json） */
   const [approvalMode, setApprovalMode] = useState<"ask" | "auto">("ask");
-  const [modelPresets, setModelPresets] = useState<
-    readonly { id: string; model: string }[]
-  >([]);
+  const [modelPresets, setModelPresets] = useState<readonly { id: string; model: string }[]>([]);
   const [provider, setProvider] = useState<string | undefined>(undefined);
 
   /** run 结束 / 切换会话时，清空待审批与待提问 */
@@ -234,16 +214,13 @@ export function useAgentRun() {
     setPendingAsk(null);
   }, []);
 
-  const setSpecRunStatus = useCallback(
-    (specId: string, status: AgentRunStatus) => {
-      if (!specId) return;
-      setAgentRunStatus((prev) => {
-        if (prev[specId] === status) return prev;
-        return { ...prev, [specId]: status };
-      });
-    },
-    [],
-  );
+  const setSpecRunStatus = useCallback((specId: string, status: AgentRunStatus) => {
+    if (!specId) return;
+    setAgentRunStatus((prev) => {
+      if (prev[specId] === status) return prev;
+      return { ...prev, [specId]: status };
+    });
+  }, []);
 
   const requestIdRef = useRef<string | null>(null);
   const assistantIdRef = useRef<string | null>(null);
@@ -271,13 +248,8 @@ export function useAgentRun() {
   const [activities, setActivities] = useState<RunActivity[]>([]);
   /** 当前开启中的 activity id（null = 无进行中的子 Agent 批次） */
   const openActivityIdRef = useRef<string | null>(null);
-  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
-    null,
-  );
-  const selectActivity = useCallback(
-    (id: string) => setSelectedActivityId(id),
-    [],
-  );
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const selectActivity = useCallback((id: string) => setSelectedActivityId(id), []);
 
   /** 连续工具调用的执行卡（toolbatch 锚点消息 → ToolBatch） */
   const toolBatchesRef = useRef<ToolBatch[]>([]);
@@ -379,9 +351,7 @@ export function useAgentRun() {
       .then((result) => {
         if (!cancelled && result.ok && result.data)
           setMonitor((current) =>
-            current && current.updatedAt >= result.data!.updatedAt
-              ? current
-              : result.data!,
+            current && current.updatedAt >= result.data!.updatedAt ? current : result.data!,
           );
       })
       .catch(() => {});
@@ -431,15 +401,12 @@ export function useAgentRun() {
       const assistant = assistantText.trim();
       if (!user || !assistant) return;
       // 跳过 aborted / 纯错误
-      if (assistant === "Run aborted." || assistant.startsWith("错误："))
-        return;
+      if (assistant === "Run aborted." || assistant.startsWith("错误：")) return;
       const next: ConversationTurn[] = [
         ...historyRef.current,
         {
           role: "user" as const,
-          content: [user, ...supplementalInputsRef.current.values()].join(
-            "\n\n追加指令：\n",
-          ),
+          content: [user, ...supplementalInputsRef.current.values()].join("\n\n追加指令：\n"),
         },
         { role: "assistant" as const, content: assistant },
       ];
@@ -504,16 +471,10 @@ export function useAgentRun() {
     // ---- RunActivity 变更助手（闭包持有 refs + 稳定 setter）----
     const commitActivities = () => setActivities([...activitiesRef.current]);
     const patchActivity = (id: string, fn: (a: RunActivity) => RunActivity) => {
-      activitiesRef.current = activitiesRef.current.map((a) =>
-        a.id === id ? fn(a) : a,
-      );
+      activitiesRef.current = activitiesRef.current.map((a) => (a.id === id ? fn(a) : a));
       commitActivities();
     };
-    const upsertAgent = (
-      activityId: string,
-      agentId: string,
-      patch: Partial<SubAgentInfo>,
-    ) => {
+    const upsertAgent = (activityId: string, agentId: string, patch: Partial<SubAgentInfo>) => {
       patchActivity(activityId, (a) => {
         const exists = a.agents.some((g) => g.id === agentId);
         const agents = exists
@@ -550,9 +511,7 @@ export function useAgentRun() {
         const line = activitySummaryLine(finalA);
         setMessages((prev) =>
           prev.map((m) =>
-            m.role === "activity" && m.activityId === id
-              ? { ...m, content: line }
-              : m,
+            m.role === "activity" && m.activityId === id ? { ...m, content: line } : m,
           ),
         );
       }
@@ -574,9 +533,7 @@ export function useAgentRun() {
         const line = toolBatchSummaryLine(b.rows);
         setMessages((prev) =>
           prev.map((m) =>
-            m.role === "toolbatch" && m.toolBatchId === id
-              ? { ...m, content: line }
-              : m,
+            m.role === "toolbatch" && m.toolBatchId === id ? { ...m, content: line } : m,
           ),
         );
       }
@@ -587,9 +544,7 @@ export function useAgentRun() {
       if (!id || fileChangesRef.current.length === 0) return;
       const line = changesSummaryLine(fileChangesRef.current);
       setMessages((prev) =>
-        prev.map((m) =>
-          m.role === "changes" && m.id === id ? { ...m, content: line } : m,
-        ),
+        prev.map((m) => (m.role === "changes" && m.id === id ? { ...m, content: line } : m)),
       );
     };
 
@@ -607,9 +562,7 @@ export function useAgentRun() {
           if (!modelFetched || force) {
             modelFetched = true;
             setModelLabel(s.modelLabel || "—");
-            setSkillsCount(
-              typeof s.skillsCount === "number" ? s.skillsCount : 0,
-            );
+            setSkillsCount(typeof s.skillsCount === "number" ? s.skillsCount : 0);
             if (s.workspaceRoot) setRepoRoot(s.workspaceRoot);
           }
           if (Array.isArray(s.agents)) {
@@ -638,9 +591,7 @@ export function useAgentRun() {
         setRepoRoot(m.repoRoot);
         setHostReady(m.agentReady);
         if (m.agentReady) {
-          setStatusText((s) =>
-            s === "等待任务" || s === "等待 Agent" ? "Agent 就绪" : s,
-          );
+          setStatusText((s) => (s === "等待任务" || s === "等待 Agent" ? "Agent 就绪" : s));
           // 就绪后持续补拉，直到花名册非空（或用户 force）
           refreshHostStatus();
           refreshSettings();
@@ -652,39 +603,26 @@ export function useAgentRun() {
 
     const offReady = desk.onReady(() => {
       setHostReady(true);
-      setStatusText((s) =>
-        s === "等待任务" || s === "等待 Agent" ? "Agent 就绪" : s,
-      );
+      setStatusText((s) => (s === "等待任务" || s === "等待 Agent" ? "Agent 就绪" : s));
       refreshHostStatus(true);
       refreshSettings();
     });
 
-    const offApprovalClosed = desk.onApprovalClosed?.(
-      ({ requestId, approvalId }) => {
-        if (requestId === requestIdRef.current)
-          setPendingApprovals((prev) =>
-            prev.filter((item) => item.approvalId !== approvalId),
-          );
-      },
-    );
+    const offApprovalClosed = desk.onApprovalClosed?.(({ requestId, approvalId }) => {
+      if (requestId === requestIdRef.current)
+        setPendingApprovals((prev) => prev.filter((item) => item.approvalId !== approvalId));
+    });
     const offEvent = desk.onEvent(({ requestId, event: envelope }) => {
       if (requestId !== requestIdRef.current) return;
 
       const ev = envelope?.event;
       if (!ev || typeof ev.type !== "string") return;
       const t = ev.type;
-      if (
-        t === "monitor.snapshot" &&
-        ev.snapshot &&
-        typeof ev.snapshot === "object"
-      ) {
+      if (t === "monitor.snapshot" && ev.snapshot && typeof ev.snapshot === "object") {
         setMonitor(ev.snapshot as DesktopMonitorSnapshot);
         return;
       }
-      if (
-        (t === "input.accepted" || t === "input.promoted") &&
-        typeof ev.inputId === "string"
-      ) {
+      if ((t === "input.accepted" || t === "input.promoted") && typeof ev.inputId === "string") {
         const inputId = ev.inputId;
         if (t === "input.accepted" && typeof ev.content === "string") {
           supplementalInputsRef.current.set(inputId, ev.content);
@@ -708,9 +646,7 @@ export function useAgentRun() {
           );
         } else if (t === "input.promoted") {
           setMessages((prev) =>
-            prev.map((m) =>
-              m.inputId === inputId ? { ...m, inputState: "promoted" } : m,
-            ),
+            prev.map((m) => (m.inputId === inputId ? { ...m, inputState: "promoted" } : m)),
           );
         }
         return;
@@ -721,25 +657,19 @@ export function useAgentRun() {
           {
             id: newId("sys"),
             role: "system",
-            content:
-              typeof ev.summary === "string" ? ev.summary : "文件差异暂不可用",
+            content: typeof ev.summary === "string" ? ev.summary : "文件差异暂不可用",
           },
         ]);
       const changeEvent = (t === "child.tool_result" ? ev.originalEvent : ev) as
         | Record<string, unknown>
         | undefined;
       if (
-        (t === "tool.result" ||
-          t === "child.tool_result" ||
-          t === "workspace.changes") &&
+        (t === "tool.result" || t === "child.tool_result" || t === "workspace.changes") &&
         changeEvent?.ok !== false &&
         changeEvent
       ) {
         // 修改性工具的变更统计 → Changed files 卡（首个变更到达时插锚点）
-        if (
-          Array.isArray(changeEvent.fileChanges) &&
-          changeEvent.fileChanges.length > 0
-        ) {
+        if (Array.isArray(changeEvent.fileChanges) && changeEvent.fileChanges.length > 0) {
           const incoming: FileChangeItem[] = [];
           for (const c of changeEvent.fileChanges) {
             if (!c || typeof c !== "object") continue;
@@ -753,10 +683,7 @@ export function useAgentRun() {
             });
           }
           if (incoming.length > 0) {
-            fileChangesRef.current = mergeFileChanges(
-              fileChangesRef.current,
-              incoming,
-            );
+            fileChangesRef.current = mergeFileChanges(fileChangesRef.current, incoming);
             setFileChanges([...fileChangesRef.current]);
             if (!changesMarkerIdRef.current) {
               const markerId = newId("chgmsg");
@@ -796,20 +723,13 @@ export function useAgentRun() {
       }
       if (t === "model.thinking" && typeof ev.text === "string") {
         setStatusText("思考中…");
-        const aid = ensureAssistantId(
-          assistantIdRef,
-          streamRawRef,
-          streamThinkingRef,
-        );
+        const aid = ensureAssistantId(assistantIdRef, streamRawRef, streamThinkingRef);
         streamThinkingRef.current =
           ev.mode === "delta" ? streamThinkingRef.current + ev.text : ev.text;
         const formatted = formatModelOutputForUi(streamRawRef.current, {
           streaming: true,
         });
-        const thinking = mergeThinking(
-          streamThinkingRef.current,
-          formatted.thinking,
-        );
+        const thinking = mergeThinking(streamThinkingRef.current, formatted.thinking);
         setMessages((prev) =>
           upsertAssistant(prev, aid, {
             content: formatted.content ?? "",
@@ -821,20 +741,12 @@ export function useAgentRun() {
       }
       if (t === "model.chunk" && typeof ev.text === "string") {
         setStatusText("生成回复…");
-        const aid = ensureAssistantId(
-          assistantIdRef,
-          streamRawRef,
-          streamThinkingRef,
-        );
-        streamRawRef.current =
-          ev.mode === "delta" ? streamRawRef.current + ev.text : ev.text;
+        const aid = ensureAssistantId(assistantIdRef, streamRawRef, streamThinkingRef);
+        streamRawRef.current = ev.mode === "delta" ? streamRawRef.current + ev.text : ev.text;
         const formatted = formatModelOutputForUi(streamRawRef.current, {
           streaming: true,
         });
-        const thinking = mergeThinking(
-          streamThinkingRef.current,
-          formatted.thinking,
-        );
+        const thinking = mergeThinking(streamThinkingRef.current, formatted.thinking);
         setMessages((prev) =>
           upsertAssistant(prev, aid, {
             content: formatted.content ?? "",
@@ -845,28 +757,18 @@ export function useAgentRun() {
         return;
       }
       if (t === "model.done" && typeof ev.text === "string") {
-        const aid = ensureAssistantId(
-          assistantIdRef,
-          streamRawRef,
-          streamThinkingRef,
-        );
+        const aid = ensureAssistantId(assistantIdRef, streamRawRef, streamThinkingRef);
         streamRawRef.current = ev.text;
         // model.done 可能自带 thinking 字段（推理通道汇总）
         if (typeof ev.thinking === "string" && ev.thinking.trim()) {
           // 优先 done 汇总；若比通道更长/更完整则采用
           const doneThink = ev.thinking.trim();
-          if (
-            !streamThinkingRef.current ||
-            doneThink.length >= streamThinkingRef.current.length
-          ) {
+          if (!streamThinkingRef.current || doneThink.length >= streamThinkingRef.current.length) {
             streamThinkingRef.current = doneThink;
           }
         }
         const formatted = formatModelOutputForUi(ev.text, { streaming: false });
-        const thinking = mergeThinking(
-          streamThinkingRef.current,
-          formatted.thinking,
-        );
+        const thinking = mergeThinking(streamThinkingRef.current, formatted.thinking);
 
         if (formatted.content === null && !thinking) {
           // 纯工具调用且无思考：去掉空助手气泡
@@ -896,8 +798,7 @@ export function useAgentRun() {
       if (t === "tool.call" && typeof ev.tool === "string") {
         // 子 Agent 派生：开/写执行卡，不再出工具胶囊
         if (ev.tool === SUB_AGENT_TOOL) {
-          const callId =
-            typeof ev.callId === "string" ? ev.callId : newId("child");
+          const callId = typeof ev.callId === "string" ? ev.callId : newId("child");
           const specId = runAgentSpecId(ev.args);
           if (specId) {
             runAgentSpecByCallRef.current.set(callId, specId);
@@ -967,8 +868,7 @@ export function useAgentRun() {
                   rows: [
                     ...b.rows,
                     {
-                      id:
-                        typeof ev.callId === "string" ? ev.callId : newId("tr"),
+                      id: typeof ev.callId === "string" ? ev.callId : newId("tr"),
                       tool: ev.tool as string,
                       summary,
                       status: "running" as const,
@@ -990,9 +890,7 @@ export function useAgentRun() {
         // 子 Agent 结果由执行卡承载，不出胶囊；花名册绿点收尾
         if (ev.tool === SUB_AGENT_TOOL) {
           const callId = typeof ev.callId === "string" ? ev.callId : undefined;
-          const fromCall = callId
-            ? runAgentSpecByCallRef.current.get(callId)
-            : undefined;
+          const fromCall = callId ? runAgentSpecByCallRef.current.get(callId) : undefined;
           const fromArgs = runAgentSpecId(ev.args);
           const fromSummary =
             typeof ev.summary === "string"
@@ -1006,8 +904,7 @@ export function useAgentRun() {
           return;
         }
         const ok = ev.ok !== false;
-        const summary =
-          typeof ev.summary === "string" ? ev.summary : ok ? "完成" : "失败";
+        const summary = typeof ev.summary === "string" ? ev.summary : ok ? "完成" : "失败";
         // 更新工具批里对应行（FIFO：最后一个 running 且同工具的行）
         const bid = openToolBatchIdRef.current;
         if (bid) {
@@ -1019,9 +916,7 @@ export function useAgentRun() {
               const r = b.rows[i]!;
               if (
                 r.status === "running" &&
-                (typeof ev.callId === "string"
-                  ? r.id === ev.callId
-                  : r.tool === ev.tool)
+                (typeof ev.callId === "string" ? r.id === ev.callId : r.tool === ev.tool)
               ) {
                 idx = i;
                 break;
@@ -1034,9 +929,7 @@ export function useAgentRun() {
             return {
               ...b,
               rows: b.rows.map((r, i) =>
-                i === idx
-                  ? { ...r, status, result: summary, finishedAt: Date.now() }
-                  : r,
+                i === idx ? { ...r, status, result: summary, finishedAt: Date.now() } : r,
               ),
             };
           });
@@ -1063,9 +956,7 @@ export function useAgentRun() {
         if (orig?.type === "agent.file_lock") {
           const lockPath = typeof orig.path === "string" ? orig.path : "";
           const holder =
-            typeof orig.holder === "string" && orig.holder
-              ? orig.holder
-              : "另一只 Agent";
+            typeof orig.holder === "string" && orig.holder ? orig.holder : "另一只 Agent";
           const denied = orig.status === "denied";
           const label = denied
             ? `锁冲突：${lockPath} 正被 ${holder} 占用`
@@ -1104,9 +995,7 @@ export function useAgentRun() {
               if (g.id !== agentId) return g;
               const isRead = tool ? /read_file/.test(tool) : false;
               const files =
-                path && isRead && !g.files.includes(path)
-                  ? [...g.files, path]
-                  : g.files;
+                path && isRead && !g.files.includes(path) ? [...g.files, path] : g.files;
               const tools = tool
                 ? appendAgentTool(g.tools ?? [], {
                     id: newId("ate"),
@@ -1129,12 +1018,7 @@ export function useAgentRun() {
           const tool = typeof orig?.tool === "string" ? orig.tool : undefined;
           if (tool) {
             const ok = orig?.ok !== false;
-            const result =
-              typeof orig?.summary === "string"
-                ? orig.summary
-                : ok
-                  ? "完成"
-                  : "失败";
+            const result = typeof orig?.summary === "string" ? orig.summary : ok ? "完成" : "失败";
             patchActivity(activityId, (a) => ({
               ...a,
               agents: a.agents.map((g) =>
@@ -1152,9 +1036,7 @@ export function useAgentRun() {
           if (specId) setSpecRunStatus(specId, "idle");
           upsertAgent(activityId, agentId, {
             status: "done",
-            ...(typeof orig?.message === "string"
-              ? { summary: orig.message }
-              : {}),
+            ...(typeof orig?.message === "string" ? { summary: orig.message } : {}),
           });
         } else if (t === "child.failed") {
           const specId = runAgentSpecByCallRef.current.get(agentId);
@@ -1162,9 +1044,7 @@ export function useAgentRun() {
           upsertAgent(activityId, agentId, {
             status: "failed",
             cancelled: orig?.status === "cancelled",
-            ...(typeof orig?.message === "string"
-              ? { error: orig.message }
-              : {}),
+            ...(typeof orig?.message === "string" ? { error: orig.message } : {}),
           });
         } else if (t === "child.started") {
           const goal =
@@ -1201,33 +1081,22 @@ export function useAgentRun() {
         });
         runAgentSpecByCallRef.current.clear();
         setMessages((prev) => {
-          let next = prev.map((m) =>
-            m.streaming ? { ...m, streaming: false } : m,
-          );
+          let next = prev.map((m) => (m.streaming ? { ...m, streaming: false } : m));
           if (typeof ev.message === "string" && ev.message.trim()) {
             // format 返回 null = 纯工具 JSON 等，禁止回退成原文（否则会把整份 CSS 刷进气泡）
             const msg = formatModelTextForUi(ev.message);
-            const last = [...next]
-              .reverse()
-              .find((m) => m.role === "assistant");
+            const last = [...next].reverse().find((m) => m.role === "assistant");
             if (msg && !last?.content.trim()) {
-              next = [
-                ...next,
-                { id: newId("a"), role: "assistant", content: msg },
-              ];
+              next = [...next, { id: newId("a"), role: "assistant", content: msg }];
             } else if (last?.content.trim()) {
               // 清洗已上屏的工具 JSON / 半截文件内容
               const cleaned = formatModelTextForUi(last.content);
               if (cleaned !== last.content) {
                 next = next.map((m) =>
-                  m.id === last.id
-                    ? { ...m, content: cleaned ?? "", streaming: false }
-                    : m,
+                  m.id === last.id ? { ...m, content: cleaned ?? "", streaming: false } : m,
                 );
                 if (!cleaned) {
-                  next = next.filter(
-                    (m) => m.id !== last.id || m.thinking?.trim(),
-                  );
+                  next = next.filter((m) => m.id !== last.id || m.thinking?.trim());
                 }
               }
             }
@@ -1265,15 +1134,12 @@ export function useAgentRun() {
       if (failed) setFailedGoal(pendingUserRef.current);
       clearPendingInteractions();
       const finalStatus = settledRunStatus(result.status);
-      if (failed)
-        setError(result.message || "任务失败。可检查原任务状态，或新建对话。");
+      if (failed) setError(result.message || "任务失败。可检查原任务状态，或新建对话。");
       setStatus(finalStatus);
       setStatusText(runStatusLabel(finalStatus));
       if (finalStatus === "incomplete" || finalStatus === "await_external") {
         setFailedGoal(pendingUserRef.current);
-        setError(
-          `${runStatusLabel(finalStatus)}。可检查并恢复原任务；开始不同任务请新建对话。`,
-        );
+        setError(`${runStatusLabel(finalStatus)}。可检查并恢复原任务；开始不同任务请新建对话。`);
       }
       setAgentRunStatus((prev) => {
         const next: Record<string, AgentRunStatus> = { ...prev };
@@ -1291,24 +1157,17 @@ export function useAgentRun() {
       streamRawRef.current = "";
       streamThinkingRef.current = "";
       setMessages((prev) => {
-        let next = prev.map((m) =>
-          m.streaming ? { ...m, streaming: false } : m,
-        );
+        let next = prev.map((m) => (m.streaming ? { ...m, streaming: false } : m));
         if (result.message?.trim()) {
           const msg = formatModelTextForUi(result.message);
           const last = [...next].reverse().find((m) => m.role === "assistant");
           if (msg && !last?.content.trim()) {
-            next = [
-              ...next,
-              { id: newId("a"), role: "assistant", content: msg },
-            ];
+            next = [...next, { id: newId("a"), role: "assistant", content: msg }];
           } else if (last?.content.trim()) {
             const cleaned = formatModelTextForUi(last.content);
             if (cleaned !== last.content) {
               next = next.map((m) =>
-                m.id === last.id
-                  ? { ...m, content: cleaned ?? "", streaming: false }
-                  : m,
+                m.id === last.id ? { ...m, content: cleaned ?? "", streaming: false } : m,
               );
               if (!cleaned && !last.thinking?.trim()) {
                 next = next.filter((m) => m.id !== last.id);
@@ -1324,8 +1183,7 @@ export function useAgentRun() {
     });
 
     const offErr = desk.onError(({ requestId, message }) => {
-      const isCurrentRun =
-        requestIdRef.current && requestId === requestIdRef.current;
+      const isCurrentRun = requestIdRef.current && requestId === requestIdRef.current;
       if (requestIdRef.current && requestId !== "?" && !isCurrentRun) {
         return;
       }
@@ -1382,9 +1240,7 @@ export function useAgentRun() {
       const interrupted = requestIdRef.current !== null;
       if (interrupted) {
         setFailedGoal(pendingUserRef.current);
-        setError(
-          "Agent 宿主中断；重启后可检查并恢复原任务，不会把它重新提交为新任务。",
-        );
+        setError("Agent 宿主中断；重启后可检查并恢复原任务，不会把它重新提交为新任务。");
         requestIdRef.current = null;
         assistantIdRef.current = null;
         streamRawRef.current = "";
@@ -1436,8 +1292,7 @@ export function useAgentRun() {
       taskMode?: "standard" | "long",
     ) => {
       const desk = api();
-      const text =
-        goal.trim() || (attachments.length ? "请分析这些附件。" : "");
+      const text = goal.trim() || (attachments.length ? "请分析这些附件。" : "");
       if (!text) return;
       if (!desk) {
         setError("当前不在 Electron 中，无法运行 Agent");
@@ -1477,10 +1332,7 @@ export function useAgentRun() {
       }
       if (text.startsWith("/")) {
         setError(null);
-        setMessages((prev) => [
-          ...prev,
-          { id: newId("u"), role: "user", content: text },
-        ]);
+        setMessages((prev) => [...prev, { id: newId("u"), role: "user", content: text }]);
         setStatusText("执行命令…");
         try {
           const result = await tryHandleSlashCommand(text, {
@@ -1612,9 +1464,7 @@ export function useAgentRun() {
       }
       activitiesRef.current = activitiesRef.current.map((a) => ({
         ...a,
-        agents: a.agents.map((g) =>
-          g.id === childId ? { ...g, cancelRequested: true } : g,
-        ),
+        agents: a.agents.map((g) => (g.id === childId ? { ...g, cancelRequested: true } : g)),
       }));
       setActivities([...activitiesRef.current]);
     } catch (error) {
@@ -1623,9 +1473,7 @@ export function useAgentRun() {
   }, []);
   const retryChild = useCallback(
     (childId: string) => {
-      const child = activitiesRef.current
-        .flatMap((a) => a.agents)
-        .find((g) => g.id === childId);
+      const child = activitiesRef.current.flatMap((a) => a.agents).find((g) => g.id === childId);
       if (!child?.retryGoal || child.status !== "failed") return;
       if (!["running", "completed", "await_user"].includes(status)) {
         setError("请先恢复主任务或新建对话。");
@@ -1648,22 +1496,15 @@ export function useAgentRun() {
   }, [clearPendingInteractions]);
 
   /** 审批卡决策：允许 / 拒绝 / 本会话始终允许 */
-  const resolveApproval = useCallback(
-    (approvalId: string, approved: boolean, always: boolean) => {
-      const desk = api();
-      const requestId = requestIdRef.current;
-      setPendingApprovals((prev) =>
-        prev.filter((a) => a.approvalId !== approvalId),
-      );
-      if (desk && requestId) {
-        void desk.respondApproval({ requestId, approvalId, approved, always });
-      }
-      setStatusText(
-        approved ? "已批准，继续执行…" : "已拒绝，等待 Agent 调整…",
-      );
-    },
-    [],
-  );
+  const resolveApproval = useCallback((approvalId: string, approved: boolean, always: boolean) => {
+    const desk = api();
+    const requestId = requestIdRef.current;
+    setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+    if (desk && requestId) {
+      void desk.respondApproval({ requestId, approvalId, approved, always });
+    }
+    setStatusText(approved ? "已批准，继续执行…" : "已拒绝，等待 Agent 调整…");
+  }, []);
 
   /** 提问卡回答：回传宿主 + 以「系统问题条 + 用户气泡」沉淀进聊天流 */
   const answerAsk = useCallback((answer: string) => {
@@ -1753,13 +1594,7 @@ export function useAgentRun() {
     clearLiveActivities();
     clearPendingInteractions();
     persistActiveIntoSessions([], []);
-  }, [
-    status,
-    hostReady,
-    persistActiveIntoSessions,
-    clearLiveActivities,
-    clearPendingInteractions,
-  ]);
+  }, [status, hostReady, persistActiveIntoSessions, clearLiveActivities, clearPendingInteractions]);
 
   /** 新建会话并切换过去（旧会话保留在列表） */
   const newConversation = useCallback(() => {
@@ -1849,9 +1684,7 @@ export function useAgentRun() {
           next = [createEmptySession()];
         }
         const switchingAway = conversationIdRef.current === sessionId;
-        const nextActive = switchingAway
-          ? next[0]!.id
-          : conversationIdRef.current;
+        const nextActive = switchingAway ? next[0]!.id : conversationIdRef.current;
         saveSessionsToStorage(next, nextActive);
 
         if (switchingAway) {

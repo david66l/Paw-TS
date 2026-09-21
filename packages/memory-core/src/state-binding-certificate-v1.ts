@@ -1,8 +1,4 @@
-import {
-  type JsonValue,
-  hashCanonicalJsonV1,
-  hashTextV1,
-} from "./canonical.js";
+import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryEvidenceAuthorityV2 } from "./evidence-contracts.js";
 import {
   type MemoryStateBoundObservationV2,
@@ -33,10 +29,7 @@ export interface MemoryStateBindingCertificateV1 {
     semanticDescriptorDigest: string;
     queryAnchorDigest: string;
     roleConstraint: "user" | "assistant";
-    authorityMode:
-      | "user_fact"
-      | "explicit_assistant_report"
-      | "certified_dialogue_artifact";
+    authorityMode: "user_fact" | "explicit_assistant_report" | "certified_dialogue_artifact";
     originRevision: string;
     temporalBindingRevision: string;
   }>;
@@ -121,14 +114,9 @@ export function compileMemoryStateBindingCertificatesV1(
   input: MemoryStateBindingCertificateValidationInputV1,
 ): readonly MemoryStateValidatedObservationV1[] {
   const slotById = new Map(input.slots.map((slot) => [slot.slotId, slot]));
-  const itemByRef = new Map(
-    input.sourceLock.items.map((item) => [item.evidenceRef, item]),
-  );
+  const itemByRef = new Map(input.sourceLock.items.map((item) => [item.evidenceRef, item]));
   const observationById = new Map(
-    input.proposedObservations.map((observation) => [
-      observation.observationId,
-      observation,
-    ]),
+    input.proposedObservations.map((observation) => [observation.observationId, observation]),
   );
   if (
     slotById.size !== input.slots.length ||
@@ -165,9 +153,7 @@ export function compileMemoryStateBindingCertificatesV1(
     input.verification.acceptedObservationIds.map((observationId) => {
       const observation = observationById.get(observationId);
       const slot = observation ? slotById.get(observation.slotId) : undefined;
-      const item = observation
-        ? itemByRef.get(observation.evidenceRef)
-        : undefined;
+      const item = observation ? itemByRef.get(observation.evidenceRef) : undefined;
       if (!observation || !slot || !item) {
         throw namedError("MemoryStateBindingCertificateInputInvalid");
       }
@@ -178,14 +164,11 @@ export function compileMemoryStateBindingCertificatesV1(
           : input.proposedObservations.filter(
               (candidate) =>
                 candidate.slotId === observation.slotId &&
-                candidate.evidenceRef ===
-                  observation.lifecycleTargetEvidenceRef,
+                candidate.evidenceRef === observation.lifecycleTargetEvidenceRef,
             );
       if (
-        (observation.lifecycleRelation === "none" &&
-          lifecycleTargetCandidates.length !== 0) ||
-        (observation.lifecycleRelation !== "none" &&
-          lifecycleTargetCandidates.length !== 1)
+        (observation.lifecycleRelation === "none" && lifecycleTargetCandidates.length !== 0) ||
+        (observation.lifecycleRelation !== "none" && lifecycleTargetCandidates.length !== 1)
       ) {
         throw namedError("MemoryStateBindingCertificateLifecycleInvalid");
       }
@@ -210,8 +193,7 @@ export function compileMemoryStateBindingCertificatesV1(
           ...(observation.lifecycleTargetEvidenceRef === undefined
             ? {}
             : {
-                lifecycleTargetEvidenceRef:
-                  observation.lifecycleTargetEvidenceRef,
+                lifecycleTargetEvidenceRef: observation.lifecycleTargetEvidenceRef,
               }),
           predicateKind: observation.predicateKind,
           polarity: observation.polarity,
@@ -224,10 +206,7 @@ export function compileMemoryStateBindingCertificatesV1(
       ) {
         throw namedError("MemoryStateBindingCertificateObservationInvalid");
       }
-      const supportSpan = compileSupportSpan(
-        item.content,
-        observation.valueSpans,
-      );
+      const supportSpan = compileSupportSpan(item.content, observation.valueSpans);
       const valueComposition = classifyMemoryStateValueCompositionV2(
         item.content,
         observation.valueSpans,
@@ -263,10 +242,7 @@ export function compileMemoryStateBindingCertificatesV1(
         claimBinding: {
           supportSpan,
           subject: {
-            referent:
-              item.role === "user"
-                ? ("query_user" as const)
-                : ("assistant" as const),
+            referent: item.role === "user" ? ("query_user" as const) : ("assistant" as const),
             basis:
               item.role === "assistant" && item.certificateRevision
                 ? ("certified_dialogue_pair" as const)
@@ -281,9 +257,7 @@ export function compileMemoryStateBindingCertificatesV1(
             exactSpans: observation.valueSpans,
             composition: valueComposition,
             surfaceDigest: hashCanonicalJsonV1(
-              observation.valueSpans.map(
-                (span) => span.textDigest,
-              ) as JsonValue,
+              observation.valueSpans.map((span) => span.textDigest) as JsonValue,
             ),
           },
           eventTime: {
@@ -295,15 +269,14 @@ export function compileMemoryStateBindingCertificatesV1(
             ...(observation.eventTimeCutoffStatus === undefined
               ? {}
               : { cutoffStatus: observation.eventTimeCutoffStatus }),
-            ...(observation.eventTimeBasis !==
-              "source_session_contemporaneous" || item.observedAt === undefined
+            ...(observation.eventTimeBasis !== "source_session_contemporaneous" ||
+            item.observedAt === undefined
               ? {}
               : {
                   sourceSessionAnchor: {
                     sourceTimestamp: item.observedAt,
                     sourceTimestampRevision: hashCanonicalJsonV1({
-                      schemaVersion:
-                        "paw.memory-source-session-timestamp-anchor.v1",
+                      schemaVersion: "paw.memory-source-session-timestamp-anchor.v1",
                       sourceLockDigest: input.sourceLock.sourceLockDigest,
                       sourceId: item.sourceId,
                       evidenceRef: item.evidenceRef,
@@ -364,8 +337,7 @@ export function validateMemoryStateBindingCertificateV1(
   input: MemoryStateBindingCertificateValidationInputV1,
 ): MemoryStateValidatedObservationV1 {
   const expected = compileMemoryStateBindingCertificatesV1(input).find(
-    (item) =>
-      item.observation.observationId === candidate.observation.observationId,
+    (item) => item.observation.observationId === candidate.observation.observationId,
   );
   if (
     !expected ||
@@ -391,9 +363,7 @@ function compileSupportSpan(
   if (!content || valueSpans.length < 1 || valueSpans.length > 4) {
     throw namedError("MemoryStateBindingCertificateSpanInvalid");
   }
-  const ordered = [...valueSpans].sort(
-    (left, right) => left.start - right.start,
-  );
+  const ordered = [...valueSpans].sort((left, right) => left.start - right.start);
   if (
     ordered.some(
       (span, index) =>

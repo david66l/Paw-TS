@@ -11,10 +11,7 @@ import {
   createPermissionRunRuleIdV1,
 } from "../permissions/engine.js";
 import { projectCheckpointSequenceHighWaterV1 } from "./agent-loop-tool-executor.js";
-import type {
-  FrozenToolRegistryV1,
-  ValidatedRuntimeToolCallV1,
-} from "./registry.js";
+import type { FrozenToolRegistryV1, ValidatedRuntimeToolCallV1 } from "./registry.js";
 
 export interface ToolHistoryPreflightInputV1 {
   readonly facts: readonly InputFactV1[];
@@ -22,8 +19,7 @@ export interface ToolHistoryPreflightInputV1 {
   readonly workspaceRoot: string;
 }
 
-export interface PermissionRunRuleHydrationInputV1
-  extends ToolHistoryPreflightInputV1 {
+export interface PermissionRunRuleHydrationInputV1 extends ToolHistoryPreflightInputV1 {
   readonly permissions: FrozenPermissionEngineV1;
   readonly runId: string;
   readonly approvalMode: PermissionApprovalModeV1;
@@ -50,9 +46,7 @@ interface ProjectedToolHistoryV1 {
  * Rebuild run-scoped allow rules only from canonical permission facts.
  * Validation and classification finish before the supplied engine is mutated.
  */
-export function hydratePermissionRunRulesV1(
-  input: PermissionRunRuleHydrationInputV1,
-): void {
+export function hydratePermissionRunRulesV1(input: PermissionRunRuleHydrationInputV1): void {
   if (!input.runId.trim()) {
     throw new TypeError("Permission run-rule hydration requires runId");
   }
@@ -63,9 +57,7 @@ export function hydratePermissionRunRulesV1(
   for (const entry of history.permissions) {
     const { fact, value } = entry;
     if (fact.policyVersion !== input.permissions.policyVersion) {
-      throw new Error(
-        `Permission policy version drift for call ${fact.callId}`,
-      );
+      throw new Error(`Permission policy version drift for call ${fact.callId}`);
     }
     input.permissions.assertRecordedResolutionFeasible(
       value,
@@ -104,15 +96,11 @@ export function hydratePermissionRunRulesV1(
       continue;
     }
     if (fact.source !== "run_rule") {
-      throw new Error(
-        `Permission allow_rule has invalid source: ${fact.callId}`,
-      );
+      throw new Error(`Permission allow_rule has invalid source: ${fact.callId}`);
     }
     const grant = grants.get(key);
     if (!grant || grant.fact.ruleId !== fact.ruleId) {
-      throw new Error(
-        `Permission run_rule has no exact earlier grant: ${fact.callId}`,
-      );
+      throw new Error(`Permission run_rule has no exact earlier grant: ${fact.callId}`);
     }
   }
 
@@ -139,17 +127,12 @@ export function assertCheckpointAllocationCoverageV1(
   for (const entry of history.permissions) {
     const allocation = history.allocations.get(entry.fact.callId);
     const required =
-      entry.fact.resolution !== "deny" &&
-      requiresToolCheckpointV1(entry.value.internalName);
+      entry.fact.resolution !== "deny" && requiresToolCheckpointV1(entry.value.internalName);
     if (required && !allocation) {
-      throw new Error(
-        `Allowed mutating tool lacks checkpoint allocation: ${entry.fact.callId}`,
-      );
+      throw new Error(`Allowed mutating tool lacks checkpoint allocation: ${entry.fact.callId}`);
     }
     if (!required && allocation) {
-      throw new Error(
-        `Tool must not have checkpoint allocation: ${entry.fact.callId}`,
-      );
+      throw new Error(`Tool must not have checkpoint allocation: ${entry.fact.callId}`);
     }
   }
   return Object.freeze({
@@ -157,17 +140,12 @@ export function assertCheckpointAllocationCoverageV1(
   });
 }
 
-function projectToolHistoryV1(
-  input: ToolHistoryPreflightInputV1,
-): ProjectedToolHistoryV1 {
+function projectToolHistoryV1(input: ToolHistoryPreflightInputV1): ProjectedToolHistoryV1 {
   if (!input.workspaceRoot.trim()) {
     throw new TypeError("Tool history preflight requires workspaceRoot");
   }
   const observed = new Map<string, ToolCallObservedFactV1>();
-  const dispatched = new Map<
-    string,
-    Extract<InputFactV1, { type: "tool.dispatch_recorded" }>
-  >();
+  const dispatched = new Map<string, Extract<InputFactV1, { type: "tool.dispatch_recorded" }>>();
   const permissionByCall = new Map<string, PermissionEntryV1>();
   const permissions: PermissionEntryV1[] = [];
   const allocations = new Map<
@@ -203,9 +181,7 @@ function projectToolHistoryV1(
       case "tool.permission_resolved": {
         const call = observed.get(fact.callId);
         if (!call || !dispatched.has(fact.callId)) {
-          throw new Error(
-            `Tool permission lacks observed dispatch: ${fact.callId}`,
-          );
+          throw new Error(`Tool permission lacks observed dispatch: ${fact.callId}`);
         }
         if (
           permissionByCall.has(fact.callId) ||
@@ -248,9 +224,7 @@ function projectToolHistoryV1(
           call.turn !== fact.turn ||
           call.order !== fact.sourceIndex
         ) {
-          throw new Error(
-            `Tool checkpoint allocation identity drift: ${fact.callId}`,
-          );
+          throw new Error(`Tool checkpoint allocation identity drift: ${fact.callId}`);
         }
         allocations.set(fact.callId, fact);
         break;

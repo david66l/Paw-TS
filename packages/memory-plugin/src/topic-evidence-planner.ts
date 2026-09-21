@@ -9,8 +9,7 @@ import {
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import type { MemoryTopicProjectionV1 } from "./topic-trajectory.js";
 
-export const PAW_MEMORY_TOPIC_EVIDENCE_PLANNER_VERSION_V1 =
-  MEMORY_TOPIC_EVIDENCE_POLICY_VERSION_V1;
+export const PAW_MEMORY_TOPIC_EVIDENCE_PLANNER_VERSION_V1 = MEMORY_TOPIC_EVIDENCE_POLICY_VERSION_V1;
 
 export interface MemoryTopicEvidenceCatalogItemV1 {
   readonly projection: MemoryTopicProjectionV1;
@@ -40,11 +39,7 @@ export function planMemoryTopicEvidenceV1(
     maxEvidenceChars?: number;
   }>,
 ): MemoryTopicEvidencePlanV1 {
-  const query = boundedText(
-    input.query,
-    8_192,
-    "MemoryTopicEvidenceQueryInvalid",
-  );
+  const query = boundedText(input.query, 8_192, "MemoryTopicEvidenceQueryInvalid");
   const scopeFingerprint = boundedText(
     input.scopeFingerprint,
     512,
@@ -62,12 +57,7 @@ export function planMemoryTopicEvidenceV1(
     8,
     "MemoryTopicSelectionBudgetInvalid",
   );
-  const maxStates = boundedInteger(
-    input.maxStates ?? 16,
-    1,
-    32,
-    "MemoryTopicStateBudgetInvalid",
-  );
+  const maxStates = boundedInteger(input.maxStates ?? 16, 1, 32, "MemoryTopicStateBudgetInvalid");
   const maxEvidenceChars = boundedInteger(
     input.maxEvidenceChars ?? 8_000,
     1_024,
@@ -120,12 +110,8 @@ export function planMemoryTopicEvidenceV1(
     .sort(
       (left, right) =>
         right.score - left.score ||
-        right.item.projection.topic.createdAt.localeCompare(
-          left.item.projection.topic.createdAt,
-        ) ||
-        left.item.projection.topic.id.localeCompare(
-          right.item.projection.topic.id,
-        ),
+        right.item.projection.topic.createdAt.localeCompare(left.item.projection.topic.createdAt) ||
+        left.item.projection.topic.id.localeCompare(right.item.projection.topic.id),
     )
     .slice(0, maxSelectedTopics);
   const candidates: Array<{
@@ -199,9 +185,7 @@ export function planMemoryTopicEvidenceV1(
   });
 }
 
-function toIndexEntry(
-  projection: MemoryTopicProjectionV1,
-): MemoryTopicIndexEntryV1 {
+function toIndexEntry(projection: MemoryTopicProjectionV1): MemoryTopicIndexEntryV1 {
   return Object.freeze({
     topicId: projection.topic.id,
     snapshotId: projection.snapshot.id,
@@ -237,14 +221,10 @@ function topicScore(
   return score;
 }
 
-function renderEntry(
-  entry: Exclude<MemoryEntry, { kind: "vault_ref" }>,
-): string {
+function renderEntry(entry: Exclude<MemoryEntry, { kind: "vault_ref" }>): string {
   if (entry.kind === "semantic") return entry.fact;
   if (entry.kind === "profile") return entry.insight;
-  return [entry.whenToUse, entry.perspective, ...entry.modification]
-    .filter(Boolean)
-    .join("\n");
+  return [entry.whenToUse, entry.perspective, ...entry.modification].filter(Boolean).join("\n");
 }
 
 function terms(value: string): ReadonlySet<string> {
@@ -259,10 +239,7 @@ function terms(value: string): ReadonlySet<string> {
   return result;
 }
 
-function overlapScore(
-  left: ReadonlySet<string>,
-  right: ReadonlySet<string>,
-): number {
+function overlapScore(left: ReadonlySet<string>, right: ReadonlySet<string>): number {
   let score = 0;
   for (const term of left) if (right.has(term)) score += 1;
   return score;
@@ -286,11 +263,7 @@ function boundedInteger(
   return value;
 }
 
-function boundedText(
-  value: string,
-  maximum: number,
-  errorName: string,
-): string {
+function boundedText(value: string, maximum: number, errorName: string): string {
   const normalized = value.trim();
   if (!normalized || normalized.length > maximum) throw namedError(errorName);
   return normalized;

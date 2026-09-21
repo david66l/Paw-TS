@@ -95,9 +95,7 @@ describe("OpenAICompatibleModel with Ollama-like responses", () => {
       async () =>
         new Response(
           JSON.stringify({
-            choices: [
-              { message: { content: "no usage" }, finish_reason: "stop" },
-            ],
+            choices: [{ message: { content: "no usage" }, finish_reason: "stop" }],
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         ),
@@ -122,20 +120,12 @@ describe("OpenAICompatibleModel with Ollama-like responses", () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'));
         controller.enqueue(
-          encoder.encode(
-            'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
-          ),
+          encoder.encode('data: {"choices":[{"delta":{"content":" world"}}]}\n\n'),
         );
         controller.enqueue(
-          encoder.encode(
-            'data: {"choices":[{"delta":{"content":" world"}}]}\n\n',
-          ),
-        );
-        controller.enqueue(
-          encoder.encode(
-            'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
-          ),
+          encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'),
         );
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
@@ -159,23 +149,17 @@ describe("OpenAICompatibleModel with Ollama-like responses", () => {
         model: "qwen2.5:7b",
       });
       const chunks: unknown[] = [];
-      for await (const c of model.completeStream([
-        { role: "user", content: "hi" },
-      ])) {
+      for await (const c of model.completeStream([{ role: "user", content: "hi" }])) {
         chunks.push(c);
       }
       const textChunks = chunks.filter(
         (c): c is { type: "text"; delta: string } =>
-          typeof c === "object" &&
-          c !== null &&
-          (c as Record<string, unknown>).type === "text",
+          typeof c === "object" && c !== null && (c as Record<string, unknown>).type === "text",
       );
       expect(textChunks.map((c) => c.delta).join("")).toBe("Hello world");
       const doneChunk = chunks.find(
         (c): c is { type: "done" } =>
-          typeof c === "object" &&
-          c !== null &&
-          (c as Record<string, unknown>).type === "done",
+          typeof c === "object" && c !== null && (c as Record<string, unknown>).type === "done",
       );
       expect(doneChunk).toBeDefined();
     } finally {

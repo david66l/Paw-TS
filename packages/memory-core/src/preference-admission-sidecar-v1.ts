@@ -1,8 +1,4 @@
-import {
-  type JsonValue,
-  hashCanonicalJsonV1,
-  hashTextV1,
-} from "./canonical.js";
+import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryEvidenceNotebookHitV1 } from "./evidence-contracts.js";
 import {
   type MemoryEvidenceObligationShapeV1,
@@ -180,11 +176,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
     evidenceRefs: readonly string[];
   }>[];
 }): MemoryPreferenceAdmissionScopeSnapshotV1 {
-  const query = boundedText(
-    input.query,
-    512,
-    "MemoryPreferenceAdmissionQueryInvalid",
-  );
+  const query = boundedText(input.query, 512, "MemoryPreferenceAdmissionQueryInvalid");
   const intent = Object.freeze({ ...input.intent });
   const obligation = compileMemoryEvidenceObligationShapeV1(query, intent);
   if (obligation.obligationKind !== "personalization_context") {
@@ -202,9 +194,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
     input.requirements.length > 4 ||
     input.temporalConstraints.length !== input.requirements.length ||
     input.candidateScopes.length !== input.requirements.length ||
-    input.requirements.some(
-      (requirement) => requirement.roleConstraint !== "user",
-    )
+    input.requirements.some((requirement) => requirement.roleConstraint !== "user")
   ) {
     throw namedError("MemoryPreferenceAdmissionRequirementInvalid");
   }
@@ -220,9 +210,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
         ...(requirement.dependsOnRequirementIds === undefined
           ? {}
           : {
-              dependsOnRequirementIds: Object.freeze([
-                ...requirement.dependsOnRequirementIds,
-              ]),
+              dependsOnRequirementIds: Object.freeze([...requirement.dependsOnRequirementIds]),
             }),
         ...(requirement.temporalConstraint === undefined
           ? {}
@@ -291,8 +279,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
         (candidate.authority !== "user_asserted" &&
           candidate.authority !== "user_confirmed_dialogue") ||
         (contextEvidenceRefs !== undefined &&
-          (contextEvidenceRefs.length !== 1 ||
-            contextEvidenceRefs[0] !== candidate.evidenceRef))
+          (contextEvidenceRefs.length !== 1 || contextEvidenceRefs[0] !== candidate.evidenceRef))
       ) {
         throw namedError("MemoryPreferenceAdmissionCandidateInvalid");
       }
@@ -307,34 +294,22 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
         content: candidate.content,
         authority: candidate.authority,
         sourceKind: "user_input" as const,
-        ...(candidate.observedAt === undefined
-          ? {}
-          : { observedAt: candidate.observedAt }),
+        ...(candidate.observedAt === undefined ? {} : { observedAt: candidate.observedAt }),
         ...(candidate.observedOrder === undefined
           ? {}
           : { observedOrder: candidate.observedOrder }),
-        ...(candidate.episodeOrder === undefined
-          ? {}
-          : { episodeOrder: candidate.episodeOrder }),
-        ...(candidate.turnOrder === undefined
-          ? {}
-          : { turnOrder: candidate.turnOrder }),
-        ...(candidate.eventKey === undefined
-          ? {}
-          : { eventKey: candidate.eventKey }),
+        ...(candidate.episodeOrder === undefined ? {} : { episodeOrder: candidate.episodeOrder }),
+        ...(candidate.turnOrder === undefined ? {} : { turnOrder: candidate.turnOrder }),
+        ...(candidate.eventKey === undefined ? {} : { eventKey: candidate.eventKey }),
         ...(contextEvidenceRefs === undefined
           ? {}
           : {
-              contextEvidenceRefs: Object.freeze([
-                candidate.evidenceRef,
-              ]) as readonly [string],
+              contextEvidenceRefs: Object.freeze([candidate.evidenceRef]) as readonly [string],
             }),
       });
     }),
   );
-  const candidateByRef = new Map(
-    candidates.map((candidate) => [candidate.evidenceRef, candidate]),
-  );
+  const candidateByRef = new Map(candidates.map((candidate) => [candidate.evidenceRef, candidate]));
   const requirementById = new Map(
     requirements.map((requirement) => [requirement.requirementId, requirement]),
   );
@@ -351,9 +326,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
         scope.requirementId !== expectedRequirement.requirementId ||
         seenScopes.has(scope.requirementId) ||
         new Set(scope.evidenceRefs).size !== scope.evidenceRefs.length ||
-        scope.evidenceRefs.some(
-          (evidenceRef) => !candidateByRef.has(evidenceRef),
-        )
+        scope.evidenceRefs.some((evidenceRef) => !candidateByRef.has(evidenceRef))
       ) {
         throw namedError("MemoryPreferenceAdmissionCandidateScopeInvalid");
       }
@@ -403,18 +376,10 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
         content: candidate.content,
         authority: candidate.authority,
         role: "user" as const,
-        ...(candidate.observedAt === undefined
-          ? {}
-          : { observedAt: candidate.observedAt }),
-        ...(candidate.episodeOrder === undefined
-          ? {}
-          : { episodeOrder: candidate.episodeOrder }),
-        ...(candidate.turnOrder === undefined
-          ? {}
-          : { turnOrder: candidate.turnOrder }),
-        ...(candidate.eventKey === undefined
-          ? {}
-          : { eventKey: candidate.eventKey }),
+        ...(candidate.observedAt === undefined ? {} : { observedAt: candidate.observedAt }),
+        ...(candidate.episodeOrder === undefined ? {} : { episodeOrder: candidate.episodeOrder }),
+        ...(candidate.turnOrder === undefined ? {} : { turnOrder: candidate.turnOrder }),
+        ...(candidate.eventKey === undefined ? {} : { eventKey: candidate.eventKey }),
       }),
     ),
   );
@@ -425,18 +390,14 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
     slots.map((slot) =>
       Object.freeze({
         slotId: slot.slotId,
-        evidenceRefs: Object.freeze([
-          ...(scopeByRequirement.get(slot.requirementId) ?? []),
-        ]),
+        evidenceRefs: Object.freeze([...(scopeByRequirement.get(slot.requirementId) ?? [])]),
       }),
     ),
   );
 
   const queryDigest = hashTextV1(query);
   const intentRevision = hashCanonicalJsonV1(intent as unknown as JsonValue);
-  const obligationRevision = hashCanonicalJsonV1(
-    obligation as unknown as JsonValue,
-  );
+  const obligationRevision = hashCanonicalJsonV1(obligation as unknown as JsonValue);
   const lockedSourceRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-locked-source-set.v1",
     lockedSourceIds,
@@ -472,9 +433,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
     requirementRevisions: requirements.map((requirement) =>
       hashCanonicalJsonV1(requirement as unknown as JsonValue),
     ),
-    temporalBindingRevisions: temporalConstraints.map(
-      (temporal) => temporal.bindingRevision,
-    ),
+    temporalBindingRevisions: temporalConstraints.map((temporal) => temporal.bindingRevision),
     slotRevisions: slots.map((slot) => slot.slotRevision),
     sourceLockDigest: sourceLock.sourceLockDigest,
   };
@@ -527,10 +486,7 @@ export function createMemoryPreferenceAdmissionSidecarV1(input: {
   readonly binder: MemoryStateObservationBinderV2;
   readonly verifier: MemoryStateObservationVerifierV2;
 }): MemoryPreferenceAdmissionSidecarV1 {
-  if (
-    !input.binder?.binderVersion.trim() ||
-    !input.verifier?.verifierVersion.trim()
-  ) {
+  if (!input.binder?.binderVersion.trim() || !input.verifier?.verifierVersion.trim()) {
     throw namedError("MemoryPreferenceAdmissionPortInvalid");
   }
   return Object.freeze({
@@ -539,8 +495,7 @@ export function createMemoryPreferenceAdmissionSidecarV1(input: {
       candidateScope: Readonly<MemoryPreferenceAdmissionScopeSnapshotV1>,
       signal: AbortSignal,
     ): Promise<MemoryPreferenceAdmissionSettlementV1> {
-      const scope =
-        validateMemoryPreferenceAdmissionScopeSnapshotV1(candidateScope);
+      const scope = validateMemoryPreferenceAdmissionScopeSnapshotV1(candidateScope);
       if (signal.aborted) throw abortError();
       const bindingRequest = Object.freeze({
         query: scope.query,
@@ -560,19 +515,14 @@ export function createMemoryPreferenceAdmissionSidecarV1(input: {
           .map((group) => group.groupId),
       );
       const proposedObservations = Object.freeze(
-        binding.groups.flatMap((group) =>
-          group.status === "completed" ? group.observations : [],
-        ),
+        binding.groups.flatMap((group) => (group.status === "completed" ? group.observations : [])),
       );
       let verification: MemoryStateObservationVerificationV2 | undefined;
-      let validated: readonly MemoryStateValidatedObservationV1[] =
-        Object.freeze([]);
+      let validated: readonly MemoryStateValidatedObservationV1[] = Object.freeze([]);
       if (proposedObservations.length > 0) {
         const verificationRequest = Object.freeze({
           query: scope.query,
-          slots: scope.slots.filter((slot) =>
-            completedGroupIds.has(slot.groupId),
-          ),
+          slots: scope.slots.filter((slot) => completedGroupIds.has(slot.groupId)),
           sourceLock: scope.sourceLock,
           proposedObservations,
         });
@@ -606,9 +556,7 @@ export function validateMemoryPreferenceAdmissionSettlementV1(input: {
 }): MemoryPreferenceAdmissionSettlementV1 {
   const scope = validateMemoryPreferenceAdmissionScopeSnapshotV1(input.scope);
   const verification = input.settlement.verification;
-  let validated: readonly MemoryStateValidatedObservationV1[] = Object.freeze(
-    [],
-  );
+  let validated: readonly MemoryStateValidatedObservationV1[] = Object.freeze([]);
   if (input.settlement.proposedObservations.length > 0) {
     if (!verification) {
       throw namedError("MemoryPreferenceAdmissionSettlementInvalid");
@@ -626,10 +574,7 @@ export function validateMemoryPreferenceAdmissionSettlementV1(input: {
       verification,
     };
     validated = input.settlement.certificates.map((certificate) =>
-      validateMemoryStateBindingCertificateV1(
-        certificate.stateBinding,
-        validationInput,
-      ),
+      validateMemoryStateBindingCertificateV1(certificate.stateBinding, validationInput),
     );
   } else if (verification || input.settlement.certificates.length > 0) {
     throw namedError("MemoryPreferenceAdmissionSettlementInvalid");
@@ -646,8 +591,8 @@ export function validateMemoryPreferenceAdmissionSettlementV1(input: {
             input.settlement.proposedObservations.filter(
               (observation) =>
                 observation.slotId &&
-                scope.slots.find((slot) => slot.slotId === observation.slotId)
-                  ?.groupId === group.groupId,
+                scope.slots.find((slot) => slot.slotId === observation.slotId)?.groupId ===
+                  group.groupId,
             ),
           ),
           failureCodes: group.failureCodes,
@@ -682,29 +627,20 @@ function compileSettlement(input: {
   readonly verification?: MemoryStateObservationVerificationV2;
   readonly validated: readonly MemoryStateValidatedObservationV1[];
 }): MemoryPreferenceAdmissionSettlementV1 {
-  const slotById = new Map(
-    input.scope.slots.map((slot) => [slot.slotId, slot]),
-  );
+  const slotById = new Map(input.scope.slots.map((slot) => [slot.slotId, slot]));
   const candidateByRef = new Map(
-    input.scope.candidates.map((candidate) => [
-      candidate.evidenceRef,
-      candidate,
-    ]),
+    input.scope.candidates.map((candidate) => [candidate.evidenceRef, candidate]),
   );
   const certificates = Object.freeze(
     input.validated.map((stateBinding) => {
       const slot = slotById.get(stateBinding.observation.slotId);
-      const rawCandidate = candidateByRef.get(
-        stateBinding.observation.evidenceRef,
-      );
+      const rawCandidate = candidateByRef.get(stateBinding.observation.evidenceRef);
       const supportSpan = stateBinding.certificate.claimBinding.supportSpan;
       if (
         !slot ||
         !rawCandidate ||
-        stateBinding.certificate.evidenceBinding.sourceId !==
-          rawCandidate.sourceId ||
-        stateBinding.certificate.evidenceBinding.contentDigest !==
-          hashTextV1(rawCandidate.content)
+        stateBinding.certificate.evidenceBinding.sourceId !== rawCandidate.sourceId ||
+        stateBinding.certificate.evidenceBinding.contentDigest !== hashTextV1(rawCandidate.content)
       ) {
         throw namedError("MemoryPreferenceAdmissionCertificateInvalid");
       }
@@ -729,34 +665,25 @@ function compileSettlement(input: {
           polarity: stateBinding.observation.polarity,
           modality: stateBinding.observation.modality,
         },
-        verifierVersion:
-          stateBinding.certificate.semanticAttestation.verifierVersion,
-        verificationRevision:
-          stateBinding.certificate.semanticAttestation.verificationRevision,
+        verifierVersion: stateBinding.certificate.semanticAttestation.verifierVersion,
+        verificationRevision: stateBinding.certificate.semanticAttestation.verificationRevision,
         stateBinding,
       };
       return Object.freeze({
         ...identity,
-        certificateRevision: hashCanonicalJsonV1(
-          identity as unknown as JsonValue,
-        ),
+        certificateRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
       });
     }),
   );
   const admittedEvidenceRefsByRequirement = Object.freeze(
     input.scope.requirements.map((requirement) => {
       const matching = certificates.filter(
-        (certificate) =>
-          certificate.requirementId === requirement.requirementId,
+        (certificate) => certificate.requirementId === requirement.requirementId,
       );
       return Object.freeze({
         requirementId: requirement.requirementId,
         evidenceRefs: Object.freeze([
-          ...new Set(
-            matching.map(
-              (certificate) => certificate.rawEvidenceBinding.evidenceRef,
-            ),
-          ),
+          ...new Set(matching.map((certificate) => certificate.rawEvidenceBinding.evidenceRef)),
         ]),
         certificateRevisions: Object.freeze(
           matching.map((certificate) => certificate.certificateRevision),
@@ -773,9 +700,7 @@ function compileSettlement(input: {
       }),
     ),
   );
-  const completedGroupCount = groups.filter(
-    (group) => group.status === "completed",
-  ).length;
+  const completedGroupCount = groups.filter((group) => group.status === "completed").length;
   const status: MemoryPreferenceAdmissionSettlementV1["status"] =
     completedGroupCount === groups.length
       ? "completed"
@@ -785,9 +710,7 @@ function compileSettlement(input: {
   const rejectedObservationIds = Object.freeze([
     ...(input.verification?.rejectedObservationIds ?? []),
   ]);
-  const failureCodes = Object.freeze([
-    ...new Set(groups.flatMap((group) => group.failureCodes)),
-  ]);
+  const failureCodes = Object.freeze([...new Set(groups.flatMap((group) => group.failureCodes))]);
   const identity = {
     policyVersion: PAW_MEMORY_PREFERENCE_ADMISSION_SIDECAR_POLICY_V1,
     status,
@@ -800,9 +723,7 @@ function compileSettlement(input: {
       : { verificationRevision: input.verification.verificationRevision }),
     groups,
     proposedObservations: Object.freeze([...input.proposedObservations]),
-    ...(input.verification === undefined
-      ? {}
-      : { verification: input.verification }),
+    ...(input.verification === undefined ? {} : { verification: input.verification }),
     certificates,
     admittedEvidenceRefsByRequirement,
     rejectedObservationIds,
@@ -826,9 +747,7 @@ function compileSettlement(input: {
         observationId: observation.observationId,
         bindingRevision: observation.bindingRevision,
       })),
-      certificateRevisions: certificates.map(
-        (certificate) => certificate.certificateRevision,
-      ),
+      certificateRevisions: certificates.map((certificate) => certificate.certificateRevision),
       rejectedObservationIds,
       failureCodes,
     } as JsonValue),

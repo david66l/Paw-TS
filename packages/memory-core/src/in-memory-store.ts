@@ -14,9 +14,7 @@ export interface InMemoryCardInputV1 extends MemoryProductCardV1 {
   readonly statement: string;
 }
 
-export interface InMemoryEvidenceStoreV1
-  extends MemoryProductArchiveV1,
-    MemoryProductProviderV1 {
+export interface InMemoryEvidenceStoreV1 extends MemoryProductArchiveV1, MemoryProductProviderV1 {
   putEvidence(spans: readonly InMemoryEvidenceInputV1[]): void;
   putCards(cards: readonly InMemoryCardInputV1[]): void;
 }
@@ -70,10 +68,7 @@ export function createInMemoryEvidenceStoreV1(input: {
       }
       return Object.freeze(selected);
     },
-    async retrieve(
-      query: Parameters<MemoryProductProviderV1["retrieve"]>[0],
-      signal: AbortSignal,
-    ) {
+    async retrieve(query: Parameters<MemoryProductProviderV1["retrieve"]>[0], signal: AbortSignal) {
       if (signal.aborted) throw abortError();
       assertScope(query.scope, scope);
       const terms = searchTerms(query.text);
@@ -81,9 +76,7 @@ export function createInMemoryEvidenceStoreV1(input: {
         .map((card) => ({ card, score: lexicalScore(card.statement, terms) }))
         .filter((item) => item.score > 0)
         .sort(
-          (left, right) =>
-            right.score - left.score ||
-            left.card.id.localeCompare(right.card.id),
+          (left, right) => right.score - left.score || left.card.id.localeCompare(right.card.id),
         )
         .slice(0, query.maxCards)
         .map(({ card }) => card);
@@ -102,10 +95,7 @@ function searchTerms(value: string): readonly string[] {
 
 function lexicalScore(content: string, terms: readonly string[]): number {
   const haystack = content.toLocaleLowerCase();
-  return terms.reduce(
-    (score, term) => score + Number(haystack.includes(term)),
-    0,
-  );
+  return terms.reduce((score, term) => score + Number(haystack.includes(term)), 0);
 }
 
 function putImmutable(
@@ -114,10 +104,7 @@ function putImmutable(
   value: InMemoryEvidenceInputV1,
 ): void {
   const current = store.get(id);
-  if (
-    current !== undefined &&
-    evidenceReceipt(current) !== evidenceReceipt(value)
-  ) {
+  if (current !== undefined && evidenceReceipt(current) !== evidenceReceipt(value)) {
     throw namedError("MemoryReferenceEvidenceConflict");
   }
   store.set(id, value);
@@ -135,18 +122,14 @@ function evidenceReceipt(input: InMemoryEvidenceInputV1): string {
   return canonicalJsonStringifyV1(receipt);
 }
 
-function freezeEvidence(
-  input: InMemoryEvidenceInputV1,
-): InMemoryEvidenceInputV1 {
+function freezeEvidence(input: InMemoryEvidenceInputV1): InMemoryEvidenceInputV1 {
   return Object.freeze({ ...input });
 }
 
 function freezeCard(input: InMemoryCardInputV1): InMemoryCardInputV1 {
   return Object.freeze({
     ...input,
-    sources: Object.freeze(
-      input.sources.map((source) => Object.freeze({ ...source })),
-    ),
+    sources: Object.freeze(input.sources.map((source) => Object.freeze({ ...source }))),
   });
 }
 
@@ -162,10 +145,7 @@ function assertCard(input: InMemoryCardInputV1): void {
   }
 }
 
-function assertScope(
-  actual: MemoryProductScopeV1,
-  expected: MemoryProductScopeV1,
-): void {
+function assertScope(actual: MemoryProductScopeV1, expected: MemoryProductScopeV1): void {
   if (
     actual.tenantId !== expected.tenantId ||
     actual.userId !== expected.userId ||

@@ -99,9 +99,7 @@ export function recoveryHintForToolResult(
 
   if (
     tool.includes("edit_file") &&
-    (blob.includes("old_string") ||
-      blob.includes("not found") ||
-      blob.includes("no match"))
+    (blob.includes("old_string") || blob.includes("not found") || blob.includes("no match"))
   ) {
     return {
       action: "refine_edit",
@@ -110,11 +108,7 @@ export function recoveryHintForToolResult(
     };
   }
 
-  if (
-    code === "E_RETRY" ||
-    blob.includes("timeout") ||
-    blob.includes("timed")
-  ) {
+  if (code === "E_RETRY" || blob.includes("timeout") || blob.includes("timed")) {
     return {
       action: "retry",
       message: `[Recovery] ${tool} timed out or is retryable. Retry with a tighter scope or longer timeout_sec; avoid repeating the identical failing command blindly.`,
@@ -139,9 +133,7 @@ export function recoveryHintForToolResult(
 }
 
 /** Format recovery hints as a single user message injection. */
-export function formatRecoveryHints(
-  hints: readonly RecoveryHint[],
-): string | null {
+export function formatRecoveryHints(hints: readonly RecoveryHint[]): string | null {
   if (hints.length === 0) return null;
   const unique = new Map<string, RecoveryHint>();
   for (const h of hints) {
@@ -157,9 +149,7 @@ export function failureSignature(
   call: { readonly tool: string; readonly args?: unknown },
   result: ToolRunResult,
 ): string {
-  const code = fingerprint(
-    errorCode(result.payload) || (result.ok ? "ok" : "fail"),
-  );
+  const code = fingerprint(errorCode(result.payload) || (result.ok ? "ok" : "fail"));
   return `${call.tool}|${actionIdentity(call)}|${code}|${fingerprint(
     result.summary.slice(0, 240),
   )}`;
@@ -197,10 +187,7 @@ export function updateFailureSignatures(
   return next.slice(-limit);
 }
 
-export function idleFuseTripped(
-  signatures: readonly string[],
-  threshold = 3,
-): boolean {
+export function idleFuseTripped(signatures: readonly string[], threshold = 3): boolean {
   if (signatures.length < threshold) return false;
   const last = signatures[signatures.length - 1]!;
   let count = 0;

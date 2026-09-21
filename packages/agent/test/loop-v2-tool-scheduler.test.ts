@@ -57,9 +57,7 @@ describe("Loop Kernel v2 tool scheduler", () => {
     ];
     const hooks: ToolSchedulerHooksV2<Prepared, Result, string> = {
       classify(item): ToolExecutionModeV2 {
-        return item.tool === "read"
-          ? { kind: "parallel" }
-          : { kind: "exclusive", scope: ["b.ts"] };
+        return item.tool === "read" ? { kind: "parallel" } : { kind: "exclusive", scope: ["b.ts"] };
       },
       async prepare(item) {
         trace.push(`${item.callId}:prepare`);
@@ -93,18 +91,12 @@ describe("Loop Kernel v2 tool scheduler", () => {
       "read-b",
       "test",
     ]);
-    expect(indexOf(trace, "read-a:commit:end")).toBeLessThan(
-      indexOf(trace, "edit-b:body:start"),
-    );
+    expect(indexOf(trace, "read-a:commit:end")).toBeLessThan(indexOf(trace, "edit-b:body:start"));
     expect(indexOf(trace, "edit-b:projector-update")).toBeLessThan(
       indexOf(trace, "edit-b:commit:end"),
     );
-    expect(indexOf(trace, "edit-b:commit:end")).toBeLessThan(
-      indexOf(trace, "read-b:body:start"),
-    );
-    expect(indexOf(trace, "read-b:commit:end")).toBeLessThan(
-      indexOf(trace, "test:body:start"),
-    );
+    expect(indexOf(trace, "edit-b:commit:end")).toBeLessThan(indexOf(trace, "read-b:body:start"));
+    expect(indexOf(trace, "read-b:commit:end")).toBeLessThan(indexOf(trace, "test:body:start"));
   });
 
   test("R10 mixed read-only child, grep, and edit all execute with source-order commits", async () => {
@@ -118,9 +110,7 @@ describe("Loop Kernel v2 tool scheduler", () => {
     ];
     const hooks: ToolSchedulerHooksV2<Prepared, Result, string> = {
       classify(item) {
-        return item.callId === "edit"
-          ? { kind: "exclusive" }
-          : { kind: "parallel" };
+        return item.callId === "edit" ? { kind: "exclusive" } : { kind: "parallel" };
       },
       async prepare(item) {
         trace.push(`${item.callId}:prepare`);
@@ -143,9 +133,7 @@ describe("Loop Kernel v2 tool scheduler", () => {
     };
 
     const running = executeToolBatchV2(calls, hooks, { maxParallel: 2 });
-    await until(
-      () => trace.includes("child:start") && trace.includes("grep:start"),
-    );
+    await until(() => trace.includes("child:start") && trace.includes("grep:start"));
     expect(trace).not.toContain("edit:start");
     grep.resolve({ value: "grep" });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -153,20 +141,12 @@ describe("Loop Kernel v2 tool scheduler", () => {
     child.resolve({ value: "child" });
     const result = await running;
 
-    expect(result.committed.map((entry) => entry.callId)).toEqual([
-      "child",
-      "grep",
-      "edit",
-    ]);
+    expect(result.committed.map((entry) => entry.callId)).toEqual(["child", "grep", "edit"]);
     expect(trace).toContain("child:start");
     expect(trace).toContain("grep:start");
     expect(trace).toContain("edit:start");
-    expect(indexOf(trace, "child:commit")).toBeLessThan(
-      indexOf(trace, "grep:commit"),
-    );
-    expect(indexOf(trace, "grep:commit")).toBeLessThan(
-      indexOf(trace, "edit:start"),
-    );
+    expect(indexOf(trace, "child:commit")).toBeLessThan(indexOf(trace, "grep:commit"));
+    expect(indexOf(trace, "grep:commit")).toBeLessThan(indexOf(trace, "edit:start"));
   });
 
   test("an explicitly denied call commits a result without dropping siblings", async () => {
@@ -175,9 +155,7 @@ describe("Loop Kernel v2 tool scheduler", () => {
       [call("read", "read"), call("denied", "edit"), call("grep", "grep")],
       {
         classify(item) {
-          return item.tool === "edit"
-            ? { kind: "exclusive" }
-            : { kind: "parallel" };
+          return item.tool === "edit" ? { kind: "exclusive" } : { kind: "parallel" };
         },
         async prepare(item) {
           return item.callId === "denied"
@@ -198,11 +176,7 @@ describe("Loop Kernel v2 tool scheduler", () => {
     );
 
     expect(dispatched).toEqual(["read", "grep"]);
-    expect(result.committed.map((entry) => entry.value)).toEqual([
-      "read",
-      "denied",
-      "grep",
-    ]);
+    expect(result.committed.map((entry) => entry.value)).toEqual(["read", "denied", "grep"]);
   });
 
   test("unknown and throwing classifiers fail closed to exclusive", async () => {
@@ -234,10 +208,7 @@ describe("Loop Kernel v2 tool scheduler", () => {
     );
 
     expect(maxActive).toBe(1);
-    expect(result.committed.map((entry) => entry.mode.kind)).toEqual([
-      "exclusive",
-      "exclusive",
-    ]);
+    expect(result.committed.map((entry) => entry.mode.kind)).toEqual(["exclusive", "exclusive"]);
   });
 
   test("pending calls are reclassified after an earlier ordered commit", async () => {
@@ -268,16 +239,8 @@ describe("Loop Kernel v2 tool scheduler", () => {
       { maxParallel: 1 },
     );
 
-    expect(result.committed.map((entry) => entry.mode.kind)).toEqual([
-      "parallel",
-      "exclusive",
-    ]);
-    expect(trace).toEqual([
-      "first:start",
-      "first:commit",
-      "second:start",
-      "second:commit",
-    ]);
+    expect(result.committed.map((entry) => entry.mode.kind)).toEqual(["parallel", "exclusive"]);
+    expect(trace).toEqual(["first:start", "first:commit", "second:start", "second:commit"]);
   });
 
   test("cancellation gives every unstarted model call an explicit ordered result", async () => {
@@ -324,8 +287,7 @@ describe("Loop Kernel v2 tool scheduler", () => {
       async dispatch(prepared) {
         trace.push(`${prepared.callId}:start`);
         if (prepared.callId === "first") return first.promise;
-        if (prepared.callId === "failure")
-          throw new Error("scheduler fixture failure");
+        if (prepared.callId === "failure") throw new Error("scheduler fixture failure");
         return { value: prepared.callId };
       },
       async commit(_item, settled) {
@@ -337,11 +299,7 @@ describe("Loop Kernel v2 tool scheduler", () => {
     };
     let settled = false;
     const running = executeToolBatchV2(
-      [
-        call("first", "read"),
-        call("failure", "read"),
-        call("unstarted", "read"),
-      ],
+      [call("first", "read"), call("failure", "read"), call("unstarted", "read")],
       hooks,
       { maxParallel: 2 },
     ).finally(() => {

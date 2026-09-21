@@ -20,9 +20,7 @@ export function makeDistillerLlm(opts: {
       onCall?.();
       if (garbage) return "这不是 JSON";
       const candidates =
-        typeof opts.candidates === "function"
-          ? opts.candidates()
-          : (opts.candidates ?? []);
+        typeof opts.candidates === "function" ? opts.candidates() : (opts.candidates ?? []);
       return JSON.stringify({ candidates });
     },
   };

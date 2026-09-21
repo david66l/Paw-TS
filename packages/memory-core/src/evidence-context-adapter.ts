@@ -1,8 +1,4 @@
-import {
-  type JsonValue,
-  hashCanonicalJsonV1,
-  hashTextV1,
-} from "./canonical.js";
+import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import {
   type MemoryContextResolverV1,
   type MemoryRawEvidenceSpanV1,
@@ -50,10 +46,7 @@ export interface MemoryEvidenceAnswerContractV1 {
 
 export function createEvidenceFirstMemoryContextResolverV1(input: {
   readonly evidenceResolver: Readonly<{
-    resolve(
-      query: string,
-      signal: AbortSignal,
-    ): Promise<MemoryEvidenceResolutionV1>;
+    resolve(query: string, signal: AbortSignal): Promise<MemoryEvidenceResolutionV1>;
   }>;
 }): MemoryContextResolverV1 {
   // Coalesce only concurrent identical reads. A settled packet must not
@@ -109,9 +102,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
         memoryId,
         layer: "L0" as const,
         statement: source.text,
-        ...(source.answerRole === "current"
-          ? { state: "current" as const }
-          : {}),
+        ...(source.answerRole === "current" ? { state: "current" as const } : {}),
         supportRole:
           source.answerRole === "candidate" || source.answerRole === "mixed"
             ? ("contextual" as const)
@@ -143,9 +134,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
         ...(coverage?.unresolvedEvidenceRefs ?? []),
         ...(assessment?.unknownEvidenceRefs ?? []),
       ];
-      const contradictingEvidenceRefs = [
-        ...(assessment?.contradictingEvidenceRefs ?? []),
-      ];
+      const contradictingEvidenceRefs = [...(assessment?.contradictingEvidenceRefs ?? [])];
       const unknownMemoryIds = Object.freeze([
         ...new Set(
           unknownEvidenceRefs.flatMap((evidenceRef) => {
@@ -183,9 +172,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
         supportingMemoryIds,
         contradictingMemoryIds,
         unknownMemoryIds,
-        evidenceDispositions: Object.freeze([
-          ...(assessment?.evidenceDispositions ?? []),
-        ]),
+        evidenceDispositions: Object.freeze([...(assessment?.evidenceDispositions ?? [])]),
       });
     }),
   );
@@ -199,9 +186,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
       }),
     ),
   );
-  const requiredCovered = requirements.every(
-    (requirement) => requirement.status === "covered",
-  );
+  const requiredCovered = requirements.every((requirement) => requirement.status === "covered");
   const supportVerified =
     resolution.supportSelectorStatus === "completed" &&
     resolution.supportSelectionRevision !== undefined &&
@@ -209,13 +194,11 @@ export function projectEvidenceFirstMemoryContextPacketV1(
   const independentClosureVerified =
     resolution.closureAuditStatus === "not_configured" ||
     resolution.closureAuditStatus === "not_needed" ||
-    (resolution.closureAuditStatus === "completed" &&
-      resolution.closureVerdict === "pass");
+    (resolution.closureAuditStatus === "completed" && resolution.closureVerdict === "pass");
   const planningExecutionVerified =
     !resolution.intent.needsPlanning ||
     resolution.plannerStatus === "completed" ||
-    (resolution.closureAuditStatus === "completed" &&
-      resolution.closureVerdict === "pass");
+    (resolution.closureAuditStatus === "completed" && resolution.closureVerdict === "pass");
   const plannedClosureVerified =
     resolution.requirements.length > 0 &&
     requiredCovered &&
@@ -223,37 +206,21 @@ export function projectEvidenceFirstMemoryContextPacketV1(
     independentClosureVerified &&
     planningExecutionVerified;
   const supportingRefs = new Set(
-    resolution.notebook.coverage.flatMap(
-      (requirement) => requirement.selectedEvidenceRefs,
-    ),
+    resolution.notebook.coverage.flatMap((requirement) => requirement.selectedEvidenceRefs),
   );
   const contradictingRefs = new Set(
-    resolution.supportAssessments.flatMap(
-      (assessment) => assessment.contradictingEvidenceRefs,
-    ),
+    resolution.supportAssessments.flatMap((assessment) => assessment.contradictingEvidenceRefs),
   );
   const unknownRefs = new Set([
-    ...resolution.supportAssessments.flatMap(
-      (assessment) => assessment.unknownEvidenceRefs,
-    ),
-    ...resolution.notebook.coverage.flatMap(
-      (requirement) => requirement.unresolvedEvidenceRefs,
-    ),
+    ...resolution.supportAssessments.flatMap((assessment) => assessment.unknownEvidenceRefs),
+    ...resolution.notebook.coverage.flatMap((requirement) => requirement.unresolvedEvidenceRefs),
   ]);
   return Object.freeze({
     schemaVersion: "paw.memory-resolved-context.v1",
     resolverVersion: PAW_MEMORY_CONTEXT_RESOLVER_VERSION_V1,
     packetRevision: resolution.resolutionRevision,
-    mode:
-      resolution.plannerStatus === "completed"
-        ? "planned"
-        : "deterministic_fallback",
-    stop:
-      evidence.length === 0
-        ? "missing"
-        : plannedClosureVerified
-          ? "sufficient"
-          : "partial",
+    mode: resolution.plannerStatus === "completed" ? "planned" : "deterministic_fallback",
+    stop: evidence.length === 0 ? "missing" : plannedClosureVerified ? "sufficient" : "partial",
     requirements,
     verification: Object.freeze({
       status:
@@ -286,24 +253,16 @@ export function projectEvidenceFirstMemoryContextPacketV1(
  */
 export function projectEvidenceFirstMemoryAnswerContractV1(
   resolution: MemoryEvidenceResolutionV1,
-  packet: MemoryResolvedContextPacketV1 = projectEvidenceFirstMemoryContextPacketV1(
-    resolution,
-  ),
+  packet: MemoryResolvedContextPacketV1 = projectEvidenceFirstMemoryContextPacketV1(resolution),
 ): MemoryEvidenceAnswerContractV1 {
   const packetRequirements = new Map(
-    packet.requirements.map((requirement) => [
-      requirement.requirementId,
-      requirement,
-    ]),
+    packet.requirements.map((requirement) => [requirement.requirementId, requirement]),
   );
   const evidenceByRequirement = new Map(
     resolution.requirementEvidence.map((entry) => [entry.requirementId, entry]),
   );
   const assessmentByRequirement = new Map(
-    resolution.supportAssessments.map((assessment) => [
-      assessment.requirementId,
-      assessment,
-    ]),
+    resolution.supportAssessments.map((assessment) => [assessment.requirementId, assessment]),
   );
   return Object.freeze({
     schemaVersion: PAW_MEMORY_EVIDENCE_ANSWER_CONTRACT_VERSION_V1,
@@ -334,9 +293,7 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
       resolution.requirements.map((requirement) => {
         const projected = packetRequirements.get(requirement.requirementId);
         const evidence = evidenceByRequirement.get(requirement.requirementId);
-        const assessment = assessmentByRequirement.get(
-          requirement.requirementId,
-        );
+        const assessment = assessmentByRequirement.get(requirement.requirementId);
         if (!evidence) {
           throw namedError("MemoryEvidenceAnswerContractLedgerInvalid");
         }
@@ -345,17 +302,14 @@ export function projectEvidenceFirstMemoryAnswerContractV1(
           description: requirement.label,
           relation: requirement.relation ?? "direct",
           coverageMode:
-            requirement.coverageMode ??
-            (requirement.temporalMode === "latest" ? "latest" : "any"),
+            requirement.coverageMode ?? (requirement.temporalMode === "latest" ? "latest" : "any"),
           minimumEvidence: requirement.minimumEvidence ?? 1,
           status: projected?.status ?? "missing",
           selectedEvidenceCount: projected?.selectedEvidenceCount ?? 0,
           supportingEvidenceRefs: evidence.supportingEvidenceRefs,
           candidateEvidenceRefs: evidence.candidateEvidenceRefs,
           contradictingEvidenceRefs: evidence.contradictingEvidenceRefs,
-          evidenceDispositions: Object.freeze([
-            ...(assessment?.evidenceDispositions ?? []),
-          ]),
+          evidenceDispositions: Object.freeze([...(assessment?.evidenceDispositions ?? [])]),
         });
       }),
     ),

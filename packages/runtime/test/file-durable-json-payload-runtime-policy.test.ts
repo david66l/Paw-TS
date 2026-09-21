@@ -35,9 +35,7 @@ describe("file durable JSON payload runtime policy", () => {
     expect(CANONICAL_DURABLE_JSON_PAYLOAD_BINDING_VERSION_V1).toBe(
       "paw.canonical-durable-json-payload-binding.v1",
     );
-    expect(LOCATION_AWARE_PAYLOAD_SESSION_VERSION_V1).toBe(
-      "paw.location-aware-payload-session.v1",
-    );
+    expect(LOCATION_AWARE_PAYLOAD_SESSION_VERSION_V1).toBe("paw.location-aware-payload-session.v1");
     expect(LOCATION_AWARE_PAYLOAD_MATERIALIZER_VERSION_V1).toBe(
       "paw.location-aware-payload-materializer.v1",
     );
@@ -86,9 +84,9 @@ describe("file durable JSON payload runtime policy", () => {
         maxArtifactBytes: 256 * 1024 * 1024 + 1,
       },
     ]) {
-      expect(() =>
-        freezeFileDurableJsonPayloadPolicyV1(invalid as never),
-      ).toThrow("policy is invalid");
+      expect(() => freezeFileDurableJsonPayloadPolicyV1(invalid as never)).toThrow(
+        "policy is invalid",
+      );
     }
   });
 
@@ -108,12 +106,8 @@ describe("file durable JSON payload runtime policy", () => {
     expect(Object.isFrozen(frozen.codec)).toBeTrue();
     expect(Object.isFrozen(frozen.storePolicy)).toBeTrue();
     expect(Object.isFrozen(frozen.readBudget)).toBeTrue();
-    expect(frozen.locationAwareSessionVersion).toBe(
-      LOCATION_AWARE_PAYLOAD_SESSION_VERSION_V1,
-    );
-    expect(frozen.materializerVersion).toBe(
-      LOCATION_AWARE_PAYLOAD_MATERIALIZER_VERSION_V1,
-    );
+    expect(frozen.locationAwareSessionVersion).toBe(LOCATION_AWARE_PAYLOAD_SESSION_VERSION_V1);
+    expect(frozen.materializerVersion).toBe(LOCATION_AWARE_PAYLOAD_MATERIALIZER_VERSION_V1);
 
     caller.codec.id = "caller-mutated";
     caller.storePolicy.maxArtifactBytes = 1;
@@ -134,10 +128,7 @@ describe("file durable JSON payload runtime policy", () => {
     const { codec: _missingCodec, ...withoutCodec } = valid;
     const { storePolicy: _missingStore, ...withoutStore } = valid;
     const { readBudget: _missingBudget, ...withoutBudget } = valid;
-    const {
-      locationAwareSessionVersion: _missingSessionVersion,
-      ...withoutSessionVersion
-    } = valid;
+    const { locationAwareSessionVersion: _missingSessionVersion, ...withoutSessionVersion } = valid;
     const invalid: unknown[] = [
       null,
       [],
@@ -178,9 +169,7 @@ describe("file durable JSON payload runtime policy", () => {
     ];
 
     for (const value of invalid) {
-      expect(() =>
-        freezeFileDurableJsonPayloadRuntimePolicyV1(value as never),
-      ).toThrow();
+      expect(() => freezeFileDurableJsonPayloadRuntimePolicyV1(value as never)).toThrow();
     }
   });
 
@@ -204,12 +193,12 @@ describe("file durable JSON payload runtime policy", () => {
       },
     };
 
-    expect(() =>
-      createFileDurableJsonPayloadReaderV1(options as never),
-    ).toThrow("policy is invalid");
-    expect(() =>
-      createFileDurableJsonPayloadWriterV1(options as never),
-    ).toThrow("policy is invalid");
+    expect(() => createFileDurableJsonPayloadReaderV1(options as never)).toThrow(
+      "policy is invalid",
+    );
+    expect(() => createFileDurableJsonPayloadWriterV1(options as never)).toThrow(
+      "policy is invalid",
+    );
     expect(workspaceReads).toBe(0);
     expect(leaseReads).toBe(0);
   });
@@ -255,13 +244,9 @@ describe("file durable JSON payload runtime policy", () => {
     }
     expect(payload.artifactRef).toMatch(/^paw-payload:v1:[0-9a-f]{64}$/);
     const artifactHash = payload.artifactRef.replace("paw-payload:v1:", "");
-    const artifacts = recursiveFiles(root).filter((file) =>
-      file.endsWith(`${artifactHash}.json`),
-    );
+    const artifacts = recursiveFiles(root).filter((file) => file.endsWith(`${artifactHash}.json`));
     expect(artifacts).toHaveLength(1);
-    expect(artifacts[0]?.split(path.sep)).toContain(
-      FILE_DURABLE_JSON_PAYLOAD_CODEC_V1.version,
-    );
+    expect(artifacts[0]?.split(path.sep)).toContain(FILE_DURABLE_JSON_PAYLOAD_CODEC_V1.version);
     expect(
       await writer.resolve(payload, {
         originSeq: 1,
@@ -287,16 +272,12 @@ function runtimePolicy(
       maxArtifactBytes: overrides.maxArtifactBytes ?? 1024 * 1024,
     },
     readBudget: {
-      policyVersion:
-        VERIFIED_CANONICAL_PAYLOAD_BUDGET_POLICY_VERSION_V1 as string,
+      policyVersion: VERIFIED_CANONICAL_PAYLOAD_BUDGET_POLICY_VERSION_V1 as string,
       maxTotalBytes: overrides.maxTotalBytes ?? 1024 * 1024,
     },
-    locationBindingVersion:
-      CANONICAL_DURABLE_JSON_PAYLOAD_BINDING_VERSION_V1 as string,
-    locationAwareSessionVersion:
-      LOCATION_AWARE_PAYLOAD_SESSION_VERSION_V1 as string,
-    materializerVersion:
-      LOCATION_AWARE_PAYLOAD_MATERIALIZER_VERSION_V1 as string,
+    locationBindingVersion: CANONICAL_DURABLE_JSON_PAYLOAD_BINDING_VERSION_V1 as string,
+    locationAwareSessionVersion: LOCATION_AWARE_PAYLOAD_SESSION_VERSION_V1 as string,
+    materializerVersion: LOCATION_AWARE_PAYLOAD_MATERIALIZER_VERSION_V1 as string,
   };
 }
 

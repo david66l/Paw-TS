@@ -13,8 +13,7 @@ function hasCurrentLocalPass(contract: MemoryOutcomeContractV1): boolean {
   }
   return contract.evidence.testResults.some(
     (result) =>
-      (result.outcome === "passed" ||
-        (result.outcome == null && result.passed)) &&
+      (result.outcome === "passed" || (result.outcome == null && result.passed)) &&
       (result.mutationRevision ?? 0) === contract.mutationRevision,
   );
 }

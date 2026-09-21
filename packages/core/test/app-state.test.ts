@@ -107,9 +107,7 @@ describe("FileSystemAppStateStore", () => {
       }),
     );
 
-    expect(store.load("native-turn")?.messages[0]?.nativeToolTurn).toEqual(
-      nativeToolTurn,
-    );
+    expect(store.load("native-turn")?.messages[0]?.nativeToolTurn).toEqual(nativeToolTurn);
   });
 
   test("load missing returns null", () => {
@@ -181,9 +179,7 @@ describe("selectors", () => {
     });
 
     test("delete rejects a runId that escapes the states directory", () => {
-      expect(() => store.delete("../../escaped")).toThrow(
-        /escapes the states directory/,
-      );
+      expect(() => store.delete("../../escaped")).toThrow(/escapes the states directory/);
     });
 
     test("load returns null for an escaping runId instead of reading outside", () => {
@@ -193,9 +189,7 @@ describe("selectors", () => {
     test("ordinary runIds still round-trip", () => {
       const state = makeState({ runId: "run.2026-01-01_abc" });
       store.save(state);
-      expect(store.load("run.2026-01-01_abc")?.runId).toBe(
-        "run.2026-01-01_abc",
-      );
+      expect(store.load("run.2026-01-01_abc")?.runId).toBe("run.2026-01-01_abc");
       store.delete("run.2026-01-01_abc");
       expect(store.load("run.2026-01-01_abc")).toBeNull();
     });

@@ -7,11 +7,7 @@ import {
   type CheckpointSemanticVerifierV1,
   createEvidenceBoundCheckpointDistillerV1,
 } from "../src/index.js";
-import {
-  item,
-  sourceEntries,
-  validCheckpoint,
-} from "./support/checkpoint-fixture.js";
+import { item, sourceEntries, validCheckpoint } from "./support/checkpoint-fixture.js";
 
 describe("evidence-bound checkpoint distiller", () => {
   test("a late distillation result cannot start semantic verification", async () => {
@@ -108,9 +104,7 @@ describe("evidence-bound checkpoint distiller", () => {
       verifier: {
         async verify(input) {
           verifierCalls += 1;
-          expect(input.evidence.items.map((entry) => entry.seq)).toEqual([
-            1, 2, 3, 4, 5,
-          ]);
+          expect(input.evidence.items.map((entry) => entry.seq)).toEqual([1, 2, 3, 4, 5]);
           return { status: "supported" };
         },
       },
@@ -131,9 +125,7 @@ describe("evidence-bound checkpoint distiller", () => {
   test("rejects markdown-wrapped JSON before semantic verification", async () => {
     let verifierCalls = 0;
     const distiller = createEvidenceBoundCheckpointDistillerV1({
-      model: completedModel(
-        `\`\`\`json\n${JSON.stringify(validCheckpoint())}\n\`\`\``,
-      ),
+      model: completedModel(`\`\`\`json\n${JSON.stringify(validCheckpoint())}\n\`\`\``),
       verifier: countingVerifier(() => {
         verifierCalls += 1;
         return { status: "supported" };
@@ -265,10 +257,7 @@ function countingVerifier(
   };
 }
 
-function runDistiller(
-  distiller: TaskCheckpointDistillerV1,
-  signal = new AbortController().signal,
-) {
+function runDistiller(distiller: TaskCheckpointDistillerV1, signal = new AbortController().signal) {
   return distiller.distill(
     {
       claimId: "claim-1",

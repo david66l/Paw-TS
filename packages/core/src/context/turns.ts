@@ -16,14 +16,10 @@ export interface ContextTurnV1 {
 }
 
 /** Derive atomic truncation/compaction units without changing persisted data. */
-export function groupContextTurnsV1(
-  messages: readonly ChatMessage[],
-): readonly ContextTurnV1[] {
+export function groupContextTurnsV1(messages: readonly ChatMessage[]): readonly ContextTurnV1[] {
   if (messages.length === 0) return [];
   const starts: number[] = [];
-  const firstAssistant = messages.findIndex(
-    (message) => message.role === "assistant",
-  );
+  const firstAssistant = messages.findIndex((message) => message.role === "assistant");
   const leadingEnd = firstAssistant < 0 ? messages.length : firstAssistant;
   for (let index = 0; index < leadingEnd; index += 1) starts.push(index);
   for (let index = 0; index < messages.length; index += 1) {
@@ -39,8 +35,6 @@ export function groupContextTurnsV1(
   });
 }
 
-export function flattenContextTurnsV1(
-  turns: readonly ContextTurnV1[],
-): ChatMessage[] {
+export function flattenContextTurnsV1(turns: readonly ContextTurnV1[]): ChatMessage[] {
   return turns.flatMap((turn) => [...turn.messages]);
 }

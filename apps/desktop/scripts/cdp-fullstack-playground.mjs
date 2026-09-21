@@ -3,20 +3,12 @@ import { spawn } from "node:child_process";
  * 独立 workspace 全栈任务：notes-api（Bun server + 静态前端 + JSON 文件库）
  * 通过 startRun({ workspaceRoot }) 切到新工作区，不改 paw-ts monorepo。
  */
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const CDP = process.env.CDP_URL || "http://127.0.0.1:9223";
-const WORKSPACE =
-  process.env.PLAYGROUND_ROOT ||
-  "/Users/Zhuanz/Documents/CS/项目/paw-playground";
+const WORKSPACE = process.env.PLAYGROUND_ROOT || "/Users/Zhuanz/Documents/CS/项目/paw-playground";
 const ART = join(import.meta.dirname, "../.cdp-artifacts");
 mkdirSync(ART, { recursive: true });
 mkdirSync(WORKSPACE, { recursive: true });
@@ -82,9 +74,7 @@ async function connect() {
     });
   };
   ws.onmessage = (ev) => {
-    const msg = JSON.parse(
-      typeof ev.data === "string" ? ev.data : ev.data.toString(),
-    );
+    const msg = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject, t } = pending.get(msg.id);
       clearTimeout(t);
@@ -110,9 +100,7 @@ async function evalJs(send, expression, awaitPromise = false) {
   });
   if (r.exceptionDetails) {
     throw new Error(
-      r.exceptionDetails.exception?.description ||
-        r.exceptionDetails.text ||
-        "eval fail",
+      r.exceptionDetails.exception?.description || r.exceptionDetails.text || "eval fail",
     );
   }
   return r.result?.value;
@@ -147,9 +135,7 @@ async function verifyServer() {
     /* ignore */
   }
 
-  const startCmd = existsSync(pkgPath)
-    ? ["bun", "run", "start"]
-    : ["bun", "server.ts"];
+  const startCmd = existsSync(pkgPath) ? ["bun", "run", "start"] : ["bun", "server.ts"];
   const child = spawn(startCmd[0], startCmd.slice(1), {
     cwd: WORKSPACE,
     stdio: ["ignore", "pipe", "pipe"],
@@ -174,11 +160,7 @@ async function verifyServer() {
       if (r.ok) {
         const j = await r.json();
         apiOk = true;
-        listCount = Array.isArray(j.notes)
-          ? j.notes.length
-          : Array.isArray(j)
-            ? j.length
-            : 0;
+        listCount = Array.isArray(j.notes) ? j.notes.length : Array.isArray(j) ? j.length : 0;
         // try create
         const c = await fetch("http://127.0.0.1:8787/api/notes", {
           method: "POST",
@@ -221,11 +203,7 @@ async function main() {
   const { ws, send } = await connect();
 
   // ensure agent ready
-  const meta = await evalJs(
-    send,
-    `(async () => window.pawDesktop.getMeta())()`,
-    true,
-  );
+  const meta = await evalJs(send, `(async () => window.pawDesktop.getMeta())()`, true);
   console.log("meta", meta);
 
   const started = await evalJs(
@@ -310,9 +288,7 @@ async function main() {
     files.some((f) => f.endsWith("server.ts"));
   const checks = {
     hasServer,
-    hasIndex: files.some(
-      (f) => f.endsWith("public/index.html") || f === "index.html",
-    ),
+    hasIndex: files.some((f) => f.endsWith("public/index.html") || f === "index.html"),
     hasAppJs: files.some((f) => f.includes("app.js")),
     hasCss: files.some((f) => f.includes("styles.css") || f.endsWith(".css")),
     hasReadme: files.some((f) => /readme/i.test(f)),
@@ -343,10 +319,7 @@ async function main() {
     score: { pass: score, total },
     at: new Date().toISOString(),
   };
-  writeFileSync(
-    join(ART, "fullstack-playground-report.json"),
-    JSON.stringify(report, null, 2),
-  );
+  writeFileSync(join(ART, "fullstack-playground-report.json"), JSON.stringify(report, null, 2));
   console.log(`\nScore: ${score}/${total}`);
   console.log("Report:", join(ART, "fullstack-playground-report.json"));
   console.log("Workspace:", WORKSPACE);

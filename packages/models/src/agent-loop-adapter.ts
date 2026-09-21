@@ -1,8 +1,5 @@
 import type { Model, ModelSettlement } from "@paw/agent-loop";
-import {
-  type ModelRequestV1,
-  materializeModelRequestMessagesV1,
-} from "@paw/core";
+import { type ModelRequestV1, materializeModelRequestMessagesV1 } from "@paw/core";
 import {
   type JsonValue,
   MODEL_RESPONSE_SCHEMA_VERSION_V1,
@@ -11,10 +8,7 @@ import {
 } from "@paw/protocol";
 import type { LanguageModel } from "./language-model.js";
 import type { ModelCompleteOptions } from "./model-options.js";
-import {
-  type RequestSupervisionLimits,
-  superviseModelRequest,
-} from "./request-supervision.js";
+import { type RequestSupervisionLimits, superviseModelRequest } from "./request-supervision.js";
 import type {
   ChatMessage,
   ModelCompletionResult,
@@ -67,28 +61,20 @@ export function createAgentLoopModelAdapter(
           return normalizeCompletion(
             transport === "complete"
               ? await model.complete(messages, options)
-              : await collectStreamCompletion(
-                  model,
-                  messages,
-                  options,
-                  (event) => {
-                    if (options.signal?.aborted) return;
-                    if (event.type === "text" || event.type === "thinking")
-                      supervisor?.event({
-                        type: "delta",
-                        kind: event.type,
-                        count: event.delta.length,
-                      });
-                    else if (event.type === "tool_use")
-                      supervisor?.event({ type: "tool_assembled" });
-                    return callOptions.onStreamEvent(event);
-                  },
-                ),
+              : await collectStreamCompletion(model, messages, options, (event) => {
+                  if (options.signal?.aborted) return;
+                  if (event.type === "text" || event.type === "thinking")
+                    supervisor?.event({
+                      type: "delta",
+                      kind: event.type,
+                      count: event.delta.length,
+                    });
+                  else if (event.type === "tool_use") supervisor?.event({ type: "tool_assembled" });
+                  return callOptions.onStreamEvent(event);
+                }),
           );
         };
-        const completion = supervisor
-          ? await supervisor.run(execute)
-          : await execute();
+        const completion = supervisor ? await supervisor.run(execute) : await execute();
         if (isTruncated(completion.finishReason)) {
           return {
             status: "truncated",
@@ -134,9 +120,7 @@ export function toDurableModelResponseV1(
       throw new Error(`Model tool call ${call.id} is missing rawArguments`);
     }
     if (typeof call.argumentsValid !== "boolean") {
-      throw new Error(
-        `Model tool call ${call.id} is missing argumentsValid evidence`,
-      );
+      throw new Error(`Model tool call ${call.id} is missing argumentsValid evidence`);
     }
     return {
       callId: call.id,
@@ -152,20 +136,14 @@ export function toDurableModelResponseV1(
     providerProtocol,
     assistantContent: completion.nativeAssistantContent ?? completion.text,
     ...(completion.thinking ? { auditThinking: completion.thinking } : {}),
-    ...(completion.reasoningPassback
-      ? { reasoningPassback: completion.reasoningPassback }
-      : {}),
-    ...(completion.finishReason
-      ? { finishReason: completion.finishReason }
-      : {}),
+    ...(completion.reasoningPassback ? { reasoningPassback: completion.reasoningPassback } : {}),
+    ...(completion.finishReason ? { finishReason: completion.finishReason } : {}),
     ...(completion.usage ? { usage: { ...completion.usage } } : {}),
     toolCalls,
   });
 }
 
-function normalizeCompletion(
-  completion: ModelCompletionResult,
-): ModelCompletionResult {
+function normalizeCompletion(completion: ModelCompletionResult): ModelCompletionResult {
   return completion.nativeAssistantContent === undefined
     ? completion
     : { ...completion, text: completion.nativeAssistantContent };
@@ -191,8 +169,7 @@ async function collectStreamCompletion(
   const toolCalls: NativeToolCall[] = [];
 
   for await (const chunk of stream.call(model, messages, options)) {
-    if (sawDone)
-      throw new Error("Model stream emitted data after its done chunk");
+    if (sawDone) throw new Error("Model stream emitted data after its done chunk");
     await onStreamEvent(chunk);
     switch (chunk.type) {
       case "text":
@@ -208,8 +185,7 @@ async function collectStreamCompletion(
         toolCalls.push(streamToolCall(chunk, toolCalls.length));
         break;
       case "done":
-        if (sawDone)
-          throw new Error("Model stream emitted more than one done chunk");
+        if (sawDone) throw new Error("Model stream emitted more than one done chunk");
         sawDone = true;
         usage = chunk.usage;
         finishReason = chunk.finishReason;
@@ -268,9 +244,7 @@ function isTruncated(reason: string | undefined): boolean {
 }
 
 function describeError(error: unknown): string {
-  return error instanceof Error
-    ? `${error.name}: ${error.message}`
-    : String(error);
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
 
 function jsonObject(
@@ -284,16 +258,8 @@ function jsonObject(
   return normalized as Readonly<{ readonly [key: string]: JsonValue }>;
 }
 
-function jsonValue(
-  value: unknown,
-  field: string,
-  seen: Set<object>,
-): JsonValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+function jsonValue(value: unknown, field: string, seen: Set<object>): JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
   if (typeof value === "number") {
@@ -307,9 +273,7 @@ function jsonValue(
   seen.add(value);
   try {
     if (Array.isArray(value)) {
-      return value.map((item, index) =>
-        jsonValue(item, `${field}[${index}]`, seen),
-      );
+      return value.map((item, index) => jsonValue(item, `${field}[${index}]`, seen));
     }
     const out: Record<string, JsonValue> = {};
     for (const [key, item] of Object.entries(value)) {

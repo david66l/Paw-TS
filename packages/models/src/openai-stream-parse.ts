@@ -83,9 +83,7 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
     throw new Error("OpenAI-compatible: invalid JSON stream payload");
   }
   const root =
-    parsed !== null && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : null;
+    parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
   if (!root) {
     throw new Error("OpenAI-compatible: invalid stream payload root");
   }
@@ -97,11 +95,7 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
 
   // ── 解析 choices[0] ──
   const choices = root.choices;
-  if (
-    Array.isArray(choices) &&
-    choices[0] !== null &&
-    typeof choices[0] === "object"
-  ) {
+  if (Array.isArray(choices) && choices[0] !== null && typeof choices[0] === "object") {
     const c0 = choices[0] as Record<string, unknown>;
     // 提取终止原因
     const fr = c0.finish_reason;
@@ -125,9 +119,7 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
       const reasoning = d.reasoning_content;
       if (typeof reasoning === "string") {
         reasoningPassbackDelta = reasoning;
-        thinkingDelta = thinkingDelta
-          ? `${thinkingDelta}\n\n${reasoning}`
-          : reasoning;
+        thinkingDelta = thinkingDelta ? `${thinkingDelta}\n\n${reasoning}` : reasoning;
       }
       // 工具调用增量
       const toolCalls = d.tool_calls;
@@ -167,26 +159,20 @@ export function parseOpenAiChatCompletionStreamDataPayload(raw: string): {
  * malformed source slots are retained and marked invalid so a valid sibling
  * cannot make a structurally broken provider batch execute partially.
  */
-function parseToolCallDelta(
-  raw: unknown,
-  sourceIndex: number,
-): OpenAiToolCallDelta {
+function parseToolCallDelta(raw: unknown, sourceIndex: number): OpenAiToolCallDelta {
   if (raw === null || typeof raw !== "object") {
     return { index: sourceIndex, invalid: true };
   }
   const obj = raw as Record<string, unknown>;
   const hasValidIndex =
-    typeof obj.index === "number" &&
-    Number.isInteger(obj.index) &&
-    obj.index >= 0;
+    typeof obj.index === "number" && Number.isInteger(obj.index) && obj.index >= 0;
   const index = hasValidIndex ? (obj.index as number) : sourceIndex;
   const id = typeof obj.id === "string" ? obj.id : undefined;
   const type = typeof obj.type === "string" ? obj.type : undefined;
   const fn = obj.function;
   let functionName: string | undefined;
   let functionArguments: string | undefined;
-  const functionShapeInvalid =
-    fn !== undefined && (fn === null || typeof fn !== "object");
+  const functionShapeInvalid = fn !== undefined && (fn === null || typeof fn !== "object");
   if (fn !== null && typeof fn === "object") {
     const f = fn as Record<string, unknown>;
     if (typeof f.name === "string") {
@@ -224,9 +210,7 @@ function parseToolCallDelta(
  * @param raw - usage 字段的原始 JSON 值
  * @returns 结构化的 token 用量对象，若无法解析则返回 undefined
  */
-export function parseOpenAiUsageJson(
-  raw: unknown,
-): ModelTokenUsage | undefined {
+export function parseOpenAiUsageJson(raw: unknown): ModelTokenUsage | undefined {
   if (raw === null || typeof raw !== "object") {
     return undefined;
   }
@@ -236,18 +220,10 @@ export function parseOpenAiUsageJson(
   const completionTokens = pickNum(u.completion_tokens ?? u.completionTokens);
   const totalTokens = pickNum(u.total_tokens ?? u.totalTokens);
   // DeepSeek 在 usage 根节点报告 hit/miss；OpenAI 在 details 中报告 hit。
-  let cachedPromptTokens = pickNum(
-    u.prompt_cache_hit_tokens ?? u.promptCacheHitTokens,
-  );
-  let cacheMissPromptTokens = pickNum(
-    u.prompt_cache_miss_tokens ?? u.promptCacheMissTokens,
-  );
+  let cachedPromptTokens = pickNum(u.prompt_cache_hit_tokens ?? u.promptCacheHitTokens);
+  let cacheMissPromptTokens = pickNum(u.prompt_cache_miss_tokens ?? u.promptCacheMissTokens);
   const details = u.prompt_tokens_details ?? u.promptTokensDetails;
-  if (
-    cachedPromptTokens === undefined &&
-    details !== null &&
-    typeof details === "object"
-  ) {
+  if (cachedPromptTokens === undefined && details !== null && typeof details === "object") {
     const d = details as Record<string, unknown>;
     cachedPromptTokens = pickNum(d.cached_tokens ?? d.cachedTokens);
   }
@@ -273,9 +249,7 @@ export function parseOpenAiUsageJson(
     return undefined;
   }
   return {
-    ...(resolvedPromptTokens !== undefined
-      ? { promptTokens: resolvedPromptTokens }
-      : {}),
+    ...(resolvedPromptTokens !== undefined ? { promptTokens: resolvedPromptTokens } : {}),
     ...(completionTokens !== undefined ? { completionTokens } : {}),
     ...(totalTokens !== undefined ? { totalTokens } : {}),
     ...(cachedPromptTokens !== undefined ? { cachedPromptTokens } : {}),

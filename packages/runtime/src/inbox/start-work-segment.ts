@@ -135,9 +135,7 @@ export async function startWorkSegmentV1(
   }
 }
 
-function captureSession(
-  session: WorkSegmentStartSessionV1,
-): WorkSegmentStartSessionV1 {
+function captureSession(session: WorkSegmentStartSessionV1): WorkSegmentStartSessionV1 {
   if (
     !session ||
     typeof session.readCanonicalPrefix !== "function" ||
@@ -149,8 +147,7 @@ function captureSession(
   return Object.freeze({
     readCanonicalPrefix: session.readCanonicalPrefix.bind(session),
     commitInputFacts: session.commitInputFacts.bind(session),
-    commitDecisionAndInputFacts:
-      session.commitDecisionAndInputFacts.bind(session),
+    commitDecisionAndInputFacts: session.commitDecisionAndInputFacts.bind(session),
   });
 }
 
@@ -173,12 +170,8 @@ function captureVerification(
       : {}),
     maxModelTurns: verification.runConfig.maxModelTurns,
     naturalStop: verification.runConfig.naturalStop,
-    ...(verification.runConfig.liveSteering
-      ? { liveSteering: true as const }
-      : {}),
-    ...(verification.runConfig.settleFinalToolBatch
-      ? { settleFinalToolBatch: true as const }
-      : {}),
+    ...(verification.runConfig.liveSteering ? { liveSteering: true as const } : {}),
+    ...(verification.runConfig.settleFinalToolBatch ? { settleFinalToolBatch: true as const } : {}),
     ...(verification.runConfig.softModelTurns === undefined
       ? {}
       : { softModelTurns: verification.runConfig.softModelTurns }),
@@ -220,9 +213,7 @@ function inspectAlreadyStarted(
     marker.reducerVersion !== INTERACTIVE_CONTROL_REDUCER_VERSION_V2 ||
     marker.policyVersion !== WORK_SEGMENT_POLICY_VERSION_V1
   ) {
-    throw new Error(
-      "Existing work segment does not match the requested policy",
-    );
+    throw new Error("Existing work segment does not match the requested policy");
   }
   assertReplayEquivalentV1(prefix, {
     ...verification,
@@ -279,9 +270,7 @@ function findAcceptedInput(
   return matches[0] as InputAcceptedFactV1;
 }
 
-function detachedPrefix(
-  prefix: readonly RunJournalEnvelopeV1[],
-): readonly RunJournalEnvelopeV1[] {
+function detachedPrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
   const parsed = parseRunJournalPrefixV1(prefix);
   const clone = immutableCanonicalJsonCloneV1(
     parsed as never,

@@ -21,17 +21,8 @@ export const PAW_MEMORY_EVIDENCE_PERSONALIZATION_REQUEST_VERSION_V1 =
 
 export interface MemoryEvidenceAggregateRequestV1 {
   readonly requestVersion: typeof PAW_MEMORY_EVIDENCE_AGGREGATE_REQUEST_VERSION_V1;
-  readonly operator:
-    | "collect_unique"
-    | "count"
-    | "sum"
-    | "difference"
-    | "ratio_percent";
-  readonly aggregationUnit:
-    | "event"
-    | "semantic_value"
-    | "entity"
-    | "numeric_quantity";
+  readonly operator: "collect_unique" | "count" | "sum" | "difference" | "ratio_percent";
+  readonly aggregationUnit: "event" | "semantic_value" | "entity" | "numeric_quantity";
   /**
    * Counting an enumerated evidence set is not the same operation as reading
    * a cardinality stated inside one piece of evidence. The latter needs a
@@ -97,13 +88,9 @@ export interface MemoryEvidenceExecutionNodeV1 {
   readonly groupId?: string;
   readonly necessity?: "required" | "contextual";
   readonly relation?: MemoryEvidenceRequirementV3["relation"];
-  readonly coverageMode?: NonNullable<
-    MemoryEvidenceRequirementV3["coverageMode"]
-  >;
+  readonly coverageMode?: NonNullable<MemoryEvidenceRequirementV3["coverageMode"]>;
   readonly minimumIndependentEvidence?: number;
-  readonly dependencyRelation?: NonNullable<
-    MemoryEvidenceRequirementV3["dependencyRelation"]
-  >;
+  readonly dependencyRelation?: NonNullable<MemoryEvidenceRequirementV3["dependencyRelation"]>;
   readonly dependencyRequirementIds?: readonly string[];
   readonly requirementRevision?: string;
   readonly temporalBindingRevision?: string;
@@ -173,10 +160,7 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
   }
 
   const nodes: MemoryEvidenceExecutionNodeV1[] = [];
-  const terminalByRequirement = new Map<
-    string,
-    MemoryEvidenceExecutionNodeV1
-  >();
+  const terminalByRequirement = new Map<string, MemoryEvidenceExecutionNodeV1>();
   const temporalByRequirement = new Map(
     input.requirements.map((requirement, index) => [
       requirement.requirementId,
@@ -190,25 +174,16 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
     if (
       !temporal ||
       !execution ||
-      execution.execution.requirementRevision !==
-        hashCanonicalJsonV1(requirement as never) ||
+      execution.execution.requirementRevision !== hashCanonicalJsonV1(requirement as never) ||
       execution.execution.temporalBindingRevision !== temporal.bindingRevision
     ) {
       throw namedError("MemoryEvidenceExecutionProgramSnapshotInvalid");
     }
-    const readNode = compileReadNode(
-      requirement,
-      temporal,
-      execution.execution,
-      execution.groupId,
-    );
+    const readNode = compileReadNode(requirement, temporal, execution.execution, execution.groupId);
     nodes.push(readNode);
     if (readNode.status === "ready") readyRequirementCount += 1;
     let terminal = readNode;
-    for (const operation of temporalOperations(
-      requirement.temporalMode,
-      temporal,
-    )) {
+    for (const operation of temporalOperations(requirement.temporalMode, temporal)) {
       terminal = compileDerivedNode({
         operation,
         outputType:
@@ -231,18 +206,13 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
       }),
     );
     if (dependencyNodeIds.length > 0) {
-      const operandNodeIds = Object.freeze([
-        ...dependencyNodeIds,
-        terminal.nodeId,
-      ]);
+      const operandNodeIds = Object.freeze([...dependencyNodeIds, terminal.nodeId]);
       terminal = compileDerivedNode({
         operation: "dependency_join",
         outputType: "collection",
         operandNodeIds,
         dependencyRelation: requirement.dependencyRelation ?? "depends_on",
-        dependencyRequirementIds: Object.freeze([
-          ...(requirement.dependsOnRequirementIds ?? []),
-        ]),
+        dependencyRequirementIds: Object.freeze([...(requirement.dependsOnRequirementIds ?? [])]),
         operands: Object.freeze(
           operandNodeIds.map((nodeId) => {
             const operand = nodes.find((node) => node.nodeId === nodeId);
@@ -259,15 +229,11 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
   }
 
   const consumedRequirementIds = new Set(
-    input.requirements.flatMap(
-      (requirement) => requirement.dependsOnRequirementIds ?? [],
-    ),
+    input.requirements.flatMap((requirement) => requirement.dependsOnRequirementIds ?? []),
   );
   const answerOperandNodeIds = Object.freeze(
     input.requirements
-      .filter(
-        (requirement) => !consumedRequirementIds.has(requirement.requirementId),
-      )
+      .filter((requirement) => !consumedRequirementIds.has(requirement.requirementId))
       .map((requirement) => {
         const terminal = terminalByRequirement.get(requirement.requirementId);
         if (!terminal) {
@@ -288,8 +254,7 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
   if (
     durationRequest &&
     durationRequests.some(
-      (candidate) =>
-        candidate.requestRevision !== durationRequest.requestRevision,
+      (candidate) => candidate.requestRevision !== durationRequest.requestRevision,
     )
   ) {
     throw namedError("MemoryEvidenceExecutionProgramTemporalInvalid");
@@ -302,10 +267,7 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
     input.intent.answerShape === "recommend"
       ? compileMemoryEvidencePersonalizationRequestV1(input.query)
       : undefined;
-  const answerOperation = answerOperationFor(
-    input.intent.answerShape,
-    durationRequest,
-  );
+  const answerOperation = answerOperationFor(input.intent.answerShape, durationRequest);
   const answerNode = compileDerivedNode({
     operation: answerOperation.operation,
     outputType: answerOperation.outputType,
@@ -326,10 +288,7 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
   assertAcyclic(nodes);
 
   const frozenNodes = Object.freeze(nodes);
-  const obligationShape = compileMemoryEvidenceObligationShapeV1(
-    input.query,
-    input.intent,
-  );
+  const obligationShape = compileMemoryEvidenceObligationShapeV1(input.query, input.intent);
   const status =
     renderNode.status === "ready"
       ? ("ready" as const)
@@ -401,8 +360,7 @@ export function validateMemoryEvidenceExecutionProgramV1(
       }
     }
     if (node.personalizationRequest) {
-      const { requestRevision, ...requestIdentity } =
-        node.personalizationRequest;
+      const { requestRevision, ...requestIdentity } = node.personalizationRequest;
       if (hashCanonicalJsonV1(requestIdentity as never) !== requestRevision) {
         throw namedError("MemoryEvidenceExecutionProgramInvalid");
       }
@@ -436,8 +394,7 @@ export function validateMemoryEvidenceExecutionProgramV1(
     root.operandNodeIds[0] !== answer.nodeId ||
     program.answerOperandNodeIds.some((nodeId) => !byId.has(nodeId)) ||
     program.readyRequirementCount !== readyRequirementCount ||
-    program.blockedRequirementCount !==
-      requirementCount - readyRequirementCount ||
+    program.blockedRequirementCount !== requirementCount - readyRequirementCount ||
     program.status !== expectedStatus
   ) {
     throw namedError("MemoryEvidenceExecutionProgramInvalid");
@@ -466,21 +423,17 @@ function compileReadNode(
     outputType: "evidence_set" as const,
     operandNodeIds: Object.freeze([]),
     completionPolicy: "single_operand" as const,
-    status:
-      blockedReason === undefined ? ("ready" as const) : ("blocked" as const),
+    status: blockedReason === undefined ? ("ready" as const) : ("blocked" as const),
     ...(blockedReason === undefined ? {} : { blockedReason }),
     requirementId: requirement.requirementId,
     groupId,
     necessity: "required" as const,
     relation: requirement.relation ?? "direct",
     coverageMode:
-      requirement.coverageMode ??
-      (requirement.temporalMode === "latest" ? "latest" : "any"),
+      requirement.coverageMode ?? (requirement.temporalMode === "latest" ? "latest" : "any"),
     minimumIndependentEvidence: requirement.minimumEvidence ?? 1,
     dependencyRelation: requirement.dependencyRelation ?? "independent",
-    dependencyRequirementIds: Object.freeze([
-      ...(requirement.dependsOnRequirementIds ?? []),
-    ]),
+    dependencyRequirementIds: Object.freeze([...(requirement.dependsOnRequirementIds ?? [])]),
     requirementRevision: execution.requirementRevision,
     temporalBindingRevision: temporal.bindingRevision,
     ...(execution.resolvedRole === undefined
@@ -503,16 +456,11 @@ function compileReadNode(
 }
 
 function compileDerivedNode(input: {
-  readonly operation: Exclude<
-    MemoryEvidenceExecutionOperationV1,
-    "read_requirement"
-  >;
+  readonly operation: Exclude<MemoryEvidenceExecutionOperationV1, "read_requirement">;
   readonly outputType: MemoryEvidenceExecutionOutputTypeV1;
   readonly operandNodeIds: readonly string[];
   readonly operands: readonly MemoryEvidenceExecutionNodeV1[];
-  readonly dependencyRelation?: NonNullable<
-    MemoryEvidenceRequirementV3["dependencyRelation"]
-  >;
+  readonly dependencyRelation?: NonNullable<MemoryEvidenceRequirementV3["dependencyRelation"]>;
   readonly dependencyRequirementIds?: readonly string[];
   readonly temporalWindow?: MemoryEvidenceBoundTemporalWindowV2;
   readonly durationRequest?: MemoryEvidenceDurationRequestV1;
@@ -540,19 +488,11 @@ function compileDerivedNode(input: {
     ...(input.dependencyRequirementIds === undefined
       ? {}
       : {
-          dependencyRequirementIds: Object.freeze([
-            ...input.dependencyRequirementIds,
-          ]),
+          dependencyRequirementIds: Object.freeze([...input.dependencyRequirementIds]),
         }),
-    ...(input.temporalWindow === undefined
-      ? {}
-      : { temporalWindow: input.temporalWindow }),
-    ...(input.durationRequest === undefined
-      ? {}
-      : { durationRequest: input.durationRequest }),
-    ...(input.aggregateRequest === undefined
-      ? {}
-      : { aggregateRequest: input.aggregateRequest }),
+    ...(input.temporalWindow === undefined ? {} : { temporalWindow: input.temporalWindow }),
+    ...(input.durationRequest === undefined ? {} : { durationRequest: input.durationRequest }),
+    ...(input.aggregateRequest === undefined ? {} : { aggregateRequest: input.aggregateRequest }),
     ...(input.personalizationRequest === undefined
       ? {}
       : { personalizationRequest: input.personalizationRequest }),
@@ -622,9 +562,7 @@ export function compileMemoryEvidenceAggregateRequestV1(
           ? ("count" as const)
           : ("collect_unique" as const);
   const aggregationUnit =
-    operator === "sum" ||
-    operator === "difference" ||
-    operator === "ratio_percent"
+    operator === "sum" || operator === "difference" || operator === "ratio_percent"
       ? ("numeric_quantity" as const)
       : /\b(?:different|distinct|unique|types?\s+of|kinds?\s+of)\b|(?:不同|各类|种类|唯一)/iu.test(
             value,
@@ -724,24 +662,16 @@ function topologicalRequirements(
   requirements: readonly MemoryEvidenceRequirementV3[],
 ): readonly MemoryEvidenceRequirementV3[] {
   const byId = new Map(
-    requirements.map((requirement, index) => [
-      requirement.requirementId,
-      { requirement, index },
-    ]),
+    requirements.map((requirement, index) => [requirement.requirementId, { requirement, index }]),
   );
-  const indegree = new Map(
-    requirements.map((requirement) => [requirement.requirementId, 0]),
-  );
+  const indegree = new Map(requirements.map((requirement) => [requirement.requirementId, 0]));
   const dependents = new Map<string, string[]>();
   for (const requirement of requirements) {
     for (const dependency of requirement.dependsOnRequirementIds ?? []) {
       if (!byId.has(dependency) || dependency === requirement.requirementId) {
         throw namedError("MemoryEvidenceExecutionProgramDependencyInvalid");
       }
-      indegree.set(
-        requirement.requirementId,
-        (indegree.get(requirement.requirementId) ?? 0) + 1,
-      );
+      indegree.set(requirement.requirementId, (indegree.get(requirement.requirementId) ?? 0) + 1);
       const rows = dependents.get(dependency) ?? [];
       rows.push(requirement.requirementId);
       dependents.set(dependency, rows);
@@ -751,8 +681,7 @@ function topologicalRequirements(
     .filter((requirement) => indegree.get(requirement.requirementId) === 0)
     .sort(
       (left, right) =>
-        (byId.get(left.requirementId)?.index ?? 0) -
-        (byId.get(right.requirementId)?.index ?? 0),
+        (byId.get(left.requirementId)?.index ?? 0) - (byId.get(right.requirementId)?.index ?? 0),
     );
   const ordered: MemoryEvidenceRequirementV3[] = [];
   while (ready.length > 0) {

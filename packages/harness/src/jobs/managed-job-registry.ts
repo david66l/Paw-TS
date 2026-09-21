@@ -54,9 +54,7 @@ export interface ManagedJobWaitV1 {
   readonly snapshot: ManagedJobSnapshotV1;
 }
 
-type DoneListenerV1 = (
-  snapshot: ManagedJobSnapshotV1,
-) => void | PromiseLike<void>;
+type DoneListenerV1 = (snapshot: ManagedJobSnapshotV1) => void | PromiseLike<void>;
 
 interface TrackedJobV1 {
   readonly id: string;
@@ -110,14 +108,10 @@ export class ManagedJobRegistryV1 {
       throw new Error("maxConcurrentJobsPerOwner must be a positive integer");
     }
     this.maxConcurrentJobsPerOwner = limit;
-    for (const [kind, count] of Object.entries(
-      options?.initialKindCounters ?? {},
-    )) {
+    for (const [kind, count] of Object.entries(options?.initialKindCounters ?? {})) {
       assertNonEmpty("initialKindCounters kind", kind);
       if (!Number.isSafeInteger(count) || count < 0) {
-        throw new Error(
-          "initialKindCounters values must be non-negative integers",
-        );
+        throw new Error("initialKindCounters values must be non-negative integers");
       }
       this.counters.set(kind, count);
     }
@@ -149,15 +143,13 @@ export class ManagedJobRegistryV1 {
     }
     if (
       spec.outputLimitBytes !== undefined &&
-      (!Number.isSafeInteger(spec.outputLimitBytes) ||
-        spec.outputLimitBytes <= 0)
+      (!Number.isSafeInteger(spec.outputLimitBytes) || spec.outputLimitBytes <= 0)
     ) {
       throw new Error("outputLimitBytes must be a positive integer");
     }
     const active = [...this.jobs.values()].filter(
       (job) =>
-        job.ownerId === spec.ownerId &&
-        (job.status === "running" || job.status === "stopping"),
+        job.ownerId === spec.ownerId && (job.status === "running" || job.status === "stopping"),
     ).length;
     if (active >= this.maxConcurrentJobsPerOwner) {
       throw new Error(
@@ -178,9 +170,7 @@ export class ManagedJobRegistryV1 {
       ownerId: spec.ownerId,
       kind: spec.kind,
       label: spec.label,
-      ...(spec.outputLimitBytes !== undefined
-        ? { outputLimitBytes: spec.outputLimitBytes }
-        : {}),
+      ...(spec.outputLimitBytes !== undefined ? { outputLimitBytes: spec.outputLimitBytes } : {}),
       cancel: hooks.cancel,
       done: hooks.done,
       ...(hooks.readOutput ? { readOutput: hooks.readOutput } : {}),
@@ -236,9 +226,7 @@ export class ManagedJobRegistryV1 {
     const job = this.expectOwned(ownerId, id);
     this.collectOutput(job);
     return Object.freeze({
-      text: job.previewOutput
-        ? this.truncationNotice(job) + job.previewOutput
-        : job.previewOutput,
+      text: job.previewOutput ? this.truncationNotice(job) + job.previewOutput : job.previewOutput,
       snapshot: this.snapshot(job),
     });
   }
@@ -253,9 +241,7 @@ export class ManagedJobRegistryV1 {
       // The producer cursor prefixes bounded reads with its drop notice, but
       // the tail() windows below can chop that notice off the front. Track
       // the drops here and re-emit one canonical notice from read()/peek().
-      const dropped = chunk.match(
-        /^\[managed output truncated: (\d+) oldest bytes dropped\]\n/,
-      );
+      const dropped = chunk.match(/^\[managed output truncated: (\d+) oldest bytes dropped\]\n/);
       const body = dropped ? chunk.slice(dropped[0].length) : chunk;
       if (dropped) job.droppedBytesTotal += Number(dropped[1]);
       job.previewOutput = tail(job.previewOutput + body);
@@ -270,11 +256,7 @@ export class ManagedJobRegistryV1 {
       : "";
   }
 
-  kill(
-    ownerId: string,
-    id: string,
-    reason?: string,
-  ): "requested" | "already_finished" {
+  kill(ownerId: string, id: string, reason?: string): "requested" | "already_finished" {
     const job = this.expectOwned(ownerId, id);
     if (isTerminal(job.status)) {
       job.reported = true;
@@ -336,9 +318,7 @@ export class ManagedJobRegistryV1 {
   }
 
   async disposeOwner(ownerId: string, timeoutMs = 5_000): Promise<void> {
-    const owned = [...this.jobs.values()].filter(
-      (job) => job.ownerId === ownerId,
-    );
+    const owned = [...this.jobs.values()].filter((job) => job.ownerId === ownerId);
     for (const job of owned) this.cancelForTeardown(job, "owner disposed");
     await Promise.all(
       owned.map(async (job) => {
@@ -366,9 +346,7 @@ export class ManagedJobRegistryV1 {
   async close(timeoutMs = 5_000): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    const owners = [
-      ...new Set([...this.jobs.values()].map((job) => job.ownerId)),
-    ];
+    const owners = [...new Set([...this.jobs.values()].map((job) => job.ownerId))];
     for (const ownerId of owners) await this.disposeOwner(ownerId, timeoutMs);
     this.listeners.clear();
     this.controllers.clear();
@@ -394,9 +372,7 @@ export class ManagedJobRegistryV1 {
       ownerId: job.ownerId,
       kind: job.kind,
       label: job.label,
-      ...(job.outputLimitBytes !== undefined
-        ? { outputLimitBytes: job.outputLimitBytes }
-        : {}),
+      ...(job.outputLimitBytes !== undefined ? { outputLimitBytes: job.outputLimitBytes } : {}),
       status: job.status,
       ...(job.detail !== undefined ? { detail: job.detail } : {}),
       startedAt: job.startedAt,

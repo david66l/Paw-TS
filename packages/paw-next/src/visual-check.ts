@@ -3,14 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ToolRunResult } from "@paw/harness";
 import type { LanguageModel, ModelCompletionResult } from "@paw/models";
-import {
-  type VisualAuditCheckV1,
-  assertVisualAuditCheckV1,
-} from "@paw/protocol";
+import { type VisualAuditCheckV1, assertVisualAuditCheckV1 } from "@paw/protocol";
 import { BROWSER_PROOF_PREFIX, runBrowserCheck } from "./browser-check.js";
 
-const hash = (value: string | Uint8Array) =>
-  createHash("sha256").update(value).digest("hex");
+const hash = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
 
 async function completeVisual(
   model: LanguageModel,
@@ -44,35 +40,21 @@ async function completeVisual(
   }
 }
 
-export function verifyVisualEvidence(
-  root: string,
-  proof: VisualAuditCheckV1,
-): boolean {
+export function verifyVisualEvidence(root: string, proof: VisualAuditCheckV1): boolean {
   try {
     assertVisualAuditCheckV1(proof);
     const canonical = fs.realpathSync(root);
     const read = (digest: string, extension: string, max: number) => {
-      const target = path.join(
-        canonical,
-        ".paw",
-        "visual-audits",
-        `${digest}.${extension}`,
-      );
+      const target = path.join(canonical, ".paw", "visual-audits", `${digest}.${extension}`);
       const relative = path.relative(canonical, fs.realpathSync(target));
-      if (
-        relative.startsWith("..") ||
-        path.isAbsolute(relative) ||
-        fs.statSync(target).size > max
-      )
+      if (relative.startsWith("..") || path.isAbsolute(relative) || fs.statSync(target).size > max)
         throw new Error("Invalid visual evidence path");
       const bytes = fs.readFileSync(target);
       if (hash(bytes) !== digest) throw new Error("Visual evidence changed");
       return bytes;
     };
     read(proof.screenshotHash, "png", 2 * 1024 * 1024);
-    const stored = JSON.parse(
-      read(proof.reportHash, "json", 64_000).toString("utf8"),
-    );
+    const stored = JSON.parse(read(proof.reportHash, "json", 64_000).toString("utf8"));
     const { reportHash: _hash, ...report } = proof;
     void _hash;
     return JSON.stringify(stored) === JSON.stringify(report);
@@ -82,11 +64,7 @@ export function verifyVisualEvidence(
 }
 
 /** Content-addressed evidence is local to this workspace; never follow an escaping .paw link. */
-function storeEvidence(
-  root: string,
-  bytes: Uint8Array,
-  extension: "png" | "json",
-) {
+function storeEvidence(root: string, bytes: Uint8Array, extension: "png" | "json") {
   const canonical = fs.realpathSync(root);
   let directory = canonical;
   for (const part of [".paw", "visual-audits"]) {
@@ -119,24 +97,16 @@ export function createVisualBrowserCheck(options: {
   onCompletion?: (result: ModelCompletionResult) => void;
   capture?: typeof runBrowserCheck;
 }) {
-  return async (
-    args: unknown,
-    signal?: AbortSignal,
-  ): Promise<ToolRunResult> => {
+  return async (args: unknown, signal?: AbortSignal): Promise<ToolRunResult> => {
     if (options.model.capabilities?.imageInput !== true)
       return {
         ok: false,
         summary: "视觉验收未执行：当前模型尚未声明 imageInput: true。",
         payload: { code: "VisualModelUnavailable" },
       };
-    const result = await (options.capture ?? runBrowserCheck)(
-      args,
-      signal,
-      true,
-    );
+    const result = await (options.capture ?? runBrowserCheck)(args, signal, true);
     if (!result.ok) {
-      const { screenshot: _pixels, ...payload } = (result.payload ??
-        {}) as Record<string, unknown>;
+      const { screenshot: _pixels, ...payload } = (result.payload ?? {}) as Record<string, unknown>;
       void _pixels;
       return { ...result, payload };
     }
@@ -204,15 +174,10 @@ export function createVisualBrowserCheck(options: {
       const report = JSON.parse(response.text);
       const visual = { ...report, reportHash: hash(response.text) };
       assertVisualAuditCheckV1(visual);
-      if (
-        visual.screenshotHash !== screenshotHash ||
-        visual.requirementsHash !== requirementsHash
-      )
+      if (visual.screenshotHash !== screenshotHash || visual.requirementsHash !== requirementsHash)
         throw new Error("VisualReportUnbound");
       storeEvidence(options.workspaceRoot, Buffer.from(response.text), "json");
-      const proof = JSON.parse(
-        result.summary.slice(BROWSER_PROOF_PREFIX.length),
-      );
+      const proof = JSON.parse(result.summary.slice(BROWSER_PROOF_PREFIX.length));
       const { screenshot: _pixels, ...bounded } = payload;
       void _pixels;
       return {

@@ -46,9 +46,7 @@ function fnmatchLite(fileName: string, pattern: string | undefined): boolean {
     return fileName === pattern;
   }
   const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(
-    `^${escaped.replaceAll("?", ".").replaceAll("*", ".*")}$`,
-  );
+  const re = new RegExp(`^${escaped.replaceAll("?", ".").replaceAll("*", ".*")}$`);
   return re.test(fileName);
 }
 
@@ -177,9 +175,7 @@ export function listWorkspaceFiles(
       for (const ent of entries) {
         const full = path.join(current, ent.name);
         const relToListRoot = path.relative(dirpath, full);
-        const relParts = relToListRoot
-          .split(path.sep)
-          .filter((p) => p.length > 0);
+        const relParts = relToListRoot.split(path.sep).filter((p) => p.length > 0);
         if (isIgnoredUnderDir(relParts)) {
           continue;
         }
@@ -268,10 +264,7 @@ export function searchWorkspaceText(
     maxDepth = DEFAULT_SEARCH_DEPTH,
   } = options;
 
-  const cap = Math.min(
-    Math.max(1, Math.floor(maxResults)),
-    MAX_SEARCH_RESULTS_CAP,
-  );
+  const cap = Math.min(Math.max(1, Math.floor(maxResults)), MAX_SEARCH_RESULTS_CAP);
 
   const d = checkWorkspacePath(workspaceRoot, relPath);
   if (!d.allowed) {
@@ -589,10 +582,7 @@ function applyHeadLimit<T>(
   return { items: sliced, wasTruncated: items.length > offset + limit };
 }
 
-function formatGrepContent(
-  matches: GrepMatch[],
-  showLineNumbers: boolean,
-): string {
+function formatGrepContent(matches: GrepMatch[], showLineNumbers: boolean): string {
   const lines: string[] = [];
   let lastPath = "";
   for (const m of matches) {
@@ -669,11 +659,7 @@ export function grepWorkspaceText(
 
   if (outputMode === "files_with_matches") {
     const filenames = [...new Set(matches.map((m) => m.path))];
-    const { items, wasTruncated } = applyHeadLimit(
-      filenames,
-      headLimit,
-      offset,
-    );
+    const { items, wasTruncated } = applyHeadLimit(filenames, headLimit, offset);
     return {
       mode: "files_with_matches",
       filenames: items,
@@ -700,15 +686,10 @@ export function grepWorkspaceText(
     }
     const lineIdx = m.line - 1;
     const before =
-      actualBefore > 0
-        ? lines.slice(Math.max(0, lineIdx - actualBefore), lineIdx)
-        : undefined;
+      actualBefore > 0 ? lines.slice(Math.max(0, lineIdx - actualBefore), lineIdx) : undefined;
     const after =
       actualAfter > 0
-        ? lines.slice(
-            lineIdx + 1,
-            Math.min(lines.length, lineIdx + 1 + actualAfter),
-          )
+        ? lines.slice(lineIdx + 1, Math.min(lines.length, lineIdx + 1 + actualAfter))
         : undefined;
     grepMatches.push({
       path: m.path,
@@ -719,11 +700,7 @@ export function grepWorkspaceText(
     });
   }
 
-  const { items, wasTruncated } = applyHeadLimit(
-    grepMatches,
-    headLimit,
-    offset,
-  );
+  const { items, wasTruncated } = applyHeadLimit(grepMatches, headLimit, offset);
   const formatted = formatGrepContent(items, showLineNumbers);
 
   return {

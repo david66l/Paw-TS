@@ -3,10 +3,7 @@
  */
 
 import type { LanguageModel } from "@paw/models";
-import {
-  createDeepSeekFlashModel,
-  createDefaultLanguageModel,
-} from "@paw/models";
+import { createDeepSeekFlashModel, createDefaultLanguageModel } from "@paw/models";
 import type { SharedContext } from "../orchestrator/types.js";
 import { resolveAllowedTools } from "./resolve-tools.js";
 import type { AgentSpec } from "./types.js";
@@ -56,14 +53,11 @@ export function materializeAgent(
 ): MaterializedAgent {
   const v = validateAgentSpec(spec);
   if (!v.ok) {
-    throw new Error(
-      `Invalid AgentSpec ${spec.id}: ${v.errors.map((e) => e.message).join("; ")}`,
-    );
+    throw new Error(`Invalid AgentSpec ${spec.id}: ${v.errors.map((e) => e.message).join("; ")}`);
   }
 
   const allowedTools = v.resolvedTools;
-  const runMode: "full" | "child" =
-    opts?.forceChild || spec.kind === "worker" ? "child" : "full";
+  const runMode: "full" | "child" = opts?.forceChild || spec.kind === "worker" ? "child" : "full";
 
   const sharedContext: SharedContext = {
     role: spec.prompt.trim() || `You are ${spec.name} (${spec.role}).`,

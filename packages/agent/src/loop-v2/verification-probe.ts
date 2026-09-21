@@ -45,8 +45,7 @@ const PROBE_MAX_GROUNDING_REFS = 2 as const;
 const PROBE_RISK_EVIDENCE_CHARS = 320 as const;
 const PROBE_PROMPT_MAX_CHARS = 42_000 as const;
 const PROBE_POLICY_VERSION = "paw.loop-v2-verification-probe-v4" as const;
-const PREVIOUS_PROBE_POLICY_VERSION =
-  "paw.loop-v2-verification-probe-v3" as const;
+const PREVIOUS_PROBE_POLICY_VERSION = "paw.loop-v2-verification-probe-v3" as const;
 
 export type VerificationProbeKindV2 = "repository_test" | "inline_contract";
 
@@ -64,10 +63,7 @@ export interface VerificationProbePlanItemV1 {
  * an observed fact; host/model adjudication decides whether it proves a task-
  * grounded defect, an invalid probe, an environment problem, or nothing yet.
  */
-export type VerificationProbeStatusV1 =
-  | "not_run"
-  | "completed"
-  | "environment_error";
+export type VerificationProbeStatusV1 = "not_run" | "completed" | "environment_error";
 
 export type VerificationProbeDispositionV2 =
   | "pass"
@@ -142,10 +138,7 @@ export function collectVerificationProbeRepositoryTargetsV1(
   const criteria = input.hostAcceptanceCriteria ?? [];
   const addCriteria = (expectedPrefix: "FAIL_TO_PASS" | "PASS_TO_PASS") => {
     for (const criterion of criteria) {
-      if (
-        criterion.source === "verification" &&
-        criterion.text.startsWith(expectedPrefix)
-      ) {
+      if (criterion.source === "verification" && criterion.text.startsWith(expectedPrefix)) {
         add(criterion.ref);
       }
     }
@@ -155,10 +148,7 @@ export function collectVerificationProbeRepositoryTargetsV1(
   addCriteria("FAIL_TO_PASS");
   for (const target of input.staticImpactedTests ?? []) add(target);
   for (const record of input.verificationRecords ?? []) {
-    if (
-      record.authoritative &&
-      record.mutationRevision === input.mutationRevision
-    ) {
+    if (record.authoritative && record.mutationRevision === input.mutationRevision) {
       for (const target of record.scope) add(target);
     }
   }
@@ -171,11 +161,7 @@ export interface VerificationProbeOnceResultV2 {
   readonly mutationRevision: number;
   readonly verificationAuthority?: "local" | "external" | "not_required";
   readonly probes: readonly VerificationProbeResultV1[];
-  readonly verdict:
-    | "clear"
-    | "candidate_defect"
-    | "inconclusive"
-    | "interrupted";
+  readonly verdict: "clear" | "candidate_defect" | "inconclusive" | "interrupted";
   readonly note?: string;
   readonly modelCalls: number;
   /** A durable claim existed without a settled record; never re-execute it. */
@@ -222,9 +208,7 @@ interface ProtocolFallbackRisk {
  * 动机（django-15098）：模型把宽松的 \w+ 正则改为严格的 BCP 47
  * 结构，导致 i-mingo、de-1996 等旧实现接受的标签被拒绝。
  */
-export function detectRegexNarrowing(
-  diff: string,
-): RegexNarrowingRisk | undefined {
+export function detectRegexNarrowing(diff: string): RegexNarrowingRisk | undefined {
   // 匹配 diff 中的 - 行（旧正则）和 + 行（新正则）
   // 常见模式：r'...' 或 r"..." 或 re.compile(...)
   const regexRe =
@@ -251,9 +235,7 @@ export function detectRegexNarrowing(
  * establish whether the fallback is correct for participants that do and do
  * not actually implement the competing protocol.
  */
-export function detectProtocolFallbackRisk(
-  diff: string,
-): ProtocolFallbackRisk | undefined {
+export function detectProtocolFallbackRisk(diff: string): ProtocolFallbackRisk | undefined {
   const chunks: string[][] = [];
   let current: string[] = [];
   for (const line of diff.split(/\r?\n/)) {
@@ -271,9 +253,7 @@ export function detectProtocolFallbackRisk(
     const broadCatch = added.find((line) =>
       /^\s*except\s*(?::|(?:Exception|BaseException)\b)/.test(line),
     );
-    const fallback = added.find((line) =>
-      /^\s*return\s+NotImplemented\b/.test(line),
-    );
+    const fallback = added.find((line) => /^\s*return\s+NotImplemented\b/.test(line));
     if (broadCatch && fallback) {
       return { broadCatch: broadCatch.trim(), fallback: fallback.trim() };
     }
@@ -311,10 +291,7 @@ export function discoverRepositoryExtensionPointsV1(
     let current = path.dirname(absolute);
     for (let depth = 0; depth < 3; depth += 1) {
       const currentRelative = path.relative(root, current);
-      if (
-        currentRelative.startsWith("..") ||
-        path.isAbsolute(currentRelative)
-      ) {
+      if (currentRelative.startsWith("..") || path.isAbsolute(currentRelative)) {
         break;
       }
       try {
@@ -341,9 +318,7 @@ export function discoverRepositoryExtensionPointsV1(
     }
     for (const entry of entries) {
       if (!EXTENSION_POINT_NAME.test(entry.name)) continue;
-      const relative = path
-        .relative(root, path.join(directory, entry.name))
-        .replace(/\\/g, "/");
+      const relative = path.relative(root, path.join(directory, entry.name)).replace(/\\/g, "/");
       if (relative && !relative.startsWith("..")) hints.add(relative);
     }
   }
@@ -391,10 +366,7 @@ function isInsideExtensionPointV1(
   });
 }
 
-function clipDiffChunkAtLineBoundariesV1(
-  chunk: string,
-  budget: number,
-): string {
+function clipDiffChunkAtLineBoundariesV1(chunk: string, budget: number): string {
   const marker = "\n... (middle of this diff hunk omitted) ...\n";
   const maxLineChars = Math.max(120, budget - marker.length - 80);
   const lines = chunk
@@ -469,31 +441,22 @@ export function sampleVerificationProbeDiffV1(
     return clipDiffChunkAtLineBoundariesV1(diff, budget);
   }
 
-  const targetCount = Math.min(
-    chunks.length,
-    Math.max(3, Math.floor(budget / 1_200)),
-  );
+  const targetCount = Math.min(chunks.length, Math.max(3, Math.floor(budget / 1_200)));
   const indices = new Set<number>();
   if (targetCount === 1) indices.add(0);
   else {
     for (let index = 0; index < targetCount; index += 1) {
-      indices.add(
-        Math.round((index * (chunks.length - 1)) / (targetCount - 1)),
-      );
+      indices.add(Math.round((index * (chunks.length - 1)) / (targetCount - 1)));
     }
   }
   const selected = [...indices].sort((left, right) => left - right);
   const separator = "\n... (other diff hunks omitted) ...\n";
   const perChunk = Math.max(
     300,
-    Math.floor(
-      (budget - separator.length * (selected.length - 1)) / selected.length,
-    ),
+    Math.floor((budget - separator.length * (selected.length - 1)) / selected.length),
   );
   return selected
-    .map((index) =>
-      clipDiffChunkAtLineBoundariesV1(chunks[index] ?? "", perChunk),
-    )
+    .map((index) => clipDiffChunkAtLineBoundariesV1(chunks[index] ?? "", perChunk))
     .join(separator);
 }
 
@@ -519,16 +482,12 @@ export function buildVerificationProbePromptV1(input: {
   const extensionPointRisk =
     extensionPointHints.length > 0 &&
     callableFiles.some(
-      (changedFile) =>
-        !isInsideExtensionPointV1(changedFile, extensionPointHints),
+      (changedFile) => !isInsideExtensionPointV1(changedFile, extensionPointHints),
     );
-  const simplifyVisible = /simplif(?:y|ied|ication)\b/i.test(
+  const simplifyVisible = /simplif(?:y|ied|ication)\b/i.test(`${input.goal}\n${input.diff}`);
+  const protocolVariantVisible = /\b(?:out(?:put)?|in[-_ ]?place|reflected)\b|__r[a-z_]+__/i.test(
     `${input.goal}\n${input.diff}`,
   );
-  const protocolVariantVisible =
-    /\b(?:out(?:put)?|in[-_ ]?place|reflected)\b|__r[a-z_]+__/i.test(
-      `${input.goal}\n${input.diff}`,
-    );
   const riskBrief = protocolFallbackRisk
     ? [
         "## Highest-priority risk: protocol fallback ownership",
@@ -536,9 +495,7 @@ export function buildVerificationProbePromptV1(input: {
         `FALLBACK: ${boundedEvidence(protocolFallbackRisk.fallback)}`,
         "Probe one ownership boundary: compare a real competing protocol participant with a look-alike lacking that handler. The sentinel must appear only when another implementation can own the operation.",
         ...(protocolVariantVisible
-          ? [
-              "Cover the single most relevant visible out/in-place/reflected variant.",
-            ]
+          ? ["Cover the single most relevant visible out/in-place/reflected variant."]
           : []),
       ]
     : extensionPointRisk
@@ -552,9 +509,7 @@ export function buildVerificationProbePromptV1(input: {
           )}`,
           "Probe the earliest public dispatch/evaluation path that distinguishes the candidate base-class change from the smallest registered handler/plugin.",
           ...(simplifyVisible
-            ? [
-                "Prefer direct construction/evaluation over simplify-only evidence.",
-              ]
+            ? ["Prefer direct construction/evaluation over simplify-only evidence."]
             : []),
         ]
       : narrowingRisk
@@ -581,9 +536,7 @@ export function buildVerificationProbePromptV1(input: {
           "",
           "## Host-authorized repository test selectors",
           "These selectors come from trusted acceptance metadata, static dependency discovery, or current verification scope. They authorize one read-only attempt only; they do not prove a dependency, availability in this checkout, or a passing result:",
-          ...input.impactedTests
-            .slice(0, 8)
-            .map((t) => `- repository_test:${boundedEvidence(t)}`),
+          ...input.impactedTests.slice(0, 8).map((t) => `- repository_test:${boundedEvidence(t)}`),
           ...(input.impactedTests.length > 8
             ? [`(and ${input.impactedTests.length - 8} more)`]
             : []),
@@ -657,9 +610,7 @@ export function parseVerificationProbePlanV1(
       groundingRefs.length === 0 ||
       !groundingRefs.every(
         (reference) =>
-          typeof reference === "string" &&
-          reference.trim().length > 0 &&
-          reference.length <= 500,
+          typeof reference === "string" && reference.trim().length > 0 && reference.length <= 500,
       )
     )
       continue;
@@ -715,15 +666,9 @@ export function executeVerificationProbesV1(input: {
       reference.startsWith("repository_test:"),
     );
     const repositoryPath = repositoryRef?.slice("repository_test:".length);
-    const refsAreKnown = probe.groundingRefs.every((reference) =>
-      knownRefs.has(reference),
-    );
+    const refsAreKnown = probe.groundingRefs.every((reference) => knownRefs.has(reference));
     const repositoryInvocation = repositoryPath
-      ? trustedRepositoryTestInvocationV2(
-          input.workspaceRoot,
-          probe.command,
-          repositoryPath,
-        )
+      ? trustedRepositoryTestInvocationV2(input.workspaceRoot, probe.command, repositoryPath)
       : undefined;
     const repositoryPlanIsGrounded =
       probe.kind !== "repository_test" ||
@@ -733,8 +678,7 @@ export function executeVerificationProbesV1(input: {
     const inlinePlanIsGrounded =
       probe.kind !== "inline_contract" ||
       probe.groundingRefs.some(
-        (reference) =>
-          reference === "task_goal" || reference === "terminal_diff",
+        (reference) => reference === "task_goal" || reference === "terminal_diff",
       );
     if (!refsAreKnown || !repositoryPlanIsGrounded || !inlinePlanIsGrounded) {
       const summary = !refsAreKnown
@@ -790,10 +734,7 @@ export function executeVerificationProbesV1(input: {
       },
     );
     if (shell.error) {
-      const output = `probe could not execute: ${shell.error}`.slice(
-        0,
-        PROBE_OUTPUT_CHARS,
-      );
+      const output = `probe could not execute: ${shell.error}`.slice(0, PROBE_OUTPUT_CHARS);
       results.push({
         probeId: probe.probeId,
         plan: probe,
@@ -867,8 +808,7 @@ export function executeVerificationProbesV1(input: {
               : `tracked repository test did not produce a code verdict (${classification.failureKind ?? "harness_failed"})`
           : "completed probe requires evidence adjudication",
         evidenceRefs:
-          classification?.outcome === "code_failed" ||
-          classification?.outcome === "passed"
+          classification?.outcome === "code_failed" || classification?.outcome === "passed"
             ? probe.groundingRefs
             : [],
       },
@@ -899,43 +839,32 @@ function trustedRepositoryTestInvocationV2(
     !invocationTargetsOnlyRepositoryPathV2(invocation, repositoryPath)
   )
     return undefined;
-  const headOwned = spawnSync(
-    "git",
-    ["cat-file", "-e", `HEAD:${repositoryFile}`],
-    {
-      cwd: workspaceRoot,
-      encoding: "utf8",
-      windowsHide: true,
-    },
-  );
+  const headOwned = spawnSync("git", ["cat-file", "-e", `HEAD:${repositoryFile}`], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    windowsHide: true,
+  });
   if (headOwned.status !== 0) return undefined;
-  const worktreeUnchanged = spawnSync(
-    "git",
-    ["diff", "--quiet", "HEAD", "--", repositoryFile],
-    { cwd: workspaceRoot, windowsHide: true },
-  );
+  const worktreeUnchanged = spawnSync("git", ["diff", "--quiet", "HEAD", "--", repositoryFile], {
+    cwd: workspaceRoot,
+    windowsHide: true,
+  });
   const indexUnchanged = spawnSync(
     "git",
     ["diff", "--cached", "--quiet", "HEAD", "--", repositoryFile],
     { cwd: workspaceRoot, windowsHide: true },
   );
-  return worktreeUnchanged.status === 0 && indexUnchanged.status === 0
-    ? invocation
-    : undefined;
+  return worktreeUnchanged.status === 0 && indexUnchanged.status === 0 ? invocation : undefined;
 }
 
 function invocationTargetsOnlyRepositoryPathV2(
   invocation: NonNullable<ReturnType<typeof analyzeVerificationInvocation>>,
   repositoryPath: string,
 ): boolean {
-  const normalizeTarget = (argument: string) =>
-    argument.replace(/\\/g, "/").replace(/^\.\//, "");
+  const normalizeTarget = (argument: string) => argument.replace(/\\/g, "/").replace(/^\.\//, "");
   const matchesTarget = (argument: string) => {
     const normalized = normalizeTarget(argument);
-    return (
-      normalized === repositoryPath ||
-      normalized.startsWith(`${repositoryPath}::`)
-    );
+    return normalized === repositoryPath || normalized.startsWith(`${repositoryPath}::`);
   };
   if (invocation.family === "node") {
     const executable = path.basename(invocation.argv[0] ?? "").toLowerCase();
@@ -954,17 +883,14 @@ function invocationTargetsOnlyRepositoryPathV2(
     runnerArgs = argv.slice(1);
   } else {
     const moduleIndex = argv.findIndex((argument) => argument === "-m");
-    if (moduleIndex < 0 || argv[moduleIndex + 1]?.toLowerCase() !== "pytest")
-      return false;
+    if (moduleIndex < 0 || argv[moduleIndex + 1]?.toLowerCase() !== "pytest") return false;
     runnerArgs = argv.slice(moduleIndex + 2);
   }
   // Pytest options can change semantics (`--runxfail`, `-Werror`, plugins).
   // Rather than maintaining a fragile allowlist, host authority accepts only
   // one bare selector. Rich invocations still execute, but the adjudicator owns
   // their disposition.
-  return (
-    runnerArgs.length === 1 && !!runnerArgs[0] && matchesTarget(runnerArgs[0])
-  );
+  return runnerArgs.length === 1 && !!runnerArgs[0] && matchesTarget(runnerArgs[0]);
 }
 
 function buildProbeAdjudicationPromptV2(input: {
@@ -1014,11 +940,8 @@ function applyProbeAdjudicationV2(input: {
   let dispositions: unknown;
   try {
     const parsed =
-      start >= 0 && end > start
-        ? JSON.parse(input.content.slice(start, end + 1))
-        : undefined;
-    dispositions = (parsed as { dispositions?: unknown } | undefined)
-      ?.dispositions;
+      start >= 0 && end > start ? JSON.parse(input.content.slice(start, end + 1)) : undefined;
+    dispositions = (parsed as { dispositions?: unknown } | undefined)?.dispositions;
   } catch {
     dispositions = undefined;
   }
@@ -1035,10 +958,7 @@ function applyProbeAdjudicationV2(input: {
     if (probe.disposition !== "inconclusive") return probe;
     const row = byProbe.get(probe.probeId);
     if (!row || typeof row !== "object" || Array.isArray(row)) {
-      return inconclusiveProbeV2(
-        probe,
-        "adjudicator omitted or malformed this probe",
-      );
+      return inconclusiveProbeV2(probe, "adjudicator omitted or malformed this probe");
     }
     const disposition = (row as { disposition?: unknown }).disposition;
     const summary = (row as { summary?: unknown }).summary;
@@ -1066,15 +986,11 @@ function applyProbeAdjudicationV2(input: {
           exitCode !== 0 &&
           Array.isArray(evidenceRefs) &&
           evidenceRefs.some(
-            (reference) =>
-              reference === "task_goal" || reference === "terminal_diff",
+            (reference) => reference === "task_goal" || reference === "terminal_diff",
           ))) &&
-      (disposition !== "pass" ||
-        (probe.execution.status === "completed" && exitCode === 0)) &&
+      (disposition !== "pass" || (probe.execution.status === "completed" && exitCode === 0)) &&
       (disposition !== "environment_error" ||
-        (probe.execution.status === "completed" &&
-          typeof exitCode === "number" &&
-          exitCode !== 0));
+        (probe.execution.status === "completed" && typeof exitCode === "number" && exitCode !== 0));
     if (
       !validDisposition ||
       typeof summary !== "string" ||
@@ -1117,9 +1033,7 @@ function inconclusiveProbeV2(
 function sumProbeUsageV2(
   usages: readonly (ModelTokenUsage | undefined)[],
 ): ModelTokenUsage | undefined {
-  const present = usages.filter(
-    (usage): usage is ModelTokenUsage => usage !== undefined,
-  );
+  const present = usages.filter((usage): usage is ModelTokenUsage => usage !== undefined);
   if (present.length === 0) return undefined;
   const sum = (field: keyof ModelTokenUsage) =>
     present.reduce((total, usage) => total + (usage[field] ?? 0), 0);
@@ -1243,11 +1157,7 @@ function migrateLegacyProbeRecordV1(input: {
   readonly candidateInputHash: string;
   readonly mutationRevision: number;
 }): VerificationProbeOnceResultV2 | undefined {
-  if (
-    !input.value ||
-    typeof input.value !== "object" ||
-    Array.isArray(input.value)
-  )
+  if (!input.value || typeof input.value !== "object" || Array.isArray(input.value))
     return undefined;
   const record = input.value as {
     schemaVersion?: unknown;
@@ -1293,8 +1203,7 @@ function migrateLegacyProbeRecordV1(input: {
       typeof legacy.command !== "string" ||
       !legacy.command.trim() ||
       !["pass", "fail", "error"].includes(String(legacy.status)) ||
-      (legacy.exitCode !== undefined &&
-        !Number.isSafeInteger(legacy.exitCode)) ||
+      (legacy.exitCode !== undefined && !Number.isSafeInteger(legacy.exitCode)) ||
       typeof legacy.output !== "string"
     )
       return undefined;
@@ -1317,9 +1226,7 @@ function migrateLegacyProbeRecordV1(input: {
       },
       execution: {
         status: legacy.status === "error" ? "environment_error" : "completed",
-        ...(typeof legacy.exitCode === "number"
-          ? { exitCode: legacy.exitCode }
-          : {}),
+        ...(typeof legacy.exitCode === "number" ? { exitCode: legacy.exitCode } : {}),
         output: legacy.output,
         outputHash: sha256Canonical({ output: legacy.output }),
       },
@@ -1335,8 +1242,7 @@ function migrateLegacyProbeRecordV1(input: {
     });
   }
   const verdict =
-    result.verdict === "pass" &&
-    migrated.every((probe) => probe.disposition === "pass")
+    result.verdict === "pass" && migrated.every((probe) => probe.disposition === "pass")
       ? "clear"
       : "inconclusive";
   return {
@@ -1351,11 +1257,8 @@ function migrateLegacyProbeRecordV1(input: {
 
 function parseLegacyProbeClaimV1(
   value: unknown,
-):
-  | Readonly<{ candidateInputHash: string; mutationRevision: number }>
-  | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return undefined;
+): Readonly<{ candidateInputHash: string; mutationRevision: number }> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const claim = value as {
     schemaVersion?: unknown;
     kind?: unknown;
@@ -1384,25 +1287,20 @@ function parseLegacyProbeClaimV1(
   };
 }
 
-type ProbePolicyVersionV2 =
-  | typeof PROBE_POLICY_VERSION
-  | typeof PREVIOUS_PROBE_POLICY_VERSION;
+type ProbePolicyVersionV2 = typeof PROBE_POLICY_VERSION | typeof PREVIOUS_PROBE_POLICY_VERSION;
 
 function parseProbeRecordForPolicyV2(
   value: unknown,
   expectedPolicyVersion: ProbePolicyVersionV2,
 ): ProbeRecordV2 | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const record = value as Partial<ProbeRecordV2>;
   const result = record.result;
   if (
     record.schemaVersion !== 2 ||
     record.kind !== "paw.loop-v2-verification-probe" ||
     record.policyVersion !== expectedPolicyVersion ||
-    !["local", "external", "not_required"].includes(
-      String(record.verificationAuthority),
-    ) ||
+    !["local", "external", "not_required"].includes(String(record.verificationAuthority)) ||
     typeof record.candidateInputHash !== "string" ||
     !record.candidateInputHash.trim() ||
     !Number.isSafeInteger(record.mutationRevision) ||
@@ -1410,9 +1308,7 @@ function parseProbeRecordForPolicyV2(
     !result ||
     result.candidateInputHash !== record.candidateInputHash ||
     result.mutationRevision !== record.mutationRevision ||
-    !["clear", "candidate_defect", "inconclusive", "interrupted"].includes(
-      result.verdict,
-    ) ||
+    !["clear", "candidate_defect", "inconclusive", "interrupted"].includes(result.verdict) ||
     !Array.isArray(result.probes) ||
     !result.probes.every(isVerificationProbeResultV2) ||
     !Number.isSafeInteger(result.modelCalls) ||
@@ -1424,18 +1320,13 @@ function parseProbeRecordForPolicyV2(
         result.probes.length !== 0 ||
         result.plannerDiagnostics !== undefined)) ||
     (!result.interrupted &&
-      !isProbePlannerDiagnosticsForPolicyV3(
-        result.plannerDiagnostics,
-        expectedPolicyVersion,
-      )) ||
+      !isProbePlannerDiagnosticsForPolicyV3(result.plannerDiagnostics, expectedPolicyVersion)) ||
     (!result.interrupted &&
       result.verdict !==
         (result.probes.some((probe) => probe.disposition === "candidate_defect")
           ? "candidate_defect"
           : result.probes.some((probe) =>
-                ["invalid_probe", "environment_error", "inconclusive"].includes(
-                  probe.disposition,
-                ),
+                ["invalid_probe", "environment_error", "inconclusive"].includes(probe.disposition),
               ) || result.probes.length === 0
             ? "inconclusive"
             : "clear"))
@@ -1452,16 +1343,13 @@ function parseProbeClaimForPolicyV2(
   value: unknown,
   expectedPolicyVersion: ProbePolicyVersionV2,
 ): ProbeClaimV2 | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const claim = value as Partial<ProbeClaimV2>;
   if (
     claim.schemaVersion !== 2 ||
     claim.kind !== "paw.loop-v2-verification-probe-claim" ||
     claim.policyVersion !== expectedPolicyVersion ||
-    !["local", "external", "not_required"].includes(
-      String(claim.verificationAuthority),
-    ) ||
+    !["local", "external", "not_required"].includes(String(claim.verificationAuthority)) ||
     typeof claim.candidateInputHash !== "string" ||
     !claim.candidateInputHash.trim() ||
     !Number.isSafeInteger(claim.mutationRevision) ||
@@ -1483,9 +1371,7 @@ function parseProbeClaimV2(value: unknown): ProbeClaimV2 | undefined {
   return parseProbeClaimForPolicyV2(value, PROBE_POLICY_VERSION);
 }
 
-function isVerificationProbeResultV2(
-  value: unknown,
-): value is VerificationProbeResultV1 {
+function isVerificationProbeResultV2(value: unknown): value is VerificationProbeResultV1 {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const probe = value as Partial<VerificationProbeResultV1>;
   const plan = probe.plan;
@@ -1508,22 +1394,15 @@ function isVerificationProbeResultV2(
     !["repository_test", "inline_contract"].includes(plan.kind) ||
     !Array.isArray(plan.groundingRefs) ||
     plan.groundingRefs.length > PROBE_MAX_GROUNDING_REFS ||
-    !plan.groundingRefs.every(
-      (reference) => typeof reference === "string" && reference.trim(),
-    ) ||
+    !plan.groundingRefs.every((reference) => typeof reference === "string" && reference.trim()) ||
     !execution ||
     !["not_run", "completed", "environment_error"].includes(execution.status) ||
-    (execution.exitCode !== undefined &&
-      !Number.isSafeInteger(execution.exitCode)) ||
+    (execution.exitCode !== undefined && !Number.isSafeInteger(execution.exitCode)) ||
     typeof execution.output !== "string" ||
     execution.outputHash !== sha256Canonical({ output: execution.output }) ||
-    ![
-      "pass",
-      "candidate_defect",
-      "invalid_probe",
-      "environment_error",
-      "inconclusive",
-    ].includes(String(probe.disposition)) ||
+    !["pass", "candidate_defect", "invalid_probe", "environment_error", "inconclusive"].includes(
+      String(probe.disposition),
+    ) ||
     !adjudication ||
     !["host", "model", "protocol", "legacy"].includes(adjudication.source) ||
     typeof adjudication.summary !== "string" ||
@@ -1531,20 +1410,14 @@ function isVerificationProbeResultV2(
     !Array.isArray(adjudication.evidenceRefs) ||
     !adjudication.evidenceRefs.every(
       (reference) =>
-        typeof reference === "string" &&
-        reference.trim() &&
-        plan.groundingRefs.includes(reference),
+        typeof reference === "string" && reference.trim() && plan.groundingRefs.includes(reference),
     )
   )
     return false;
   const exitCode = execution.exitCode;
-  if (execution.status === "completed" && !Number.isSafeInteger(exitCode))
-    return false;
+  if (execution.status === "completed" && !Number.isSafeInteger(exitCode)) return false;
   if (execution.status !== "completed" && exitCode !== undefined) return false;
-  if (
-    probe.disposition === "pass" &&
-    !(execution.status === "completed" && exitCode === 0)
-  )
+  if (probe.disposition === "pass" && !(execution.status === "completed" && exitCode === 0))
     return false;
   if (
     probe.disposition === "candidate_defect" &&
@@ -1555,13 +1428,10 @@ function isVerificationProbeResultV2(
       adjudication.evidenceRefs.length > 0 &&
       (adjudication.source === "host"
         ? plan.kind === "repository_test" &&
-          adjudication.evidenceRefs.some((reference) =>
-            reference.startsWith("repository_test:"),
-          )
+          adjudication.evidenceRefs.some((reference) => reference.startsWith("repository_test:"))
         : adjudication.source === "model" &&
           adjudication.evidenceRefs.some(
-            (reference) =>
-              reference === "task_goal" || reference === "terminal_diff",
+            (reference) => reference === "task_goal" || reference === "terminal_diff",
           ))
     )
   )
@@ -1577,8 +1447,7 @@ function isVerificationProbeResultV2(
     )
   )
     return false;
-  if (execution.status === "not_run" && probe.disposition !== "invalid_probe")
-    return false;
+  if (execution.status === "not_run" && probe.disposition !== "invalid_probe") return false;
   return true;
 }
 
@@ -1654,12 +1523,7 @@ function readProbeJsonV1(
       value: JSON.parse(fs.readFileSync(filePath, "utf8")),
     };
   } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return { state: "missing" };
     }
     return { state: "corrupt" };
@@ -1709,21 +1573,12 @@ export async function runVerificationProbeOnceV2(input: {
   const claimPath = probeClaimPath(input.workspaceRoot, input.runId);
   const verificationAuthority = input.verificationAuthority ?? "local";
   const recordRead = readProbeJsonV1(recordPath);
-  const existing =
-    recordRead.state === "parsed"
-      ? parseProbeRecordV2(recordRead.value)
-      : undefined;
+  const existing = recordRead.state === "parsed" ? parseProbeRecordV2(recordRead.value) : undefined;
   const supersededRecord =
     recordRead.state === "parsed"
-      ? parseProbeRecordForPolicyV2(
-          recordRead.value,
-          PREVIOUS_PROBE_POLICY_VERSION,
-        )
+      ? parseProbeRecordForPolicyV2(recordRead.value, PREVIOUS_PROBE_POLICY_VERSION)
       : undefined;
-  if (
-    supersededRecord &&
-    supersededRecord.mutationRevision >= input.mutationRevision
-  ) {
+  if (supersededRecord && supersededRecord.mutationRevision >= input.mutationRevision) {
     return interruptedProbeResultV2({
       candidateInputHash: input.candidateInputHash,
       mutationRevision: input.mutationRevision,
@@ -1766,20 +1621,12 @@ export async function runVerificationProbeOnceV2(input: {
   }
   const claimRead = readProbeJsonV1(claimPath);
   const existingClaim =
-    claimRead.state === "parsed"
-      ? parseProbeClaimV2(claimRead.value)
-      : undefined;
+    claimRead.state === "parsed" ? parseProbeClaimV2(claimRead.value) : undefined;
   const supersededClaim =
     claimRead.state === "parsed"
-      ? parseProbeClaimForPolicyV2(
-          claimRead.value,
-          PREVIOUS_PROBE_POLICY_VERSION,
-        )
+      ? parseProbeClaimForPolicyV2(claimRead.value, PREVIOUS_PROBE_POLICY_VERSION)
       : undefined;
-  if (
-    supersededClaim &&
-    supersededClaim.mutationRevision >= input.mutationRevision
-  ) {
+  if (supersededClaim && supersededClaim.mutationRevision >= input.mutationRevision) {
     return interruptedProbeResultV2({
       candidateInputHash: input.candidateInputHash,
       mutationRevision: input.mutationRevision,
@@ -1810,9 +1657,8 @@ export async function runVerificationProbeOnceV2(input: {
         mutationRevision: input.mutationRevision,
       });
       if (migrated) return migrated;
-      const legacyRevision = (
-        legacyRecordRead.value as { mutationRevision?: unknown }
-      ).mutationRevision;
+      const legacyRevision = (legacyRecordRead.value as { mutationRevision?: unknown })
+        .mutationRevision;
       if (legacyRevision === input.mutationRevision) {
         return interruptedProbeResultV2({
           candidateInputHash: input.candidateInputHash,
@@ -1827,9 +1673,7 @@ export async function runVerificationProbeOnceV2(input: {
         note: "legacy verification probe record is corrupt; execution was not repeated",
       });
     }
-    const legacyClaimRead = readProbeJsonV1(
-      legacyProbeClaimPath(input.workspaceRoot, input.runId),
-    );
+    const legacyClaimRead = readProbeJsonV1(legacyProbeClaimPath(input.workspaceRoot, input.runId));
     if (legacyClaimRead.state === "parsed") {
       const legacyClaim = parseLegacyProbeClaimV1(legacyClaimRead.value);
       if (!legacyClaim) {
@@ -1918,25 +1762,19 @@ export async function runVerificationProbeOnceV2(input: {
   const plannerTruncated = ["length", "max_tokens"].includes(
     completion.finishReason?.trim().toLowerCase() ?? "",
   );
-  const plan = plannerTruncated
-    ? []
-    : parseVerificationProbePlanV1(completion.text);
+  const plan = plannerTruncated ? [] : parseVerificationProbePlanV1(completion.text);
   const executed = plannerTruncated
     ? []
     : executeVerificationProbesV1({
         workspaceRoot: input.workspaceRoot,
         ...(input.shellSandbox ? { shellSandbox: input.shellSandbox } : {}),
-        ...(input.hostShellRunner
-          ? { hostShellRunner: input.hostShellRunner }
-          : {}),
+        ...(input.hostShellRunner ? { hostShellRunner: input.hostShellRunner } : {}),
         probes: plan,
         ...(input.impactedTests ? { impactedTests: input.impactedTests } : {}),
         changedFiles: input.changedFiles,
         verificationAuthority,
       });
-  const pendingAdjudication = executed.filter(
-    (probe) => probe.disposition === "inconclusive",
-  );
+  const pendingAdjudication = executed.filter((probe) => probe.disposition === "inconclusive");
   let adjudicatorUsage: ModelTokenUsage | undefined;
   let probes = executed;
   let modelCalls = 1;
@@ -1944,9 +1782,7 @@ export async function runVerificationProbeOnceV2(input: {
     const knownEvidenceRefs = [
       "task_goal",
       "terminal_diff",
-      ...(input.impactedTests ?? []).map(
-        (test) => `repository_test:${test.replace(/\\/g, "/")}`,
-      ),
+      ...(input.impactedTests ?? []).map((test) => `repository_test:${test.replace(/\\/g, "/")}`),
     ];
     const adjudication = await input.model.complete(
       [
@@ -1984,41 +1820,27 @@ export async function runVerificationProbeOnceV2(input: {
           probes: pendingAdjudication,
           knownEvidenceRefs,
         });
-    const byId = new Map(
-      adjudicatedPending.map((probe) => [probe.probeId, probe]),
-    );
+    const byId = new Map(adjudicatedPending.map((probe) => [probe.probeId, probe]));
     probes = executed.map((probe) => byId.get(probe.probeId) ?? probe);
   }
-  const candidateDefect = probes.some(
-    (probe) => probe.disposition === "candidate_defect",
-  );
+  const candidateDefect = probes.some((probe) => probe.disposition === "candidate_defect");
   const inconclusive =
     probes.length === 0 ||
     probes.some((probe) =>
-      ["invalid_probe", "environment_error", "inconclusive"].includes(
-        probe.disposition,
-      ),
+      ["invalid_probe", "environment_error", "inconclusive"].includes(probe.disposition),
     );
   const usage = sumProbeUsageV2([completion.usage, adjudicatorUsage]);
   const plannerDiagnostics = buildProbePlannerDiagnosticsV3({
     prompt: plannerPrompt,
     text: completion.text,
-    ...(completion.thinking !== undefined
-      ? { thinking: completion.thinking }
-      : {}),
-    ...(completion.finishReason !== undefined
-      ? { finishReason: completion.finishReason }
-      : {}),
+    ...(completion.thinking !== undefined ? { thinking: completion.thinking } : {}),
+    ...(completion.finishReason !== undefined ? { finishReason: completion.finishReason } : {}),
   });
   const result: VerificationProbeOnceResultV2 = {
     candidateInputHash: input.candidateInputHash,
     mutationRevision: input.mutationRevision,
     probes,
-    verdict: candidateDefect
-      ? "candidate_defect"
-      : inconclusive
-        ? "inconclusive"
-        : "clear",
+    verdict: candidateDefect ? "candidate_defect" : inconclusive ? "inconclusive" : "clear",
     ...(probes.length === 0
       ? {
           note: plannerTruncated
@@ -2043,9 +1865,7 @@ export async function runVerificationProbeOnceV2(input: {
     result,
   };
   atomicWrite(recordPath, JSON.stringify(record));
-  const settled = parseProbeRecordV2(
-    JSON.parse(fs.readFileSync(recordPath, "utf8")),
-  );
+  const settled = parseProbeRecordV2(JSON.parse(fs.readFileSync(recordPath, "utf8")));
   if (!settled) {
     throw new Error("Verification probe record failed strict reread");
   }

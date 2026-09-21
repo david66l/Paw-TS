@@ -133,14 +133,10 @@ export class AgentGroup {
       }
       const agentId = `child-${this.parentRunId}-${sourceIndex}`;
       if (this.children.has(agentId)) {
-        throw new Error(
-          `Child agent source index is already active: ${sourceIndex}`,
-        );
+        throw new Error(`Child agent source index is already active: ${sourceIndex}`);
       }
       const goal =
-        typeof call.args?.goal === "string"
-          ? call.args.goal
-          : String(call.args?.goal ?? "");
+        typeof call.args?.goal === "string" ? call.args.goal : String(call.args?.goal ?? "");
       const sharedContext = sharedCtxForCall(call);
       const callArgs =
         call.args && typeof call.args === "object"
@@ -260,8 +256,7 @@ export class AgentGroup {
         break;
       case "loop.tick": {
         const maxSteps = controller.maxSteps;
-        const progress =
-          maxSteps > 0 ? Math.min(50, (event.turn / maxSteps) * 50) : 0;
+        const progress = maxSteps > 0 ? Math.min(50, (event.turn / maxSteps) * 50) : 0;
         this.updateChildState(agentId, "model_calling", progress);
         break;
       }
@@ -303,8 +298,7 @@ export class AgentGroup {
     // 子 Agent 写文件后通知父 Agent 的文件监听器
     if (
       event.type === "tool.result" &&
-      (event.tool === "workspace.write_file" ||
-        event.tool === "workspace.edit_file") &&
+      (event.tool === "workspace.write_file" || event.tool === "workspace.edit_file") &&
       event.ok
     ) {
       const detail = event.detail;

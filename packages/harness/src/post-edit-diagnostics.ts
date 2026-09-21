@@ -4,8 +4,7 @@ import path from "node:path";
 
 import { checkWorkspacePath } from "@paw/workspace";
 
-export const POST_EDIT_DIAGNOSTICS_SCHEMA_V1 =
-  "paw.post-edit-diagnostics.v1" as const;
+export const POST_EDIT_DIAGNOSTICS_SCHEMA_V1 = "paw.post-edit-diagnostics.v1" as const;
 
 export interface PostEditDiagnosticIssueV1 {
   readonly severity: "error";
@@ -44,10 +43,7 @@ function issue(message: string): PostEditDiagnosticIssueV1 {
   });
 }
 
-function diagnoseJson(
-  relativePath: string,
-  content: string,
-): PostEditFileDiagnosticV1 {
+function diagnoseJson(relativePath: string, content: string): PostEditFileDiagnosticV1 {
   try {
     JSON.parse(content);
     return Object.freeze({
@@ -61,9 +57,7 @@ function diagnoseJson(
       path: relativePath,
       engine: "json_parse" as const,
       status: "issues" as const,
-      issues: Object.freeze([
-        issue(error instanceof Error ? error.message : String(error)),
-      ]),
+      issues: Object.freeze([issue(error instanceof Error ? error.message : String(error))]),
     });
   }
 }
@@ -114,9 +108,7 @@ function diagnoseJavaScript(
       path: relativePath,
       engine: "bun_syntax" as const,
       status: "issues" as const,
-      issues: Object.freeze([
-        issue(error instanceof Error ? error.message : String(error)),
-      ]),
+      issues: Object.freeze([issue(error instanceof Error ? error.message : String(error))]),
     });
   }
 }
@@ -131,10 +123,7 @@ const PYTHON_AST_SCRIPT = [
   " sys.exit(1)",
 ].join("\n");
 
-function diagnosePython(
-  relativePath: string,
-  absolutePath: string,
-): PostEditFileDiagnosticV1 {
+function diagnosePython(relativePath: string, absolutePath: string): PostEditFileDiagnosticV1 {
   const candidates =
     cachedPythonCommand === null
       ? []
@@ -157,10 +146,7 @@ function diagnosePython(
       windowsHide: true,
       maxBuffer: 16 * 1024,
     });
-    if (
-      result.error &&
-      (result.error as NodeJS.ErrnoException).code === "ENOENT"
-    ) {
+    if (result.error && (result.error as NodeJS.ErrnoException).code === "ENOENT") {
       continue;
     }
     cachedPythonCommand = candidate;
@@ -175,8 +161,7 @@ function diagnosePython(
     const output = `${result.stdout ?? ""}`.trim();
     try {
       const parsed = JSON.parse(output) as Record<string, unknown>;
-      const message =
-        typeof parsed.message === "string" ? parsed.message : output;
+      const message = typeof parsed.message === "string" ? parsed.message : output;
       return Object.freeze({
         path: relativePath,
         engine: "python_ast" as const,
@@ -185,9 +170,7 @@ function diagnosePython(
           Object.freeze({
             ...issue(message || "Python syntax error"),
             ...(typeof parsed.line === "number" ? { line: parsed.line } : {}),
-            ...(typeof parsed.column === "number"
-              ? { column: parsed.column }
-              : {}),
+            ...(typeof parsed.column === "number" ? { column: parsed.column } : {}),
           }),
         ]),
       });
@@ -197,10 +180,9 @@ function diagnosePython(
         engine: "python_ast" as const,
         status: "unavailable" as const,
         issues: Object.freeze([]),
-        reason:
-          `python AST probe failed: ${output || result.stderr || "unknown"}`
-            .replace(/\s+/g, " ")
-            .slice(0, 300),
+        reason: `python AST probe failed: ${output || result.stderr || "unknown"}`
+          .replace(/\s+/g, " ")
+          .slice(0, 300),
       });
     }
   }
@@ -214,10 +196,7 @@ function diagnosePython(
   });
 }
 
-function diagnoseFile(
-  workspaceRoot: string,
-  relativePath: string,
-): PostEditFileDiagnosticV1 {
+function diagnoseFile(workspaceRoot: string, relativePath: string): PostEditFileDiagnosticV1 {
   const checked = checkWorkspacePath(workspaceRoot, relativePath);
   if (!checked.allowed) {
     return Object.freeze({
@@ -246,10 +225,9 @@ function diagnoseFile(
       engine: "none" as const,
       status: "unavailable" as const,
       issues: Object.freeze([]),
-      reason:
-        `diagnostic read failed: ${error instanceof Error ? error.message : String(error)}`
-          .replace(/\s+/g, " ")
-          .slice(0, 300),
+      reason: `diagnostic read failed: ${error instanceof Error ? error.message : String(error)}`
+        .replace(/\s+/g, " ")
+        .slice(0, 300),
     });
   }
   if (Buffer.byteLength(content, "utf8") > MAX_FILE_BYTES) {
@@ -281,14 +259,10 @@ export function diagnoseEditedFilesV1(
   workspaceRoot: string,
   relativePaths: readonly string[],
 ): PostEditDiagnosticsV1 {
-  const unique = [...new Set(relativePaths.map((item) => item.trim()))].filter(
-    Boolean,
-  );
+  const unique = [...new Set(relativePaths.map((item) => item.trim()))].filter(Boolean);
   const files = unique.map((file) => diagnoseFile(workspaceRoot, file));
   const issues = files.flatMap((file) => file.issues).slice(0, MAX_ISSUES);
-  const supported = files.filter(
-    (file) => file.status === "clean" || file.status === "issues",
-  );
+  const supported = files.filter((file) => file.status === "clean" || file.status === "issues");
   return Object.freeze({
     schemaVersion: POST_EDIT_DIAGNOSTICS_SCHEMA_V1,
     authority: "syntax_only_not_verification" as const,

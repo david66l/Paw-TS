@@ -75,8 +75,7 @@ export function createCompletionReviewEvidencePacketV1(
       continue;
     }
     latest.set(
-      evidence.verificationTarget ??
-        `${evidence.verificationKind}:${evidence.callId}`,
+      evidence.verificationTarget ?? `${evidence.verificationKind}:${evidence.callId}`,
       evidence,
     );
   }
@@ -87,23 +86,14 @@ export function createCompletionReviewEvidencePacketV1(
         callId: evidence.callId,
         tool: evidence.tool,
         target,
-        kind: evidence.verificationKind as Exclude<
-          CompletionReviewVerificationKindV1,
-          "none"
-        >,
+        kind: evidence.verificationKind as Exclude<CompletionReviewVerificationKindV1, "none">,
         executionStatus: evidence.executionStatus,
         outcome: evidence.outcome,
         args: evidence.args,
         summary: evidence.summary,
-        ...(evidence.isError === undefined
-          ? {}
-          : { isError: evidence.isError }),
-        ...(evidence.exitCode === undefined
-          ? {}
-          : { exitCode: evidence.exitCode }),
-        ...(evidence.timedOut === undefined
-          ? {}
-          : { timedOut: evidence.timedOut }),
+        ...(evidence.isError === undefined ? {} : { isError: evidence.isError }),
+        ...(evidence.exitCode === undefined ? {} : { exitCode: evidence.exitCode }),
+        ...(evidence.timedOut === undefined ? {} : { timedOut: evidence.timedOut }),
       }),
     ),
   );

@@ -73,18 +73,13 @@ export function createModelCompletionReviewerV1(options: {
   const complete = captureModel(options.model);
   const maxPromptChars = positive(options.maxPromptChars ?? 96_000, "prompt");
   const maxOutputTokens = positive(options.maxOutputTokens ?? 4_096, "output");
-  const maxTruncationRetries = nonNegative(
-    options.maxTruncationRetries ?? 1,
-    "truncation retry",
-  );
+  const maxTruncationRetries = nonNegative(options.maxTruncationRetries ?? 1, "truncation retry");
   const timeoutMs = positive(options.timeoutMs ?? 30_000, "timeout");
   return Object.freeze({
     reviewerId: COMPLETION_REVIEWER_POLICY_VERSION_V1,
     async review(candidate, callOptions) {
       if (callOptions.signal.aborted) return cancelled();
-      const user = JSON.stringify(
-        createCompletionReviewEvidencePacketV1(candidate),
-      );
+      const user = JSON.stringify(createCompletionReviewEvidencePacketV1(candidate));
       if (user.length > maxPromptChars) {
         return Object.freeze({
           status: "unknown" as const,
@@ -96,24 +91,14 @@ export function createModelCompletionReviewerV1(options: {
       try {
         for (let attempt = 0; ; attempt += 1) {
           const result = await deadline.run(() =>
-            complete(
-              { system: SYSTEM_PROMPT, user, maxOutputTokens },
-              { signal },
-            ),
+            complete({ system: SYSTEM_PROMPT, user, maxOutputTokens }, { signal }),
           );
-          if (
-            result.status === "truncated" &&
-            attempt < maxTruncationRetries &&
-            !signal.aborted
-          ) {
+          if (result.status === "truncated" && attempt < maxTruncationRetries && !signal.aborted) {
             continue;
           }
           if (result.status !== "completed") {
             return Object.freeze({
-              status:
-                result.status === "truncated"
-                  ? ("unknown" as const)
-                  : result.status,
+              status: result.status === "truncated" ? ("unknown" as const) : result.status,
               errorCode: normalizeCode(result.errorCode),
             });
           }
@@ -164,8 +149,7 @@ function parseVerdict(value: string): CompletionReviewerResultV1 {
     }
     return Object.freeze({
       status: "completed" as const,
-      verdict:
-        parsed.decision === "allow" ? ("allow" as const) : ("block" as const),
+      verdict: parsed.decision === "allow" ? ("allow" as const) : ("block" as const),
       reasonCode: normalizeCode(parsed.reasonCode),
       summary: singleLine(parsed.summary).slice(0, 2_000),
     });
@@ -210,10 +194,7 @@ function cancelled(): CompletionReviewerResultV1 {
 }
 
 function normalizeCode(value: string): string {
-  return (
-    value.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128) ||
-    "CompletionReviewUnknown"
-  );
+  return value.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128) || "CompletionReviewUnknown";
 }
 
 function singleLine(value: string): string {

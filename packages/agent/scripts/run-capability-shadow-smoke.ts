@@ -82,16 +82,9 @@ const scenarios: readonly Scenario[] = [
 
 const repoRoot = path.resolve(process.argv[2] ?? process.cwd());
 const suiteId = `deterministic-${Date.now().toString(36)}`;
-const smokeRoot = path.join(
-  repoRoot,
-  "benchmarks",
-  "swe-compare",
-  "capability-shadow-smoke",
-);
+const smokeRoot = path.join(repoRoot, "benchmarks", "swe-compare", "capability-shadow-smoke");
 const suiteRoot = path.join(smokeRoot, "runs", suiteId);
-const workspaceRoot = fs.mkdtempSync(
-  path.join(os.tmpdir(), "paw-capability-shadow-"),
-);
+const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paw-capability-shadow-"));
 
 try {
   fs.mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
@@ -189,11 +182,7 @@ try {
     });
   const summary = summarizeCapabilityExposureV1(observations);
   const summaryPath = path.join(suiteRoot, "summary.json");
-  fs.writeFileSync(
-    summaryPath,
-    `${JSON.stringify(summary, null, 2)}\n`,
-    "utf8",
-  );
+  fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
   fs.writeFileSync(
     path.join(smokeRoot, "last-run-summary.json"),
     `${JSON.stringify(summary, null, 2)}\n`,

@@ -78,22 +78,17 @@ export function createJsonMemoryEvidenceCoveragePlannerV1(input: {
     throw namedError("MemoryEvidenceCoverageModelInvalid");
   }
   const plannerVersion =
-    input.plannerVersion ??
-    PAW_MEMORY_EVIDENCE_REQUIREMENT_EXTRACTOR_VERSION_V1;
+    input.plannerVersion ?? PAW_MEMORY_EVIDENCE_REQUIREMENT_EXTRACTOR_VERSION_V1;
   if (!plannerVersion.trim()) {
     throw namedError("MemoryEvidenceCoveragePlannerVersionInvalid");
   }
   return Object.freeze({
     plannerVersion,
-    async plan(
-      planning: MemoryEvidenceCoveragePlanningInputV1,
-      signal: AbortSignal,
-    ) {
+    async plan(planning: MemoryEvidenceCoveragePlanningInputV1, signal: AbortSignal) {
       if (signal.aborted) throw abortError();
-      const result = await input.model.complete(
-        buildMemoryEvidenceCoverageRequestV1(planning),
-        { signal },
-      );
+      const result = await input.model.complete(buildMemoryEvidenceCoverageRequestV1(planning), {
+        signal,
+      });
       if (signal.aborted || result.status === "cancelled") throw abortError();
       if (result.status !== "completed") {
         throw namedError(stableName(result.errorCode));
@@ -101,24 +96,18 @@ export function createJsonMemoryEvidenceCoveragePlannerV1(input: {
       try {
         return parseMemoryEvidenceCoverageProposalV1(result.text, planning);
       } catch (error) {
-        if (
-          signal.aborted ||
-          (error instanceof Error && error.name === "AbortError")
-        ) {
+        if (signal.aborted || (error instanceof Error && error.name === "AbortError")) {
           throw abortError();
         }
         const repaired = await input.model.complete(
           buildMemoryEvidenceCoverageRepairRequestV1(
             planning,
             result.text,
-            error instanceof Error
-              ? error.name
-              : "MemoryEvidenceCoverageInvalid",
+            error instanceof Error ? error.name : "MemoryEvidenceCoverageInvalid",
           ),
           { signal },
         );
-        if (signal.aborted || repaired.status === "cancelled")
-          throw abortError();
+        if (signal.aborted || repaired.status === "cancelled") throw abortError();
         if (repaired.status !== "completed") {
           throw namedError(stableName(repaired.errorCode));
         }
@@ -171,11 +160,7 @@ export function buildMemoryEvidenceCoverageRequestV1(
     ].join("\n"),
     user: JSON.stringify({
       schemaVersion: "paw.memory-evidence-coverage-input.v1",
-      query: boundedText(
-        input.query,
-        8_192,
-        "MemoryEvidenceCoverageQueryInvalid",
-      ),
+      query: boundedText(input.query, 8_192, "MemoryEvidenceCoverageQueryInvalid"),
       availableEvidence: input.evidence.slice(0, 48),
       topicIndex: input.topics.slice(0, 128),
     }),
@@ -226,11 +211,7 @@ export function parseMemoryEvidenceCoverageProposalV1(
       }),
     );
     return Object.freeze({
-      description: boundedText(
-        raw.description,
-        1_024,
-        "MemoryEvidenceCoverageDescriptionInvalid",
-      ),
+      description: boundedText(raw.description, 1_024, "MemoryEvidenceCoverageDescriptionInvalid"),
       priority: oneOf(
         raw.priority,
         ["required", "supporting"] as const,
@@ -268,11 +249,7 @@ export async function planMemoryEvidenceCoverageV1(
   }>,
 ): Promise<MemoryEvidenceCoveragePlanV1> {
   assertMaterializationBudget(input);
-  const source = collectCoverageSource(
-    input.snapshot,
-    input.queryId,
-    input.query,
-  );
+  const source = collectCoverageSource(input.snapshot, input.queryId, input.query);
   if (source.evidence.length === 0 && source.topics.length === 0) {
     const empty = Object.freeze([]);
     return Object.freeze({
@@ -295,9 +272,7 @@ export async function planMemoryEvidenceCoverageV1(
   const proposals = await input.planner.plan(
     {
       query: source.query,
-      evidence: source.evidence.map(
-        ({ evidenceRefs: _refs, ...candidate }) => candidate,
-      ),
+      evidence: source.evidence.map(({ evidenceRefs: _refs, ...candidate }) => candidate),
       topics: source.topics,
       maxRequirements: input.maxRequirements,
       maxExpansionTopics: input.maxExpansionTopics,
@@ -333,19 +308,13 @@ export async function planMemoryEvidenceCoverageV1(
     const requirement = requirements[index];
     if (!proposal || !requirement) continue;
     const allocated: string[] = [];
-    const needed = Math.max(
-      0,
-      proposal.minimumEvidence - proposal.coveredMemoryIds.length,
-    );
+    const needed = Math.max(0, proposal.minimumEvidence - proposal.coveredMemoryIds.length);
     if (needed === 0) {
       supplementalForRequirement.set(requirement.requirementId, allocated);
       expansionTopicsForRequirement.set(requirement.requirementId, []);
       continue;
     }
-    expansionTopicsForRequirement.set(
-      requirement.requirementId,
-      proposal.expandTopicIds,
-    );
+    expansionTopicsForRequirement.set(requirement.requirementId, proposal.expandTopicIds);
     const candidates = proposal.expandTopicIds.flatMap((topicId) => {
       const item = catalogByTopic.get(topicId);
       return item ? supplementalCandidates(item, proposal.description) : [];
@@ -392,19 +361,12 @@ export async function planMemoryEvidenceCoverageV1(
       requirementId: requirement.requirementId,
       status,
       memoryIds,
-      topicIds:
-        expansionTopicsForRequirement.get(requirement.requirementId) ?? [],
+      topicIds: expansionTopicsForRequirement.get(requirement.requirementId) ?? [],
     });
   });
   const supplementalStates = Object.freeze([...supplementalById.values()]);
-  const refsByMemory = evidenceRefsByMemory(
-    source.evidence,
-    supplementalStates,
-  );
-  const requests = orderedCoverageRequests(coverage, refsByMemory).slice(
-    0,
-    input.maxRawSpans,
-  );
+  const refsByMemory = evidenceRefsByMemory(source.evidence, supplementalStates);
+  const requests = orderedCoverageRequests(coverage, refsByMemory).slice(0, input.maxRawSpans);
   const resolved = await input.archive.resolve(requests, input.signal);
   const boundedRaw = boundMemoryRawEvidenceSpansV1({
     requests,
@@ -447,9 +409,7 @@ function collectCoverageSource(
   query: string,
 ): {
   query: string;
-  evidence: Array<
-    MemoryEvidenceCandidateV1 & { evidenceRefs: readonly string[] }
-  >;
+  evidence: Array<MemoryEvidenceCandidateV1 & { evidenceRefs: readonly string[] }>;
   topics: MemoryEvidenceTopicCandidateV1[];
 } {
   const evidence = new Map<
@@ -459,9 +419,7 @@ function collectCoverageSource(
   const retrieval = [...snapshot.entries]
     .reverse()
     .find(
-      (entry) =>
-        entry.fact.type === "memory.retrieval_settled" &&
-        entry.fact.queryId === queryId,
+      (entry) => entry.fact.type === "memory.retrieval_settled" && entry.fact.queryId === queryId,
     );
   if (retrieval?.fact.type === "memory.retrieval_settled") {
     for (const card of retrieval.fact.cards) {
@@ -477,8 +435,7 @@ function collectCoverageSource(
     .reverse()
     .find(
       (entry) =>
-        entry.fact.type === "memory.topic_evidence_settled" &&
-        entry.fact.queryId === queryId,
+        entry.fact.type === "memory.topic_evidence_settled" && entry.fact.queryId === queryId,
     );
   const topics: MemoryEvidenceTopicCandidateV1[] = [];
   if (topic?.fact.type === "memory.topic_evidence_settled") {
@@ -504,8 +461,7 @@ function collectCoverageSource(
     .reverse()
     .find(
       (entry) =>
-        entry.fact.type === "memory.persona_projection_settled" &&
-        entry.fact.queryId === queryId,
+        entry.fact.type === "memory.persona_projection_settled" && entry.fact.queryId === queryId,
     );
   if (persona?.fact.type === "memory.persona_projection_settled") {
     for (const claim of persona.fact.claims) {
@@ -530,9 +486,7 @@ function supplementalCandidates(
   item: MemoryTopicEvidenceCatalogItemV1,
   requirement: string,
 ): MemoryTopicEvidenceStateV1[] {
-  const entries = new Map(
-    item.entries.map((entry) => [entry.id, entry] as const),
-  );
+  const entries = new Map(item.entries.map((entry) => [entry.id, entry] as const));
   const requirementTerms = terms(requirement);
   const candidates: Array<{
     state: MemoryTopicEvidenceStateV1;
@@ -579,8 +533,7 @@ function evidenceRefsByMemory(
 ): ReadonlyMap<string, readonly string[]> {
   const result = new Map<string, readonly string[]>();
   for (const item of evidence) result.set(item.memoryId, item.evidenceRefs);
-  for (const state of supplemental)
-    result.set(state.memoryId, state.evidenceRefs);
+  for (const state of supplemental) result.set(state.memoryId, state.evidenceRefs);
   return result;
 }
 
@@ -592,8 +545,7 @@ function orderedCoverageRequests(
     const byRef = new Map<string, Set<string>>();
     for (const memoryId of item.memoryIds) {
       const refs = [...(refsByMemory.get(memoryId) ?? [])].sort(
-        (left, right) =>
-          rawEvidenceRefWeight(left) - rawEvidenceRefWeight(right),
+        (left, right) => rawEvidenceRefWeight(left) - rawEvidenceRefWeight(right),
       );
       for (const evidenceRef of refs) {
         const ids = byRef.get(evidenceRef) ?? new Set<string>();
@@ -635,14 +587,10 @@ function rawEvidenceRefWeight(ref: string): number {
   return 1;
 }
 
-function renderEntry(
-  entry: Exclude<MemoryEntry, { kind: "vault_ref" }>,
-): string {
+function renderEntry(entry: Exclude<MemoryEntry, { kind: "vault_ref" }>): string {
   if (entry.kind === "semantic") return entry.fact;
   if (entry.kind === "profile") return entry.insight;
-  return [entry.whenToUse, entry.perspective, ...entry.modification]
-    .filter(Boolean)
-    .join("\n");
+  return [entry.whenToUse, entry.perspective, ...entry.modification].filter(Boolean).join("\n");
 }
 
 function terms(value: string): ReadonlySet<string> {
@@ -657,10 +605,7 @@ function terms(value: string): ReadonlySet<string> {
   return result;
 }
 
-function overlapScore(
-  left: ReadonlySet<string>,
-  right: ReadonlySet<string>,
-): number {
+function overlapScore(left: ReadonlySet<string>, right: ReadonlySet<string>): number {
   let score = 0;
   for (const term of left) if (right.has(term)) score += 1;
   return score;
@@ -675,48 +620,15 @@ function assertMaterializationBudget(input: {
   maxRawChars: number;
 }): void {
   assertPlanningBudget(input.maxRequirements, input.maxExpansionTopics);
-  boundedInteger(
-    input.maxSupplementalStates,
-    1,
-    16,
-    "MemoryEvidenceCoverageStateBudgetInvalid",
-  );
-  boundedInteger(
-    input.maxSupplementalChars,
-    256,
-    8_192,
-    "MemoryEvidenceCoverageStateCharsInvalid",
-  );
-  boundedInteger(
-    input.maxRawSpans,
-    1,
-    16,
-    "MemoryEvidenceCoverageRawSpanBudgetInvalid",
-  );
-  boundedInteger(
-    input.maxRawChars,
-    256,
-    16_384,
-    "MemoryEvidenceCoverageRawCharsInvalid",
-  );
+  boundedInteger(input.maxSupplementalStates, 1, 16, "MemoryEvidenceCoverageStateBudgetInvalid");
+  boundedInteger(input.maxSupplementalChars, 256, 8_192, "MemoryEvidenceCoverageStateCharsInvalid");
+  boundedInteger(input.maxRawSpans, 1, 16, "MemoryEvidenceCoverageRawSpanBudgetInvalid");
+  boundedInteger(input.maxRawChars, 256, 16_384, "MemoryEvidenceCoverageRawCharsInvalid");
 }
 
-function assertPlanningBudget(
-  maxRequirements: number,
-  maxExpansionTopics: number,
-): void {
-  boundedInteger(
-    maxRequirements,
-    1,
-    6,
-    "MemoryEvidenceCoverageRequirementBudgetInvalid",
-  );
-  boundedInteger(
-    maxExpansionTopics,
-    1,
-    8,
-    "MemoryEvidenceCoverageTopicBudgetInvalid",
-  );
+function assertPlanningBudget(maxRequirements: number, maxExpansionTopics: number): void {
+  boundedInteger(maxRequirements, 1, 6, "MemoryEvidenceCoverageRequirementBudgetInvalid");
+  boundedInteger(maxExpansionTopics, 1, 8, "MemoryEvidenceCoverageTopicBudgetInvalid");
 }
 
 function boundedKnownIds(
@@ -725,12 +637,10 @@ function boundedKnownIds(
   maximum: number,
   errorName: string,
 ): readonly string[] {
-  if (!Array.isArray(value) || value.length > maximum)
-    throw namedError(errorName);
+  if (!Array.isArray(value) || value.length > maximum) throw namedError(errorName);
   const result: string[] = [];
   for (const item of value) {
-    if (typeof item !== "string" || !allowed.has(item))
-      throw namedError(errorName);
+    if (typeof item !== "string" || !allowed.has(item)) throw namedError(errorName);
     if (!result.includes(item)) result.push(item);
   }
   return Object.freeze(result);
@@ -754,20 +664,13 @@ function exactRecord(
 function extractJsonObject(text: string): Record<string, unknown> {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start)
-    throw namedError("MemoryEvidenceCoverageOutputInvalid");
-  return exactRecord(
-    JSON.parse(text.slice(start, end + 1)),
-    "MemoryEvidenceCoverageOutput",
-    ["requirements"],
-  );
+  if (start < 0 || end <= start) throw namedError("MemoryEvidenceCoverageOutputInvalid");
+  return exactRecord(JSON.parse(text.slice(start, end + 1)), "MemoryEvidenceCoverageOutput", [
+    "requirements",
+  ]);
 }
 
-function boundedText(
-  value: unknown,
-  maximum: number,
-  errorName: string,
-): string {
+function boundedText(value: unknown, maximum: number, errorName: string): string {
   if (typeof value !== "string") throw namedError(errorName);
   const normalized = value.trim().replace(/\s+/g, " ");
   if (
@@ -789,31 +692,19 @@ function boundedInteger(
   maximum: number,
   errorName: string,
 ): number {
-  if (
-    !Number.isSafeInteger(value) ||
-    (value as number) < minimum ||
-    (value as number) > maximum
-  ) {
+  if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
     throw namedError(errorName);
   }
   return value as number;
 }
 
-function oneOf<T extends string>(
-  value: unknown,
-  allowed: readonly T[],
-  errorName: string,
-): T {
-  if (typeof value !== "string" || !allowed.includes(value as T))
-    throw namedError(errorName);
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], errorName: string): T {
+  if (typeof value !== "string" || !allowed.includes(value as T)) throw namedError(errorName);
   return value as T;
 }
 
 function stableName(value: string): string {
-  return (
-    value.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 120) ||
-    "MemoryEvidenceCoverageFailed"
-  );
+  return value.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 120) || "MemoryEvidenceCoverageFailed";
 }
 
 function namedError(name: string): Error {

@@ -10,9 +10,7 @@ test("desktop hands persisted readback payload to the reviewer on the first comp
   const nativeFetch = globalThis.fetch;
   let turns = 0;
   let reviews = 0;
-  let actualPacket:
-    | { observations: Array<{ observedOutput?: unknown }> }
-    | undefined;
+  let actualPacket: { observations: Array<{ observedOutput?: unknown }> } | undefined;
   globalThis.fetch = Object.assign(
     async (_url: unknown, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
@@ -41,10 +39,7 @@ test("desktop hands persisted readback payload to the reviewer on the first comp
                   id: `call-${turns}`,
                   type: "function",
                   function: {
-                    name:
-                      turns === 1
-                        ? "workspace_write_file"
-                        : "workspace_read_file",
+                    name: turns === 1 ? "workspace_write_file" : "workspace_read_file",
                     arguments: JSON.stringify(
                       turns === 1
                         ? { path: "probe.txt", content: "PAW_TOOL_PROBE_OK\n" }
@@ -95,17 +90,11 @@ test("desktop hands persisted readback payload to the reviewer on the first comp
       truncated: false,
     });
     expect(
-      fs
-        .readFileSync(path.join(root, "probe.txt"))
-        .equals(Buffer.from("PAW_TOOL_PROBE_OK\n")),
+      fs.readFileSync(path.join(root, "probe.txt")).equals(Buffer.from("PAW_TOOL_PROBE_OK\n")),
     ).toBe(true);
   } finally {
     globalThis.fetch = nativeFetch;
-    if (
-      path
-        .resolve(root)
-        .startsWith(path.join(os.tmpdir(), "paw-readback-review-"))
-    ) {
+    if (path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-readback-review-"))) {
       fs.rmSync(root, { recursive: true, force: true });
     }
   }

@@ -29,8 +29,7 @@ function parseLocator(value: unknown): MemoryJobLocator {
   const v = value as MemoryJobLocator;
   if (
     !v ||
-    Object.keys(v).sort().join(",") !==
-      "configHash,runId,sourceThroughSeq,workspaceRoot" ||
+    Object.keys(v).sort().join(",") !== "configHash,runId,sourceThroughSeq,workspaceRoot" ||
     typeof v.workspaceRoot !== "string" ||
     !path.isAbsolute(v.workspaceRoot) ||
     !/^desktop-next-[\w-]+$/.test(v.runId) ||
@@ -53,10 +52,7 @@ function identity(v: MemoryJobLocator) {
 }
 
 /** Synchronous local ingress survives an unavailable DB and contains no credentials. */
-export function enqueueDesktopMemoryJob(
-  directory: string,
-  locator: MemoryJobLocator,
-): string {
+export function enqueueDesktopMemoryJob(directory: string, locator: MemoryJobLocator): string {
   const value = parseLocator(locator);
   fs.mkdirSync(directory, { recursive: true });
   const id = identity(value);
@@ -80,19 +76,12 @@ export function enqueueDesktopMemoryJob(
 
 export function postgresMemoryJobStore(
   hostId = createHash("sha256")
-    .update(
-      JSON.stringify([
-        os.hostname(),
-        os.userInfo().username,
-        fs.realpathSync(process.cwd()),
-      ]),
-    )
+    .update(JSON.stringify([os.hostname(), os.userInfo().username, fs.realpathSync(process.cwd())]))
     .digest("hex"),
 ): MemoryJobStore {
   return {
     async put(id, locator) {
-      if (id !== identity(locator))
-        throw new Error("MemoryJobIdentityMismatch");
+      if (id !== identity(locator)) throw new Error("MemoryJobIdentityMismatch");
       await getSql()`INSERT INTO desktop_memory_jobs (id,host_id,locator) VALUES (${`${hostId}:${id}`},${hostId},${getSql().json({ ...locator })}) ON CONFLICT (id) DO NOTHING`;
     },
     async claim() {
@@ -108,8 +97,7 @@ export function postgresMemoryJobStore(
       const row = rows[0];
       if (!row) return undefined;
       const locator = parseLocator(row.locator);
-      if (row.id !== `${hostId}:${identity(locator)}`)
-        throw new Error("MemoryJobIdentityMismatch");
+      if (row.id !== `${hostId}:${identity(locator)}`) throw new Error("MemoryJobIdentityMismatch");
       return {
         ...locator,
         id: row.id as string,
@@ -233,10 +221,7 @@ export function createDesktopMemoryWorker(input: {
       const pending = execution;
       abort?.abort(new Error("MemoryForegroundRequested"));
       if (!pending) return;
-      const join = createOperationDeadline(
-        new AbortController().signal,
-        40_000,
-      );
+      const join = createOperationDeadline(new AbortController().signal, 40_000);
       try {
         await join.run(() => pending.catch(() => {}));
       } finally {

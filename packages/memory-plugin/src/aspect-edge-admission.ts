@@ -52,16 +52,13 @@ export function evaluateMemoryAspectEdgeAdmissionV1(
   for (const item of input.catalog) {
     if (
       evidence.has(item.claimId) ||
-      deriveMemoryAspectLinkStatementHashV1(item.statement) !==
-        item.statementHash
+      deriveMemoryAspectLinkStatementHashV1(item.statement) !== item.statementHash
     ) {
       throw namedError("MemoryAspectEdgeAdmissionCatalogInvalid");
     }
     evidence.set(item.claimId, item);
   }
-  const weights = inverseDocumentWeights(
-    input.catalog.map((item) => terms(item.statement)),
-  );
+  const weights = inverseDocumentWeights(input.catalog.map((item) => terms(item.statement)));
   const roles = activeRoles(input.snapshot);
   const graphEdgeIds = new Set(input.snapshot.edges.map((edge) => edge.id));
   const seen = new Set<string>();
@@ -84,11 +81,7 @@ export function evaluateMemoryAspectEdgeAdmissionV1(
       if (fromRoles === undefined || toRoles === undefined) {
         return decision(edge.id, "reject", "role_incompatible");
       }
-      const overlap = discriminantOverlap(
-        from.statement,
-        to.statement,
-        weights,
-      );
+      const overlap = discriminantOverlap(from.statement, to.statement, weights);
       if (edge.edgeType === "supports") {
         if (isEvidenceRole(fromRoles) && hasStateRole(toRoles)) {
           return decision(edge.id, "admit", "role_grounded");
@@ -137,19 +130,13 @@ export function evaluateMemoryAspectEdgeAdmissionV1(
     ...body,
     admissionRevision: hashCanonicalJsonV1(body as unknown as JsonValue),
     admittedEdgeIds: Object.freeze(
-      decisions
-        .filter((item) => item.disposition === "admit")
-        .map((item) => item.edgeId),
+      decisions.filter((item) => item.disposition === "admit").map((item) => item.edgeId),
     ),
     rejectedEdgeIds: Object.freeze(
-      decisions
-        .filter((item) => item.disposition === "reject")
-        .map((item) => item.edgeId),
+      decisions.filter((item) => item.disposition === "reject").map((item) => item.edgeId),
     ),
     deferredEdgeIds: Object.freeze(
-      decisions
-        .filter((item) => item.disposition === "defer")
-        .map((item) => item.edgeId),
+      decisions.filter((item) => item.disposition === "defer").map((item) => item.edgeId),
     ),
   });
 }
@@ -193,9 +180,7 @@ function isEvidenceRole(roles: ReadonlySet<MemoryAspectClaimRoleV1>): boolean {
   return roles.has("event") || roles.has("cause") || roles.has("condition");
 }
 
-function hasQualifierRole(
-  roles: ReadonlySet<MemoryAspectClaimRoleV1>,
-): boolean {
+function hasQualifierRole(roles: ReadonlySet<MemoryAspectClaimRoleV1>): boolean {
   return roles.has("fact") || roles.has("condition");
 }
 
@@ -229,9 +214,7 @@ function discriminantOverlap(
 function terms(value: string): ReadonlySet<string> {
   const normalized = value.normalize("NFKC").toLocaleLowerCase();
   const result = new Set(
-    (normalized.match(/[\p{L}\p{N}]{2,}/gu) ?? []).filter(
-      (term) => !STOP_WORDS.has(term),
-    ),
+    (normalized.match(/[\p{L}\p{N}]{2,}/gu) ?? []).filter((term) => !STOP_WORDS.has(term)),
   );
   for (const match of normalized.matchAll(/[\p{Script=Han}]+/gu)) {
     const chars = [...match[0]];
@@ -252,10 +235,7 @@ function inverseDocumentWeights(
     }
   }
   return new Map(
-    [...frequency].map(([term, count]) => [
-      term,
-      Math.log((documents.length + 1) / (count + 1)),
-    ]),
+    [...frequency].map(([term, count]) => [term, Math.log((documents.length + 1) / (count + 1))]),
   );
 }
 

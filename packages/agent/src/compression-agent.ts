@@ -87,10 +87,7 @@ export async function runCompressionAgent(
  *
  * 使用 parseMarkdownSections 按 ## 标题分割，然后映射到 SessionMemory 字段。
  */
-function parseSummaryToSessionMemory(
-  summary: string,
-  runId: string,
-): SessionMemory {
+function parseSummaryToSessionMemory(summary: string, runId: string): SessionMemory {
   const sections = parseMarkdownSections(summary);
 
   return {

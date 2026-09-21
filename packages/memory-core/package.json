@@ -9,13 +9,7 @@
     "url": "git+https://github.com/david66l/Paw-TS.git",
     "directory": "packages/memory-core"
   },
-  "keywords": [
-    "agent-memory",
-    "evidence",
-    "long-term-memory",
-    "rag",
-    "typescript"
-  ],
+  "keywords": ["agent-memory", "evidence", "long-term-memory", "rag", "typescript"],
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",

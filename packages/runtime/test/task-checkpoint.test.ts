@@ -126,9 +126,7 @@ describe("deterministic task checkpoint generation", () => {
   test("rejects missing cited facts and future source ranges", async () => {
     const missing: TaskCheckpointV1 = {
       ...checkpointValue(),
-      confirmedFacts: [
-        { statement: "not in the source range", sourceSeqs: [4] },
-      ],
+      confirmedFacts: [{ statement: "not in the source range", sourceSeqs: [4] }],
     };
     await expect(
       createAndCommitTaskCheckpointV1(
@@ -235,9 +233,7 @@ describe("deterministic task checkpoint generation", () => {
   });
 
   test("persists two monotonic versions and restores a consumable latest checkpoint", async () => {
-    const root = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-checkpoint-chain-"),
-    );
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-checkpoint-chain-"));
     try {
       let session = openFileSession(root);
       await session.appendInputFacts(sourceFacts());
@@ -255,9 +251,7 @@ describe("deterministic task checkpoint generation", () => {
           checkpointId: "checkpoint-2",
           checkpoint: {
             ...checkpointValue(),
-            confirmedFacts: [
-              { statement: "old answer remains summarized", sourceSeqs: [3] },
-            ],
+            confirmedFacts: [{ statement: "old answer remains summarized", sourceSeqs: [3] }],
           },
         },
         inlineCodec(),
@@ -279,8 +273,7 @@ describe("deterministic task checkpoint generation", () => {
       const request = await createJournalContextV1({
         payloads: {
           async resolve(payload) {
-            if (payload.kind !== "inline")
-              throw new Error("unexpected artifact");
+            if (payload.kind !== "inline") throw new Error("unexpected artifact");
             return payload.value;
           },
           hash: stableHash,
@@ -379,9 +372,7 @@ class MemorySession implements Session<InputFactV1, unknown> {
   }
 }
 
-function sourceFacts(
-  hash: (value: JsonValue) => string = stableHash,
-): readonly InputFactV1[] {
+function sourceFacts(hash: (value: JsonValue) => string = stableHash): readonly InputFactV1[] {
   return [
     promoted("goal", "initial", "fix the regression"),
     modelDispatch("old-model", 1),
@@ -458,9 +449,7 @@ function checkpointInput() {
 function checkpointValue(): TaskCheckpointV1 {
   return {
     schemaVersion: TASK_CHECKPOINT_SCHEMA_VERSION_V1,
-    confirmedFacts: [
-      { statement: "old answer was inspected", sourceSeqs: [3] },
-    ],
+    confirmedFacts: [{ statement: "old answer was inspected", sourceSeqs: [3] }],
     currentHypotheses: [],
     ruledOut: [],
     changedFiles: [],
@@ -469,11 +458,7 @@ function checkpointValue(): TaskCheckpointV1 {
   };
 }
 
-function promoted(
-  inputId: string,
-  delivery: "initial" | "steer",
-  content: string,
-): InputFactV1 {
+function promoted(inputId: string, delivery: "initial" | "steer", content: string): InputFactV1 {
   return {
     type: "input.promoted",
     inputId,
@@ -530,8 +515,7 @@ function generousBudget() {
     estimatorVersion: "1",
     estimator: {
       count: (text: string) => text.length,
-      countMessages: (messages: readonly unknown[]) =>
-        JSON.stringify(messages).length,
+      countMessages: (messages: readonly unknown[]) => JSON.stringify(messages).length,
     },
   };
 }
@@ -543,10 +527,7 @@ function inlineCodec(): TaskCheckpointPayloadCodecV1 {
   };
 }
 
-function inline(
-  value: JsonValue,
-  hash: (value: JsonValue) => string = stableHash,
-) {
+function inline(value: JsonValue, hash: (value: JsonValue) => string = stableHash) {
   return { kind: "inline" as const, value, hash: hash(value) };
 }
 
@@ -566,9 +547,6 @@ function stableStringify(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${stableStringify(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key] as JsonValue)}`)
     .join(",")}}`;
 }

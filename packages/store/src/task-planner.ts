@@ -30,9 +30,7 @@ export class TaskPlanner {
         continue;
       }
       const taskId =
-        typeof task.id === "string" && task.id
-          ? task.id
-          : `task-${String(i).padStart(3, "0")}`;
+        typeof task.id === "string" && task.id ? task.id : `task-${String(i).padStart(3, "0")}`;
       const dependsOn = Array.isArray(task.depends_on)
         ? task.depends_on.filter((x): x is string => typeof x === "string")
         : [];
@@ -51,11 +49,7 @@ export class TaskPlanner {
   }
 
   /** Restore an already-versioned durable plan without manufacturing updates. */
-  restorePlan(
-    workflowId: string,
-    items: readonly PlanItem[],
-    revision: number,
-  ): Plan {
+  restorePlan(workflowId: string, items: readonly PlanItem[], revision: number): Plan {
     if (!workflowId.trim()) throw new Error("Invalid plan workflow id");
     if (!Number.isSafeInteger(revision) || revision < 0) {
       throw new Error("Invalid plan revision");
@@ -72,11 +66,8 @@ export class TaskPlanner {
         !item.task_id.trim() ||
         !statuses.has(item.status) ||
         !Array.isArray(item.depends_on) ||
-        !item.depends_on.every(
-          (dependency) => typeof dependency === "string",
-        ) ||
-        (item.assigned_run_id !== null &&
-          typeof item.assigned_run_id !== "string") ||
+        !item.depends_on.every((dependency) => typeof dependency === "string") ||
+        (item.assigned_run_id !== null && typeof item.assigned_run_id !== "string") ||
         (item.note !== null && typeof item.note !== "string")
       ) {
         throw new Error("Invalid restored plan item");
@@ -107,9 +98,7 @@ export class TaskPlanner {
       if (item?.status === PlanItemStatus.COMPLETED) {
         item.note = `Deprecated: ${reason}`;
       } else if (item?.status === PlanItemStatus.FAILED) {
-        throw new Error(
-          `Cannot deprecate failed plan item ${itemId} without resolution`,
-        );
+        throw new Error(`Cannot deprecate failed plan item ${itemId} without resolution`);
       }
     }
 

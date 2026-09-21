@@ -25,9 +25,7 @@ function parsePlanSnapshotMaxItems(value: unknown): number | undefined {
  *
  * @returns 计划快照最大条目数，或 undefined（使用默认值 64）
  */
-export function resolvePlanSnapshotMaxItems(
-  workspaceRoot: string,
-): number | undefined {
+export function resolvePlanSnapshotMaxItems(workspaceRoot: string): number | undefined {
   return readSetting(
     workspaceRoot,
     (s) => s.plan_snapshot_max_items,

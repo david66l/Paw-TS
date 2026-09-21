@@ -21,11 +21,7 @@ function sharedTokenCount(text: string): number {
 }
 import { recordRetrievalHits } from "../observability/ledger.js";
 import { appendOpLog } from "../observability/op-log.js";
-import type {
-  MemoryEntry,
-  MemoryKind,
-  MemoryStoreEngine,
-} from "../store/engine.js";
+import type { MemoryEntry, MemoryKind, MemoryStoreEngine } from "../store/engine.js";
 import type { MemoryScopeKey } from "../store/scope-key.js";
 import { decrementTrialAttempts, listTrialLessons } from "../write/trial.js";
 import { RECALL_ALPHA, type ScoredEntry, hybridRecall } from "./hybrid.js";
@@ -136,15 +132,11 @@ export function isActionableError(errorOutput: string): boolean {
   return ACTIONABLE_RE.test(errorOutput);
 }
 
-const ERROR_TYPE_RE =
-  /\b([A-Z][\w]*(?:Error|Exception)|error\s+TS\d+|FAIL(?:ED)?)\b/;
+const ERROR_TYPE_RE = /\b([A-Z][\w]*(?:Error|Exception)|error\s+TS\d+|FAIL(?:ED)?)\b/;
 const STACK_LINE_RE = /^\s*(?:at\s+\S+|\S+:\d+:\d+|File\s+")/;
 
 /** T2 query = errorType + 关键堆栈行（错误输出 ≤400 字符）+ 上一轮动作摘要（§6.2） */
-export function buildActionFailedQuery(
-  errorOutput: string,
-  lastActionSummary: string,
-): string {
+export function buildActionFailedQuery(errorOutput: string, lastActionSummary: string): string {
   const truncated = errorOutput.slice(0, 400);
   const errorType = ERROR_TYPE_RE.exec(truncated)?.[0] ?? "";
   const stackLines = truncated
@@ -152,16 +144,11 @@ export function buildActionFailedQuery(
     .filter((l) => STACK_LINE_RE.test(l))
     .slice(0, 2)
     .map((l) => l.trim().slice(0, 120));
-  return [errorType, ...stackLines, lastActionSummary.slice(0, 100)]
-    .filter(Boolean)
-    .join("\n");
+  return [errorType, ...stackLines, lastActionSummary.slice(0, 100)].filter(Boolean).join("\n");
 }
 
 /** T3 去重（§6.1）：条目文本与 SessionMemory hints 高重叠 → 跳过 */
-export function isCoveredByHints(
-  entryText: string,
-  hints: readonly string[],
-): boolean {
+export function isCoveredByHints(entryText: string, hints: readonly string[]): boolean {
   const tokens = new Set(
     entryText
       .toLowerCase()
@@ -193,10 +180,7 @@ export interface RerankItem {
   label: "applicable" | "reference";
 }
 
-export function buildRerankPrompt(
-  query: string,
-  candidates: readonly ScoredEntry[],
-): string {
+export function buildRerankPrompt(query: string, candidates: readonly ScoredEntry[]): string {
   const blocks = candidates.map((c, i) => {
     const text = entryText(c.entry);
     return `候选 ${i + 1}:\n${text}`;
@@ -236,10 +220,7 @@ export function parseQueryRewrite(raw: string): string | null {
 }
 
 /** 手写校验精排输出；非法 → null（调用方降级召回直取） */
-export function parseRerankOutput(
-  raw: string,
-  numCandidates: number,
-): RerankItem[] | null {
+export function parseRerankOutput(raw: string, numCandidates: number): RerankItem[] | null {
   let parsed: unknown;
   try {
     const start = raw.indexOf("{");
@@ -256,12 +237,7 @@ export function parseRerankOutput(
   for (const it of items) {
     if (typeof it !== "object" || it === null) return null;
     const r = it as Record<string, unknown>;
-    if (
-      typeof r.seq !== "number" ||
-      !Number.isInteger(r.seq) ||
-      r.seq < 1 ||
-      r.seq > numCandidates
-    )
+    if (typeof r.seq !== "number" || !Number.isInteger(r.seq) || r.seq < 1 || r.seq > numCandidates)
       return null;
     if (r.label !== "applicable" && r.label !== "reference") return null;
     out.push({
@@ -280,10 +256,7 @@ export function entryText(entry: MemoryEntry): string {
     case "semantic":
       return entry.fact;
     case "episodic":
-      return [
-        entry.perspective,
-        ...entry.modification.map((m) => `- ${m}`),
-      ].join("\n");
+      return [entry.perspective, ...entry.modification.map((m) => `- ${m}`)].join("\n");
     case "profile":
       return entry.insight;
     case "vault_ref":
@@ -305,9 +278,7 @@ export function inferApplicabilityLabel(
   query: string,
   entry: MemoryEntry,
 ): "applicable" | "reference" {
-  const haystack = [entryWhenToUse(entry) ?? "", entryText(entry)]
-    .join("\n")
-    .toLowerCase();
+  const haystack = [entryWhenToUse(entry) ?? "", entryText(entry)].join("\n").toLowerCase();
   const terms = extractMatchTerms(query);
   if (terms.length === 0) return "reference";
   const hits = terms.filter((t) => haystack.includes(t)).length;
@@ -370,10 +341,7 @@ export class TriggeredRetriever {
     const repo = "repo" in trigger ? trigger.repo : undefined;
 
     // T2 防误检（§6.2）：不可行动错误零开销跳过
-    if (
-      trigger.type === "action_failed" &&
-      !isActionableError(trigger.errorOutput)
-    ) {
+    if (trigger.type === "action_failed" && !isActionableError(trigger.errorOutput)) {
       return this.emptyPackage();
     }
 
@@ -432,9 +400,7 @@ export class TriggeredRetriever {
     // repo 密封：注入路径只召回本仓库条目（A 仓库任务不注入 B 仓库记忆）
     const kinds = TRIGGER_KINDS[trigger.type];
     const alpha =
-      trigger.type === "action_failed"
-        ? RECALL_ALPHA.actionFailed
-        : RECALL_ALPHA.taskStart;
+      trigger.type === "action_failed" ? RECALL_ALPHA.actionFailed : RECALL_ALPHA.taskStart;
     const candidates: ScoredEntry[] = [];
     for (const kind of kinds ?? [undefined]) {
       for (const q of queries) {
@@ -477,9 +443,7 @@ export class TriggeredRetriever {
     }[];
     if (this.reranker && pool.length > 0) {
       const parsed = parseRerankOutput(
-        await this.reranker
-          .complete(buildRerankPrompt(query, pool))
-          .catch(() => ""),
+        await this.reranker.complete(buildRerankPrompt(query, pool)).catch(() => ""),
         pool.length,
       );
       if (parsed) {
@@ -504,13 +468,9 @@ export class TriggeredRetriever {
     }
 
     // ── T3 与 SessionMemory 去重（§6.1）──
-    if (
-      trigger.type === "post_compact" &&
-      trigger.existingContextHints?.length
-    ) {
+    if (trigger.type === "post_compact" && trigger.existingContextHints?.length) {
       selected = selected.filter(
-        (s) =>
-          !isCoveredByHints(entryText(s.entry), trigger.existingContextHints!),
+        (s) => !isCoveredByHints(entryText(s.entry), trigger.existingContextHints!),
       );
     }
 
@@ -538,8 +498,7 @@ export class TriggeredRetriever {
       status: resolveInjectStatus(query, s.entry, s.label),
       why: s.why,
       score: s.score,
-      supportCount:
-        s.entry.kind === "profile" ? s.entry.supportCount : undefined,
+      supportCount: s.entry.kind === "profile" ? s.entry.supportCount : undefined,
     }));
 
     // gate 可观测：applicable(=verified) / reference 计数（trial 随后追加，不计入本行）
@@ -552,9 +511,7 @@ export class TriggeredRetriever {
         detail: {
           applicable: gateApplicable,
           reference: gateReference,
-          source: selected.some((s) => s.label != null)
-            ? "rerank"
-            : "heuristic",
+          source: selected.some((s) => s.label != null) ? "rerank" : "heuristic",
         },
       });
     }
@@ -615,10 +572,7 @@ export class TriggeredRetriever {
       case "task_start":
         return trigger.taskDescription;
       case "action_failed":
-        return buildActionFailedQuery(
-          trigger.errorOutput,
-          trigger.lastActionSummary,
-        );
+        return buildActionFailedQuery(trigger.errorOutput, trigger.lastActionSummary);
       case "post_compact":
         return `${trigger.summaryHead.split(/[。.\n]/)[0] ?? ""}\n${trigger.goal}`;
       case "explicit_query":
@@ -640,22 +594,15 @@ export class TriggeredRetriever {
   }
 
   /** trial 池匹配（embedding 索引属 v2；宁缺毋滥：长特征词/中文词命中 whenToUse/keywords/lesson） */
-  private async matchTrialLesson(
-    query: string,
-  ): Promise<InjectedMemory | null> {
+  private async matchTrialLesson(query: string): Promise<InjectedMemory | null> {
     try {
       const terms = extractMatchTerms(query);
       if (terms.length === 0) return null;
       const lessons = await listTrialLessons(undefined, this.scope);
-      let best: { lesson: (typeof lessons)[number]; hits: number } | null =
-        null;
+      let best: { lesson: (typeof lessons)[number]; hits: number } | null = null;
       for (const lesson of lessons) {
         // 蒸馏产物有检索键（whenToUse/keywords，V032）；原文切片只有 lesson 文本
-        const text = [
-          lesson.whenToUse ?? "",
-          ...(lesson.keywords ?? []),
-          lesson.lesson,
-        ]
+        const text = [lesson.whenToUse ?? "", ...(lesson.keywords ?? []), lesson.lesson]
           .join(" ")
           .toLowerCase();
         const hits = terms.filter((t) => text.includes(t)).length;
@@ -729,12 +676,8 @@ export class TriggeredRetriever {
         });
       } else {
         // 账本：注入即 freq+1（trial 不进正式账本）；op-log read.inject 由 recordRetrievalHits 落
-        const formalIds = kept
-          .filter((i) => i.kind !== "trial")
-          .map((i) => i.id);
-        const trialIds = kept
-          .filter((i) => i.kind === "trial")
-          .map((i) => i.id);
+        const formalIds = kept.filter((i) => i.kind !== "trial").map((i) => i.id);
+        const trialIds = kept.filter((i) => i.kind === "trial").map((i) => i.id);
         if (formalIds.length > 0) {
           await recordRetrievalHits(this.engine, formalIds, {
             runId,
@@ -793,11 +736,12 @@ export function extractMatchTerms(query: string): string[] {
   const terms: string[] = [];
   const re = /[a-z0-9]+|[一-鿿㐀-䶿]+/g;
   const lower = query.toLowerCase();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(lower))) {
+  let m: RegExpExecArray | null = re.exec(lower);
+  while (m !== null) {
     const t = m[0];
     const isCjk = /[一-鿿㐀-䶿]/.test(t[0]!);
     if (isCjk ? t.length >= 2 : t.length > 6) terms.push(t);
+    m = re.exec(lower);
   }
   return terms;
 }
@@ -812,9 +756,7 @@ const STATUS_PREFIX: Record<InjectStatus, string> = {
 function renderXml(items: readonly InjectedMemory[]): string {
   return items
     .map((i) => {
-      const lines = [
-        `<agent-memory source="${i.kind}" id="${i.id}" status="${i.status}">`,
-      ];
+      const lines = [`<agent-memory source="${i.kind}" id="${i.id}" status="${i.status}">`];
       if (i.whenToUse) lines.push(i.whenToUse);
       lines.push(`${STATUS_PREFIX[i.status]}：${i.text}`);
       if (i.tInvalid) lines.push(`（已于 ${i.tInvalid} 失效）`);

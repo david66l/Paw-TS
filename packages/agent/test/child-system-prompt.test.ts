@@ -26,9 +26,7 @@ function context(overrides: Partial<SharedContext> = {}): SharedContext {
       risks: ["The fixture may be stale."],
     },
     outputFormat: "Return findings and evidence.",
-    parentConclusions: [
-      { conclusion: "The lexer is probably healthy.", confidence: "medium" },
-    ],
+    parentConclusions: [{ conclusion: "The lexer is probably healthy.", confidence: "medium" }],
     ...overrides,
   };
 }

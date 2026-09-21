@@ -14,15 +14,10 @@ import type {
   ProfileInsight,
   SemanticFact,
 } from "../src/longterm/store/engine.js";
-import {
-  deriveEntryId,
-  deriveMemoryId,
-  normalizeBody,
-} from "../src/longterm/store/id.js";
+import { deriveEntryId, deriveMemoryId, normalizeBody } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -31,10 +26,7 @@ const engine = new PostgresMemoryStoreEngine();
 const TEST_REPO = "longterm-store-test-repo";
 const createdIds: string[] = [];
 
-function makeFact(
-  fact: string,
-  keywords: string[] = ["bun", "test"],
-): SemanticFact {
+function makeFact(fact: string, keywords: string[] = ["bun", "test"]): SemanticFact {
   const now = new Date().toISOString();
   return {
     id: "",
@@ -154,18 +146,13 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
     expect(matches).toHaveLength(1);
 
     const sql = getSql();
-    const dup =
-      await sql`SELECT count(*)::int AS n FROM memory_items WHERE id = ${id}`;
+    const dup = await sql`SELECT count(*)::int AS n FROM memory_items WHERE id = ${id}`;
     expect((dup[0] as { n: number }).n).toBe(1);
   });
 
   it("getMany 按请求顺序批量补水、保留重复并忽略缺失项", async () => {
-    const first = makeFact(
-      "Bulk hydration preserves the first requested entry",
-    );
-    const second = makeFact(
-      "Bulk hydration preserves the second requested entry",
-    );
+    const first = makeFact("Bulk hydration preserves the first requested entry");
+    const second = makeFact("Bulk hydration preserves the second requested entry");
     const firstId = deriveEntryId(first);
     const secondId = deriveEntryId(second);
     createdIds.push(firstId, secondId);
@@ -179,11 +166,7 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
       secondId,
     ]);
 
-    expect(hydrated.map((entry) => entry.id)).toEqual([
-      secondId,
-      firstId,
-      secondId,
-    ]);
+    expect(hydrated.map((entry) => entry.id)).toEqual([secondId, firstId, secondId]);
   });
 
   it("episodic 条目的 whenToUse 落入 when_to_use 列", async () => {
@@ -201,8 +184,7 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
       freq: 0,
       utility: 0,
       whenToUse: "When module resolution fails after an ESM migration",
-      perspective:
-        "ESM migration module resolution failures usually come from the exports field",
+      perspective: "ESM migration module resolution failures usually come from the exports field",
       modification: ["Check the exports field in package.json"],
       issueType: "ModuleResolutionError",
       taskId: "tsk_test_1",
@@ -212,11 +194,8 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
 
     await engine.put(exp);
     const sql = getSql();
-    const rows =
-      await sql`SELECT when_to_use FROM memory_items WHERE id = ${id}`;
-    expect((rows[0] as { when_to_use: string }).when_to_use).toBe(
-      exp.whenToUse,
-    );
+    const rows = await sql`SELECT when_to_use FROM memory_items WHERE id = ${id}`;
+    expect((rows[0] as { when_to_use: string }).when_to_use).toBe(exp.whenToUse);
 
     const got = (await engine.get(id)) as EpisodicExperience;
     expect(got.whenToUse).toBe(exp.whenToUse);
@@ -224,9 +203,7 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
   });
 
   it("invalidate 后 query 默认过滤，includeInvalidated 可查", async () => {
-    const fact = makeFact(
-      "Soft invalidation hides entries from default queries",
-    );
+    const fact = makeFact("Soft invalidation hides entries from default queries");
     const id = deriveEntryId(fact);
     createdIds.push(id);
 
@@ -251,9 +228,7 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
   });
 
   it("ledger/bumpLedger 计数读写", async () => {
-    const fact = makeFact(
-      "Utility ledger tracks retrieval hits and task successes",
-    );
+    const fact = makeFact("Utility ledger tracks retrieval hits and task successes");
     const id = deriveEntryId(fact);
     createdIds.push(id);
 
@@ -273,9 +248,7 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
   });
 
   it("searchText 命中关键词", async () => {
-    const fact = makeFact("The zebracorn deploy pipeline runs nightly", [
-      "zebracorn",
-    ]);
+    const fact = makeFact("The zebracorn deploy pipeline runs nightly", ["zebracorn"]);
     const id = deriveEntryId(fact);
     createdIds.push(id);
 
@@ -307,15 +280,11 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
       issueType: "assistant_output",
       createdAtUpperBound: new Date(Date.parse(created) + 1_000).toISOString(),
     };
+    expect((await engine.searchText("cobalt", 5, TEST_REPO, filter)).map((hit) => hit.id)).toEqual([
+      assistantId,
+    ]);
     expect(
-      (await engine.searchText("cobalt", 5, TEST_REPO, filter)).map(
-        (hit) => hit.id,
-      ),
-    ).toEqual([assistantId]);
-    expect(
-      (await engine.searchVector("cobalt answer", 5, TEST_REPO, filter)).map(
-        (hit) => hit.id,
-      ),
+      (await engine.searchVector("cobalt answer", 5, TEST_REPO, filter)).map((hit) => hit.id),
     ).toEqual([assistantId]);
     expect(
       await engine.searchText("cobalt", 5, TEST_REPO, {
@@ -331,10 +300,7 @@ describe("MemoryStoreEngine 契约（db 后端）", () => {
     createdIds.push(id);
 
     await engine.put(fact);
-    const hits = await engine.searchVector(
-      "memory embeddings pgvector search",
-      5,
-    );
+    const hits = await engine.searchVector("memory embeddings pgvector search", 5);
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.map((h) => h.id)).toContain(id);
   });

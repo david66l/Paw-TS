@@ -16,9 +16,7 @@ describe("readWorkspaceFile", () => {
         byte_size: 5,
         partial: false,
       });
-      expect(
-        readWorkspaceFile(root, "unicode.txt", { limit: 1 }),
-      ).toMatchObject({
+      expect(readWorkspaceFile(root, "unicode.txt", { limit: 1 })).toMatchObject({
         content: "猫",
         size: 1,
         byte_size: 5,

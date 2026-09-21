@@ -83,12 +83,8 @@ interface ScannedAction {
  * a stray array closer (`}]`). We repair only this terminal action shape —
  * never malformed tool calls — so recovery cannot execute unintended tools.
  */
-function recoverMalformedFinalAnswer(
-  text: string,
-  scanWindow: number,
-): ScannedAction | null {
-  const windowStart =
-    scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
+function recoverMalformedFinalAnswer(text: string, scanWindow: number): ScannedAction | null {
+  const windowStart = scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
   const window = text.slice(windowStart);
   const marker = /\{\s*"(?:action|type)"\s*:\s*"final_answer"/g;
   const matches = [...window.matchAll(marker)];
@@ -168,16 +164,12 @@ function recoverMalformedFinalAnswer(
  * 返回每个对象的原始子串、字符偏移和置信度提示
  * （代码块内更高，用于区分模型有意输出的 JSON 和碰巧是 JSON 的代码片段）。
  */
-function extractJsonObjects(
-  text: string,
-  scanWindow: number,
-): ExtractedObject[] {
+function extractJsonObjects(text: string, scanWindow: number): ExtractedObject[] {
   const results: ExtractedObject[] = [];
 
   // 先找出所有 ```json ... ``` 代码块的范围
   const fencedRanges = findFencedCodeBlockRanges(text);
-  const windowStart =
-    scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
+  const windowStart = scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
 
   let i = windowStart;
   while (i < text.length) {
@@ -192,9 +184,7 @@ function extractJsonObjects(
         const obj = JSON.parse(slice) as unknown;
         // 只接受非数组的对象
         if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-          const inFence = fencedRanges.some(
-            (r) => idx >= r.start && j <= r.end,
-          );
+          const inFence = fencedRanges.some((r) => idx >= r.start && j <= r.end);
           results.push({
             obj: obj as Record<string, unknown>,
             raw: slice,
@@ -218,9 +208,7 @@ function extractJsonObjects(
 }
 
 /** 返回每个 ```json … ``` 代码块的主体范围 [start, end) */
-function findFencedCodeBlockRanges(
-  text: string,
-): Array<{ start: number; end: number }> {
+function findFencedCodeBlockRanges(text: string): Array<{ start: number; end: number }> {
   const ranges: Array<{ start: number; end: number }> = [];
   const re = /```(?:json)?\s*\n([\s\S]*?)```/g;
   let m = re.exec(text);
@@ -266,10 +254,7 @@ function scanAgentActions(
  * @param tool 工具名
  * @param args 工具参数
  */
-export function toolCallDedupKey(
-  tool: string,
-  args: Record<string, unknown>,
-): string {
+export function toolCallDedupKey(tool: string, args: Record<string, unknown>): string {
   return `${tool}:${stableStringify(args)}`;
 }
 
@@ -282,9 +267,7 @@ function stableStringify(value: unknown): string {
   if (typeof value === "object") {
     const o = value as Record<string, unknown>;
     const keys = Object.keys(o).sort();
-    return `{${keys
-      .map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`)
-      .join(",")}}`;
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`).join(",")}}`;
   }
   return JSON.stringify(value);
 }
@@ -534,20 +517,14 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return null;
 }
 
-function parseAcceptanceAdds(
-  value: unknown,
-): AgentAcceptanceUpdateAction["add"] | null {
+function parseAcceptanceAdds(value: unknown): AgentAcceptanceUpdateAction["add"] | null {
   if (value === undefined) return [];
   if (!Array.isArray(value)) return null;
   const result: Array<AgentAcceptanceUpdateAction["add"][number]> = [];
   for (const raw of value) {
     const item = asRecord(raw);
     if (!item || typeof item.text !== "string") return null;
-    if (
-      item.source !== "user" &&
-      item.source !== "repository" &&
-      item.source !== "verification"
-    ) {
+    if (item.source !== "user" && item.source !== "repository" && item.source !== "verification") {
       return null;
     }
     if (item.ref !== undefined && typeof item.ref !== "string") return null;
@@ -560,9 +537,7 @@ function parseAcceptanceAdds(
   return result;
 }
 
-function parseAcceptanceUpdates(
-  value: unknown,
-): AgentAcceptanceUpdateAction["updates"] | null {
+function parseAcceptanceUpdates(value: unknown): AgentAcceptanceUpdateAction["updates"] | null {
   if (value === undefined) return [];
   if (!Array.isArray(value)) return null;
   const result: Array<AgentAcceptanceUpdateAction["updates"][number]> = [];
@@ -701,13 +676,9 @@ function describeInvalidAction(
  * - invalid：JSON 语法正确，但缺字段 / 工具名未知
  * - ok：没有工具调用痕迹（纯对话），不需要干预
  */
-export function diagnoseParseFailure(
-  text: string,
-  opts?: ParseToolCallOptions,
-): ParseDiagnosis {
+export function diagnoseParseFailure(text: string, opts?: ParseToolCallOptions): ParseDiagnosis {
   const scanWindow = opts?.scanWindow ?? DEFAULT_JSON_SCAN_WINDOW;
-  const windowStart =
-    scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
+  const windowStart = scanWindow > 0 ? Math.max(0, text.length - scanWindow) : 0;
   const window = text.slice(windowStart);
 
   let i = window.indexOf("{");
@@ -721,10 +692,7 @@ export function diagnoseParseFailure(
         try {
           const obj = JSON.parse(slice) as unknown;
           if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-            const cause = describeInvalidAction(
-              obj as Record<string, unknown>,
-              opts?.knownTools,
-            );
+            const cause = describeInvalidAction(obj as Record<string, unknown>, opts?.knownTools);
             if (cause) {
               return { kind: "invalid", reason: cause };
             }

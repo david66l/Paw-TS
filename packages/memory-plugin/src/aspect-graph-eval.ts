@@ -5,8 +5,7 @@ import {
   resolveMemoryAspectIdsV1,
 } from "./aspect-graph.js";
 
-export const PAW_MEMORY_ASPECT_GRAPH_EVAL_VERSION_V1 =
-  "paw.memory-aspect-graph-eval.v1" as const;
+export const PAW_MEMORY_ASPECT_GRAPH_EVAL_VERSION_V1 = "paw.memory-aspect-graph-eval.v1" as const;
 
 export interface MemoryAspectGraphBinaryMetricsV1 {
   readonly truePositive: number;
@@ -48,21 +47,13 @@ export function evaluateMemoryAspectGraphStructureV1(
 ): MemoryAspectGraphEvaluationV1 {
   measureMemoryAspectGraphV1(input.predicted);
   measureMemoryAspectGraphV1(input.gold);
-  const aspectPairwise = compareSets(
-    claimPairSet(input.predicted),
-    claimPairSet(input.gold),
-  );
-  const evidenceEdges = compareSets(
-    activeEdgeSet(input.predicted),
-    activeEdgeSet(input.gold),
-  );
+  const aspectPairwise = compareSets(claimPairSet(input.predicted), claimPairSet(input.gold));
+  const evidenceEdges = compareSets(activeEdgeSet(input.predicted), activeEdgeSet(input.gold));
 
   const predictedStates = new Set<string>();
   const goldStates = new Set<string>();
   let exact = 0;
-  for (const [index, evaluationCase] of (
-    input.currentStateCases ?? []
-  ).entries()) {
+  for (const [index, evaluationCase] of (input.currentStateCases ?? []).entries()) {
     const predicted = projectMemoryAspectStateV1({
       snapshot: input.predicted,
       aspectId: evaluationCase.predictedAspectId,
@@ -83,24 +74,19 @@ export function evaluateMemoryAspectGraphStructureV1(
     aspectPairwise,
     evidenceEdges,
     currentState: compareSets(predictedStates, goldStates),
-    currentStateExactMatch:
-      currentStateCaseCount === 0 ? 0 : exact / currentStateCaseCount,
+    currentStateExactMatch: currentStateCaseCount === 0 ? 0 : exact / currentStateCaseCount,
     currentStateCaseCount,
   });
 }
 
-function claimPairSet(
-  snapshot: MemoryAspectGraphSnapshotV1,
-): ReadonlySet<string> {
+function claimPairSet(snapshot: MemoryAspectGraphSnapshotV1): ReadonlySet<string> {
   const claimsByAspect = new Map<string, Set<string>>();
   const retracted = new Set(
     snapshot.lifecycleEvents
       .filter((event) => event.targetKind === "membership")
       .map((event) => event.targetId),
   );
-  const aspects = new Map(
-    snapshot.aspects.map((aspect) => [aspect.id, aspect]),
-  );
+  const aspects = new Map(snapshot.aspects.map((aspect) => [aspect.id, aspect]));
   for (const membership of snapshot.memberships) {
     if (retracted.has(membership.id)) continue;
     const aspect = aspects.get(membership.aspectId);
@@ -127,22 +113,18 @@ function claimPairSet(
   return result;
 }
 
-function activeEdgeSet(
-  snapshot: MemoryAspectGraphSnapshotV1,
-): ReadonlySet<string> {
+function activeEdgeSet(snapshot: MemoryAspectGraphSnapshotV1): ReadonlySet<string> {
   return new Set(
     snapshot.edges
       .filter(
         (edge) =>
           !snapshot.lifecycleEvents.some(
-            (event) =>
-              event.targetKind === "edge" && event.targetId === edge.id,
+            (event) => event.targetKind === "edge" && event.targetId === edge.id,
           ),
       )
       .map((edge) => {
         const [fromClaimId, toClaimId] =
-          edge.edgeType === "same_state" &&
-          edge.fromClaimId.localeCompare(edge.toClaimId) > 0
+          edge.edgeType === "same_state" && edge.fromClaimId.localeCompare(edge.toClaimId) > 0
             ? [edge.toClaimId, edge.fromClaimId]
             : [edge.fromClaimId, edge.toClaimId];
         return `${edge.edgeType}\n${edge.stateKeyId ?? "unscoped"}\n${fromClaimId}\n${toClaimId}`;
@@ -161,17 +143,9 @@ function compareSets(
   const falsePositive = predicted.size - truePositive;
   const falseNegative = gold.size - truePositive;
   const precision =
-    predicted.size === 0
-      ? gold.size === 0
-        ? 1
-        : 0
-      : truePositive / predicted.size;
-  const recall =
-    gold.size === 0 ? (predicted.size === 0 ? 1 : 0) : truePositive / gold.size;
-  const f1 =
-    precision + recall === 0
-      ? 0
-      : (2 * precision * recall) / (precision + recall);
+    predicted.size === 0 ? (gold.size === 0 ? 1 : 0) : truePositive / predicted.size;
+  const recall = gold.size === 0 ? (predicted.size === 0 ? 1 : 0) : truePositive / gold.size;
+  const f1 = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
   return Object.freeze({
     truePositive,
     falsePositive,
@@ -182,9 +156,6 @@ function compareSets(
   });
 }
 
-function sameSet(
-  left: ReadonlySet<string>,
-  right: ReadonlySet<string>,
-): boolean {
+function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   return left.size === right.size && [...left].every((item) => right.has(item));
 }

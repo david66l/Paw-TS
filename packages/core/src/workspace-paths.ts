@@ -93,9 +93,7 @@ export function checkpointsDir(workspaceRoot: string, runId: string): string {
   // an already-canonical, case-stable identifier; Paw Next derives one from the
   // canonical workspace/session/run identity.
   if (!/^[a-z0-9_-]+$/.test(runId)) {
-    throw new Error(
-      "checkpoint namespace must contain only lowercase letters, digits, '_' or '-'",
-    );
+    throw new Error("checkpoint namespace must contain only lowercase letters, digits, '_' or '-'");
   }
   return path.join(workspaceRoot, ".paw", "checkpoints", runId);
 }
@@ -113,11 +111,7 @@ export function sessionsDir(workspaceRoot: string): string {
  * 存储因过大或上下文驱逐而持久化到磁盘的工具输出结果。
  */
 export function toolResultsDir(workspaceRoot: string, runId: string): string {
-  return path.join(
-    sessionsDir(workspaceRoot),
-    sanitizeRunId(runId),
-    "tool-results",
-  );
+  return path.join(sessionsDir(workspaceRoot), sanitizeRunId(runId), "tool-results");
 }
 
 /**

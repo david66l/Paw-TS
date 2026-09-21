@@ -10,12 +10,10 @@ describe("Paw Next global tool resource lock", () => {
     const readTwo = await lock.acquire(classification("read"), signal);
 
     let writeAcquired = false;
-    const write = lock
-      .acquire(classification("write"), signal)
-      .then((lease) => {
-        writeAcquired = true;
-        return lease;
-      });
+    const write = lock.acquire(classification("write"), signal).then((lease) => {
+      writeAcquired = true;
+      return lease;
+    });
     await Promise.resolve();
     expect(writeAcquired).toBe(false);
     readOne.release();
@@ -26,12 +24,10 @@ describe("Paw Next global tool resource lock", () => {
     expect(writeAcquired).toBe(true);
 
     let secondWriteAcquired = false;
-    const secondWrite = lock
-      .acquire(classification("write"), signal)
-      .then((lease) => {
-        secondWriteAcquired = true;
-        return lease;
-      });
+    const secondWrite = lock.acquire(classification("write"), signal).then((lease) => {
+      secondWriteAcquired = true;
+      return lease;
+    });
     await Promise.resolve();
     expect(secondWriteAcquired).toBe(false);
     writeLease.release();

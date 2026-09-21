@@ -62,16 +62,11 @@ export class AgentRegistry {
 
   /** 注入总控 prompt 的花名册文本 */
   catalogText(): string {
-    const items = this.list().filter(
-      (s) => s.kind !== "root" || s.id === "lihua",
-    );
+    const items = this.list().filter((s) => s.kind !== "root" || s.id === "lihua");
     if (items.length === 0) return "Available agents: (none)";
     const lines = items.map((s) => {
       const emoji = s.emoji ? `${s.emoji} ` : "";
-      const tools =
-        s.tools === "inherit"
-          ? "tools=inherit"
-          : `tools=[${s.tools.join(", ")}]`;
+      const tools = s.tools === "inherit" ? "tools=inherit" : `tools=[${s.tools.join(", ")}]`;
       const capabilities = s.capabilities?.length
         ? `, capabilities=[${s.capabilities.join(", ")}]`
         : "";
@@ -125,9 +120,7 @@ export function loadAgentRegistry(workspaceRoot: string): AgentRegistry {
 }
 
 /** 仅加载，不写种子（测试用） */
-export function loadAgentRegistryReadonly(
-  workspaceRoot: string,
-): AgentRegistry {
+export function loadAgentRegistryReadonly(workspaceRoot: string): AgentRegistry {
   const reg = new AgentRegistry(workspaceRoot);
   if (existsSync(agentsDir(workspaceRoot))) {
     reg.reload();

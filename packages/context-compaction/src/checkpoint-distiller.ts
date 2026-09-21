@@ -1,9 +1,6 @@
 import { createOperationDeadline } from "@paw/core";
 import { type TaskCheckpointV1, parseTaskCheckpointV1 } from "@paw/protocol";
-import type {
-  TaskCheckpointDistillerResultV1,
-  TaskCheckpointDistillerV1,
-} from "@paw/runtime";
+import type { TaskCheckpointDistillerResultV1, TaskCheckpointDistillerV1 } from "@paw/runtime";
 
 import {
   type CheckpointEvidenceBundleV1,
@@ -103,12 +100,11 @@ export interface CheckpointDistillerPolicyV1 {
   readonly timeoutMs: number;
 }
 
-export const DEFAULT_CHECKPOINT_DISTILLER_POLICY_V1: CheckpointDistillerPolicyV1 =
-  Object.freeze({
-    maxPromptChars: 256_000,
-    maxOutputTokens: 4_096,
-    timeoutMs: 45_000,
-  });
+export const DEFAULT_CHECKPOINT_DISTILLER_POLICY_V1: CheckpointDistillerPolicyV1 = Object.freeze({
+  maxPromptChars: 256_000,
+  maxOutputTokens: 4_096,
+  timeoutMs: 45_000,
+});
 
 export interface EvidenceBoundCheckpointDistillerOptionsV1 {
   readonly model: CheckpointDistillationModelV1;
@@ -129,9 +125,7 @@ export function createEvidenceBoundCheckpointDistillerV1(
           projectCheckpointEvidenceV1(input.sourceEntries)
       : captureEvidenceSource(options.evidence);
   const qualityGate =
-    options.qualityGate === undefined
-      ? undefined
-      : captureQualityGate(options.qualityGate);
+    options.qualityGate === undefined ? undefined : captureQualityGate(options.qualityGate);
   const policy = freezeCheckpointDistillerPolicyV1(
     options.policy ?? DEFAULT_CHECKPOINT_DISTILLER_POLICY_V1,
   );
@@ -143,15 +137,10 @@ export function createEvidenceBoundCheckpointDistillerV1(
       if (callOptions.signal.aborted) {
         return failure("cancelled", "CheckpointDistillationCancelled");
       }
-      const deadline = createOperationDeadline(
-        callOptions.signal,
-        policy.timeoutMs,
-      );
+      const deadline = createOperationDeadline(callOptions.signal, policy.timeoutMs);
       const signal = deadline.signal;
       try {
-        const evidence = await deadline.run(() =>
-          loadEvidence(input, { signal }),
-        );
+        const evidence = await deadline.run(() => loadEvidence(input, { signal }));
         if (
           evidence.sourceFromSeq !== input.sourceFromSeq ||
           evidence.sourceThroughSeq !== input.sourceThroughSeq
@@ -181,10 +170,7 @@ export function createEvidenceBoundCheckpointDistillerV1(
         if (!checkpoint) {
           return failure("failed", "CheckpointInvalidJson");
         }
-        const deterministic = verifyTaskCheckpointEvidenceV1(
-          checkpoint,
-          evidence,
-        );
+        const deterministic = verifyTaskCheckpointEvidenceV1(checkpoint, evidence);
         if (!deterministic.ok) {
           return failure("failed", "CheckpointEvidenceRejected");
         }
@@ -192,19 +178,14 @@ export function createEvidenceBoundCheckpointDistillerV1(
           verifier(Object.freeze({ checkpoint, evidence }), { signal }),
         );
         if (semantic.status !== "supported") {
-          return failure(
-            semantic.status === "unknown" ? "unknown" : "failed",
-            semantic.errorCode,
-          );
+          return failure(semantic.status === "unknown" ? "unknown" : "failed", semantic.errorCode);
         }
         if (qualityGate) {
           const quality = qualityGate(Object.freeze({ checkpoint, evidence }));
           if (quality.status !== "accepted") {
             return failure(
               "failed",
-              quality.status === "low_savings"
-                ? "CheckpointLowSavings"
-                : quality.errorCode,
+              quality.status === "low_savings" ? "CheckpointLowSavings" : quality.errorCode,
             );
           }
         }
@@ -224,9 +205,7 @@ export function createEvidenceBoundCheckpointDistillerV1(
   });
 }
 
-export function buildCheckpointDistillationPromptV1(
-  evidence: CheckpointEvidenceBundleV1,
-): string {
+export function buildCheckpointDistillationPromptV1(evidence: CheckpointEvidenceBundleV1): string {
   return [
     "Create a checkpoint for this exact source range.",
     `sourceFromSeq=${evidence.sourceFromSeq}`,
@@ -284,9 +263,7 @@ function captureVerifier(
   return verifier.verify.bind(verifier);
 }
 
-function captureQualityGate(
-  gate: CheckpointQualityGateV1,
-): CheckpointQualityGateV1["evaluate"] {
+function captureQualityGate(gate: CheckpointQualityGateV1): CheckpointQualityGateV1["evaluate"] {
   if (!gate || typeof gate.evaluate !== "function") {
     throw new Error("Checkpoint quality gate is invalid");
   }
@@ -313,12 +290,7 @@ function failure(
 }
 
 function stableErrorCode(error: unknown): string {
-  if (
-    error &&
-    typeof error === "object" &&
-    "name" in error &&
-    typeof error.name === "string"
-  ) {
+  if (error && typeof error === "object" && "name" in error && typeof error.name === "string") {
     return `Checkpoint${error.name}`;
   }
   return "CheckpointUnknownError";

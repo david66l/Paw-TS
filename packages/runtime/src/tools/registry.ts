@@ -42,11 +42,7 @@ export interface RuntimeToolCallV1 extends LoopToolCall {
 
 export type ToolPermissionCategoryV1 = "read" | "write" | "shell";
 export type ToolConcurrencyModeV1 = "parallel" | "exclusive";
-export type RuntimeShellBoundaryV1 =
-  | "deny"
-  | "read_only"
-  | "verification"
-  | "allow";
+export type RuntimeShellBoundaryV1 = "deny" | "read_only" | "verification" | "allow";
 
 export interface ToolResourceV1 {
   readonly key: string;
@@ -153,13 +149,9 @@ export function createFrozenToolRegistryV1(input?: {
   readonly pathPolicy?: WorkspacePathPolicyV1;
   readonly shellBoundary?: RuntimeShellBoundaryV1;
 }): FrozenToolRegistryV1 {
-  const shellSandbox = input?.shellSandbox
-    ? cloneAndDeepFreeze(input.shellSandbox)
-    : undefined;
+  const shellSandbox = input?.shellSandbox ? cloneAndDeepFreeze(input.shellSandbox) : undefined;
   const shellSandboxHash = hashCanonical(shellSandbox ?? null);
-  const pathPolicy = input?.pathPolicy
-    ? cloneAndDeepFreeze(input.pathPolicy)
-    : undefined;
+  const pathPolicy = input?.pathPolicy ? cloneAndDeepFreeze(input.pathPolicy) : undefined;
   const shellBoundary = input?.shellBoundary ?? "allow";
   const requested = [...(input?.tools ?? PAW_NEXT_INITIAL_TOOLS_V1)].sort();
   if (new Set(requested).size !== requested.length) {
@@ -187,19 +179,13 @@ export function createFrozenToolRegistryV1(input?: {
     internalNames.add(internalName);
     const definitions = definitionsByProvider.get(providerName) ?? [];
     if (definitions.length !== 1) {
-      throw new Error(
-        `Runtime tool ${internalName} must have exactly one harness schema`,
-      );
+      throw new Error(`Runtime tool ${internalName} must have exactly one harness schema`);
     }
     const [definition] = definitions;
     if (!definition) {
       throw new Error(`Runtime tool ${internalName} has no harness schema`);
     }
-    return createRegistryEntry(
-      internalName,
-      providerName,
-      cloneAndDeepFreeze(definition),
-    );
+    return createRegistryEntry(internalName, providerName, cloneAndDeepFreeze(definition));
   });
   const pluginIdentities: FrozenRuntimeToolPluginIdentityV1[] = [];
   const pluginIds = new Set<string>();
@@ -214,14 +200,10 @@ export function createFrozenToolRegistryV1(input?: {
     );
     for (const pluginEntry of plugin.entries) {
       if (internalNames.has(pluginEntry.internalName)) {
-        throw new Error(
-          `Runtime tool internal-name collision: ${pluginEntry.internalName}`,
-        );
+        throw new Error(`Runtime tool internal-name collision: ${pluginEntry.internalName}`);
       }
       if (providerNames.has(pluginEntry.providerName)) {
-        throw new Error(
-          `Runtime provider tool-name collision: ${pluginEntry.providerName}`,
-        );
+        throw new Error(`Runtime provider tool-name collision: ${pluginEntry.providerName}`);
       }
       assertPluginEntry(plugin, pluginEntry);
       internalNames.add(pluginEntry.internalName);
@@ -229,15 +211,9 @@ export function createFrozenToolRegistryV1(input?: {
       entries.push(createPluginRegistryEntry(plugin, pluginEntry));
     }
   }
-  entries.sort((left, right) =>
-    left.internalName.localeCompare(right.internalName),
-  );
-  pluginIdentities.sort((left, right) =>
-    left.pluginId.localeCompare(right.pluginId),
-  );
-  const byProviderName = new Map(
-    entries.map((entry) => [entry.providerName, entry]),
-  );
+  entries.sort((left, right) => left.internalName.localeCompare(right.internalName));
+  pluginIdentities.sort((left, right) => left.pluginId.localeCompare(right.pluginId));
+  const byProviderName = new Map(entries.map((entry) => [entry.providerName, entry]));
   const registryHash = hashCanonical({
     schemaVersion: "paw.runtime-tool-registry.v1",
     shellSandboxHash,
@@ -269,9 +245,7 @@ export function createFrozenToolRegistryV1(input?: {
     shellSandboxHash,
     assertCompatibleShellSandbox(value: ShellSandboxConfig | undefined) {
       if (hashCanonical(value ?? null) !== shellSandboxHash) {
-        throw new Error(
-          "Runtime registry shell sandbox does not match execution context",
-        );
+        throw new Error("Runtime registry shell sandbox does not match execution context");
       }
     },
     resolveProviderName: (name: string) => byProviderName.get(name),
@@ -280,10 +254,7 @@ export function createFrozenToolRegistryV1(input?: {
       if (!entry) {
         return {
           ok: false as const,
-          result: toolFailure(
-            "E_TOOL_UNKNOWN",
-            `Unknown runtime tool: ${call.name}`,
-          ),
+          result: toolFailure("E_TOOL_UNKNOWN", `Unknown runtime tool: ${call.name}`),
         };
       }
       const validation = entry.validate(call.arguments);
@@ -329,22 +300,15 @@ function classifyWithinPathPolicyV1(
     if (shellBoundary === "deny") {
       throw new Error("Shell is denied by the active child boundary");
     }
-    if (
-      shellBoundary === "read_only" &&
-      classification.effectClass !== "read"
-    ) {
-      throw new Error(
-        "Command is not proven read-only by the active child boundary",
-      );
+    if (shellBoundary === "read_only" && classification.effectClass !== "read") {
+      throw new Error("Command is not proven read-only by the active child boundary");
     }
     if (
       shellBoundary === "verification" &&
       classification.effectClass !== "read" &&
       !isVerificationShellCommandV1(args.command)
     ) {
-      throw new Error(
-        "Command is neither read-only nor an approved verification command",
-      );
+      throw new Error("Command is neither read-only nor an approved verification command");
     }
     return classification;
   }
@@ -391,10 +355,7 @@ function createPluginRegistryEntry(
   });
 }
 
-function assertToolPlugin(
-  plugin: RuntimeToolPluginV1,
-  pluginIds: ReadonlySet<string>,
-): void {
+function assertToolPlugin(plugin: RuntimeToolPluginV1, pluginIds: ReadonlySet<string>): void {
   if (
     plugin.schemaVersion !== "paw.runtime-tool-plugin.v1" ||
     !isStableToken(plugin.pluginId) ||
@@ -409,10 +370,7 @@ function assertToolPlugin(
   }
 }
 
-function assertPluginEntry(
-  plugin: RuntimeToolPluginV1,
-  entry: RuntimeToolPluginEntryV1,
-): void {
+function assertPluginEntry(plugin: RuntimeToolPluginV1, entry: RuntimeToolPluginEntryV1): void {
   if (
     !isStableToken(entry.internalName) ||
     !isStableToken(entry.providerName) ||
@@ -455,10 +413,7 @@ function createRegistryEntry(
       if (!args || typeof args !== "object" || Array.isArray(args)) {
         return {
           ok: false as const,
-          result: toolFailure(
-            "E_SCHEMA_INVALID",
-            "Tool arguments must be an object",
-          ),
+          result: toolFailure("E_SCHEMA_INVALID", "Tool arguments must be an object"),
         };
       }
       return {
@@ -530,9 +485,7 @@ function classifyInitialToolV1(
       effectClass: "read",
       permissionCategory: "read",
       concurrencyMode: "parallel",
-      resources: [
-        { key: `${root}${path.sep}.paw-managed-jobs`, access: "read" },
-      ],
+      resources: [{ key: `${root}${path.sep}.paw-managed-jobs`, access: "read" }],
     };
   }
   if (tool === JOB_KILL) {
@@ -542,9 +495,7 @@ function classifyInitialToolV1(
       effectClass: "unknown",
       permissionCategory: "shell",
       concurrencyMode: "exclusive",
-      resources: [
-        { key: `${root}${path.sep}.paw-managed-jobs`, access: "write" },
-      ],
+      resources: [{ key: `${root}${path.sep}.paw-managed-jobs`, access: "write" }],
     };
   }
   throw new Error(`Tool has no Paw Next classifier: ${tool}`);
@@ -558,8 +509,7 @@ function canonicalResourcePath(input: string): string {
   } catch {
     const parent = path.dirname(absolute);
     try {
-      const realParent =
-        fs.realpathSync.native?.(parent) ?? fs.realpathSync(parent);
+      const realParent = fs.realpathSync.native?.(parent) ?? fs.realpathSync(parent);
       canonical = path.join(realParent, path.basename(absolute));
     } catch {
       canonical = absolute;
@@ -593,15 +543,10 @@ function cloneAndDeepFreeze<T>(value: T, seen = new Set<object>()): T {
   } else {
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError(
-        "Runtime tool schema must contain plain objects only",
-      );
+      throw new TypeError("Runtime tool schema must contain plain objects only");
     }
     clone = Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        cloneAndDeepFreeze(item, seen),
-      ]),
+      Object.entries(value).map(([key, item]) => [key, cloneAndDeepFreeze(item, seen)]),
     );
   }
   seen.delete(value);

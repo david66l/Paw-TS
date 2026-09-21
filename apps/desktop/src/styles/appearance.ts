@@ -9,8 +9,7 @@ export function readAppearance(): Appearance {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
     return {
       color:
-        saved?.version === 2 &&
-        ["calm", "aurora", "paper"].includes(saved?.color)
+        saved?.version === 2 && ["calm", "aurora", "paper"].includes(saved?.color)
           ? saved.color
           : "paper",
       material: saved?.material === "soft" ? "soft" : "lens",
@@ -29,10 +28,7 @@ export function applyAppearance(appearance: Appearance): void {
 
 export function saveAppearance(appearance: Appearance): void {
   try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ ...appearance, version: 2 }),
-    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...appearance, version: 2 }));
   } catch {
     // The selected skin still works when local storage is unavailable.
   }

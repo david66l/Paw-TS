@@ -5,10 +5,7 @@ import {
   isStableCandidateCheckpointEligibleV1,
 } from "../src/loop-v2/index.js";
 
-function verification(
-  mutationRevision: number,
-  authoritative = true,
-): VerificationRecordV2 {
+function verification(mutationRevision: number, authoritative = true): VerificationRecordV2 {
   return {
     id: `verification-${mutationRevision}`,
     runner: "custom",

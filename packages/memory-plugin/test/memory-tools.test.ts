@@ -111,12 +111,8 @@ describe("progressive read-only memory tools", () => {
     if (second[0]?.status !== "success") {
       throw new Error("expected cached memory tool success");
     }
-    expect(
-      (second[0].result.payload as Record<string, unknown>).evidence,
-    ).toEqual([]);
-    expect(
-      (second[0].result.payload as Record<string, unknown>).evidenceLedger,
-    ).toEqual({
+    expect((second[0].result.payload as Record<string, unknown>).evidence).toEqual([]);
+    expect((second[0].result.payload as Record<string, unknown>).evidenceLedger).toEqual({
       schemaVersion: "paw.memory-evidence-ledger.v1",
       newItems: 0,
       repeatedItems: 1,
@@ -178,9 +174,7 @@ describe("progressive read-only memory tools", () => {
     expect(settled[0]?.status).toBe("success");
     expect(settled[1]?.status).toBe("failed");
     if (settled[0]?.status !== "success") throw new Error("resolver failed");
-    expect((settled[0].result.payload as Record<string, unknown>).stop).toBe(
-      "sufficient",
-    );
+    expect((settled[0].result.payload as Record<string, unknown>).stop).toBe("sufficient");
     const afterSufficient = await executor.executeSettled(
       [call("late-1", "memory_search_atoms", { query: "Compose" })],
       batch(),
@@ -217,23 +211,15 @@ describe("progressive read-only memory tools", () => {
       batch(),
     );
     expect(settled.map((item) => item.callId)).toEqual(["d1", "m1", "d2"]);
-    expect(settled.map((item) => item.status)).toEqual([
-      "success",
-      "success",
-      "success",
-    ]);
+    expect(settled.map((item) => item.status)).toEqual(["success", "success", "success"]);
   });
 
   test("canonicalizes only one known topic id from model decoration", () => {
     const known = ["topic/alpha", "topic/beta"];
     expect(resolveMemoryTopicIdV1("topic/alpha", known)).toBe("topic/alpha");
-    expect(resolveMemoryTopicIdV1('read "topic/beta"', known)).toBe(
-      "topic/beta",
-    );
+    expect(resolveMemoryTopicIdV1('read "topic/beta"', known)).toBe("topic/beta");
     expect(resolveMemoryTopicIdV1("topic/unknown", known)).toBeUndefined();
-    expect(
-      resolveMemoryTopicIdV1("topic/alpha or topic/beta", known),
-    ).toBeUndefined();
+    expect(resolveMemoryTopicIdV1("topic/alpha or topic/beta", known)).toBeUndefined();
   });
 
   test("projects overlapping tool reads as session evidence deltas", () => {
@@ -256,9 +242,7 @@ describe("progressive read-only memory tools", () => {
     expect(second.newItems).toBe(1);
     expect(second.repeatedItems).toBe(1);
     expect(second.totalDistinctItems).toBe(3);
-    expect(second.payload.evidence).toEqual([
-      { memoryId: "m3", statement: "third" },
-    ]);
+    expect(second.payload.evidence).toEqual([{ memoryId: "m3", statement: "third" }]);
     expect(second.payload.evidenceLedger).toEqual({
       schemaVersion: "paw.memory-evidence-ledger.v1",
       newItems: 1,
@@ -295,9 +279,7 @@ function card(repositoryId: string): MemoryCardV1 {
     statement: "High deployment cost caused the user to choose Compose.",
     applicability: "reference",
     scope: Object.freeze({ repositoryId }),
-    sources: Object.freeze([
-      Object.freeze({ kind: "memory_store_evidence", ref: "evidence/1" }),
-    ]),
+    sources: Object.freeze([Object.freeze({ kind: "memory_store_evidence", ref: "evidence/1" })]),
     confidence: 0.9,
     contentHash: "hash-1",
   });
@@ -315,10 +297,7 @@ function batch() {
   return Object.freeze({ turn: 1, signal: new AbortController().signal });
 }
 
-function success(
-  callId: string,
-  summary: string,
-): ToolSettlement<ToolRunResult> {
+function success(callId: string, summary: string): ToolSettlement<ToolRunResult> {
   return Object.freeze({
     status: "success" as const,
     callId,

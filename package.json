@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "scripts": {
-    "typecheck": "bun run --filter '*' typecheck",
+    "typecheck": "bun run scripts/typecheck-all.ts",
     "lint": "biome check packages apps",
     "lint:fix": "biome check --write packages apps",
     "test:ts": "bun test packages/protocol packages/agent-loop packages/core packages/memory-core packages/memory-plugin packages/settings packages/workspace packages/harness packages/models packages/model-output-recovery packages/runtime packages/context-compaction packages/completion-review packages/output-recall packages/web-access packages/task-progress packages/collaboration packages/store packages/agent packages/progress-advisor",

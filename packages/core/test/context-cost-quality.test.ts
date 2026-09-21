@@ -34,9 +34,7 @@ describe("P5.2 预算按成本记账", () => {
   test("costAdjustedCompactThreshold：高命中放宽阈值，低命中不变", () => {
     const base = 50_000;
     expect(costAdjustedCompactThreshold(base, 0)).toBe(base);
-    expect(costAdjustedCompactThreshold(base, 0.8)).toBe(
-      Math.floor(base * 1.2),
-    );
+    expect(costAdjustedCompactThreshold(base, 0.8)).toBe(Math.floor(base * 1.2));
     expect(costAdjustedCompactThreshold(base, 1)).toBe(Math.floor(base * 1.25));
     // 上限 1.25
     expect(costAdjustedCompactThreshold(base, 5)).toBe(Math.floor(base * 1.25));

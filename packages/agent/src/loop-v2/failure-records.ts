@@ -31,9 +31,7 @@ export interface VerificationFailureRecordV2 {
  * 交集规则只适用于结构性错误（import/discovery）——案发地点不在改动面
  * 的导入/收集失败是环境装配问题。
  */
-export function isEnvironmentFailure(
-  record: VerificationFailureRecordV2,
-): boolean {
+export function isEnvironmentFailure(record: VerificationFailureRecordV2): boolean {
   return record.kind !== "assertion" && !record.touchesChangeSurface;
 }
 
@@ -48,19 +46,14 @@ function normalizePath(value: string): string {
   return value.replaceAll("\\", "/").toLowerCase();
 }
 
-function filesOverlap(
-  tracebackFiles: readonly string[],
-  filesChanged: readonly string[],
-): boolean {
+function filesOverlap(tracebackFiles: readonly string[], filesChanged: readonly string[]): boolean {
   const changed = filesChanged.map(normalizePath);
   return tracebackFiles.some((file) => {
     const normalized = normalizePath(file);
     const basename = normalized.split("/").at(-1) ?? "";
     return changed.some(
       (c) =>
-        (c && normalized.endsWith(c)) ||
-        (basename && c.endsWith(`/${basename}`)) ||
-        c === basename,
+        (c && normalized.endsWith(c)) || (basename && c.endsWith(`/${basename}`)) || c === basename,
     );
   });
 }
@@ -94,16 +87,13 @@ function parseFailureBlocks(output: string): readonly RawFailureBlock[] {
       continue;
     }
     // pytest 摘要行
-    const pytest = /^(FAILED|ERROR) ([^\s]+::[^\s]+)(?:\s*-\s*(.*))?$/.exec(
-      line,
-    );
+    const pytest = /^(FAILED|ERROR) ([^\s]+::[^\s]+)(?:\s*-\s*(.*))?$/.exec(line);
     if (pytest?.[1] && pytest[2]) {
       const detail = pytest[3] ?? "";
       blocks.push({
         testId: pytest[2],
         kind:
-          pytest[1] === "ERROR" &&
-          /(?:ModuleNotFound|ImportError)/i.test(detail)
+          pytest[1] === "ERROR" && /(?:ModuleNotFound|ImportError)/i.test(detail)
             ? "import"
             : pytest[1] === "ERROR"
               ? "discovery"
@@ -136,11 +126,7 @@ export function decomposeVerificationFailuresV2(input: {
     if (records.length >= MAX_RECORDS) break;
     const tracebackFiles: string[] = [];
     let errorLine: string | undefined;
-    for (
-      let j = block.headerIndex;
-      j <= block.bodyEnd && j < lines.length;
-      j += 1
-    ) {
+    for (let j = block.headerIndex; j <= block.bodyEnd && j < lines.length; j += 1) {
       const line = lines[j] ?? "";
       const fileMatch = /^\s*File ["']([^"']+)["']/.exec(line);
       if (fileMatch?.[1]) tracebackFiles.push(fileMatch[1]);
@@ -177,10 +163,7 @@ export function renderVerificationFailureRecordsV2(
   const owned = records.filter(isOwnedFailure).map((r) => r.testId);
   const environment = records
     .filter(isEnvironmentFailure)
-    .map(
-      (r) =>
-        `${r.testId} (${r.kind}; traceback does not overlap the change surface)`,
-    );
+    .map((r) => `${r.testId} (${r.kind}; traceback does not overlap the change surface)`);
   const parts: string[] = [];
   if (owned.length > 0) {
     parts.push(`failures of the current change: ${owned.join(", ")}`);

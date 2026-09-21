@@ -21,9 +21,7 @@ export function canonicalBody(entry: MemoryEntry): string {
     case "semantic":
       return entry.fact;
     case "episodic":
-      return [entry.whenToUse, entry.perspective, ...entry.modification].join(
-        "\n",
-      );
+      return [entry.whenToUse, entry.perspective, ...entry.modification].join("\n");
     case "profile":
       return entry.insight;
     case "vault_ref":
@@ -47,9 +45,6 @@ export function deriveMemoryId(
 }
 
 /** 从条目直接派生 id */
-export function deriveEntryId(
-  entry: MemoryEntry,
-  scope?: MemoryScopeKey,
-): string {
+export function deriveEntryId(entry: MemoryEntry, scope?: MemoryScopeKey): string {
   return deriveMemoryId(entry.kind, canonicalBody(entry), entry.repo, scope);
 }

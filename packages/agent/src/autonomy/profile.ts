@@ -5,14 +5,8 @@
  * only the default resolvers and shell policy differ.
  */
 
-import {
-  type AutonomyShellLevel,
-  applyAutonomyShellPolicy,
-} from "@paw/harness";
-import type {
-  AskUserResolveInput,
-  ToolApprovalInput,
-} from "../orchestrator.js";
+import { type AutonomyShellLevel, applyAutonomyShellPolicy } from "@paw/harness";
+import type { AskUserResolveInput, ToolApprovalInput } from "../orchestrator.js";
 
 export type AutonomyLevel = AutonomyShellLevel;
 
@@ -38,8 +32,7 @@ export interface AutonomyProfile {
   readonly apply: () => void;
 }
 
-const HEADLESS_ASK_USER =
-  "Continue with the best judgment; no interactive user is available.";
+const HEADLESS_ASK_USER = "Continue with the best judgment; no interactive user is available.";
 
 /**
  * Resolve a concrete AutonomyProfile for factory / CLI / eval.
@@ -48,8 +41,7 @@ const HEADLESS_ASK_USER =
 export function createAutonomyProfile(
   opts: AutonomyProfileOptions | AutonomyLevel = "headless",
 ): AutonomyProfile {
-  const options: AutonomyProfileOptions =
-    typeof opts === "string" ? { level: opts } : opts;
+  const options: AutonomyProfileOptions = typeof opts === "string" ? { level: opts } : opts;
   const { level } = options;
 
   if (level === "headless") {

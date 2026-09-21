@@ -44,18 +44,14 @@ describe("structural evidence obligations v1", () => {
   test("marks only new recommendation evidence as contextual discovery", () => {
     const query = "What should I cook based on what I already have?";
     const intent = classifyMemoryEvidenceQueryV3(query);
-    expect(compileMemoryEvidenceObligationShapeV1(query, intent)).toMatchObject(
-      {
-        obligationKind: "personalization_context",
-        minimumRequirementCount: 1,
-      },
-    );
+    expect(compileMemoryEvidenceObligationShapeV1(query, intent)).toMatchObject({
+      obligationKind: "personalization_context",
+      minimumRequirementCount: 1,
+    });
     const recall = "What did you recommend last time?";
     expect(
-      compileMemoryEvidenceObligationShapeV1(
-        recall,
-        classifyMemoryEvidenceQueryV3(recall),
-      ).obligationKind,
+      compileMemoryEvidenceObligationShapeV1(recall, classifyMemoryEvidenceQueryV3(recall))
+        .obligationKind,
     ).toBe("answer_operands");
   });
 
@@ -112,9 +108,9 @@ describe("structural evidence obligations v1", () => {
     };
 
     expect(shape.reasonCodes).toContain("longitudinal_evidence");
-    expect(() =>
-      validateMemoryEvidenceObligationsV1(shape, [requirement]),
-    ).toThrow("MemoryEvidenceQueryPlanEvidenceFloorInvalid");
+    expect(() => validateMemoryEvidenceObligationsV1(shape, [requirement])).toThrow(
+      "MemoryEvidenceQueryPlanEvidenceFloorInvalid",
+    );
     expect(() =>
       validateMemoryEvidenceObligationsV1(shape, [
         { ...requirement, coverageMode: "all", minimumEvidence: 2 },
@@ -123,15 +119,10 @@ describe("structural evidence obligations v1", () => {
   });
 
   test("opens planning for two explicitly coordinated answer slots", () => {
-    const intent = classifyMemoryEvidenceQueryV3(
-      "When and where did I meet the designer?",
-    );
+    const intent = classifyMemoryEvidenceQueryV3("When and where did I meet the designer?");
     expect(intent.needsPlanning).toBe(true);
     expect(
-      compileMemoryEvidenceObligationShapeV1(
-        "When and where did I meet the designer?",
-        intent,
-      ),
+      compileMemoryEvidenceObligationShapeV1("When and where did I meet the designer?", intent),
     ).toMatchObject({
       minimumRequirementCount: 2,
       minimumEvidenceCount: 2,

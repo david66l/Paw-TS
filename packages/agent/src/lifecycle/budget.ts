@@ -34,9 +34,7 @@ export const HEADLESS_LIFECYCLE_BUDGET: LifecycleBudget = {
   idleFuseHardStopTrips: 2,
 };
 
-export function resolveLifecycleBudget(
-  partial?: Partial<LifecycleBudget>,
-): LifecycleBudget {
+export function resolveLifecycleBudget(partial?: Partial<LifecycleBudget>): LifecycleBudget {
   const base = DEFAULT_LIFECYCLE_BUDGET;
   return {
     maxSteps:
@@ -49,13 +47,11 @@ export function resolveLifecycleBudget(
         ? { timeoutMs: base.timeoutMs }
         : {}),
     childMaxSteps:
-      partial?.childMaxSteps !== undefined &&
-      Number.isFinite(partial.childMaxSteps)
+      partial?.childMaxSteps !== undefined && Number.isFinite(partial.childMaxSteps)
         ? Math.max(1, Math.floor(partial.childMaxSteps))
         : base.childMaxSteps,
     idleFuseHardStopTrips:
-      partial?.idleFuseHardStopTrips !== undefined &&
-      Number.isFinite(partial.idleFuseHardStopTrips)
+      partial?.idleFuseHardStopTrips !== undefined && Number.isFinite(partial.idleFuseHardStopTrips)
         ? Math.max(1, Math.floor(partial.idleFuseHardStopTrips))
         : base.idleFuseHardStopTrips,
   };

@@ -29,11 +29,7 @@ describe("generateBrief", () => {
 
   test("detects Python project", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-brief-"));
-    writeFileSync(
-      path.join(root, "pyproject.toml"),
-      '[project]\nname = "test"\n',
-      "utf8",
-    );
+    writeFileSync(path.join(root, "pyproject.toml"), '[project]\nname = "test"\n', "utf8");
     writeFileSync(path.join(root, "main.py"), "print('hello')\n", "utf8");
     const r = generateBrief(root);
     expect(r.error).toBeUndefined();
@@ -42,11 +38,7 @@ describe("generateBrief", () => {
 
   test("reads README", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-brief-"));
-    writeFileSync(
-      path.join(root, "README.md"),
-      "# Test Project\n\nThis is a test.\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "README.md"), "# Test Project\n\nThis is a test.\n", "utf8");
     const r = generateBrief(root);
     expect(r.error).toBeUndefined();
     expect(r.summary).toContain("README");

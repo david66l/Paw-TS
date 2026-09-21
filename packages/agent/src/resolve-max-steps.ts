@@ -34,20 +34,12 @@ function parseMaxSteps(value: unknown): number | undefined {
  * 2. settings.local.json 中的 max_steps
  * 3. DEFAULT_MAX_STEPS（32）
  */
-export function resolveMaxSteps(
-  workspaceRoot: string,
-  override?: number,
-): number {
+export function resolveMaxSteps(workspaceRoot: string, override?: number): number {
   if (override !== undefined) {
     if (!Number.isFinite(override) || override < 1) {
       return DEFAULT_MAX_STEPS;
     }
     return Math.min(Math.floor(override), HARD_CAP);
   }
-  return readSetting(
-    workspaceRoot,
-    (s) => s.max_steps,
-    DEFAULT_MAX_STEPS,
-    parseMaxSteps,
-  );
+  return readSetting(workspaceRoot, (s) => s.max_steps, DEFAULT_MAX_STEPS, parseMaxSteps);
 }

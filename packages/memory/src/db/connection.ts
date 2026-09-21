@@ -8,8 +8,7 @@ let _sql: ReturnType<typeof postgres> | null = null;
 
 export function getSql(): ReturnType<typeof postgres> {
   if (!_sql) {
-    const url =
-      process.env.DATABASE_URL ?? "postgresql://localhost:5432/paw_memory";
+    const url = process.env.DATABASE_URL ?? "postgresql://localhost:5432/paw_memory";
     _sql = postgres(url, {
       max: 10,
       idle_timeout: 30,
@@ -55,11 +54,5 @@ export function parseJson(v: unknown): unknown {
  * 用字面量 + 显式 cast 可完全绕开驱动类型推断：`${textArrayLiteral(xs)}::text[]`。
  */
 export function textArrayLiteral(xs: readonly string[]): string {
-  return (
-    "{" +
-    xs
-      .map((x) => `"${x.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
-      .join(",") +
-    "}"
-  );
+  return "{" + xs.map((x) => `"${x.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",") + "}";
 }

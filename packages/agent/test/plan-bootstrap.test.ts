@@ -8,8 +8,7 @@ import {
 
 describe("extractPlanStepsFromGoal", () => {
   test("extracts numbered steps", () => {
-    const goal =
-      "多步骤任务：1) 列出顶层目录；2) 说明 apps 职责；3) 一句话总结。";
+    const goal = "多步骤任务：1) 列出顶层目录；2) 说明 apps 职责；3) 一句话总结。";
     const steps = extractPlanStepsFromGoal(goal);
     expect(steps.length).toBeGreaterThanOrEqual(3);
     expect(steps[0]).toMatch(/目录/);

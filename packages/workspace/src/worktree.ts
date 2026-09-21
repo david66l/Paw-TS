@@ -107,15 +107,11 @@ export function findGitRoot(dir: string): string | null {
  * @returns 包含 worktreeRoot 和 cleanup 的 TemporaryWorktree 对象
  * @throws 如果 originalRoot 不在 git 仓库中
  */
-export function createTemporaryWorktree(
-  originalRoot: string,
-): TemporaryWorktree {
+export function createTemporaryWorktree(originalRoot: string): TemporaryWorktree {
   // 步骤 1：定位 git 仓库根目录
   const gitRoot = findGitRoot(originalRoot);
   if (!gitRoot) {
-    throw new Error(
-      `Not a git repository (or any of the parent directories): ${originalRoot}`,
-    );
+    throw new Error(`Not a git repository (or any of the parent directories): ${originalRoot}`);
   }
 
   // 步骤 2：创建临时基础目录
@@ -196,9 +192,7 @@ export function createRecoverableWorktreeV1(
   }
   const gitRoot = findGitRoot(originalRoot);
   if (!gitRoot) {
-    throw new Error(
-      `Not a git repository (or any of the parent directories): ${originalRoot}`,
-    );
+    throw new Error(`Not a git repository (or any of the parent directories): ${originalRoot}`);
   }
   const sourceRoot = fs.realpathSync.native(path.resolve(originalRoot));
   const resolvedGitRoot = fs.realpathSync.native(path.resolve(gitRoot));
@@ -211,43 +205,25 @@ export function createRecoverableWorktreeV1(
     throw new Error("Workspace root is outside its resolved git repository");
   }
 
-  const checkoutRoot = path.join(
-    resolvedGitRoot,
-    ".paw",
-    "collaboration",
-    "worktrees",
-    key,
-  );
+  const checkoutRoot = path.join(resolvedGitRoot, ".paw", "collaboration", "worktrees", key);
   const metadataPath = `${checkoutRoot}.json`;
   const worktreeRoot = path.join(checkoutRoot, workspaceRelative);
   const readMetadata = (): string | undefined => {
     const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as {
       snapshotIdentity?: unknown;
     };
-    return typeof metadata.snapshotIdentity === "string"
-      ? metadata.snapshotIdentity
-      : undefined;
+    return typeof metadata.snapshotIdentity === "string" ? metadata.snapshotIdentity : undefined;
   };
   const isRegistered = (): boolean => {
     const listed = runGit(resolvedGitRoot, ["worktree", "list", "--porcelain"]);
-    if (!listed.ok)
-      throw new Error(`git worktree list failed: ${listed.error}`);
+    if (!listed.ok) throw new Error(`git worktree list failed: ${listed.error}`);
     return listed.stdout
       .split(/\r?\n/u)
       .filter((line) => line.startsWith("worktree "))
-      .some(
-        (line) =>
-          path.resolve(line.slice("worktree ".length)) ===
-          path.resolve(checkoutRoot),
-      );
+      .some((line) => path.resolve(line.slice("worktree ".length)) === path.resolve(checkoutRoot));
   };
   const removeRegistered = (): void => {
-    const removed = runGit(resolvedGitRoot, [
-      "worktree",
-      "remove",
-      "--force",
-      checkoutRoot,
-    ]);
+    const removed = runGit(resolvedGitRoot, ["worktree", "remove", "--force", checkoutRoot]);
     if (!removed.ok) {
       throw new Error(`git worktree remove failed: ${removed.error}`);
     }
@@ -278,34 +254,22 @@ export function createRecoverableWorktreeV1(
       removeRegistered();
     }
   } else if (fs.existsSync(checkoutRoot)) {
-    throw new Error(
-      `Recoverable worktree path exists but is not registered: ${checkoutRoot}`,
-    );
+    throw new Error(`Recoverable worktree path exists but is not registered: ${checkoutRoot}`);
   }
 
   const metadataExisted = fs.existsSync(metadataPath);
-  const anchoredSnapshotIdentity = metadataExisted
-    ? readMetadata()
-    : options.snapshotIdentity;
+  const anchoredSnapshotIdentity = metadataExisted ? readMetadata() : options.snapshotIdentity;
   if (
     metadataExisted &&
     options.snapshotIdentity !== undefined &&
     anchoredSnapshotIdentity !== undefined &&
     options.snapshotIdentity !== anchoredSnapshotIdentity
   ) {
-    throw new Error(
-      "Parent workspace changed since the recoverable child snapshot was created",
-    );
+    throw new Error("Parent workspace changed since the recoverable child snapshot was created");
   }
 
   fs.mkdirSync(path.dirname(checkoutRoot), { recursive: true });
-  const added = runGit(resolvedGitRoot, [
-    "worktree",
-    "add",
-    "--detach",
-    checkoutRoot,
-    "HEAD",
-  ]);
+  const added = runGit(resolvedGitRoot, ["worktree", "add", "--detach", checkoutRoot, "HEAD"]);
   if (!added.ok) {
     throw new Error(`git worktree add failed: ${added.error}`);
   }
@@ -313,11 +277,7 @@ export function createRecoverableWorktreeV1(
     const diff = runGit(sourceRoot, ["diff", "--binary", "HEAD", "--", "."]);
     if (!diff.ok) throw new Error(`git diff failed: ${diff.error}`);
     if (diff.stdout.length > 0) {
-      const applied = runGit(
-        checkoutRoot,
-        ["apply", "--whitespace=nowarn", "-"],
-        diff.stdout,
-      );
+      const applied = runGit(checkoutRoot, ["apply", "--whitespace=nowarn", "-"], diff.stdout);
       if (!applied.ok) throw new Error(`git apply failed: ${applied.error}`);
     }
 
@@ -358,12 +318,7 @@ export function createRecoverableWorktreeV1(
     }
     return createHandle(metadataExisted, anchoredSnapshotIdentity);
   } catch (error) {
-    const removed = runGit(resolvedGitRoot, [
-      "worktree",
-      "remove",
-      "--force",
-      checkoutRoot,
-    ]);
+    const removed = runGit(resolvedGitRoot, ["worktree", "remove", "--force", checkoutRoot]);
     if (!metadataExisted) fs.rmSync(metadataPath, { force: true });
     if (!removed.ok && error instanceof Error) {
       error.message += `; cleanup failed: ${removed.error}`;

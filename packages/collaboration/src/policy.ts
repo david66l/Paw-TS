@@ -20,34 +20,27 @@ export interface CollaborationPolicyV1 {
   readonly maxSummaryChars: number;
 }
 
-export const DEFAULT_COLLABORATION_POLICY_V1: CollaborationPolicyV1 =
-  Object.freeze({
-    maxConcurrentChildren: 3,
-    maxMissionTasks: 8,
-    defaultMaxSteps: 24,
-    maxChildSteps: 96,
-    maxMissionSteps: 240,
-    maxGoalChars: 4_000,
-    maxSummaryChars: 6_000,
-  });
+export const DEFAULT_COLLABORATION_POLICY_V1: CollaborationPolicyV1 = Object.freeze({
+  maxConcurrentChildren: 3,
+  maxMissionTasks: 8,
+  defaultMaxSteps: 24,
+  maxChildSteps: 96,
+  maxMissionSteps: 240,
+  maxGoalChars: 4_000,
+  maxSummaryChars: 6_000,
+});
 
-export function freezeCollaborationPolicyV1(
-  value: CollaborationPolicyV1,
-): CollaborationPolicyV1 {
+export function freezeCollaborationPolicyV1(value: CollaborationPolicyV1): CollaborationPolicyV1 {
   for (const [key, number] of Object.entries(value)) {
     if (!Number.isSafeInteger(number) || number <= 0) {
       throw new TypeError(`Collaboration policy ${key} must be positive`);
     }
   }
   if (value.defaultMaxSteps > value.maxChildSteps) {
-    throw new TypeError(
-      "Collaboration defaultMaxSteps cannot exceed maxChildSteps",
-    );
+    throw new TypeError("Collaboration defaultMaxSteps cannot exceed maxChildSteps");
   }
   if (value.maxChildSteps > value.maxMissionSteps) {
-    throw new TypeError(
-      "Collaboration maxChildSteps cannot exceed maxMissionSteps",
-    );
+    throw new TypeError("Collaboration maxChildSteps cannot exceed maxMissionSteps");
   }
   return Object.freeze({ ...value });
 }

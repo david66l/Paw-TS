@@ -13,8 +13,7 @@ import {
 } from "../src/longterm/eval/memory-mechanism-fixtures.js";
 import { resetMemoryV2Core } from "../src/runtime/index.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;

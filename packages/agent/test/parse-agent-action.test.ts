@@ -74,9 +74,7 @@ describe("parseAgentActionFromModelText", () => {
   });
 
   test("prefers last JSON line", () => {
-    const a = parseAgentActionFromModelText(
-      '{"action":"noop"}\n{"tool":"t","args":{}}',
-    );
+    const a = parseAgentActionFromModelText('{"action":"noop"}\n{"tool":"t","args":{}}');
     expect(a?.type).toBe("tool_call");
   });
 
@@ -91,9 +89,7 @@ describe("parseAgentActionFromModelText", () => {
   });
 
   test("parses final_answer with type field", () => {
-    const a = parseAgentActionFromModelText(
-      '{"type":"final_answer","summary":"x"}',
-    );
+    const a = parseAgentActionFromModelText('{"type":"final_answer","summary":"x"}');
     expect(a).toEqual({ type: "final_answer", summary: "x" });
   });
 
@@ -113,9 +109,7 @@ describe("parseAgentActionFromModelText", () => {
   });
 
   test("parses abort", () => {
-    const a = parseAgentActionFromModelText(
-      '{"action":"abort","reason":"bad","can_resume":true}',
-    );
+    const a = parseAgentActionFromModelText('{"action":"abort","reason":"bad","can_resume":true}');
     expect(a).toEqual({
       type: "abort",
       reason: "bad",
@@ -146,9 +140,7 @@ describe("parseAgentActionFromModelText", () => {
       expect(ask.timeoutSec).toBeNull();
     }
 
-    const fin = parseAgentActionFromModelText(
-      '{"tool":"final_answer","args":{"summary":"done"}}',
-    );
+    const fin = parseAgentActionFromModelText('{"tool":"final_answer","args":{"summary":"done"}}');
     expect(fin).toEqual({ type: "final_answer", summary: "done" });
 
     // 真实工具不受归一化影响
@@ -203,9 +195,7 @@ describe("parseAgentActionFromModelText", () => {
   });
 
   test("returns null when final_answer missing summary", () => {
-    expect(parseAgentActionFromModelText('{"action":"final_answer"}')).toBe(
-      null,
-    );
+    expect(parseAgentActionFromModelText('{"action":"final_answer"}')).toBe(null);
   });
 });
 
@@ -377,18 +367,16 @@ describe("diagnoseParseFailure", () => {
   });
 
   test("returns malformed for non-JSON tool trace", () => {
-    const d = diagnoseParseFailure(
-      '{"tool": workspace.read_file, "args": {path: "a.txt"}}',
-      { knownTools },
-    );
+    const d = diagnoseParseFailure('{"tool": workspace.read_file, "args": {path: "a.txt"}}', {
+      knownTools,
+    });
     expect(d.kind).toBe("malformed");
   });
 
   test("returns invalid for unknown tool name", () => {
-    const d = diagnoseParseFailure(
-      '{"tool":"workspace.unknown_tool","args":{"x":1}}',
-      { knownTools },
-    );
+    const d = diagnoseParseFailure('{"tool":"workspace.unknown_tool","args":{"x":1}}', {
+      knownTools,
+    });
     expect(d.kind).toBe("invalid");
     if (d.kind === "invalid") {
       expect(d.reason).toContain("unknown tool");
@@ -421,25 +409,21 @@ describe("diagnoseParseFailure", () => {
     );
     expect(diagnosis.kind).toBe("invalid");
     if (diagnosis.kind === "invalid") {
-      expect(diagnosis.reason).toContain(
-        "satisfied requires non-empty evidence",
-      );
+      expect(diagnosis.reason).toContain("satisfied requires non-empty evidence");
     }
   });
 
   test("returns ok when a valid action exists elsewhere", () => {
-    const d = diagnoseParseFailure(
-      '{"tool":"workspace.read_file","args":{"path":"a.txt"}}',
-      { knownTools },
-    );
+    const d = diagnoseParseFailure('{"tool":"workspace.read_file","args":{"path":"a.txt"}}', {
+      knownTools,
+    });
     expect(d.kind).toBe("ok");
   });
 
   test("does not treat code-block JSON as a tool trace without known key", () => {
-    const d = diagnoseParseFailure(
-      'Here is the payload:\n{"count": 3, "items": []}',
-      { knownTools },
-    );
+    const d = diagnoseParseFailure('Here is the payload:\n{"count": 3, "items": []}', {
+      knownTools,
+    });
     expect(d.kind).toBe("ok");
   });
 });

@@ -27,12 +27,7 @@ export type MemoryStatus =
   | "archived"
   | "deleted";
 
-export type CandidateStatus =
-  | "draft"
-  | "evaluating"
-  | "approved"
-  | "rejected"
-  | "promoted";
+export type CandidateStatus = "draft" | "evaluating" | "approved" | "rejected" | "promoted";
 
 export type GovernanceAction =
   | "APPROVE_CREATE"
@@ -62,11 +57,7 @@ export type TaskSessionStatus =
   | "failed"
   | "cancelled";
 
-export type VerificationLevel =
-  | "CLAIMED"
-  | "EXECUTED"
-  | "VERIFIED"
-  | "USER_CONFIRMED";
+export type VerificationLevel = "CLAIMED" | "EXECUTED" | "VERIFIED" | "USER_CONFIRMED";
 
 export type ContextPlacement = "hot" | "warm" | "cold_pointer" | "excluded";
 
@@ -108,14 +99,7 @@ export interface ScopeDescriptor {
 // ══════════════════════════════════════════════════════════
 
 export interface ActorRef {
-  actorType:
-    | "user"
-    | "human_reviewer"
-    | "agent"
-    | "subagent"
-    | "system"
-    | "tool"
-    | "importer";
+  actorType: "user" | "human_reviewer" | "agent" | "subagent" | "system" | "tool" | "importer";
   actorId: string;
   modelId?: string;
   runtimeVersion?: string;
@@ -180,12 +164,7 @@ export interface WorkingMemory {
 export interface WorkingConstraint {
   id: string;
   text: string;
-  source:
-    | "current_user_request"
-    | "user_followup"
-    | "active_rule"
-    | "runtime"
-    | "tool_result";
+  source: "current_user_request" | "user_followup" | "active_rule" | "runtime" | "tool_result";
   sourceRefId?: string;
   priority: number;
   scope?: ScopeDescriptor;
@@ -319,11 +298,7 @@ export interface MemoryItemBase {
   status: MemoryStatus;
   scope: ScopeDescriptor;
   confidence: number;
-  verificationStatus:
-    | "unverified"
-    | "partially_verified"
-    | "verified"
-    | "invalidated";
+  verificationStatus: "unverified" | "partially_verified" | "verified" | "invalidated";
   tags: string[];
   relatedFiles: string[];
   relatedSymbols: string[];
@@ -454,11 +429,7 @@ export interface DecisionPayload {
 export interface UserPreferencePayload {
   preferenceKey: string;
   value: unknown;
-  origin:
-    | "explicit"
-    | "confirmed_inference"
-    | "repeated_inference"
-    | "single_observation";
+  origin: "explicit" | "confirmed_inference" | "repeated_inference" | "single_observation";
   strength: "hard" | "default" | "soft" | "inferred";
   appliesTo:
     | "communication"
@@ -473,10 +444,7 @@ export interface UserPreferencePayload {
   firstObservedAt: string;
   lastObservedAt: string;
   confirmedAt?: string;
-  overridePolicy:
-    | "current_request_wins"
-    | "ask_on_conflict"
-    | "hard_unless_revoked";
+  overridePolicy: "current_request_wins" | "ask_on_conflict" | "hard_unless_revoked";
 }
 
 export interface SkillPayload {

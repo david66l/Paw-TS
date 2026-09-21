@@ -2,10 +2,8 @@ import { createHash } from "node:crypto";
 
 import type { JsonValue } from "@paw/protocol";
 
-export const PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V1 =
-  "paw.product-manifest.v1";
-export const PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V1 =
-  "paw.product-composition.v1";
+export const PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V1 = "paw.product-manifest.v1";
+export const PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V1 = "paw.product-composition.v1";
 export const PAW_NEXT_INLINE_PAYLOAD_CODEC_V1 = Object.freeze({
   id: "paw.inline-durable-json",
   version: "v1",
@@ -68,21 +66,15 @@ export interface CreatePawNextProductManifestInputV1 {
 export function createPawNextProductManifestV1(
   input: CreatePawNextProductManifestInputV1,
 ): PawNextProductManifestV1 {
-  if (
-    (input.profileIdentity === undefined) !==
-    (input.credentialBindingHash === undefined)
-  ) {
-    throw new Error(
-      "Paw Next profile identity and credential binding must be provided together",
-    );
+  if ((input.profileIdentity === undefined) !== (input.credentialBindingHash === undefined)) {
+    throw new Error("Paw Next profile identity and credential binding must be provided together");
   }
   if (input.profileIdentity !== undefined) {
     if (
       input.profileIdentity === null ||
       typeof input.profileIdentity !== "object" ||
       Array.isArray(input.profileIdentity) ||
-      Object.keys(input.profileIdentity).sort().join("\0") !==
-        "profileId\0revision" ||
+      Object.keys(input.profileIdentity).sort().join("\0") !== "profileId\0revision" ||
       typeof input.profileIdentity.profileId !== "string" ||
       !input.profileIdentity.profileId.trim() ||
       !Number.isSafeInteger(input.profileIdentity.revision) ||
@@ -107,9 +99,7 @@ export function createPawNextProductManifestV1(
   ) as unknown as PawNextProductManifestV1;
 }
 
-export function hashPawNextProductManifestV1(
-  manifest: PawNextProductManifestV1,
-): string {
+export function hashPawNextProductManifestV1(manifest: PawNextProductManifestV1): string {
   return hashCanonicalJsonV1(manifest);
 }
 
@@ -145,11 +135,7 @@ function canonicalJson(value: JsonValue): string {
 }
 
 function toJsonValue(value: unknown, seen = new Set<object>()): JsonValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
   if (typeof value === "number") {

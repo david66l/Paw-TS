@@ -1,8 +1,4 @@
-import {
-  type JsonValue,
-  hashCanonicalJsonV1,
-  hashTextV1,
-} from "./canonical.js";
+import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryEvidenceAuthorityV2 } from "./evidence-contracts.js";
 import {
   PAW_MEMORY_EVIDENCE_SELECTOR_GROUP_POLICY_V1,
@@ -53,11 +49,7 @@ export interface MemoryStateSlotSpecV2 {
   readonly necessity: "required" | "contextual";
   readonly operation: MemoryStateSlotOperationV2;
   /** Answer/group operation is separate from this slot's temporal leaf. */
-  readonly derivedAnswerOperation:
-    | "none"
-    | "compare"
-    | "aggregate"
-    | "infer_preference";
+  readonly derivedAnswerOperation: "none" | "compare" | "aggregate" | "infer_preference";
   readonly queryAnchor: MemoryStateQueryAnchorV2;
   /** Planner semantics are immutable hints, never a model-authored state key. */
   readonly semanticDescriptor: Readonly<{
@@ -66,10 +58,7 @@ export interface MemoryStateSlotSpecV2 {
     descriptorRevision: string;
   }>;
   readonly roleConstraint: "user" | "assistant";
-  readonly authorityMode:
-    | "user_fact"
-    | "explicit_assistant_report"
-    | "certified_dialogue_artifact";
+  readonly authorityMode: "user_fact" | "explicit_assistant_report" | "certified_dialogue_artifact";
   readonly temporalMode: MemoryEvidenceBoundTemporalConstraintV1["mode"];
   readonly evidenceTimeUpperBound: string | null;
   readonly durationEndpointContractKind:
@@ -79,11 +68,7 @@ export interface MemoryStateSlotSpecV2 {
   readonly coverageMode: "any" | "all" | "latest" | "convergent";
   readonly minimumIndependentEvidence: number;
   readonly dependencySlotIds: readonly string[];
-  readonly dependencyRelation:
-    | "independent"
-    | "depends_on"
-    | "responds_to"
-    | "supersedes";
+  readonly dependencyRelation: "independent" | "depends_on" | "responds_to" | "supersedes";
   readonly originRevision: string;
   readonly temporalBindingRevision: string;
   readonly authorityPolicyRevision: typeof PAW_MEMORY_STATE_AUTHORITY_POLICY_VERSION_V2;
@@ -128,17 +113,9 @@ export type MemoryStateEventTimeBasisV2 =
   | "source_session_contemporaneous"
   | "unbound";
 
-export type MemoryStateDurationEndpointRoleV2 =
-  | "start"
-  | "end"
-  | "evidence"
-  | "not_applicable";
+export type MemoryStateDurationEndpointRoleV2 = "start" | "end" | "evidence" | "not_applicable";
 
-export type MemoryStateClaimLifecycleRelationV2 =
-  | "none"
-  | "retracts"
-  | "supersedes"
-  | "confirms";
+export type MemoryStateClaimLifecycleRelationV2 = "none" | "retracts" | "supersedes" | "confirms";
 
 export interface MemoryStateObservationProposalV2 {
   readonly slotId: string;
@@ -155,13 +132,7 @@ export interface MemoryStateObservationProposalV2 {
   readonly durationEndpointRole?: MemoryStateDurationEndpointRoleV2;
   readonly lifecycleRelation?: MemoryStateClaimLifecycleRelationV2;
   readonly lifecycleTargetEvidenceRef?: string;
-  readonly predicateKind:
-    | "assert"
-    | "update"
-    | "retract"
-    | "confirm"
-    | "prefer"
-    | "disprefer";
+  readonly predicateKind: "assert" | "update" | "retract" | "confirm" | "prefer" | "disprefer";
   readonly polarity: "positive" | "negative";
   readonly modality: "observed" | "goal" | "plan" | "forecast";
 }
@@ -174,10 +145,7 @@ export interface MemoryStateBoundObservationV2 {
   readonly sourceId: string;
   readonly contentDigest: string;
   readonly valueSpans: readonly MemoryStateExactSpanV2[];
-  readonly valueComposition:
-    | "single"
-    | "contiguous_composite"
-    | "ordered_tuple";
+  readonly valueComposition: "single" | "contiguous_composite" | "ordered_tuple";
   /** Exact source envelope for contiguous values; tuple text remains display-only. */
   readonly valueText: string;
   readonly eventTimeSpans: readonly MemoryStateExactSpanV2[];
@@ -236,10 +204,7 @@ export function compileMemoryStateSlotsV2(input: {
   readonly intent: MemoryEvidenceQueryIntentV3;
   readonly requirements: readonly MemoryEvidenceRequirementV3[];
   readonly origin: MemoryQueryAnswerOriginV1;
-  readonly temporalConstraints: ReadonlyMap<
-    string,
-    MemoryEvidenceBoundTemporalConstraintV1
-  >;
+  readonly temporalConstraints: ReadonlyMap<string, MemoryEvidenceBoundTemporalConstraintV1>;
 }): readonly MemoryStateSlotSpecV2[] {
   const query = boundedText(input.query, 512, "MemoryStateSlotQueryInvalid");
   const expectedOrigin = compileMemoryQueryAnswerOriginV1(query);
@@ -254,9 +219,7 @@ export function compileMemoryStateSlotsV2(input: {
   const orderedRequirements = topologicalRequirements(input.requirements);
   const groupByRequirement = new Map(
     groups.flatMap((group) =>
-      group.requirementIds.map(
-        (requirementId) => [requirementId, group.groupId] as const,
-      ),
+      group.requirementIds.map((requirementId) => [requirementId, group.groupId] as const),
     ),
   );
   const slotIdByRequirement = new Map(
@@ -288,23 +251,13 @@ export function compileMemoryStateSlotsV2(input: {
       const descriptorIdentity = {
         queryRevision: queryAnchor.textDigest,
         requirementId: requirement.requirementId,
-        label: boundedText(
-          requirement.label,
-          192,
-          "MemoryStateSlotDescriptorInvalid",
-        ),
-        searchText: boundedText(
-          requirement.searchText,
-          192,
-          "MemoryStateSlotDescriptorInvalid",
-        ),
+        label: boundedText(requirement.label, 192, "MemoryStateSlotDescriptorInvalid"),
+        searchText: boundedText(requirement.searchText, 192, "MemoryStateSlotDescriptorInvalid"),
       };
       const semanticDescriptor = Object.freeze({
         label: descriptorIdentity.label,
         searchText: descriptorIdentity.searchText,
-        descriptorRevision: hashCanonicalJsonV1(
-          descriptorIdentity as unknown as JsonValue,
-        ),
+        descriptorRevision: hashCanonicalJsonV1(descriptorIdentity as unknown as JsonValue),
       });
       const identity = {
         compilerVersion: PAW_MEMORY_STATE_SLOT_COMPILER_VERSION_V2,
@@ -317,23 +270,17 @@ export function compileMemoryStateSlotsV2(input: {
         queryAnchor,
         semanticDescriptor,
         roleConstraint: concreteRole(requirement.roleConstraint),
-        authorityMode: stateAuthorityMode(
-          concreteRole(requirement.roleConstraint),
-          input.origin,
-        ),
+        authorityMode: stateAuthorityMode(concreteRole(requirement.roleConstraint), input.origin),
         temporalMode: temporal.mode,
         evidenceTimeUpperBound: temporal.evidenceTimeUpperBound,
-        durationEndpointContractKind:
-          temporal.durationRequest?.endpointContract.kind ?? null,
+        durationEndpointContractKind: temporal.durationRequest?.endpointContract.kind ?? null,
         coverageMode:
-          requirement.coverageMode ??
-          (requirement.temporalMode === "latest" ? "latest" : "any"),
+          requirement.coverageMode ?? (requirement.temporalMode === "latest" ? "latest" : "any"),
         minimumIndependentEvidence: requirement.minimumEvidence ?? 1,
         dependencySlotIds: Object.freeze(
           (requirement.dependsOnRequirementIds ?? []).map((requirementId) => {
             const dependency = slotIdByRequirement.get(requirementId);
-            if (!dependency)
-              throw namedError("MemoryStateSlotDependencyInvalid");
+            if (!dependency) throw namedError("MemoryStateSlotDependencyInvalid");
             return dependency;
           }),
         ),
@@ -369,8 +316,7 @@ export function compileMemoryStateSourceLockV2(
       refs.has(item.evidenceRef) ||
       !item.content.trim() ||
       item.content.length > 65_536 ||
-      (item.observedAt !== undefined &&
-        !Number.isFinite(Date.parse(item.observedAt))) ||
+      (item.observedAt !== undefined && !Number.isFinite(Date.parse(item.observedAt))) ||
       !validOrder(item.episodeOrder) ||
       !validOrder(item.turnOrder)
     ) {
@@ -410,10 +356,9 @@ export function bindMemoryStateObservationV2(input: {
   }
   if (
     (item.role === "user" &&
-      !new Set<MemoryEvidenceAuthorityV2>([
-        "user_asserted",
-        "user_confirmed_dialogue",
-      ]).has(item.authority)) ||
+      !new Set<MemoryEvidenceAuthorityV2>(["user_asserted", "user_confirmed_dialogue"]).has(
+        item.authority,
+      )) ||
     (input.slot.authorityMode === "certified_dialogue_artifact" &&
       !item.certificateRevision?.trim())
   ) {
@@ -422,15 +367,11 @@ export function bindMemoryStateObservationV2(input: {
   if (
     input.slot.evidenceTimeUpperBound !== null &&
     (item.observedAt === undefined ||
-      Date.parse(item.observedAt) >
-        Date.parse(input.slot.evidenceTimeUpperBound))
+      Date.parse(item.observedAt) > Date.parse(input.slot.evidenceTimeUpperBound))
   ) {
     throw namedError("MemoryStateObservationTemporalInvalid");
   }
-  if (
-    input.proposal.valueSpans.length < 1 ||
-    input.proposal.valueSpans.length > 4
-  ) {
+  if (input.proposal.valueSpans.length < 1 || input.proposal.valueSpans.length > 4) {
     throw namedError("MemoryStateObservationSpanInvalid");
   }
   const exactSpans = (
@@ -459,17 +400,11 @@ export function bindMemoryStateObservationV2(input: {
     ),
   );
   if (
-    valueSpans.some(
-      (span, index) =>
-        index > 0 && (valueSpans[index - 1]?.end ?? 0) > span.start,
-    )
+    valueSpans.some((span, index) => index > 0 && (valueSpans[index - 1]?.end ?? 0) > span.start)
   ) {
     throw namedError("MemoryStateObservationSpanInvalid");
   }
-  const valueComposition = classifyMemoryStateValueCompositionV2(
-    item.content,
-    valueSpans,
-  );
+  const valueComposition = classifyMemoryStateValueCompositionV2(item.content, valueSpans);
   const firstValueSpan = valueSpans[0] as MemoryStateExactSpanV2;
   const lastValueSpan = valueSpans.at(-1) as MemoryStateExactSpanV2;
   const valueText =
@@ -483,8 +418,7 @@ export function bindMemoryStateObservationV2(input: {
   const eventTimeSpans = exactSpans(eventTimeProposals);
   const proposedEventTimeBasis = input.proposal.eventTimeBasis;
   const eventTimeBasis =
-    proposedEventTimeBasis ??
-    (eventTimeSpans.length > 0 ? "explicit_span" : "unbound");
+    proposedEventTimeBasis ?? (eventTimeSpans.length > 0 ? "explicit_span" : "unbound");
   if (
     proposedEventTimeBasis !== undefined &&
     ((eventTimeBasis === "explicit_span" && eventTimeSpans.length === 0) ||
@@ -505,49 +439,38 @@ export function bindMemoryStateObservationV2(input: {
   ) {
     throw namedError("MemoryStateObservationTemporalBasisInvalid");
   }
-  const durationEndpointRole =
-    input.proposal.durationEndpointRole ?? "not_applicable";
+  const durationEndpointRole = input.proposal.durationEndpointRole ?? "not_applicable";
   if (
-    !new Set<MemoryStateDurationEndpointRoleV2>([
-      "start",
-      "end",
-      "evidence",
-      "not_applicable",
-    ]).has(durationEndpointRole)
+    !new Set<MemoryStateDurationEndpointRoleV2>(["start", "end", "evidence", "not_applicable"]).has(
+      durationEndpointRole,
+    )
   ) {
     throw namedError("MemoryStateObservationEndpointRoleInvalid");
   }
   const lifecycleRelation = input.proposal.lifecycleRelation ?? "none";
-  const lifecycleTargetEvidenceRef =
-    input.proposal.lifecycleTargetEvidenceRef?.trim();
+  const lifecycleTargetEvidenceRef = input.proposal.lifecycleTargetEvidenceRef?.trim();
   const lifecycleTarget = lifecycleTargetEvidenceRef
     ? input.sourceLock.items.find(
         (candidate) => candidate.evidenceRef === lifecycleTargetEvidenceRef,
       )
     : undefined;
   if (
-    (input.proposal.predicateKind === "prefer" &&
-      input.proposal.polarity !== "positive") ||
-    (input.proposal.predicateKind === "disprefer" &&
-      input.proposal.polarity !== "negative") ||
+    (input.proposal.predicateKind === "prefer" && input.proposal.polarity !== "positive") ||
+    (input.proposal.predicateKind === "disprefer" && input.proposal.polarity !== "negative") ||
     !new Set<MemoryStateClaimLifecycleRelationV2>([
       "none",
       "retracts",
       "supersedes",
       "confirms",
     ]).has(lifecycleRelation) ||
-    (lifecycleRelation === "none" &&
-      lifecycleTargetEvidenceRef !== undefined) ||
+    (lifecycleRelation === "none" && lifecycleTargetEvidenceRef !== undefined) ||
     (lifecycleRelation !== "none" &&
       (!lifecycleTarget ||
         lifecycleTarget.evidenceRef === item.evidenceRef ||
         lifecycleTarget.role !== item.role)) ||
-    (lifecycleRelation === "retracts" &&
-      input.proposal.predicateKind !== "retract") ||
-    (lifecycleRelation === "supersedes" &&
-      input.proposal.predicateKind !== "update") ||
-    (lifecycleRelation === "confirms" &&
-      input.proposal.predicateKind !== "confirm") ||
+    (lifecycleRelation === "retracts" && input.proposal.predicateKind !== "retract") ||
+    (lifecycleRelation === "supersedes" && input.proposal.predicateKind !== "update") ||
+    (lifecycleRelation === "confirms" && input.proposal.predicateKind !== "confirm") ||
     (lifecycleTarget?.observedAt !== undefined &&
       item.observedAt !== undefined &&
       Date.parse(lifecycleTarget.observedAt) >= Date.parse(item.observedAt))
@@ -568,17 +491,14 @@ export function bindMemoryStateObservationV2(input: {
   if (
     input.slot.evidenceTimeUpperBound !== null &&
     normalizedEventTime !== undefined &&
-    normalizedEventTime.eventTimeInterval.lower >
-      input.slot.evidenceTimeUpperBound
+    normalizedEventTime.eventTimeInterval.lower > input.slot.evidenceTimeUpperBound
   ) {
     throw namedError("MemoryStateObservationTemporalInvalid");
   }
   const eventTimeCutoffStatus =
-    input.slot.evidenceTimeUpperBound === null ||
-    normalizedEventTime === undefined
+    input.slot.evidenceTimeUpperBound === null || normalizedEventTime === undefined
       ? undefined
-      : normalizedEventTime.eventTimeInterval.upper >
-          input.slot.evidenceTimeUpperBound
+      : normalizedEventTime.eventTimeInterval.upper > input.slot.evidenceTimeUpperBound
         ? ("straddles" as const)
         : ("within" as const);
   const identity = {
@@ -596,18 +516,14 @@ export function bindMemoryStateObservationV2(input: {
     ...(eventTimeCutoffStatus === undefined ? {} : { eventTimeCutoffStatus }),
     durationEndpointRole,
     lifecycleRelation,
-    ...(lifecycleTargetEvidenceRef === undefined
-      ? {}
-      : { lifecycleTargetEvidenceRef }),
+    ...(lifecycleTargetEvidenceRef === undefined ? {} : { lifecycleTargetEvidenceRef }),
     predicateKind: input.proposal.predicateKind,
     polarity: input.proposal.polarity,
     modality: input.proposal.modality,
     authority: item.authority,
     role: item.role,
     ...(item.observedAt === undefined ? {} : { observedAt: item.observedAt }),
-    ...(item.episodeOrder === undefined
-      ? {}
-      : { episodeOrder: item.episodeOrder }),
+    ...(item.episodeOrder === undefined ? {} : { episodeOrder: item.episodeOrder }),
     ...(item.turnOrder === undefined ? {} : { turnOrder: item.turnOrder }),
     ...(item.eventKey === undefined ? {} : { eventKey: item.eventKey }),
     ...(item.certificateRevision === undefined
@@ -702,9 +618,7 @@ export function resolveMemoryStateFrameV2(input: {
     );
   }
   const slots = Object.freeze(
-    input.slots.map(
-      (slot) => resolved.get(slot.slotId) as MemoryStateResolvedSlotV2,
-    ),
+    input.slots.map((slot) => resolved.get(slot.slotId) as MemoryStateResolvedSlotV2),
   );
   const derivedOperations = compileDerivedOperations(input.slots);
   const identity = {
@@ -715,9 +629,7 @@ export function resolveMemoryStateFrameV2(input: {
       selectorGroupPolicy: PAW_MEMORY_EVIDENCE_SELECTOR_GROUP_POLICY_V1,
       sourceLockDigest: input.sourceLock.sourceLockDigest,
       slotRevisions: input.slots.map((slot) => slot.slotRevision),
-      derivedOperationRevisions: derivedOperations.map(
-        (operation) => operation.operationRevision,
-      ),
+      derivedOperationRevisions: derivedOperations.map((operation) => operation.operationRevision),
     }),
     slots,
     derivedOperations,
@@ -733,11 +645,7 @@ function compileDerivedOperations(
 ): readonly MemoryStateDerivedOperationV2[] {
   const operations: MemoryStateDerivedOperationV2[] = [];
   const answerKinds = [
-    ...new Set(
-      slots
-        .map((slot) => slot.derivedAnswerOperation)
-        .filter((kind) => kind !== "none"),
-    ),
+    ...new Set(slots.map((slot) => slot.derivedAnswerOperation).filter((kind) => kind !== "none")),
   ];
   if (answerKinds.length > 1) {
     throw namedError("MemoryStateDerivedOperationInvalid");
@@ -751,9 +659,7 @@ function compileDerivedOperations(
       operandSlotIds: Object.freeze([...operandSlotIds]),
       status: "unsupported" as const,
     };
-    const operationRevision = hashCanonicalJsonV1(
-      identity as unknown as JsonValue,
-    );
+    const operationRevision = hashCanonicalJsonV1(identity as unknown as JsonValue);
     return Object.freeze({
       operationId: hashCanonicalJsonV1({
         kind,
@@ -773,13 +679,8 @@ function compileDerivedOperations(
     );
   }
   for (const slot of slots) {
-    if (
-      slot.dependencyRelation !== "independent" ||
-      slot.dependencySlotIds.length > 0
-    ) {
-      operations.push(
-        compile("dependency_join", [...slot.dependencySlotIds, slot.slotId]),
-      );
+    if (slot.dependencyRelation !== "independent" || slot.dependencySlotIds.length > 0) {
+      operations.push(compile("dependency_join", [...slot.dependencySlotIds, slot.slotId]));
     }
   }
   return Object.freeze(operations);
@@ -803,17 +704,11 @@ function resolveSlot(
         [],
       );
     }
-    const eligible = ordered.filter(
-      (observation) => observation.modality === "observed",
-    );
+    const eligible = ordered.filter((observation) => observation.modality === "observed");
     if (eligible.length === 0) {
       return resolvedSlot(slot.slotId, "missing", [], ordered, [], []);
     }
-    if (
-      eligible.some(
-        (observation) => observation.eventTimeCutoffStatus === "straddles",
-      )
-    ) {
+    if (eligible.some((observation) => observation.eventTimeCutoffStatus === "straddles")) {
       return resolvedSlot(
         slot.slotId,
         "partial",
@@ -868,23 +763,13 @@ function resolveSlot(
       );
     }
     if (!new Set(["assert", "update", "confirm"]).has(winner.predicateKind)) {
-      return resolvedSlot(
-        slot.slotId,
-        "partial",
-        [],
-        ordered,
-        [],
-        [winner.bindingRevision],
-      );
+      return resolvedSlot(slot.slotId, "partial", [], ordered, [], [winner.bindingRevision]);
     }
     return resolvedSlot(
       slot.slotId,
       conflicts.length > 0 ? "conflict" : "complete",
       [winner],
-      ordered.filter(
-        (observation) =>
-          observation !== winner && !conflicts.includes(observation),
-      ),
+      ordered.filter((observation) => observation !== winner && !conflicts.includes(observation)),
       conflicts,
       [winner, ...conflicts].map((observation) => observation.bindingRevision),
     );
@@ -901,12 +786,8 @@ function resolveSlot(
       : `source:${observation.sourceId}\0episode:${observation.episodeOrder ?? "unknown"}`;
     if (!independent.has(key)) independent.set(key, observation);
   }
-  const proof = [...independent.values()].map(
-    (observation) => observation.bindingRevision,
-  );
-  const values = new Set(
-    [...independent.values()].map((observation) => spanIdentity(observation)),
-  );
+  const proof = [...independent.values()].map((observation) => observation.bindingRevision);
+  const values = new Set([...independent.values()].map((observation) => spanIdentity(observation)));
   if (slot.operation === "lookup") {
     const conflict = values.size > 1;
     return resolvedSlot(
@@ -919,9 +800,7 @@ function resolveSlot(
             ? "partial"
             : "missing",
       conflict ? [] : [...independent.values()],
-      ordered.filter(
-        (observation) => !independent.has(independenceKey(observation)),
-      ),
+      ordered.filter((observation) => !independent.has(independenceKey(observation))),
       conflict ? [...independent.values()] : [],
       proof,
     );
@@ -979,25 +858,14 @@ function resolvedSlot(
   });
 }
 
-function slotOperation(
-  requirement: MemoryEvidenceRequirementV3,
-): MemoryStateSlotOperationV2 {
-  if (
-    requirement.temporalMode === "latest" ||
-    requirement.temporalMode === "as_of"
-  ) {
+function slotOperation(requirement: MemoryEvidenceRequirementV3): MemoryStateSlotOperationV2 {
+  if (requirement.temporalMode === "latest" || requirement.temporalMode === "as_of") {
     return "resolve_latest";
   }
-  if (
-    requirement.temporalMode === "history" ||
-    requirement.temporalMode === "range"
-  ) {
+  if (requirement.temporalMode === "history" || requirement.temporalMode === "range") {
     return "preserve_history";
   }
-  if (
-    requirement.coverageMode === "all" ||
-    requirement.coverageMode === "convergent"
-  ) {
+  if (requirement.coverageMode === "all" || requirement.coverageMode === "convergent") {
     return "collect";
   }
   return "lookup";
@@ -1022,23 +890,14 @@ function topologicalRequirements(
   requirements: readonly MemoryEvidenceRequirementV3[],
 ): readonly MemoryEvidenceRequirementV3[] {
   const byId = new Map(
-    requirements.map((requirement, index) => [
-      requirement.requirementId,
-      { requirement, index },
-    ]),
+    requirements.map((requirement, index) => [requirement.requirementId, { requirement, index }]),
   );
-  const indegree = new Map(
-    requirements.map((requirement) => [requirement.requirementId, 0]),
-  );
+  const indegree = new Map(requirements.map((requirement) => [requirement.requirementId, 0]));
   const dependents = new Map<string, string[]>();
   for (const requirement of requirements) {
     for (const dependency of requirement.dependsOnRequirementIds ?? []) {
-      if (!byId.has(dependency))
-        throw namedError("MemoryStateSlotDependencyInvalid");
-      indegree.set(
-        requirement.requirementId,
-        (indegree.get(requirement.requirementId) ?? 0) + 1,
-      );
+      if (!byId.has(dependency)) throw namedError("MemoryStateSlotDependencyInvalid");
+      indegree.set(requirement.requirementId, (indegree.get(requirement.requirementId) ?? 0) + 1);
       const values = dependents.get(dependency) ?? [];
       values.push(requirement.requirementId);
       dependents.set(dependency, values);
@@ -1048,8 +907,7 @@ function topologicalRequirements(
     .filter((requirement) => indegree.get(requirement.requirementId) === 0)
     .sort(
       (left, right) =>
-        (byId.get(left.requirementId)?.index ?? 0) -
-        (byId.get(right.requirementId)?.index ?? 0),
+        (byId.get(left.requirementId)?.index ?? 0) - (byId.get(right.requirementId)?.index ?? 0),
     );
   const ordered: MemoryEvidenceRequirementV3[] = [];
   while (ready.length > 0) {
@@ -1059,9 +917,7 @@ function topologicalRequirements(
       const remaining = (indegree.get(dependentId) ?? 0) - 1;
       indegree.set(dependentId, remaining);
       if (remaining === 0) {
-        ready.push(
-          byId.get(dependentId)?.requirement as MemoryEvidenceRequirementV3,
-        );
+        ready.push(byId.get(dependentId)?.requirement as MemoryEvidenceRequirementV3);
         ready.sort(
           (left, right) =>
             (byId.get(left.requirementId)?.index ?? 0) -
@@ -1076,9 +932,7 @@ function topologicalRequirements(
   return Object.freeze(ordered);
 }
 
-function concreteRole(
-  role: "user" | "assistant" | "any",
-): "user" | "assistant" {
+function concreteRole(role: "user" | "assistant" | "any"): "user" | "assistant" {
   if (role === "any") throw namedError("MemoryStateSlotRoleInvalid");
   return role;
 }
@@ -1091,10 +945,7 @@ function stateAuthorityMode(
   if (origin.originKind === "dialogue_artifact_unowned") {
     return "certified_dialogue_artifact";
   }
-  if (
-    origin.originKind === "explicit_assistant" ||
-    origin.originKind === "explicit_shared"
-  ) {
+  if (origin.originKind === "explicit_assistant" || origin.originKind === "explicit_shared") {
     return "explicit_assistant_report";
   }
   throw namedError("MemoryStateSlotOriginInvalid");
@@ -1117,28 +968,21 @@ function compareObservation(
   left: MemoryStateBoundObservationV2,
   right: MemoryStateBoundObservationV2,
 ): number {
-  return (
-    (comparePosition(right, left) ?? 0) ||
-    left.evidenceRef.localeCompare(right.evidenceRef)
-  );
+  return (comparePosition(right, left) ?? 0) || left.evidenceRef.localeCompare(right.evidenceRef);
 }
 
 function comparePosition(
   left: MemoryStateBoundObservationV2,
   right: MemoryStateBoundObservationV2,
 ): number | null {
-  const temporal = compareEventIntervals(
-    left.eventTimeInterval,
-    right.eventTimeInterval,
-  );
+  const temporal = compareEventIntervals(left.eventTimeInterval, right.eventTimeInterval);
   if (temporal !== undefined) return temporal;
   if (left.eventTimeInterval || right.eventTimeInterval) return null;
   return (
     (left.observedAt ?? "").localeCompare(right.observedAt ?? "") ||
     (left.episodeOrder ?? Number.MIN_SAFE_INTEGER) -
       (right.episodeOrder ?? Number.MIN_SAFE_INTEGER) ||
-    (left.turnOrder ?? Number.MIN_SAFE_INTEGER) -
-      (right.turnOrder ?? Number.MIN_SAFE_INTEGER)
+    (left.turnOrder ?? Number.MIN_SAFE_INTEGER) - (right.turnOrder ?? Number.MIN_SAFE_INTEGER)
   );
 }
 
@@ -1152,11 +996,7 @@ function normalizeEventTime(spans: readonly MemoryStateExactSpanV2[]):
   for (const span of spans) {
     const iso = /(?:^|\D)(\d{4})-(\d{2})-(\d{2})(?:\D|$)/u.exec(span.text);
     if (iso) {
-      const interval = strictUtcDay(
-        Number(iso[1]),
-        Number(iso[2]),
-        Number(iso[3]),
-      );
+      const interval = strictUtcDay(Number(iso[1]), Number(iso[2]), Number(iso[3]));
       return interval ? normalizedInterval(interval) : undefined;
     }
     const named =
@@ -1164,15 +1004,10 @@ function normalizeEventTime(spans: readonly MemoryStateExactSpanV2[]):
         span.text,
       );
     if (named) {
-      const parts =
-        /^(\p{L}+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(\d{4})$/iu.exec(
-          named[0],
-        );
+      const parts = /^(\p{L}+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(\d{4})$/iu.exec(named[0]);
       const month = parts ? monthNumber(parts[1] ?? "") : undefined;
       const interval =
-        parts && month
-          ? strictUtcDay(Number(parts[3]), month, Number(parts[2]))
-          : undefined;
+        parts && month ? strictUtcDay(Number(parts[3]), month, Number(parts[2])) : undefined;
       return interval ? normalizedInterval(interval) : undefined;
     }
     const year = /(?:^|\D)((?:19|20)\d{2})(?:\D|$)/u.exec(span.text);

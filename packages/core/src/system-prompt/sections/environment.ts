@@ -1,7 +1,4 @@
-import type {
-  LegacyMemoryRecordV1,
-  LegacyProjectMemoryV1,
-} from "@paw/protocol";
+import type { LegacyMemoryRecordV1, LegacyProjectMemoryV1 } from "@paw/protocol";
 /**
  * 系统提示词章节：运行环境
  *

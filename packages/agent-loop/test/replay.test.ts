@@ -106,9 +106,9 @@ describe("canonical reducer replay", () => {
     ];
 
     for (const item of cases) {
-      expect(() =>
-        assertReplayEquivalentV1(item.prefix, createVerification()),
-      ).toThrow(item.expected);
+      expect(() => assertReplayEquivalentV1(item.prefix, createVerification())).toThrow(
+        item.expected,
+      );
     }
   });
 
@@ -117,9 +117,9 @@ describe("canonical reducer replay", () => {
       stateHash: "corrupt-middle-hash",
     });
 
-    expect(() =>
-      assertReplayEquivalentV1(prefix, createVerification()),
-    ).toThrow("seq 2: stateHash");
+    expect(() => assertReplayEquivalentV1(prefix, createVerification())).toThrow(
+      "seq 2: stateHash",
+    );
   });
 
   test("fails closed when StateHasher returns empty or throws", () => {
@@ -145,9 +145,7 @@ describe("canonical reducer replay", () => {
       inputCount: facts.length + 1,
     });
 
-    expect(() => assertReplayEquivalentV1(validPrefix(), verification)).toThrow(
-      "seq 2: stateHash",
-    );
+    expect(() => assertReplayEquivalentV1(validPrefix(), verification)).toThrow("seq 2: stateHash");
   });
 });
 
@@ -171,14 +169,9 @@ function createVerification(): ReplayVerificationV1<ReplayConfig, ReplayState> {
 
 function validPrefix(): readonly RunJournalEnvelopeV1[] {
   return [
-    factEnvelope(
-      { type: "attempt.started", goalHash: "goal", configHash: "config" },
-      1,
-    ),
+    factEnvelope({ type: "attempt.started", goalHash: "goal", configHash: "config" }, 1),
     decisionEnvelope(
-      reduceFacts([
-        { type: "attempt.started", goalHash: "goal", configHash: "config" },
-      ]),
+      reduceFacts([{ type: "attempt.started", goalHash: "goal", configHash: "config" }]),
       1,
       2,
     ),
@@ -206,10 +199,7 @@ function validPrefix(): readonly RunJournalEnvelopeV1[] {
       3,
       4,
     ),
-    factEnvelope(
-      { type: "abort.requested", source: "host", reason: "stop-now" },
-      5,
-    ),
+    factEnvelope({ type: "abort.requested", source: "host", reason: "stop-now" }, 5),
     decisionEnvelope(
       reduceFacts([
         { type: "attempt.started", goalHash: "goal", configHash: "config" },
@@ -229,9 +219,7 @@ function validPrefix(): readonly RunJournalEnvelopeV1[] {
 }
 
 function reduceFacts(facts: readonly InputFactV1[]): ReplayState {
-  const abort = [...facts]
-    .reverse()
-    .find((fact) => fact.type === "abort.requested");
+  const abort = [...facts].reverse().find((fact) => fact.type === "abort.requested");
   return {
     inputCount: facts.length,
     decision: abort

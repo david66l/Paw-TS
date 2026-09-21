@@ -81,16 +81,7 @@ export interface SymbolSearchResponse {
 }
 
 /** 支持的 JS/TS 文件扩展名 */
-const JS_TS_EXTS = new Set([
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".mjs",
-  ".cjs",
-  ".mts",
-  ".cts",
-]);
+const JS_TS_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"]);
 
 /** 最多扫描的文件数 */
 const MAX_FILES = 500;
@@ -151,9 +142,7 @@ function walkAstForSymbols(
 
   // 函数声明
   if (ts.isFunctionDeclaration(node) && node.name) {
-    const pos = sourceFile.getLineAndCharacterOfPosition(
-      node.name.getStart(sourceFile),
-    );
+    const pos = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile));
     symbols.push({
       name: node.name.text,
       kind: "function",
@@ -161,9 +150,7 @@ function walkAstForSymbols(
       character: pos.character + 1,
     });
   } else if (ts.isClassDeclaration(node) && node.name) {
-    const pos = sourceFile.getLineAndCharacterOfPosition(
-      node.name.getStart(sourceFile),
-    );
+    const pos = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile));
     symbols.push({
       name: node.name.text,
       kind: "class",
@@ -177,9 +164,7 @@ function walkAstForSymbols(
         member.name &&
         ts.isIdentifier(member.name)
       ) {
-        const mPos = sourceFile.getLineAndCharacterOfPosition(
-          member.name.getStart(sourceFile),
-        );
+        const mPos = sourceFile.getLineAndCharacterOfPosition(member.name.getStart(sourceFile));
         symbols.push({
           // 类成员名称格式：ClassName.memberName
           name: `${node.name.text}.${member.name.text}`,
@@ -190,9 +175,7 @@ function walkAstForSymbols(
       }
     }
   } else if (ts.isInterfaceDeclaration(node)) {
-    const pos = sourceFile.getLineAndCharacterOfPosition(
-      node.name.getStart(sourceFile),
-    );
+    const pos = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile));
     symbols.push({
       name: node.name.text,
       kind: "interface",
@@ -200,9 +183,7 @@ function walkAstForSymbols(
       character: pos.character + 1,
     });
   } else if (ts.isTypeAliasDeclaration(node)) {
-    const pos = sourceFile.getLineAndCharacterOfPosition(
-      node.name.getStart(sourceFile),
-    );
+    const pos = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile));
     symbols.push({
       name: node.name.text,
       kind: "type",
@@ -213,9 +194,7 @@ function walkAstForSymbols(
     // 变量声明（顶层的 const/let/var）
     for (const decl of node.declarationList.declarations) {
       if (ts.isIdentifier(decl.name)) {
-        const pos = sourceFile.getLineAndCharacterOfPosition(
-          decl.name.getStart(sourceFile),
-        );
+        const pos = sourceFile.getLineAndCharacterOfPosition(decl.name.getStart(sourceFile));
         symbols.push({
           name: decl.name.text,
           kind: "variable",
@@ -228,9 +207,7 @@ function walkAstForSymbols(
     // 命名导出：export { a, b }
     if (node.exportClause && ts.isNamedExports(node.exportClause)) {
       for (const elem of node.exportClause.elements) {
-        const pos = sourceFile.getLineAndCharacterOfPosition(
-          elem.name.getStart(sourceFile),
-        );
+        const pos = sourceFile.getLineAndCharacterOfPosition(elem.name.getStart(sourceFile));
         symbols.push({
           name: elem.name.text,
           kind: "export",
@@ -242,9 +219,7 @@ function walkAstForSymbols(
   } else if (ts.isExportAssignment(node)) {
     // 默认导出：export default <expr>
     if (ts.isIdentifier(node.expression)) {
-      const pos = sourceFile.getLineAndCharacterOfPosition(
-        node.expression.getStart(sourceFile),
-      );
+      const pos = sourceFile.getLineAndCharacterOfPosition(node.expression.getStart(sourceFile));
       symbols.push({
         name: `default (${node.expression.text})`,
         kind: "export",
@@ -255,9 +230,7 @@ function walkAstForSymbols(
   }
 
   // 递归遍历子节点
-  ts.forEachChild(node, (child) =>
-    walkAstForSymbols(child, sourceFile, symbols, depth + 1),
-  );
+  ts.forEachChild(node, (child) => walkAstForSymbols(child, sourceFile, symbols, depth + 1));
 }
 
 /**
@@ -409,11 +382,7 @@ export function searchWorkspaceSymbols(
     useRegex?: boolean;
   } = {},
 ): SymbolSearchResponse {
-  const {
-    maxResults = MAX_TOTAL_RESULTS,
-    maxFiles = MAX_FILES,
-    useRegex = false,
-  } = options;
+  const { maxResults = MAX_TOTAL_RESULTS, maxFiles = MAX_FILES, useRegex = false } = options;
 
   // 构造匹配函数
   let matcher: (name: string) => boolean;
@@ -444,10 +413,7 @@ export function searchWorkspaceSymbols(
       continue;
     }
     // 将绝对路径转为相对于工作区的路径（统一使用正斜杠）
-    const rel = path
-      .relative(workspaceRoot, filePath)
-      .split(path.sep)
-      .join("/");
+    const rel = path.relative(workspaceRoot, filePath).split(path.sep).join("/");
     // 每个文件最多返回 MAX_RESULTS_PER_FILE 个符号
     const capped = matched.slice(0, MAX_RESULTS_PER_FILE);
     matches.push({ file: rel, symbols: capped });

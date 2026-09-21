@@ -65,10 +65,7 @@ export interface TruncateOptions {
  * @param options  截断配置
  * @returns 截断后的对话历史（新数组，不修改原数组）
  */
-export function truncateHistory(
-  history: ChatMessage[],
-  options: TruncateOptions,
-): ChatMessage[] {
+export function truncateHistory(history: ChatMessage[], options: TruncateOptions): ChatMessage[] {
   // Phase 1: 按消息数量截断
   let next = history;
   if (next.length > options.maxMessages) {
@@ -121,9 +118,7 @@ function truncateByMessageCount(
     keepTurns.add(turnIndex);
     keptMessages += turnSize;
   }
-  return flattenContextTurnsV1(
-    turns.filter((_, turnIndex) => keepTurns.has(turnIndex)),
-  );
+  return flattenContextTurnsV1(turns.filter((_, turnIndex) => keepTurns.has(turnIndex)));
 }
 
 /**
@@ -135,10 +130,7 @@ function truncateByMessageCount(
  * 3. 对可驱逐消息按优先级评分排序，低分优先驱逐
  * 4. 如果仍超预算，降级保护进一步驱逐
  */
-function truncateByBudget(
-  history: ChatMessage[],
-  opts: TruncateBudgetOptions,
-): ChatMessage[] {
+function truncateByBudget(history: ChatMessage[], opts: TruncateBudgetOptions): ChatMessage[] {
   // 消息成本计算函数：按 token 或按字符
   const msgCost = (m: ChatMessage): number =>
     opts.useTokens
@@ -155,14 +147,9 @@ function truncateByBudget(
   if (current <= opts.budget) return history;
   const turns = groupContextTurnsV1(history);
   const turnCost = (turnIndex: number): number =>
-    turns[turnIndex]?.messages.reduce(
-      (sum, message) => sum + msgCost(message),
-      0,
-    ) ?? 0;
+    turns[turnIndex]?.messages.reduce((sum, message) => sum + msgCost(message), 0) ?? 0;
   const turnIndexForMessage = (messageIndex: number): number =>
-    turns.findIndex(
-      (turn) => messageIndex >= turn.start && messageIndex < turn.endExclusive,
-    );
+    turns.findIndex((turn) => messageIndex >= turn.start && messageIndex < turn.endExclusive);
 
   // 寻找合适的保护级别：从 3 → 2 → 1 → 0 逐级降级
   // 保护级别 = 保留最近 N 个对话回合
@@ -176,10 +163,7 @@ function truncateByBudget(
       ),
     ];
     const latestTurnIndex = Math.max(0, turns.length - 1);
-    const protectedWithLatest = new Set([
-      ...protectedTurnIndices,
-      latestTurnIndex,
-    ]);
+    const protectedWithLatest = new Set([...protectedTurnIndices, latestTurnIndex]);
     const protectedCost = [...protectedWithLatest].reduce(
       (sum, turnIndex) => sum + turnCost(turnIndex),
       0,
@@ -244,9 +228,7 @@ function truncateByBudget(
   // lose an explicit safety constraint or orphan the active action protocol.
 
   if (evictSet.size === 0) return history;
-  return flattenContextTurnsV1(
-    turns.filter((_, turnIndex) => !evictSet.has(turnIndex)),
-  );
+  return flattenContextTurnsV1(turns.filter((_, turnIndex) => !evictSet.has(turnIndex)));
 }
 
 /**
@@ -257,10 +239,7 @@ function truncateByBudget(
  * 2. **约束**：包含"不要"/"禁止"/"必须"等关键词的用户消息 —— 保证行为限制不被遗忘
  * 3. **尾部**：最近 N 个对话回合（以 assistant 消息为回合边界）—— 保证当前上下文完整
  */
-function getProtectedIndices(
-  history: ChatMessage[],
-  tailTurnCount: number,
-): number[] {
+function getProtectedIndices(history: ChatMessage[], tailTurnCount: number): number[] {
   const result: number[] = [];
 
   // Head: 找到第一条非工具结果的用户消息（用户初始目标）
@@ -377,8 +356,7 @@ function messagePriorityScore(
   }
   // 工具结果消息：基础分 95，但随时间衰减，最低到 45
   if (msg.role === "user" && isToolResultMessage(msg.content)) {
-    const age =
-      index !== undefined && total !== undefined ? total - 1 - index : 0;
+    const age = index !== undefined && total !== undefined ? total - 1 - index : 0;
     const score = Math.max(
       TOOL_RESULT_AGE_FLOOR,
       MSG_PRIORITY.TOOL_RESULT - age * TOOL_RESULT_AGE_PENALTY,
@@ -526,14 +504,11 @@ export function computeSegments(
   const tail = opts?.tailTurnCount ?? 3;
   if (messages.length === 0) return [];
   const turns = groupContextTurnsV1(messages);
-  const assistantTurnCount = turns.filter(
-    (turn) => turn.messages[0]?.role === "assistant",
-  ).length;
+  const assistantTurnCount = turns.filter((turn) => turn.messages[0]?.role === "assistant").length;
   let assistantOrdinal = 0;
   const segments: SegmentInfo[] = turns.map((turn) => {
     const startsWithAssistant = turn.messages[0]?.role === "assistant";
-    const isTail =
-      startsWithAssistant && assistantOrdinal >= assistantTurnCount - tail;
+    const isTail = startsWithAssistant && assistantOrdinal >= assistantTurnCount - tail;
     if (startsWithAssistant) assistantOrdinal += 1;
     return {
       start: turn.start,

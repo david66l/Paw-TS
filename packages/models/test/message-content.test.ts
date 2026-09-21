@@ -1,15 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  buildAnthropicUserContent,
-  buildOpenAiMessageContent,
-} from "../src/message-content.js";
+import { buildAnthropicUserContent, buildOpenAiMessageContent } from "../src/message-content.js";
 
 describe("buildOpenAiMessageContent", () => {
   test("returns plain string when no attachments", () => {
-    expect(buildOpenAiMessageContent({ role: "user", content: "hello" })).toBe(
-      "hello",
-    );
+    expect(buildOpenAiMessageContent({ role: "user", content: "hello" })).toBe("hello");
   });
 
   test("builds image_url parts for image attachments", () => {
@@ -48,9 +43,7 @@ describe("buildOpenAiMessageContent", () => {
 
 describe("buildAnthropicUserContent", () => {
   test("returns plain string when no attachments", () => {
-    expect(buildAnthropicUserContent({ role: "user", content: "hello" })).toBe(
-      "hello",
-    );
+    expect(buildAnthropicUserContent({ role: "user", content: "hello" })).toBe("hello");
   });
 
   test("builds base64 image blocks", () => {

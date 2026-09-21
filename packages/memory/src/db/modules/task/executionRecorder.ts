@@ -59,8 +59,7 @@ function rowToRecord(row: Record<string, unknown>): ExecutionRecord {
     exitCode: row.exit_code as number | undefined,
     durationMs: row.duration_ms as number,
     verificationLevel:
-      (row.verification_level as ExecutionRecord["verificationLevel"]) ??
-      "EXECUTED",
+      (row.verification_level as ExecutionRecord["verificationLevel"]) ?? "EXECUTED",
     errors: parseJson(row.errors) as ExecutionRecord["errors"],
     createdAt: row.created_at as string,
   };
@@ -130,10 +129,9 @@ export const executionRecorder = {
     failures: { toolCallId: string; toolName: string; errorSummary: string }[];
   }> {
     const sql = getSql();
-    const rows = (await sql.unsafe(
-      "SELECT * FROM tool_result_records WHERE task_id = $1",
-      [taskId],
-    )) as Record<string, unknown>[];
+    const rows = (await sql.unsafe("SELECT * FROM tool_result_records WHERE task_id = $1", [
+      taskId,
+    ])) as Record<string, unknown>[];
 
     const byStatus: Record<string, number> = {};
     const byVerification: Record<string, number> = {};

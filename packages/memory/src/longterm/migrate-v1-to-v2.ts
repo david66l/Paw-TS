@@ -50,12 +50,7 @@ const V1_TYPES: readonly string[] = [
   "project_knowledge",
   "skill",
 ];
-const V2_KINDS: readonly string[] = [
-  "semantic",
-  "episodic",
-  "profile",
-  "vault_ref",
-];
+const V2_KINDS: readonly string[] = ["semantic", "episodic", "profile", "vault_ref"];
 
 /** type → kind 映射（pure，供单测） */
 export function mapV1TypeToKind(type: string): MemoryKind | null {
@@ -99,10 +94,7 @@ export function buildV2EntryFromV1Row(row: {
     id: row.id,
     kind,
     repo: row.repo ?? "",
-    created:
-      toIso(payload.createdAt) ??
-      toIso(payload.created_at) ??
-      new Date().toISOString(),
+    created: toIso(payload.createdAt) ?? toIso(payload.created_at) ?? new Date().toISOString(),
     tValid: toIso(row.t_valid) ?? new Date().toISOString(),
     tInvalid: row.t_invalid != null ? (toIso(row.t_invalid) ?? null) : null,
     source: "agent_verified" as const,
@@ -163,9 +155,7 @@ export function extractMigratedKeywords(...texts: string[]): string[] {
 }
 
 /** 迁移入口：扫描 v1 行 → engine.put（dry-run 只统计） */
-export async function migrateV1ToV2(
-  opts: MigrateV1ToV2Options = {},
-): Promise<MigrateV1ToV2Result> {
+export async function migrateV1ToV2(opts: MigrateV1ToV2Options = {}): Promise<MigrateV1ToV2Result> {
   const sql = getSql();
   const engine = opts.engine ?? new PostgresMemoryStoreEngine();
   const dryRun = opts.dryRun === true;
@@ -198,8 +188,7 @@ export async function migrateV1ToV2(
 
     // v1 scope 列（JSONB）→ repo
     const scope = (parseJson(raw.scope) ?? {}) as { repositoryId?: string };
-    const repo =
-      typeof scope.repositoryId === "string" ? scope.repositoryId : "";
+    const repo = typeof scope.repositoryId === "string" ? scope.repositoryId : "";
 
     const entry = buildV2EntryFromV1Row({
       id: String(raw.id),

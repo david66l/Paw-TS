@@ -1,18 +1,12 @@
 import type { LoopInputPort, LoopSafeBoundary } from "@paw/agent-loop";
-import type {
-  JournalContextPlanV1,
-  JournalContextPlannerV1,
-} from "@paw/runtime";
+import type { JournalContextPlanV1, JournalContextPlannerV1 } from "@paw/runtime";
 
 import {
   type ContextCompactionPolicyV1,
   DEFAULT_CONTEXT_COMPACTION_POLICY_V1,
   freezeContextCompactionPolicyV1,
 } from "./policy.js";
-import {
-  type ContextCompactionPlanV1,
-  planContextCompactionV1,
-} from "./range-planner.js";
+import { type ContextCompactionPlanV1, planContextCompactionV1 } from "./range-planner.js";
 
 type JournalContextSnapshotV1 = Parameters<JournalContextPlannerV1["plan"]>[0];
 
@@ -33,9 +27,7 @@ export interface ContextCompactionInputPortOptionsV1 {
   readonly signal: AbortSignal;
   readonly policy?: ContextCompactionPolicyV1;
   /** May run distillation and append checkpoint facts before input promotion. */
-  readonly onDecision: (
-    decision: ContextCompactionBoundaryDecisionV1,
-  ) => void | Promise<void>;
+  readonly onDecision: (decision: ContextCompactionBoundaryDecisionV1) => void | Promise<void>;
   /** Best-effort observation; compaction failure must fall back to base input. */
   readonly onError?: (
     error: unknown,
@@ -58,9 +50,7 @@ export function createContextCompactionInputPortV1(
   const planContext = captureContextPlanner(options.context);
   const onDecision = captureCallback(options.onDecision, "decision");
   const onError =
-    options.onError === undefined
-      ? undefined
-      : captureCallback(options.onError, "error");
+    options.onError === undefined ? undefined : captureCallback(options.onError, "error");
   const policy = freezeContextCompactionPolicyV1(
     options.policy ?? DEFAULT_CONTEXT_COMPACTION_POLICY_V1,
   );
@@ -125,9 +115,7 @@ function captureSnapshotSource(
   return source.readInputSnapshot.bind(source);
 }
 
-function captureContextPlanner(
-  context: JournalContextPlannerV1,
-): JournalContextPlannerV1["plan"] {
+function captureContextPlanner(context: JournalContextPlannerV1): JournalContextPlannerV1["plan"] {
   if (!context || typeof context.plan !== "function") {
     throw new Error("Context compaction planner is invalid");
   }

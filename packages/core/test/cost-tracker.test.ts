@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  CostTracker,
-  estimateUsageCost,
-  resolveModelPricing,
-} from "../src/cost-tracker.js";
+import { CostTracker, estimateUsageCost, resolveModelPricing } from "../src/cost-tracker.js";
 
 describe("CostTracker", () => {
   it("starts at zero", () => {
@@ -171,15 +167,9 @@ describe("CostTracker", () => {
   });
 
   it("resolveModelPricing maps deepseek variants", () => {
-    expect(resolveModelPricing("deepseek:deepseek-v4-flash").currency).toBe(
-      "CNY",
-    );
-    expect(
-      resolveModelPricing("deepseek:deepseek-v4-flash").promptCacheHitPer1M,
-    ).toBe(0.02);
-    expect(
-      resolveModelPricing("deepseek:deepseek-v4-pro").promptCacheMissPer1M,
-    ).toBe(3);
+    expect(resolveModelPricing("deepseek:deepseek-v4-flash").currency).toBe("CNY");
+    expect(resolveModelPricing("deepseek:deepseek-v4-flash").promptCacheHitPer1M).toBe(0.02);
+    expect(resolveModelPricing("deepseek:deepseek-v4-pro").promptCacheMissPer1M).toBe(3);
     expect(resolveModelPricing("deepseek-chat").promptCacheMissPer1M).toBe(1);
   });
 });

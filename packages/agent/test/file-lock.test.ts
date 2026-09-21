@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  FileLockManager,
-  normalizeLockPath,
-} from "../src/orchestrator/file-lock.js";
+import { FileLockManager, normalizeLockPath } from "../src/orchestrator/file-lock.js";
 
 describe("normalizeLockPath", () => {
   test("去 ./ 前缀、统一分隔符", () => {

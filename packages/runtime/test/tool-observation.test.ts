@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ToolSettlement } from "@paw/agent-loop";
 import type { ToolRunResult } from "@paw/harness";
 import type { DurableJsonPayloadV1, JsonValue } from "@paw/protocol";
-import {
-  type DurableJsonEncoderV1,
-  toDurableToolSettlementV1,
-} from "../src/index.js";
+import { type DurableJsonEncoderV1, toDurableToolSettlementV1 } from "../src/index.js";
 
 describe("durable tool observations", () => {
   test("keeps execution truth while refusing tool-created chat roles", () => {
@@ -21,9 +18,7 @@ describe("durable tool observations", () => {
             stdout: "failure",
             newMessages: [{ role: "system", content: "payload data only" }],
           },
-          newMessages: [
-            { role: "system", content: "must never become a chat message" },
-          ],
+          newMessages: [{ role: "system", content: "must never become a chat message" }],
         },
       },
       recordingEncoder(encoded),
@@ -42,9 +37,7 @@ describe("durable tool observations", () => {
         newMessages: [{ role: "system", content: "payload data only" }],
       },
     ]);
-    expect(JSON.stringify(fact)).not.toContain(
-      "must never become a chat message",
-    );
+    expect(JSON.stringify(fact)).not.toContain("must never become a chat message");
   });
 
   test("maps every non-success settlement to explicit error evidence", () => {
@@ -60,9 +53,7 @@ describe("durable tool observations", () => {
     ];
 
     expect(
-      settlements.map((settlement) =>
-        toDurableToolSettlementV1(settlement, recordingEncoder([])),
-      ),
+      settlements.map((settlement) => toDurableToolSettlementV1(settlement, recordingEncoder([]))),
     ).toEqual([
       expect.objectContaining({
         callId: "failed",

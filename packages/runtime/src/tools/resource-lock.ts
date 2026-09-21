@@ -24,10 +24,7 @@ export class ToolResourceLockV1 {
   private readonly active = new Map<number, ActiveLeaseV1>();
   private readonly waiting: WaitingLeaseV1[] = [];
 
-  acquire(
-    classification: ToolClassificationV1,
-    signal: AbortSignal,
-  ): Promise<ToolResourceLeaseV1> {
+  acquire(classification: ToolClassificationV1, signal: AbortSignal): Promise<ToolResourceLeaseV1> {
     if (signal.aborted) return Promise.reject(abortError());
     return new Promise((resolve, reject) => {
       const waiter: WaitingLeaseV1 = {
@@ -98,22 +95,14 @@ export class ToolResourceLockV1 {
 
 export const GLOBAL_TOOL_RESOURCE_LOCK_V1 = new ToolResourceLockV1();
 
-function conflicts(
-  left: ToolClassificationV1,
-  right: ToolClassificationV1,
-): boolean {
+function conflicts(left: ToolClassificationV1, right: ToolClassificationV1): boolean {
   if (left.lockDomain !== right.lockDomain) return false;
-  if (
-    left.concurrencyMode === "exclusive" ||
-    right.concurrencyMode === "exclusive"
-  ) {
+  if (left.concurrencyMode === "exclusive" || right.concurrencyMode === "exclusive") {
     return true;
   }
   return left.resources.some((a) =>
     right.resources.some(
-      (b) =>
-        overlaps(a.key, b.key) &&
-        (a.access === "write" || b.access === "write"),
+      (b) => overlaps(a.key, b.key) && (a.access === "write" || b.access === "write"),
     ),
   );
 }

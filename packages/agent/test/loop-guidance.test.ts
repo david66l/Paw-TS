@@ -115,8 +115,6 @@ describe("late loop guidance v1", () => {
       historyUsed: 10,
       historyBudget: 100,
     });
-    expect(candidates.map((candidate) => candidate.receipt.kind)).toEqual([
-      "implementation",
-    ]);
+    expect(candidates.map((candidate) => candidate.receipt.kind)).toEqual(["implementation"]);
   });
 });

@@ -120,9 +120,7 @@ describe("dynamic memory topic trajectories", () => {
   });
 
   test("keeps coarse families fixed while deriving concrete topic identity dynamically", () => {
-    expect(normalizeMemoryTopicNameV1("  后端　技术栈偏好  ")).toBe(
-      "后端 技术栈偏好",
-    );
+    expect(normalizeMemoryTopicNameV1("  后端　技术栈偏好  ")).toBe("后端 技术栈偏好");
     const proposal = createMemoryTopicProposalV1({
       scope,
       family: "profile",
@@ -277,9 +275,10 @@ describe("dynamic memory topic trajectories", () => {
     expect(rebuilt.snapshot.id).toBe(first.snapshot.id);
     expect(rebuilt.snapshot.projectionHash).toBe(first.snapshot.projectionHash);
     expect(first.snapshot.trajectories).toHaveLength(1);
-    expect(
-      first.snapshot.trajectories[0]?.states.map((state) => state.memoryId),
-    ).toEqual(["old", "current"]);
+    expect(first.snapshot.trajectories[0]?.states.map((state) => state.memoryId)).toEqual([
+      "old",
+      "current",
+    ]);
     expect(() => assertMemoryTopicProjectionIntegrityV1(first)).not.toThrow();
   });
 

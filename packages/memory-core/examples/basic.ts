@@ -1,8 +1,4 @@
-import {
-  createEvidenceIndex,
-  createEvidenceResolver,
-  createInMemoryStore,
-} from "../src/index.js";
+import { createEvidenceIndex, createEvidenceResolver, createInMemoryStore } from "../src/index.js";
 
 const scope = {
   tenantId: "example",
@@ -36,9 +32,6 @@ const index = createEvidenceIndex({
   archive: store,
 });
 const memory = createEvidenceResolver({ index });
-const result = await memory.resolve(
-  "How long was my Kyoto trip?",
-  new AbortController().signal,
-);
+const result = await memory.resolve("How long was my Kyoto trip?", new AbortController().signal);
 
 console.log(result.packetSources.map((source) => source.text));

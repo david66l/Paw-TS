@@ -62,8 +62,7 @@ export function validateProfileDraft(
 ): { ok: true; supportCount: number } | { ok: false; reason: string } {
   const insight = draft.insight?.trim() ?? "";
   if (!insight) return { ok: false, reason: "empty_insight" };
-  if (!isBehaviorDescription(insight))
-    return { ok: false, reason: "not_behavior_description" };
+  if (!isBehaviorDescription(insight)) return { ok: false, reason: "not_behavior_description" };
   const evidence = (draft.evidence ?? []).map((e) => e.trim()).filter(Boolean);
   const unique = [...new Set(evidence)];
   if (unique.length < PROFILE_MIN_SUPPORT) {
@@ -82,8 +81,11 @@ export function profileSimilarity(a: string, b: string): number {
     const out = new Set<string>();
     const lower = s.toLowerCase();
     const lat = /[a-z0-9]{4,}/g;
-    let m: RegExpExecArray | null;
-    while ((m = lat.exec(lower))) out.add(m[0]!);
+    let m: RegExpExecArray | null = lat.exec(lower);
+    while (m !== null) {
+      out.add(m[0]!);
+      m = lat.exec(lower);
+    }
     const chars = [...s].filter((c) => /[\u4e00-\u9fff]/u.test(c));
     for (let i = 0; i < chars.length - 1; i++) {
       out.add(chars[i]! + chars[i + 1]!);
@@ -109,9 +111,7 @@ async function listActiveProfiles(
   repo: string,
 ): Promise<ProfileInsight[]> {
   const rows = await engine.query({ kind: "profile", repo, limit: 200 });
-  return rows.filter(
-    (e): e is ProfileInsight => e.kind === "profile" && e.tInvalid == null,
-  );
+  return rows.filter((e): e is ProfileInsight => e.kind === "profile" && e.tInvalid == null);
 }
 
 /**
@@ -132,9 +132,7 @@ export async function admitProfile(
   }
 
   const nowIso = (opts.now?.() ?? new Date()).toISOString();
-  const evidence = [
-    ...new Set(draft.evidence.map((e) => e.trim()).filter(Boolean)),
-  ];
+  const evidence = [...new Set(draft.evidence.map((e) => e.trim()).filter(Boolean))];
   const cap = opts.cap ?? PROFILE_CAP;
   const existing = await listActiveProfiles(opts.engine, draft.repo);
 
@@ -152,11 +150,7 @@ export async function admitProfile(
         draft.insight.trim().length >= best.entry.insight.length
           ? draft.insight.trim()
           : best.entry.insight,
-      supportCount: Math.max(
-        best.entry.supportCount,
-        mergedEvidence.length,
-        PROFILE_MIN_SUPPORT,
-      ),
+      supportCount: Math.max(best.entry.supportCount, mergedEvidence.length, PROFILE_MIN_SUPPORT),
       evidence: mergedEvidence,
       confidence: Math.max(best.entry.confidence, draft.confidence ?? 0.7),
       // 不改 id：内容哈希若变会成新 id；EDIT 语义是原地更新同 id

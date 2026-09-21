@@ -12,10 +12,7 @@ import {
   parseTaskCheckpointV1,
 } from "@paw/protocol";
 import type { VerifiedCanonicalPayloadEvidenceV1 } from "../payload/verified-model-response-evidence.js";
-import {
-  canonicalJsonStringifyV1,
-  immutableCanonicalJsonCloneV1,
-} from "./canonical-json.js";
+import { canonicalJsonStringifyV1, immutableCanonicalJsonCloneV1 } from "./canonical-json.js";
 import { assertTaskCheckpointStableBoundaryV1 } from "./journal-context.js";
 import {
   type TaskCheckpointPayloadCodecV1,
@@ -55,16 +52,11 @@ export interface TaskCheckpointDistillerV1 {
   ): Promise<TaskCheckpointDistillerResultV1>;
 }
 
-export interface TaskCheckpointDistillationCodecV1
-  extends TaskCheckpointPayloadCodecV1 {
-  resolve(
-    payload: DurableJsonPayloadV1,
-    signal: AbortSignal,
-  ): JsonValue | Promise<JsonValue>;
+export interface TaskCheckpointDistillationCodecV1 extends TaskCheckpointPayloadCodecV1 {
+  resolve(payload: DurableJsonPayloadV1, signal: AbortSignal): JsonValue | Promise<JsonValue>;
 }
 
-export interface RunTaskCheckpointDistillationInputV1
-  extends TaskCheckpointSourceInputV1 {
+export interface RunTaskCheckpointDistillationInputV1 extends TaskCheckpointSourceInputV1 {
   readonly boundary: TaskCheckpointDistillationBoundaryV1;
 }
 
@@ -72,9 +64,7 @@ export interface RunTaskCheckpointDistillationOptionsV1 {
   readonly loadPayloadEvidence?: (
     snapshot: SessionInputSnapshot<InputFactV1>,
     signal: AbortSignal,
-  ) =>
-    | VerifiedCanonicalPayloadEvidenceV1
-    | Promise<VerifiedCanonicalPayloadEvidenceV1>;
+  ) => VerifiedCanonicalPayloadEvidenceV1 | Promise<VerifiedCanonicalPayloadEvidenceV1>;
 }
 
 type TaskCheckpointPayloadEvidenceLoaderV1 = NonNullable<
@@ -135,12 +125,7 @@ export async function runTaskCheckpointDistillationV1(
     );
   }
   assertTaskCheckpointStableBoundaryV1(snapshot, input.boundary);
-  const binding = await bindTaskCheckpointSourceV1(
-    snapshot,
-    input,
-    codec,
-    signal,
-  );
+  const binding = await bindTaskCheckpointSourceV1(snapshot, input, codec, signal);
   const claimId = checkpointClaimId({
     checkpointId: input.checkpointId,
     boundary: input.boundary,
@@ -182,10 +167,7 @@ export async function runTaskCheckpointDistillationV1(
     sourceThroughSeq: input.sourceThroughSeq,
     sourceInputHash: binding.sourceInputHash,
   };
-  if (
-    (await session.commitInputFacts(binding.expectedTailSeq, [claim])) !==
-    "committed"
-  ) {
+  if ((await session.commitInputFacts(binding.expectedTailSeq, [claim])) !== "committed") {
     return result("conflict", claimId, input.checkpointId, 0);
   }
 
@@ -219,27 +201,10 @@ export async function runTaskCheckpointDistillationV1(
     input.sourceFromSeq,
     input.sourceThroughSeq,
   );
-  if (
-    settlement.status !== "completed" ||
-    settlement.checkpoint === undefined
-  ) {
-    return result(
-      "settled_without_checkpoint",
-      claimId,
-      input.checkpointId,
-      1,
-      settlement.status,
-    );
+  if (settlement.status !== "completed" || settlement.checkpoint === undefined) {
+    return result("settled_without_checkpoint", claimId, input.checkpointId, 1, settlement.status);
   }
-  return finalizeSettledCheckpoint(
-    session,
-    input,
-    claimId,
-    codec,
-    signal,
-    1,
-    loadPayloadEvidence,
-  );
+  return finalizeSettledCheckpoint(session, input, claimId, codec, signal, 1, loadPayloadEvidence);
 }
 
 async function resumeDistillation(
@@ -249,9 +214,7 @@ async function resumeDistillation(
   existing: ReturnType<typeof findDistillationState>,
   codec: TaskCheckpointDistillationCodecV1,
   signal: AbortSignal,
-  loadPayloadEvidence:
-    | RunTaskCheckpointDistillationOptionsV1["loadPayloadEvidence"]
-    | undefined,
+  loadPayloadEvidence: RunTaskCheckpointDistillationOptionsV1["loadPayloadEvidence"] | undefined,
 ): Promise<TaskCheckpointDistillationRunResultV1> {
   if (!existing.claim || !existing.settlement) {
     return result("interrupted", claimId, input.checkpointId, 0);
@@ -259,10 +222,7 @@ async function resumeDistillation(
   if (existing.recorded) {
     return result("reused", claimId, input.checkpointId, 0, "completed");
   }
-  if (
-    existing.settlement.status !== "completed" ||
-    existing.settlement.checkpoint === undefined
-  ) {
+  if (existing.settlement.status !== "completed" || existing.settlement.checkpoint === undefined) {
     return result(
       "settled_without_checkpoint",
       claimId,
@@ -271,15 +231,7 @@ async function resumeDistillation(
       existing.settlement.status,
     );
   }
-  return finalizeSettledCheckpoint(
-    session,
-    input,
-    claimId,
-    codec,
-    signal,
-    0,
-    loadPayloadEvidence,
-  );
+  return finalizeSettledCheckpoint(session, input, claimId, codec, signal, 0, loadPayloadEvidence);
 }
 
 async function settleDistillation(
@@ -358,13 +310,7 @@ async function finalizeSettledCheckpoint(
     }
     assertClaimMatches(state.claim, input, state.claim.sourceInputHash);
     if (state.recorded) {
-      return result(
-        "reused",
-        claimId,
-        input.checkpointId,
-        distillerCalls,
-        "completed",
-      );
+      return result("reused", claimId, input.checkpointId, distillerCalls, "completed");
     }
     const settlement = state.settlement;
     if (!settlement) {
@@ -393,9 +339,7 @@ async function finalizeSettledCheckpoint(
             "completed",
           );
         }
-        payloadEvidence = capturePayloadEvidence(
-          await loadPayloadEvidence(snapshot, signal),
-        );
+        payloadEvidence = capturePayloadEvidence(await loadPayloadEvidence(snapshot, signal));
         payloadEvidence.assertSnapshot(snapshot);
       }
       checkpoint = await resolveCheckpoint(
@@ -419,13 +363,7 @@ async function finalizeSettledCheckpoint(
       }
     } catch {
       if (signal.aborted) throwIfAborted(signal);
-      return result(
-        "invalid_settlement",
-        claimId,
-        input.checkpointId,
-        distillerCalls,
-        "completed",
-      );
+      return result("invalid_settlement", claimId, input.checkpointId, distillerCalls, "completed");
     }
 
     const committed = await createAndCommitTaskCheckpointFromSnapshotV1(
@@ -444,21 +382,9 @@ async function finalizeSettledCheckpoint(
       signal,
     );
     if (committed.status === "conflict") {
-      return result(
-        "conflict",
-        claimId,
-        input.checkpointId,
-        distillerCalls,
-        "completed",
-      );
+      return result("conflict", claimId, input.checkpointId, distillerCalls, "completed");
     }
-    return result(
-      "committed",
-      claimId,
-      input.checkpointId,
-      distillerCalls,
-      "completed",
-    );
+    return result("committed", claimId, input.checkpointId, distillerCalls, "completed");
   }
 }
 
@@ -549,10 +475,7 @@ function findDistillationState(
       state.settlement = fact;
       state.settlementSeq = entry.seq;
       states.set(fact.claimId, state);
-    } else if (
-      fact.type === "context.checkpoint_recorded" &&
-      fact.distillationClaimId
-    ) {
+    } else if (fact.type === "context.checkpoint_recorded" && fact.distillationClaimId) {
       const state = states.get(fact.distillationClaimId) ?? {};
       state.recorded = fact;
       states.set(fact.distillationClaimId, state);
@@ -563,8 +486,7 @@ function findDistillationState(
       id !== claimId &&
       state.claim !== undefined &&
       (state.settlement === undefined ||
-        (state.settlement.status === "completed" &&
-          state.recorded === undefined)),
+        (state.settlement.status === "completed" && state.recorded === undefined)),
   );
   return { ...states.get(claimId), otherPending };
 }
@@ -603,18 +525,14 @@ function assertCheckpointSourcesInRange(
   ];
   if (
     items.some((item) =>
-      item.sourceSeqs.some(
-        (seq) => seq < sourceFromSeq || seq > sourceThroughSeq,
-      ),
+      item.sourceSeqs.some((seq) => seq < sourceFromSeq || seq > sourceThroughSeq),
     )
   ) {
     throw new Error("Distilled checkpoint source is outside its claimed range");
   }
 }
 
-function checkpointClaimId(
-  identity: Readonly<Record<string, JsonValue | undefined>>,
-): string {
+function checkpointClaimId(identity: Readonly<Record<string, JsonValue | undefined>>): string {
   const value = Object.fromEntries(
     Object.entries(identity).filter((entry) => entry[1] !== undefined),
   ) as JsonValue;
@@ -666,10 +584,7 @@ function result(
 }
 
 function errorCode(error: unknown): string {
-  if (
-    error instanceof Error &&
-    /^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,511}$/.test(error.name)
-  ) {
+  if (error instanceof Error && /^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,511}$/.test(error.name)) {
     return error.name;
   }
   return "DistillationUnknown";
@@ -679,8 +594,6 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
     throw signal.reason instanceof Error
       ? signal.reason
-      : new Error(
-          String(signal.reason ?? "Task checkpoint distillation aborted"),
-        );
+      : new Error(String(signal.reason ?? "Task checkpoint distillation aborted"));
   }
 }

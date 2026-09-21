@@ -6,10 +6,7 @@ import { TaskPlanner } from "../src/task-planner.js";
 describe("TaskPlanner", () => {
   test("createPlan builds stable ids and stores plan", () => {
     const tp = new TaskPlanner();
-    const plan = tp.createPlan("wf-x", [
-      {},
-      { id: "custom", depends_on: ["plan-000"] },
-    ]);
+    const plan = tp.createPlan("wf-x", [{}, { id: "custom", depends_on: ["plan-000"] }]);
     expect(plan.workflow_id).toBe("wf-x");
     expect(plan.items[0]?.id).toBe("plan-000");
     expect(plan.items[0]?.task_id).toBe("task-000");
@@ -43,9 +40,7 @@ describe("TaskPlanner", () => {
     const tp = new TaskPlanner();
     const plan = tp.createPlan("wf", [{ id: "a" }]);
     plan.updateItemStatus("plan-000", PlanItemStatus.FAILED);
-    expect(() => tp.applyUpdate([], ["plan-000"], "x")).toThrow(
-      /without resolution/,
-    );
+    expect(() => tp.applyUpdate([], ["plan-000"], "x")).toThrow(/without resolution/);
   });
 
   test("applyUpdate without createPlan throws", () => {

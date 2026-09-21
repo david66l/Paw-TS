@@ -22,9 +22,7 @@ async function connect() {
     });
   };
   ws.onmessage = (ev) => {
-    const msg = JSON.parse(
-      typeof ev.data === "string" ? ev.data : ev.data.toString(),
-    );
+    const msg = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject, t } = pending.get(msg.id);
       clearTimeout(t);
@@ -50,19 +48,14 @@ async function evalJs(send, expression, awaitPromise = false) {
   });
   if (r.exceptionDetails) {
     throw new Error(
-      r.exceptionDetails.exception?.description ||
-        r.exceptionDetails.text ||
-        "eval failed",
+      r.exceptionDetails.exception?.description || r.exceptionDetails.text || "eval failed",
     );
   }
   return r.result?.value;
 }
 
 async function bodyText(send) {
-  return evalJs(
-    send,
-    `document.body?.innerText || document.documentElement?.innerText || ""`,
-  );
+  return evalJs(send, `document.body?.innerText || document.documentElement?.innerText || ""`);
 }
 
 async function sendChat(send, text) {
@@ -193,8 +186,7 @@ async function main() {
       }))()`,
       true,
     );
-    if (runs?.ok && Array.isArray(runs.items))
-      pass("runs.list IPC", `${runs.items.length} runs`);
+    if (runs?.ok && Array.isArray(runs.items)) pass("runs.list IPC", `${runs.items.length} runs`);
     else fail("runs.list IPC", JSON.stringify(runs)?.slice(0, 200));
   } catch (e) {
     fail("runs.list IPC", String(e));
@@ -240,8 +232,7 @@ async function main() {
     else fail("Ops tab", JSON.stringify(ops));
     await sleep(400);
     const text = await bodyText(send);
-    if (/Doctor|Checkpoint|Run/i.test(text))
-      pass("Ops panel content", "labels present");
+    if (/Doctor|Checkpoint|Run/i.test(text)) pass("Ops panel content", "labels present");
     else fail("Ops panel content", text.slice(0, 300));
   } catch (e) {
     fail("Ops tab", String(e));

@@ -8,12 +8,9 @@ const EVENT_WIDTH = 16;
 const EVENT_FILE = /^(\d{16})\.json$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const ZERO_HASH = "0".repeat(64);
-export const EMPTY_RUN_JOURNAL_PREFIX_HASH_V1 = createHash("sha256")
-  .update("[]")
-  .digest("hex");
+export const EMPTY_RUN_JOURNAL_PREFIX_HASH_V1 = createHash("sha256").update("[]").digest("hex");
 const JOURNAL_ARTIFACT_FILE = /^(\d{16})-(\d{16})-([0-9a-f]{64})\.json$/;
-const RECOVERY_SNAPSHOT_ARTIFACT_FILE =
-  /^snapshot-(\d{16})-([0-9a-f]{64})\.json$/;
+const RECOVERY_SNAPSHOT_ARTIFACT_FILE = /^snapshot-(\d{16})-([0-9a-f]{64})\.json$/;
 /** @internal Bound operations captured at issuance; public properties are untrusted. */
 export interface VerifiedFileSessionExecutionLeaseCapabilityV1 {
   readonly workspaceRoot: string;
@@ -41,12 +38,7 @@ const TEMP_FILE =
   /^(?:identity|\d{16})\.json\.tmp-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export interface SessionLeaseTransitionAttemptV1 {
-  readonly kind:
-    | "claim"
-    | "heartbeat"
-    | "release"
-    | "journal_commit"
-    | "recovery_snapshot_commit";
+  readonly kind: "claim" | "heartbeat" | "release" | "journal_commit" | "recovery_snapshot_commit";
   readonly eventSeq: number;
   readonly fencingToken: number;
 }
@@ -61,13 +53,9 @@ export interface FileSessionExecutionLeaseOptionsV1 {
   readonly basePrefixHash: string;
   readonly clock?: () => number;
   /** @internal Deterministic transition-race seam. */
-  readonly beforeTransitionPublish?: (
-    attempt: SessionLeaseTransitionAttemptV1,
-  ) => void;
+  readonly beforeTransitionPublish?: (attempt: SessionLeaseTransitionAttemptV1) => void;
   /** @internal Exposes the hard-link-before-temp-unlink visibility window. */
-  readonly afterTransitionLink?: (
-    attempt: SessionLeaseTransitionAttemptV1,
-  ) => void;
+  readonly afterTransitionLink?: (attempt: SessionLeaseTransitionAttemptV1) => void;
 }
 
 export interface JournalHeadV1 {
@@ -341,18 +329,9 @@ interface Authority {
   readonly lastEventHash: string;
   readonly lastEventTime?: number;
   readonly headsByRunId: ReadonlyMap<string, JournalHeadV1>;
-  readonly commitsByRunId: ReadonlyMap<
-    string,
-    ReadonlyMap<string, JournalCommitEvent>
-  >;
-  readonly snapshotsByRunId: ReadonlyMap<
-    string,
-    ReadonlyMap<string, RecoverySnapshotCommitEvent>
-  >;
-  readonly latestSnapshotByRunId: ReadonlyMap<
-    string,
-    RecoverySnapshotCommitEvent
-  >;
+  readonly commitsByRunId: ReadonlyMap<string, ReadonlyMap<string, JournalCommitEvent>>;
+  readonly snapshotsByRunId: ReadonlyMap<string, ReadonlyMap<string, RecoverySnapshotCommitEvent>>;
+  readonly latestSnapshotByRunId: ReadonlyMap<string, RecoverySnapshotCommitEvent>;
 }
 
 /**
@@ -419,9 +398,7 @@ export function acquireFileSessionExecutionLeaseV1(
     };
     const attempt = transitionAttempt(event);
     options.beforeTransitionPublish?.(attempt);
-    if (
-      publishEvent(paths, event, () => options.afterTransitionLink?.(attempt))
-    ) {
+    if (publishEvent(paths, event, () => options.afterTransitionLink?.(attempt))) {
       return {
         status: "acquired",
         lease: new FileLease(
@@ -465,9 +442,7 @@ export function readFileSessionJournalCommitIndexV1(
   }
   readAndValidateIdentity(paths, options.sessionId);
   const authority = readAuthority(paths, options.sessionId);
-  const commits = [
-    ...(authority.commitsByRunId.get(options.runId)?.values() ?? []),
-  ]
+  const commits = [...(authority.commitsByRunId.get(options.runId)?.values() ?? [])]
     .sort((left, right) => left.eventSeq - right.eventSeq)
     .map(journalCommitIndexEntry);
   return immutableJournalCommitIndex(
@@ -549,18 +524,13 @@ export function readFileSessionAuthorityInventoryV1(
 export function discoverFileSessionAuthoritiesV1(
   options: DiscoverFileSessionAuthoritiesOptionsV1,
 ): FileSessionAuthorityDiscoveryV1 {
-  const workspaceRoot = fs.realpathSync.native(
-    path.resolve(options.workspaceRoot),
-  );
+  const workspaceRoot = fs.realpathSync.native(path.resolve(options.workspaceRoot));
   const workspaceStat = fs.lstatSync(workspaceRoot);
   if (!workspaceStat.isDirectory() || workspaceStat.isSymbolicLink()) {
     throw new Error("Session authority workspace must be a real directory");
   }
   const sessionsRoot = path.join(workspaceRoot, ".paw", "paw-next", "sessions");
-  const rootStat = strictReadonlyDirectoryIfPresent(
-    workspaceRoot,
-    sessionsRoot,
-  );
+  const rootStat = strictReadonlyDirectoryIfPresent(workspaceRoot, sessionsRoot);
   if (!rootStat) return immutableAuthorityDiscovery([]);
   const names = fs.readdirSync(sessionsRoot).sort(compareText);
   const entries = names.map((entryName) =>
@@ -599,9 +569,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
     private readonly beforePublish:
       | ((attempt: SessionLeaseTransitionAttemptV1) => void)
       | undefined,
-    private readonly afterLink:
-      | ((attempt: SessionLeaseTransitionAttemptV1) => void)
-      | undefined,
+    private readonly afterLink: ((attempt: SessionLeaseTransitionAttemptV1) => void) | undefined,
   ) {
     this.workspaceRoot = paths.workspaceRoot;
     this.sessionId = claim.sessionId;
@@ -663,9 +631,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
     input: LinearizeRecoverySnapshotInputV1,
   ): Promise<LinearizeRecoverySnapshotResultV1> {
     assertLinearizeRecoverySnapshotInput(input);
-    return this.serializeTransition(() =>
-      this.linearizeRecoverySnapshotTransition(input),
-    );
+    return this.serializeTransition(() => this.linearizeRecoverySnapshotTransition(input));
   }
 
   private async renewTransition(): Promise<void> {
@@ -708,9 +674,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
         continue;
       }
       try {
-        this.expiresAtValue = this.ownedActiveProjection(
-          readClock(this.clock),
-        ).expiresAt;
+        this.expiresAtValue = this.ownedActiveProjection(readClock(this.clock)).expiresAt;
         return;
       } catch (error) {
         throw this.markLost(error);
@@ -718,9 +682,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
     }
   }
 
-  private async releaseTransition(): Promise<
-    "released" | "already_released" | "lost"
-  > {
+  private async releaseTransition(): Promise<"released" | "already_released" | "lost"> {
     if (this.released) return "already_released";
     if (this.lost) return "lost";
     for (;;) {
@@ -794,11 +756,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
         return { status: "lost" };
       }
       const current = authority.current;
-      if (
-        !current ||
-        !sameClaim(current.claim, this.claim) ||
-        !isActive(current, now)
-      ) {
+      if (!current || !sameClaim(current.claim, this.claim) || !isActive(current, now)) {
         this.markLost(new Error("lease cannot linearize a journal batch"));
         return { status: "lost" };
       }
@@ -877,11 +835,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
         return { status: "lost" };
       }
       const current = authority.current;
-      if (
-        !current ||
-        !sameClaim(current.claim, this.claim) ||
-        !isActive(current, now)
-      ) {
+      if (!current || !sameClaim(current.claim, this.claim) || !isActive(current, now)) {
         this.markLost(new Error("lease cannot linearize a recovery snapshot"));
         return { status: "lost" };
       }
@@ -889,9 +843,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
       const head = journalHeadForRun(authority, this.runId);
       if (existing) {
         if (!sameRecoverySnapshotCommit(existing, input)) {
-          throw new Error(
-            "Recovery snapshotId was reused with different content",
-          );
+          throw new Error("Recovery snapshotId was reused with different content");
         }
         if (!sameJournalHead(head, input.head)) {
           return { status: "conflict", head };
@@ -905,11 +857,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
       if (!sameJournalHead(head, input.head)) {
         return { status: "conflict", head };
       }
-      const journalCommit = commitForRun(
-        authority,
-        this.runId,
-        input.journalCommitId,
-      );
+      const journalCommit = commitForRun(authority, this.runId, input.journalCommitId);
       if (
         !journalCommit ||
         journalCommit.eventSeq !== input.journalCommitEventSeq ||
@@ -979,9 +927,7 @@ class FileLease implements FileSessionExecutionLeaseV1 {
   private markLost(error: unknown): SessionExecutionLeaseLostError {
     this.lost = true;
     const detail = error instanceof Error ? `: ${error.message}` : "";
-    const result = new SessionExecutionLeaseLostError(
-      `Session lease lost${detail}`,
-    );
+    const result = new SessionExecutionLeaseLostError(`Session lease lost${detail}`);
     if (!this.signal.aborted) this.abortController.abort(result);
     return result;
   }
@@ -1000,13 +946,9 @@ export function assertFileSessionExecutionLeaseCapabilityV1(
 ): VerifiedFileSessionExecutionLeaseCapabilityV1 {
   const capability = issuedLeaseCapabilities.get(value as object);
   if (!capability) {
-    throw new Error(
-      "File Session requires an issued execution lease capability",
-    );
+    throw new Error("File Session requires an issued execution lease capability");
   }
-  const canonicalWorkspace = fs.realpathSync.native(
-    path.resolve(workspaceRoot),
-  );
+  const canonicalWorkspace = fs.realpathSync.native(path.resolve(workspaceRoot));
   if (
     capability.workspaceRoot !== canonicalWorkspace ||
     capability.sessionId !== sessionId ||
@@ -1079,10 +1021,7 @@ function existingOwnershipTree(paths: LeasePaths): boolean {
   return true;
 }
 
-function validatePathTree(
-  paths: LeasePaths,
-  mode: AuthorityReadMode = "recovering",
-): void {
+function validatePathTree(paths: LeasePaths, mode: AuthorityReadMode = "recovering"): void {
   validateExistingDirectoryTree(paths.workspaceRoot, paths.eventsDir);
   assertOwnershipEntries(paths, mode);
 }
@@ -1137,11 +1076,7 @@ function strictReadonlyDirectoryIfPresent(
   target: string,
 ): fs.Stats | undefined {
   const relative = path.relative(workspaceRoot, target);
-  if (
-    relative === "" ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes("..")
-  ) {
+  if (relative === "" || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
     throw new Error("Session authority discovery escaped the workspace root");
   }
   let current = workspaceRoot;
@@ -1156,9 +1091,7 @@ function strictReadonlyDirectoryIfPresent(
       throw error;
     }
     if (!stat.isDirectory() || stat.isSymbolicLink()) {
-      throw new Error(
-        "Session authority discovery root contains a symbolic link",
-      );
+      throw new Error("Session authority discovery root contains a symbolic link");
     }
     validateDirectoryPath(workspaceRoot, current);
     targetStat = stat;
@@ -1227,10 +1160,7 @@ function discoverAuthorityEntry(
   });
 }
 
-function readDiscoveredSessionIdentity(
-  workspaceRoot: string,
-  sessionDir: string,
-): string {
+function readDiscoveredSessionIdentity(workspaceRoot: string, sessionDir: string): string {
   const ownershipDir = path.join(sessionDir, "ownership");
   const ownershipStat = fs.lstatSync(ownershipDir);
   if (!ownershipStat.isDirectory() || ownershipStat.isSymbolicLink()) {
@@ -1269,14 +1199,8 @@ function assertDiscoveryRootUnchanged(
   }
 }
 
-function sameTextList(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  );
+function sameTextList(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function compareText(left: string, right: string): number {
@@ -1296,18 +1220,13 @@ function ensureIdentity(paths: LeasePaths, sessionId: string): void {
   const expected = { schemaVersion: IDENTITY_SCHEMA, sessionId };
   if (!fs.existsSync(identityPath)) {
     if (fs.readdirSync(paths.eventsDir).length > 0) {
-      throw new Error(
-        "Session lease identity is missing beside existing authority",
-      );
+      throw new Error("Session lease identity is missing beside existing authority");
     }
     atomicPublishNewFile(identityPath, `${JSON.stringify(expected)}\n`);
   }
   const parsed = readJsonFile(identityPath, "Session lease identity");
   exactKeys(parsed, ["schemaVersion", "sessionId"], "identity");
-  if (
-    parsed.schemaVersion !== IDENTITY_SCHEMA ||
-    parsed.sessionId !== sessionId
-  ) {
+  if (parsed.schemaVersion !== IDENTITY_SCHEMA || parsed.sessionId !== sessionId) {
     throw new Error("Session lease identity mismatch");
   }
   assertOwnershipEntries(paths);
@@ -1324,10 +1243,7 @@ function readAndValidateIdentity(
     mode,
   );
   exactKeys(identity, ["schemaVersion", "sessionId"], "identity");
-  if (
-    identity.schemaVersion !== IDENTITY_SCHEMA ||
-    identity.sessionId !== sessionId
-  ) {
+  if (identity.schemaVersion !== IDENTITY_SCHEMA || identity.sessionId !== sessionId) {
     throw new Error("Session lease identity mismatch");
   }
 }
@@ -1348,19 +1264,12 @@ function readAuthority(
   let lastEventTime: number | undefined;
   const headsByRunId = new Map<string, JournalHeadV1>();
   const commitsByRunId = new Map<string, Map<string, JournalCommitEvent>>();
-  const snapshotsByRunId = new Map<
-    string,
-    Map<string, RecoverySnapshotCommitEvent>
-  >();
+  const snapshotsByRunId = new Map<string, Map<string, RecoverySnapshotCommitEvent>>();
   const latestSnapshotByRunId = new Map<string, RecoverySnapshotCommitEvent>();
   for (const [index, name] of names.entries()) {
     const eventSeq = eventSeqFromName(name);
-    if (eventSeq !== index + 1)
-      throw new Error("lease eventSeq is not contiguous");
-    const { value, contentHash } = readEventFile(
-      path.join(paths.eventsDir, name),
-      mode,
-    );
+    if (eventSeq !== index + 1) throw new Error("lease eventSeq is not contiguous");
+    const { value, contentHash } = readEventFile(path.join(paths.eventsDir, name), mode);
     const event = parseEvent(value, sessionId, eventSeq);
     if (event.previousEventHash !== previousHash) {
       throw new Error("lease previousEventHash chain is invalid");
@@ -1403,10 +1312,7 @@ function reduceEvent(
 ): Projection {
   if (event.type === "claim") {
     const token = (current?.claim.fencingToken ?? 0) + 1;
-    if (
-      event.fencingToken !== token ||
-      event.previousFencingToken !== token - 1
-    ) {
+    if (event.fencingToken !== token || event.previousFencingToken !== token - 1) {
       throw new Error("lease fencingToken is not contiguous");
     }
     if (current && !current.released && event.claimedAt < current.expiresAt) {
@@ -1464,9 +1370,7 @@ function reduceEvent(
     ) {
       throw new Error("recovery snapshot journal head anchor is invalid");
     }
-    const journalCommit = commitsByRunId
-      .get(event.runId)
-      ?.get(event.journalCommitId);
+    const journalCommit = commitsByRunId.get(event.runId)?.get(event.journalCommitId);
     if (
       !journalCommit ||
       journalCommit.eventSeq !== event.journalCommitEventSeq ||
@@ -1516,10 +1420,7 @@ function parseEvent(
   assertHash(value.previousEventHash, "event.previousEventHash");
   if (value.type === "claim") {
     exactKeys(value, CLAIM_KEYS, "claim event");
-    assertNonNegativeInteger(
-      value.previousFencingToken,
-      "previousFencingToken",
-    );
+    assertNonNegativeInteger(value.previousFencingToken, "previousFencingToken");
     assertPositiveInteger(value.leaseDurationMs, "leaseDurationMs");
     assertNonNegativeInteger(value.claimedAt, "claimedAt");
     assertNonNegativeInteger(value.expiresAt, "expiresAt");
@@ -1558,11 +1459,7 @@ function parseEvent(
     return value as unknown as JournalCommitEvent;
   }
   if (value.type === "recovery_snapshot_commit") {
-    exactKeys(
-      value,
-      RECOVERY_SNAPSHOT_COMMIT_KEYS,
-      "recovery snapshot commit event",
-    );
+    exactKeys(value, RECOVERY_SNAPSHOT_COMMIT_KEYS, "recovery snapshot commit event");
     assertHash(value.snapshotId, "snapshotId");
     assertNonNegativeInteger(value.committedAt, "committedAt");
     assertId(value.journalCommitId, "journalCommitId");
@@ -1574,9 +1471,7 @@ function parseEvent(
     assertHash(value.artifactId, "artifactId");
     assertId(value.artifactFileName, "artifactFileName");
     assertHash(value.artifactContentHash, "artifactContentHash");
-    assertRecoverySnapshotCommitShape(
-      value as unknown as RecoverySnapshotCommitEvent,
-    );
+    assertRecoverySnapshotCommitShape(value as unknown as RecoverySnapshotCommitEvent);
     return value as unknown as RecoverySnapshotCommitEvent;
   }
   throw new Error("lease event type is invalid");
@@ -1632,11 +1527,7 @@ const RECOVERY_SNAPSHOT_COMMIT_KEYS = [
   "throughSeq",
 ] as const;
 
-function publishEvent(
-  paths: LeasePaths,
-  event: TransitionEvent,
-  afterLink: () => void,
-): boolean {
+function publishEvent(paths: LeasePaths, event: TransitionEvent, afterLink: () => void): boolean {
   validatePathTree(paths);
   return atomicPublishNewFile(
     path.join(paths.eventsDir, eventFileName(event.eventSeq)),
@@ -1660,8 +1551,7 @@ function readEventFile(
   } catch {
     throw new Error("Session lease event is not valid JSON");
   }
-  if (!plainObject(value))
-    throw new Error("Session lease event must be an object");
+  if (!plainObject(value)) throw new Error("Session lease event must be an object");
   if (content !== `${JSON.stringify(value)}\n`) {
     throw new Error("Session lease event encoding is not canonical");
   }
@@ -1675,10 +1565,7 @@ function enumerateEventFileNames(directory: string): string[] {
     if (EVENT_FILE.test(name)) {
       committed.push(name);
     } else if (TEMP_FILE.test(name) && !name.startsWith("identity")) {
-      assertStrictTemporaryFile(
-        path.join(directory, name),
-        "Session lease temporary event",
-      );
+      assertStrictTemporaryFile(path.join(directory, name), "Session lease temporary event");
     } else {
       throw new Error(`Unrecognized Session lease event entry: ${name}`);
     }
@@ -1686,10 +1573,7 @@ function enumerateEventFileNames(directory: string): string[] {
   return committed;
 }
 
-function assertOwnershipEntries(
-  paths: LeasePaths,
-  mode: AuthorityReadMode = "recovering",
-): void {
+function assertOwnershipEntries(paths: LeasePaths, mode: AuthorityReadMode = "recovering"): void {
   for (const name of fs.readdirSync(paths.ownershipDir).sort()) {
     const full = path.join(paths.ownershipDir, name);
     if (name === "events") {
@@ -1742,27 +1626,15 @@ function assertStrictTemporaryFile(filePath: string, kind: string): void {
     if (fsError(error, "ENOENT")) return;
     throw error;
   }
-  if (
-    !stat.isFile() ||
-    stat.isSymbolicLink() ||
-    stat.nlink < 1 ||
-    stat.nlink > 2
-  ) {
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink < 1 || stat.nlink > 2) {
     throw new Error(`${kind} is invalid`);
   }
-  if (
-    stat.nlink === 2 &&
-    !hasMatchingCommittedSibling(filePath, stat.dev, stat.ino)
-  ) {
+  if (stat.nlink === 2 && !hasMatchingCommittedSibling(filePath, stat.dev, stat.ino)) {
     throw new Error(`${kind} hardlink is not owned by the publisher`);
   }
 }
 
-function matchingPublisherTemps(
-  authorityPath: string,
-  device: number,
-  inode: number,
-): string[] {
+function matchingPublisherTemps(authorityPath: string, device: number, inode: number): string[] {
   const prefix = `${path.basename(authorityPath)}.tmp-`;
   return fs.readdirSync(path.dirname(authorityPath)).flatMap((name) => {
     if (!name.startsWith(prefix) || !TEMP_FILE.test(name)) return [];
@@ -1774,32 +1646,20 @@ function matchingPublisherTemps(
       if (fsError(error, "ENOENT")) return [];
       throw error;
     }
-    return stat.isFile() &&
-      !stat.isSymbolicLink() &&
-      stat.dev === device &&
-      stat.ino === inode
+    return stat.isFile() && !stat.isSymbolicLink() && stat.dev === device && stat.ino === inode
       ? [candidate]
       : [];
   });
 }
 
-function hasMatchingCommittedSibling(
-  tempPath: string,
-  device: number,
-  inode: number,
-): boolean {
+function hasMatchingCommittedSibling(tempPath: string, device: number, inode: number): boolean {
   const name = path.basename(tempPath);
   const marker = name.indexOf(".tmp-");
   if (marker < 0) return false;
   const committed = path.join(path.dirname(tempPath), name.slice(0, marker));
   if (!fs.existsSync(committed)) return false;
   const stat = fs.lstatSync(committed);
-  return (
-    stat.isFile() &&
-    !stat.isSymbolicLink() &&
-    stat.dev === device &&
-    stat.ino === inode
-  );
+  return stat.isFile() && !stat.isSymbolicLink() && stat.dev === device && stat.ino === inode;
 }
 
 function readJsonFile(
@@ -1822,11 +1682,7 @@ function readJsonFile(
   return value;
 }
 
-function atomicPublishNewFile(
-  finalPath: string,
-  content: string,
-  afterLink?: () => void,
-): boolean {
+function atomicPublishNewFile(finalPath: string, content: string, afterLink?: () => void): boolean {
   const tempPath = `${finalPath}.tmp-${process.pid}-${randomUUID()}`;
   let descriptor: number | undefined;
   try {
@@ -1861,22 +1717,14 @@ function validateDirectoryPath(workspaceRoot: string, current: string): void {
   }
   const canonical = fs.realpathSync.native(current);
   const relative = path.relative(workspaceRoot, canonical);
-  if (
-    relative === "" ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes("..")
-  ) {
+  if (relative === "" || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
     throw new Error("Session lease storage escaped the workspace root");
   }
 }
 
 function ensureSafeDirectoryTree(workspaceRoot: string, target: string): void {
   const relative = path.relative(workspaceRoot, target);
-  if (
-    relative === "" ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes("..")
-  ) {
+  if (relative === "" || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
     throw new Error("Session lease storage escaped the workspace root");
   }
   let current = workspaceRoot;
@@ -1893,16 +1741,9 @@ function ensureSafeDirectoryTree(workspaceRoot: string, target: string): void {
   }
 }
 
-function validateExistingDirectoryTree(
-  workspaceRoot: string,
-  target: string,
-): void {
+function validateExistingDirectoryTree(workspaceRoot: string, target: string): void {
   const relative = path.relative(workspaceRoot, target);
-  if (
-    relative === "" ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes("..")
-  ) {
+  if (relative === "" || path.isAbsolute(relative) || relative.split(path.sep).includes("..")) {
     throw new Error("Session lease storage escaped the workspace root");
   }
   let current = workspaceRoot;
@@ -1954,9 +1795,7 @@ function journalHeadFromCommit(event: JournalCommitEvent): JournalHeadV1 {
   return { tailSeq: event.tailSeq, prefixHash: event.prefixHash };
 }
 
-function journalCommitIndexEntry(
-  event: JournalCommitEvent,
-): JournalCommitIndexEntryV1 {
+function journalCommitIndexEntry(event: JournalCommitEvent): JournalCommitIndexEntryV1 {
   return Object.freeze({
     eventSeq: event.eventSeq,
     commitId: event.commitId,
@@ -2112,9 +1951,7 @@ function assertLinearizeInput(input: LinearizeJournalBatchInputV1): void {
   });
 }
 
-function assertLinearizeRecoverySnapshotInput(
-  input: LinearizeRecoverySnapshotInputV1,
-): void {
+function assertLinearizeRecoverySnapshotInput(input: LinearizeRecoverySnapshotInputV1): void {
   assertHash(input.snapshotId, "snapshotId");
   assertId(input.journalCommitId, "journalCommitId");
   assertPositiveInteger(input.journalCommitEventSeq, "journalCommitEventSeq");
@@ -2155,8 +1992,7 @@ function assertRecoverySnapshotCommitShape(
     value.prefixHash !== value.journalPrefixHash ||
     value.snapshotId !== value.artifactId ||
     value.artifactId !== value.artifactContentHash ||
-    value.artifactFileName !==
-      recoverySnapshotArtifactFileName(value.throughSeq, value.artifactId)
+    value.artifactFileName !== recoverySnapshotArtifactFileName(value.throughSeq, value.artifactId)
   ) {
     throw new Error("Recovery snapshot artifact identity is invalid");
   }
@@ -2202,24 +2038,17 @@ function assertJournalCommitShape(
   if (
     value.artifactId !== value.artifactContentHash ||
     value.artifactFileName !==
-      journalArtifactFileName(
-        value.batchStartSeq,
-        value.batchEndSeq,
-        value.artifactId,
-      )
+      journalArtifactFileName(value.batchStartSeq, value.batchEndSeq, value.artifactId)
   ) {
     throw new Error("Journal commit artifact identity is invalid");
   }
 }
 
-function journalArtifactFileName(
-  startSeq: number,
-  endSeq: number,
-  artifactId: string,
-): string {
-  const fileName = `${String(startSeq).padStart(16, "0")}-${String(
-    endSeq,
-  ).padStart(16, "0")}-${artifactId}.json`;
+function journalArtifactFileName(startSeq: number, endSeq: number, artifactId: string): string {
+  const fileName = `${String(startSeq).padStart(16, "0")}-${String(endSeq).padStart(
+    16,
+    "0",
+  )}-${artifactId}.json`;
   const match = JOURNAL_ARTIFACT_FILE.exec(fileName);
   if (
     !match ||
@@ -2232,14 +2061,8 @@ function journalArtifactFileName(
   return fileName;
 }
 
-function recoverySnapshotArtifactFileName(
-  throughSeq: number,
-  artifactId: string,
-): string {
-  const fileName = `snapshot-${String(throughSeq).padStart(
-    EVENT_WIDTH,
-    "0",
-  )}-${artifactId}.json`;
+function recoverySnapshotArtifactFileName(throughSeq: number, artifactId: string): string {
+  const fileName = `snapshot-${String(throughSeq).padStart(EVENT_WIDTH, "0")}-${artifactId}.json`;
   const match = RECOVERY_SNAPSHOT_ARTIFACT_FILE.exec(fileName);
   if (!match || Number(match[1]) !== throughSeq || match[2] !== artifactId) {
     throw new Error("Recovery snapshot artifact filename is invalid");
@@ -2261,11 +2084,7 @@ function sameClaim(left: ClaimEvent, right: ClaimEvent): boolean {
 }
 
 function sameEventOwner(
-  event:
-    | HeartbeatEvent
-    | ReleaseEvent
-    | JournalCommitEvent
-    | RecoverySnapshotCommitEvent,
+  event: HeartbeatEvent | ReleaseEvent | JournalCommitEvent | RecoverySnapshotCommitEvent,
   claim: ClaimEvent,
 ): boolean {
   return (
@@ -2276,9 +2095,7 @@ function sameEventOwner(
   );
 }
 
-function transitionAttempt(
-  event: TransitionEvent,
-): SessionLeaseTransitionAttemptV1 {
+function transitionAttempt(event: TransitionEvent): SessionLeaseTransitionAttemptV1 {
   return {
     kind: event.type,
     eventSeq: event.eventSeq,
@@ -2302,8 +2119,7 @@ function assertClockNotBehind(authority: Authority, now: number): void {
 function eventFileName(eventSeq: number): string {
   assertPositiveInteger(eventSeq, "eventSeq");
   const text = String(eventSeq);
-  if (text.length > EVENT_WIDTH)
-    throw new Error("eventSeq persisted width exceeded");
+  if (text.length > EVENT_WIDTH) throw new Error("eventSeq persisted width exceeded");
   return `${text.padStart(EVENT_WIDTH, "0")}.json`;
 }
 
@@ -2324,10 +2140,7 @@ function exactKeys(
 }
 
 function assertId(value: unknown, field: string): asserts value is string {
-  if (
-    typeof value !== "string" ||
-    !/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,511}$/.test(value)
-  ) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,511}$/.test(value)) {
     throw new Error(`${field} must be a stable protocol id`);
   }
 }
@@ -2338,19 +2151,13 @@ function assertHash(value: unknown, field: string): asserts value is string {
   }
 }
 
-function assertPositiveInteger(
-  value: unknown,
-  field: string,
-): asserts value is number {
+function assertPositiveInteger(value: unknown, field: string): asserts value is number {
   if (!Number.isSafeInteger(value) || (value as number) <= 0) {
     throw new Error(`${field} must be a positive safe integer`);
   }
 }
 
-function assertNonNegativeInteger(
-  value: unknown,
-  field: string,
-): asserts value is number {
+function assertNonNegativeInteger(value: unknown, field: string): asserts value is number {
   if (!Number.isSafeInteger(value) || (value as number) < 0) {
     throw new Error(`${field} must be a non-negative safe integer`);
   }

@@ -1,8 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  arrangeDesktopTask,
-  parseTaskArrangement,
-} from "../agent-host/task-arrangement.js";
+import { arrangeDesktopTask, parseTaskArrangement } from "../agent-host/task-arrangement.js";
 
 test("task arrangement never starts a request after cancellation", async () => {
   const controller = new AbortController();
@@ -39,12 +36,8 @@ test("task arrangement uses a bounded tool-free model request and validates the 
     "重做界面并完成验收",
   );
   expect(result).toEqual({ taskMode: "long", visualAudit: true });
-  expect(() =>
-    parseTaskArrangement('{"taskMode":"delete","visualAudit":true}'),
-  ).toThrow();
-  expect(() =>
-    parseTaskArrangement('{"taskMode":"standard","visualAudit":"false"}'),
-  ).toThrow();
+  expect(() => parseTaskArrangement('{"taskMode":"delete","visualAudit":true}')).toThrow();
+  expect(() => parseTaskArrangement('{"taskMode":"standard","visualAudit":"false"}')).toThrow();
 });
 
 test("task arrangement releases a hung classifier at its deadline", async () => {

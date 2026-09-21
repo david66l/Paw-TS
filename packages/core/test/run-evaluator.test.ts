@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  evaluateRunFromEnvelopes,
-  evaluateRunFromJsonl,
-} from "../src/run-evaluator.js";
+import { evaluateRunFromEnvelopes, evaluateRunFromJsonl } from "../src/run-evaluator.js";
 import type { RunEventEnvelope } from "../src/run-events.js";
 
 function env(ts: number, event: RunEventEnvelope["event"]): RunEventEnvelope {

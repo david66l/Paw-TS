@@ -12,12 +12,11 @@ export interface ContextCompactionPolicyV1 {
   readonly retainNewestUnprotectedUnits: number;
 }
 
-export const DEFAULT_CONTEXT_COMPACTION_POLICY_V1: ContextCompactionPolicyV1 =
-  Object.freeze({
-    triggerRatioBasisPoints: 8_000,
-    minimumNewTimelineUnits: 2,
-    retainNewestUnprotectedUnits: 4,
-  });
+export const DEFAULT_CONTEXT_COMPACTION_POLICY_V1: ContextCompactionPolicyV1 = Object.freeze({
+  triggerRatioBasisPoints: 8_000,
+  minimumNewTimelineUnits: 2,
+  retainNewestUnprotectedUnits: 4,
+});
 
 export type ContextCompactionTriggerV1 =
   | Readonly<{
@@ -37,9 +36,7 @@ export function evaluateContextCompactionTriggerV1(
 ): ContextCompactionTriggerV1 {
   const frozen = freezeContextCompactionPolicyV1(policy);
   const denominator = Math.max(1, plan.tokens.softTargetTokens);
-  const usageRatioBasisPoints = Math.ceil(
-    (plan.tokens.fullInputTokens * 10_000) / denominator,
-  );
+  const usageRatioBasisPoints = Math.ceil((plan.tokens.fullInputTokens * 10_000) / denominator);
   if (plan.selection.omittedUnitSourceSeqs.length > 0) {
     return Object.freeze({
       shouldDistill: true,

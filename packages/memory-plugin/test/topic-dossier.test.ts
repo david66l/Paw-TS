@@ -134,16 +134,11 @@ describe("memory topic dossier", () => {
         },
       },
     });
-    const proposal = await extractor.extract(
-      extraction,
-      new AbortController().signal,
-    );
+    const proposal = await extractor.extract(extraction, new AbortController().signal);
 
     expect(proposal.currentMemoryIds).toEqual(["current"]);
     expect(requests).toHaveLength(2);
-    expect(requests[1]?.system).toContain(
-      "paw.memory-topic-dossier-repair-once.v1",
-    );
+    expect(requests[1]?.system).toContain("paw.memory-topic-dossier-repair-once.v1");
     expect(requests[1]?.user).toBe(requests[0]?.user);
   });
 
@@ -231,9 +226,7 @@ describe("memory topic dossier", () => {
     expect(rebuilt.id).toBe(first.id);
     const tampered = {
       ...first,
-      currentConclusions: [
-        { ...first.currentConclusions[0], statement: "Invented durable fact" },
-      ],
+      currentConclusions: [{ ...first.currentConclusions[0], statement: "Invented durable fact" }],
     } as MemoryTopicDossierV1;
     expect(() => assertMemoryTopicDossierIntegrityV1(tampered)).toThrow(
       "MemoryTopicDossierHashMismatch",
@@ -276,10 +269,7 @@ describe("memory topic dossier", () => {
     };
 
     const first = await projector.project(source, new AbortController().signal);
-    const replay = await projector.project(
-      source,
-      new AbortController().signal,
-    );
+    const replay = await projector.project(source, new AbortController().signal);
 
     expect(replay.id).toBe(first.id);
     expect(extractions).toBe(1);
@@ -306,8 +296,7 @@ describe("memory topic dossier", () => {
         },
       },
       maxCurrentConclusions: 1,
-      onEvent: (event) =>
-        events.push(event as unknown as Record<string, unknown>),
+      onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     });
     await expect(
       projector.project(
@@ -458,9 +447,7 @@ class FakeDossierStore implements MemoryTopicDossierStoreV1 {
   }
 
   async getCurrent(topicId: string): Promise<MemoryTopicDossierV1 | undefined> {
-    return [...this.values.values()].find(
-      (dossier) => dossier.topicId === topicId,
-    );
+    return [...this.values.values()].find((dossier) => dossier.topicId === topicId);
   }
 
   async put(dossier: MemoryTopicDossierV1): Promise<{ inserted: boolean }> {
@@ -477,15 +464,8 @@ class FakeDossierStore implements MemoryTopicDossierStoreV1 {
     return { inserted };
   }
 
-  private key(
-    key: Parameters<MemoryTopicDossierStoreV1["getExact"]>[0],
-  ): string {
-    return [
-      key.topicId,
-      key.projectionHash,
-      key.policyVersion,
-      key.extractorVersion,
-    ].join("\n");
+  private key(key: Parameters<MemoryTopicDossierStoreV1["getExact"]>[0]): string {
+    return [key.topicId, key.projectionHash, key.policyVersion, key.extractorVersion].join("\n");
   }
 }
 

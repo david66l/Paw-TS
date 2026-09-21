@@ -101,27 +101,12 @@ export function createMemoryEvidenceResolverV1(input: {
   readonly maxNotebookChars?: number;
 }): Readonly<{
   resolverVersion: typeof PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1;
-  resolve(
-    query: string,
-    signal: AbortSignal,
-  ): Promise<MemoryEvidenceResolutionV1>;
+  resolve(query: string, signal: AbortSignal): Promise<MemoryEvidenceResolutionV1>;
 }> {
   const maxSources = boundedInteger(input.maxSources ?? 8, 1, 16);
-  const maxEvidencePerSource = boundedInteger(
-    input.maxEvidencePerSource ?? 8,
-    1,
-    16,
-  );
-  const maxHitsPerRequirement = boundedInteger(
-    input.maxHitsPerRequirement ?? 2,
-    1,
-    8,
-  );
-  const maxNotebookChars = boundedInteger(
-    input.maxNotebookChars ?? 4_096,
-    256,
-    16_384,
-  );
+  const maxEvidencePerSource = boundedInteger(input.maxEvidencePerSource ?? 8, 1, 16);
+  const maxHitsPerRequirement = boundedInteger(input.maxHitsPerRequirement ?? 2, 1, 8);
+  const maxNotebookChars = boundedInteger(input.maxNotebookChars ?? 4_096, 256, 16_384);
   if (
     input.closureMode !== undefined &&
     input.closureMode !== "observe" &&
@@ -139,12 +124,12 @@ export function createMemoryEvidenceResolverV1(input: {
       // Query-owned provenance is frozen before any planner normalization. A
       // plan may propose a role graph but cannot rewrite this capability.
       const queryAnswerOrigin = compileMemoryQueryAnswerOriginV1(value);
-      let intent: MemoryEvidenceQueryIntentV3 =
-        classifyMemoryEvidenceQueryV3(value);
+      let intent: MemoryEvidenceQueryIntentV3 = classifyMemoryEvidenceQueryV3(value);
       const primaryUnfiltered = await input.index.search(value, signal);
       let requirements: readonly MemoryEvidenceRequirementV3[] = [];
-      let plannerStatus: MemoryEvidenceResolutionV1["plannerStatus"] =
-        intent.needsPlanning ? "fallback" : "not_needed";
+      let plannerStatus: MemoryEvidenceResolutionV1["plannerStatus"] = intent.needsPlanning
+        ? "fallback"
+        : "not_needed";
       let plannerFailureCode: string | undefined;
       const shouldPlan = input.planner !== undefined;
       if (shouldPlan && input.planner) {
@@ -179,14 +164,8 @@ export function createMemoryEvidenceResolverV1(input: {
       // Semantic normalization happens before any authority filter or closure
       // contract is compiled. Otherwise a corrected assistant/latest intent
       // would still execute against the stale deterministic user/any lane.
-      const obligationShape = compileMemoryEvidenceObligationShapeV1(
-        value,
-        intent,
-      );
-      const primary = filterEvidenceSearchResultForRole(
-        primaryUnfiltered,
-        intent.roleConstraint,
-      );
+      const obligationShape = compileMemoryEvidenceObligationShapeV1(value, intent);
+      const primary = filterEvidenceSearchResultForRole(primaryUnfiltered, intent.roleConstraint);
       // An empty requirement set must not bypass semantic verification. Bind
       // the original question as one root requirement and run the same support
       // gate used by decomposed queries, including deterministic direct hits.
@@ -195,8 +174,7 @@ export function createMemoryEvidenceResolverV1(input: {
           createRootEvidenceRequirement(value, intent, obligationShape),
         ]);
       }
-      let obligationStatus: MemoryEvidenceResolutionV1["obligationStatus"] =
-        "satisfied";
+      let obligationStatus: MemoryEvidenceResolutionV1["obligationStatus"] = "satisfied";
       try {
         validateMemoryEvidenceObligationsV1(obligationShape, requirements);
       } catch {
@@ -219,15 +197,12 @@ export function createMemoryEvidenceResolverV1(input: {
         maxHitsPerRequirement: expansiveEvidence
           ? maxHitsPerRequirement
           : Math.min(4, maxHitsPerRequirement),
-        maxNotebookChars: expansiveEvidence
-          ? maxNotebookChars
-          : Math.min(4_096, maxNotebookChars),
+        maxNotebookChars: expansiveEvidence ? maxNotebookChars : Math.min(4_096, maxNotebookChars),
         sourceLocalLocator: input.sourceLocalLocator,
         sourceLocalHydrator: input.sourceLocalHydrator,
         dialoguePredecessorVerifier: input.dialoguePredecessorVerifier,
         sourceLocalBudget:
-          input.sourceLocalBudget ??
-          DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+          input.sourceLocalBudget ?? DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
         queryAnswerOrigin,
         evidenceGroundedRoleBinding: input.evidenceGroundedRoleBinding,
         evidenceTimeUpperBound: input.evidenceTimeUpperBound,
@@ -239,25 +214,20 @@ export function createMemoryEvidenceResolverV1(input: {
       let closureVerdict: MemoryEvidenceClosureVerdictV1 | undefined;
       let closureDeficiencyCount = 0;
       let closureRepairCount: 0 | 1 = 0;
-      let closureRepairMode: MemoryEvidenceResolutionV1["closureRepairMode"] =
-        "none";
+      let closureRepairMode: MemoryEvidenceResolutionV1["closureRepairMode"] = "none";
       let closureAuditRevision: string | undefined;
       let closureAuditFailureCode: string | undefined;
       const shouldAudit =
         input.closureAuditor !== undefined &&
         resolvedRequirements.length > 0 &&
-        selectedNotebookEvidence(pass.requirementHits, pass.notebook).length >
-          0 &&
+        selectedNotebookEvidence(pass.requirementHits, pass.notebook).length > 0 &&
         (intent.roleConstraint !== "user" ||
           intent.temporalMode !== "any" ||
           intent.answerShape !== "lookup" ||
           resolvedRequirements.length > 1 ||
           pass.fusion.sources.length > 1);
       if (shouldAudit && input.closureAuditor) {
-        const selectedEvidence = selectedNotebookEvidence(
-          pass.requirementHits,
-          pass.notebook,
-        );
+        const selectedEvidence = selectedNotebookEvidence(pass.requirementHits, pass.notebook);
         try {
           const auditInput = Object.freeze({
             query: value,
@@ -298,10 +268,7 @@ export function createMemoryEvidenceResolverV1(input: {
               plan: revisedPlan,
             });
             const repairedRequirements = revisedPlan.requirements;
-            const seedHits = mergeEvidenceHits(
-              pass.requirementHits.flat(),
-              primary.hits,
-            );
+            const seedHits = mergeEvidenceHits(pass.requirementHits.flat(), primary.hits);
             pass = await resolveEvidencePass({
               index: input.index,
               supportSelector: input.supportSelector,
@@ -322,8 +289,7 @@ export function createMemoryEvidenceResolverV1(input: {
               sourceLocalHydrator: input.sourceLocalHydrator,
               dialoguePredecessorVerifier: input.dialoguePredecessorVerifier,
               sourceLocalBudget:
-                input.sourceLocalBudget ??
-                DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
+                input.sourceLocalBudget ?? DEFAULT_MEMORY_SOURCE_LOCAL_EVIDENCE_BUDGET_V1,
               queryAnswerOrigin,
               evidenceGroundedRoleBinding: input.evidenceGroundedRoleBinding,
               evidenceTimeUpperBound: input.evidenceTimeUpperBound,
@@ -363,15 +329,11 @@ export function createMemoryEvidenceResolverV1(input: {
                 selectedEvidence: finalSelectedEvidence,
               });
               const finalAudit = validateMemoryEvidenceClosureAuditBoundaryV1({
-                audit: await input.closureAuditor.audit(
-                  finalAuditInput,
-                  signal,
-                ),
+                audit: await input.closureAuditor.audit(finalAuditInput, signal),
                 auditInput: finalAuditInput,
                 auditorVersion: input.closureAuditor.auditorVersion,
               });
-              closureVerdict =
-                finalAudit.decision === "pass" ? "pass" : "insufficient";
+              closureVerdict = finalAudit.decision === "pass" ? "pass" : "insufficient";
               closureAuditRevision = hashCanonicalJsonV1({
                 schemaVersion: "paw.memory-evidence-closure-replan.v1",
                 initialAuditRevision: audit.auditRevision,
@@ -381,10 +343,7 @@ export function createMemoryEvidenceResolverV1(input: {
           }
         } catch (error) {
           if (signal.aborted || isAbort(error)) throw abortError();
-          if (
-            error instanceof Error &&
-            /^MemoryEvidenceQueryPlan[A-Za-z0-9]+$/u.test(error.name)
-          ) {
+          if (error instanceof Error && /^MemoryEvidenceQueryPlan[A-Za-z0-9]+$/u.test(error.name)) {
             plannerStatus = "fallback";
             plannerFailureCode = stablePlannerFailureCode(error);
           }
@@ -395,10 +354,7 @@ export function createMemoryEvidenceResolverV1(input: {
       }
       let stateFrameShadow: MemoryStateFrameShadowResultV2 | undefined;
       let stateFrameFailureCode: string | undefined;
-      let stateFrameFailureStage:
-        | "coverage_certificate"
-        | "state_shadow"
-        | undefined;
+      let stateFrameFailureStage: "coverage_certificate" | "state_shadow" | undefined;
       if (
         input.stateObservationBinder &&
         input.stateObservationVerifier &&
@@ -416,9 +372,7 @@ export function createMemoryEvidenceResolverV1(input: {
                 notebook: pass.notebook,
                 closureAuditStatus,
                 ...(closureVerdict === undefined ? {} : { closureVerdict }),
-                ...(closureAuditRevision === undefined
-                  ? {}
-                  : { closureAuditRevision }),
+                ...(closureAuditRevision === undefined ? {} : { closureAuditRevision }),
               });
             stateFrameFailureStage = "state_shadow";
             stateFrameShadow = await buildMemoryStateFrameShadowV2({
@@ -474,11 +428,9 @@ export function createMemoryEvidenceResolverV1(input: {
             committedGroupCount: stateFrameShadow.committedGroupCount,
             failedGroupCount: stateFrameShadow.failedGroupCount,
             selectorGroupCount: stateFrameShadow.selectorGroupCount,
-            selectorCommittedGroupCount:
-              stateFrameShadow.selectorCommittedGroupCount,
+            selectorCommittedGroupCount: stateFrameShadow.selectorCommittedGroupCount,
             selectorFailedGroupCount: stateFrameShadow.selectorFailedGroupCount,
-            unassessedRequirementCount:
-              stateFrameShadow.unassessedRequirementCount,
+            unassessedRequirementCount: stateFrameShadow.unassessedRequirementCount,
             slotCount: stateFrameShadow.slotCount,
             completeSlotCount: stateFrameShadow.completeSlotCount,
             partialSlotCount: stateFrameShadow.partialSlotCount,
@@ -486,83 +438,64 @@ export function createMemoryEvidenceResolverV1(input: {
             conflictSlotCount: stateFrameShadow.conflictSlotCount,
             sourceLockItemCount: stateFrameShadow.sourceLockItemCount,
             proposedObservationCount: stateFrameShadow.proposedObservationCount,
-            validatedObservationCount:
-              stateFrameShadow.validatedObservationCount,
+            validatedObservationCount: stateFrameShadow.validatedObservationCount,
             rejectedObservationCount: stateFrameShadow.rejectedObservationCount,
-            bindingCertificatePolicyVersion:
-              stateFrameShadow.bindingCertificatePolicyVersion,
+            bindingCertificatePolicyVersion: stateFrameShadow.bindingCertificatePolicyVersion,
             bindingCertificateCount: stateFrameShadow.bindingCertificateCount,
             mechanicalBindingProfilePolicyVersion:
               stateFrameShadow.mechanicalBindingProfilePolicyVersion,
-            mechanicalBindingProfileCount:
-              stateFrameShadow.mechanicalBindingSummary.profileCount,
+            mechanicalBindingProfileCount: stateFrameShadow.mechanicalBindingSummary.profileCount,
             mechanicallyCompleteBindingCount:
-              stateFrameShadow.mechanicalBindingSummary
-                .mechanicallyCompleteCount,
+              stateFrameShadow.mechanicalBindingSummary.mechanicallyCompleteCount,
             mechanicallyIncompleteBindingCount:
-              stateFrameShadow.mechanicalBindingSummary
-                .mechanicallyIncompleteCount,
+              stateFrameShadow.mechanicalBindingSummary.mechanicallyIncompleteCount,
             mechanicalBindingProofFailureCounts:
               stateFrameShadow.mechanicalBindingSummary.proofFailureCounts,
             mechanicalBindingSummaryRevision:
               stateFrameShadow.mechanicalBindingSummary.summaryRevision,
-            unsupportedCompleteSlotCount:
-              stateFrameShadow.unsupportedCompleteSlotCount,
-            unsupportedDerivedOperationCount:
-              stateFrameShadow.unsupportedDerivedOperationCount,
+            unsupportedCompleteSlotCount: stateFrameShadow.unsupportedCompleteSlotCount,
+            unsupportedDerivedOperationCount: stateFrameShadow.unsupportedDerivedOperationCount,
             ...(stateFrameShadow.executionResult === undefined ||
             stateFrameShadow.executionProgram === undefined
               ? {}
               : {
                   executionStatus: stateFrameShadow.executionResult.status,
-                  executionProgramRevision:
-                    stateFrameShadow.executionProgram.programRevision,
-                  executionRevision:
-                    stateFrameShadow.executionResult.executionRevision,
-                  executionCompleteNodeCount:
-                    stateFrameShadow.executionResult.completeNodeCount,
-                  executionPartialNodeCount:
-                    stateFrameShadow.executionResult.partialNodeCount,
-                  executionMissingNodeCount:
-                    stateFrameShadow.executionResult.missingNodeCount,
-                  executionConflictNodeCount:
-                    stateFrameShadow.executionResult.conflictNodeCount,
+                  executionProgramRevision: stateFrameShadow.executionProgram.programRevision,
+                  executionRevision: stateFrameShadow.executionResult.executionRevision,
+                  executionCompleteNodeCount: stateFrameShadow.executionResult.completeNodeCount,
+                  executionPartialNodeCount: stateFrameShadow.executionResult.partialNodeCount,
+                  executionMissingNodeCount: stateFrameShadow.executionResult.missingNodeCount,
+                  executionConflictNodeCount: stateFrameShadow.executionResult.conflictNodeCount,
                   executionUnsupportedNodeCount:
                     stateFrameShadow.executionResult.unsupportedNodeCount,
-                  executionOperationStatusCounts:
-                    summarizeExecutionOperationStatuses(
-                      stateFrameShadow.executionResult,
-                    ),
-                  executionAnswerOperandStatusCounts:
-                    summarizeAnswerOperandStatuses(
-                      stateFrameShadow.executionProgram,
-                      stateFrameShadow.executionResult,
-                    ),
-                  executionAnswerOperationStatusCounts:
-                    summarizeAnswerOperationStatus(
-                      stateFrameShadow.executionProgram,
-                      stateFrameShadow.executionResult,
-                    ),
+                  executionOperationStatusCounts: summarizeExecutionOperationStatuses(
+                    stateFrameShadow.executionResult,
+                  ),
+                  executionAnswerOperandStatusCounts: summarizeAnswerOperandStatuses(
+                    stateFrameShadow.executionProgram,
+                    stateFrameShadow.executionResult,
+                  ),
+                  executionAnswerOperationStatusCounts: summarizeAnswerOperationStatus(
+                    stateFrameShadow.executionProgram,
+                    stateFrameShadow.executionResult,
+                  ),
                   executionReasonCounts: summarizeExecutionReasons(
                     stateFrameShadow.executionResult,
                   ),
-                  executionPlanBlockedReasonCounts:
-                    summarizeExecutionPlanBlockedReasons(
-                      stateFrameShadow.executionProgram,
-                    ),
+                  executionPlanBlockedReasonCounts: summarizeExecutionPlanBlockedReasons(
+                    stateFrameShadow.executionProgram,
+                  ),
                   ...summarizeExecutionAnswerRequest(
                     stateFrameShadow.executionProgram,
                     stateFrameShadow.executionResult,
                   ),
                   ...(stateFrameShadow.readerProjectionBuild === undefined
                     ? {}
-                    : stateFrameShadow.readerProjectionBuild.status ===
-                        "projected"
+                    : stateFrameShadow.readerProjectionBuild.status === "projected"
                       ? {
                           executionReaderProjectionStatus: "projected" as const,
                           executionReaderProjectionKind:
-                            stateFrameShadow.readerProjectionBuild.projection
-                              .payload.kind,
+                            stateFrameShadow.readerProjectionBuild.projection.payload.kind,
                           executionReaderProjectionCertificateCount:
                             stateFrameShadow.readerProjectionBuild.projection
                               .stateBindingCertificateIds.length,
@@ -570,25 +503,17 @@ export function createMemoryEvidenceResolverV1(input: {
                       : {
                           executionReaderProjectionStatus: "rejected" as const,
                           executionReaderProjectionRejectedReason:
-                            stateFrameShadow.readerProjectionBuild
-                              .rejectedReason,
+                            stateFrameShadow.readerProjectionBuild.rejectedReason,
                           executionReaderProjectionCertificateCount: 0,
                         }),
-                  executionReadNodeCompleteCount:
-                    stateFrameShadow.executionResult.nodes.filter(
-                      (node) =>
-                        node.operation === "read_requirement" &&
-                        node.status === "complete",
-                    ).length,
-                  executionReadNodeBlockedCount:
-                    stateFrameShadow.executionResult.nodes.filter(
-                      (node) =>
-                        node.operation === "read_requirement" &&
-                        node.status !== "complete",
-                    ).length,
+                  executionReadNodeCompleteCount: stateFrameShadow.executionResult.nodes.filter(
+                    (node) => node.operation === "read_requirement" && node.status === "complete",
+                  ).length,
+                  executionReadNodeBlockedCount: stateFrameShadow.executionResult.nodes.filter(
+                    (node) => node.operation === "read_requirement" && node.status !== "complete",
+                  ).length,
                 }),
-            assistantValidatedObservationCount:
-              stateFrameShadow.assistantValidatedObservationCount,
+            assistantValidatedObservationCount: stateFrameShadow.assistantValidatedObservationCount,
             uncertifiedAssistantValidatedObservationCount:
               stateFrameShadow.uncertifiedAssistantValidatedObservationCount,
           })
@@ -600,17 +525,13 @@ export function createMemoryEvidenceResolverV1(input: {
               schemaVersion: "paw.memory-state-shadow-audit.v1",
               status: stateFrameShadow?.status ?? "fallback",
               binderVersion: input.stateObservationBinder.binderVersion,
-              verifierVersion:
-                input.stateObservationVerifier?.verifierVersion ?? null,
+              verifierVersion: input.stateObservationVerifier?.verifierVersion ?? null,
               failureCode: stateFrameFailureCode ?? null,
               bindingRevision: stateFrameShadow?.bindingRevision ?? null,
-              verificationRevision:
-                stateFrameShadow?.verificationRevision ?? null,
-              bindingCertificateAuditRevision:
-                stateFrameShadow?.stateShadowAuditRevision ?? null,
+              verificationRevision: stateFrameShadow?.verificationRevision ?? null,
+              bindingCertificateAuditRevision: stateFrameShadow?.stateShadowAuditRevision ?? null,
               programRevision: stateFrameShadow?.frame?.programRevision ?? null,
-              sourceLockDigest:
-                stateFrameShadow?.frame?.sourceLockDigest ?? null,
+              sourceLockDigest: stateFrameShadow?.frame?.sourceLockDigest ?? null,
               telemetry: stateFrameTelemetry ?? null,
             } as unknown as JsonValue);
       const revisionBody = {
@@ -636,28 +557,22 @@ export function createMemoryEvidenceResolverV1(input: {
         closureDeficiencyCount,
         closureRepairCount,
         closureRepairMode,
-        ...(closureAuditFailureCode === undefined
-          ? {}
-          : { closureAuditFailureCode }),
+        ...(closureAuditFailureCode === undefined ? {} : { closureAuditFailureCode }),
         supportAssessments,
         sourceLocalization,
         degradedChannels,
         ...(input.supportSelector === undefined
           ? {}
           : { supportSelectorVersion: input.supportSelector.selectorVersion }),
-        ...(supportSelectionRevision === undefined
-          ? {}
-          : { supportSelectionRevision }),
+        ...(supportSelectionRevision === undefined ? {} : { supportSelectionRevision }),
         ...(input.closureAuditor === undefined
           ? {}
           : { closureAuditorVersion: input.closureAuditor.auditorVersion }),
         ...(closureAuditRevision === undefined ? {} : { closureAuditRevision }),
-        requirements: resolvedRequirements.map(
-          ({ searchText, ...requirement }) => ({
-            ...requirement,
-            searchTextHash: hashCanonicalJsonV1(searchText as JsonValue),
-          }),
-        ),
+        requirements: resolvedRequirements.map(({ searchText, ...requirement }) => ({
+          ...requirement,
+          searchTextHash: hashCanonicalJsonV1(searchText as JsonValue),
+        })),
         sources: fusion.sources.map((source) => ({
           sourceId: source.sourceId,
           evidenceRefs: source.evidence.map((item) => item.evidenceRef),
@@ -685,29 +600,21 @@ export function createMemoryEvidenceResolverV1(input: {
           : {
               stateFrameStatus: stateFrameShadow?.status ?? "fallback",
               stateBinderVersion: input.stateObservationBinder.binderVersion,
-              ...(stateShadowAuditRevision === undefined
-                ? {}
-                : { stateShadowAuditRevision }),
+              ...(stateShadowAuditRevision === undefined ? {} : { stateShadowAuditRevision }),
               ...(input.stateObservationVerifier === undefined
                 ? {}
                 : {
-                    stateVerifierVersion:
-                      input.stateObservationVerifier.verifierVersion,
+                    stateVerifierVersion: input.stateObservationVerifier.verifierVersion,
                   }),
-              ...(stateFrameFailureCode === undefined
-                ? {}
-                : { stateFrameFailureCode }),
-              ...(stateFrameFailureStage === undefined
-                ? {}
-                : { stateFrameFailureStage }),
+              ...(stateFrameFailureCode === undefined ? {} : { stateFrameFailureCode }),
+              ...(stateFrameFailureStage === undefined ? {} : { stateFrameFailureStage }),
               ...(stateFrameShadow?.bindingRevision === undefined
                 ? {}
                 : { stateBindingRevision: stateFrameShadow.bindingRevision }),
               ...(stateFrameShadow?.verificationRevision === undefined
                 ? {}
                 : {
-                    stateVerificationRevision:
-                      stateFrameShadow.verificationRevision,
+                    stateVerificationRevision: stateFrameShadow.verificationRevision,
                   }),
               ...(stateFrameShadow?.frame === undefined
                 ? {}
@@ -715,12 +622,9 @@ export function createMemoryEvidenceResolverV1(input: {
               ...(stateFrameShadow?.readerProjectionBuild === undefined
                 ? {}
                 : {
-                    readerProjectionBuild:
-                      stateFrameShadow.readerProjectionBuild,
+                    readerProjectionBuild: stateFrameShadow.readerProjectionBuild,
                   }),
-              ...(stateFrameTelemetry === undefined
-                ? {}
-                : { stateFrameTelemetry }),
+              ...(stateFrameTelemetry === undefined ? {} : { stateFrameTelemetry }),
             }),
         closureAuditStatus,
         closureMode,
@@ -728,18 +632,14 @@ export function createMemoryEvidenceResolverV1(input: {
         closureDeficiencyCount,
         closureRepairCount,
         closureRepairMode,
-        ...(closureAuditFailureCode === undefined
-          ? {}
-          : { closureAuditFailureCode }),
+        ...(closureAuditFailureCode === undefined ? {} : { closureAuditFailureCode }),
         supportAssessments,
         sourceLocalization,
         degradedChannels,
         ...(input.supportSelector === undefined
           ? {}
           : { supportSelectorVersion: input.supportSelector.selectorVersion }),
-        ...(supportSelectionRevision === undefined
-          ? {}
-          : { supportSelectionRevision }),
+        ...(supportSelectionRevision === undefined ? {} : { supportSelectionRevision }),
         ...(input.closureAuditor === undefined
           ? {}
           : { closureAuditorVersion: input.closureAuditor.auditorVersion }),
@@ -752,9 +652,7 @@ export function createMemoryEvidenceResolverV1(input: {
         packetSources,
         telemetry: fusion.telemetry,
         notebook,
-        resolutionRevision: hashCanonicalJsonV1(
-          revisionBody as unknown as JsonValue,
-        ),
+        resolutionRevision: hashCanonicalJsonV1(revisionBody as unknown as JsonValue),
       });
     },
   });
@@ -767,26 +665,17 @@ function namedError(name: string): Error {
 }
 
 function stablePlannerFailureCode(error: unknown): string {
-  if (
-    error instanceof Error &&
-    /^MemoryEvidenceQueryPlan[A-Za-z0-9]+$/u.test(error.name)
-  ) {
+  if (error instanceof Error && /^MemoryEvidenceQueryPlan[A-Za-z0-9]+$/u.test(error.name)) {
     return error.name;
   }
   return "MemoryEvidenceQueryPlannerFailed";
 }
 
 function stableClosureAuditFailureCode(error: unknown): string {
-  if (
-    error instanceof Error &&
-    /^MemoryEvidenceQueryPlan[A-Za-z0-9]+$/u.test(error.name)
-  ) {
+  if (error instanceof Error && /^MemoryEvidenceQueryPlan[A-Za-z0-9]+$/u.test(error.name)) {
     return "MemoryEvidenceClosureReplanFailed";
   }
-  if (
-    error instanceof Error &&
-    /^MemoryEvidenceClosureAudit[A-Za-z0-9]+$/u.test(error.name)
-  ) {
+  if (error instanceof Error && /^MemoryEvidenceClosureAudit[A-Za-z0-9]+$/u.test(error.name)) {
     return error.name;
   }
   return "MemoryEvidenceClosureAuditFailed";
@@ -849,9 +738,7 @@ function summarizeAnswerOperationStatus(
   program: NonNullable<MemoryStateFrameShadowResultV2["executionProgram"]>,
   result: NonNullable<MemoryStateFrameShadowResultV2["executionResult"]>,
 ): Readonly<Record<string, Readonly<Record<string, number>>>> {
-  const answer = result.nodes.find(
-    (node) => node.nodeId === program.answerNodeId,
-  );
+  const answer = result.nodes.find((node) => node.nodeId === program.answerNodeId);
   return answer
     ? Object.freeze({
         [answer.operation]: Object.freeze({ [answer.status]: 1 }),
@@ -889,10 +776,7 @@ function summarizeExecutionAnswerRequest(
   executionAggregationUnit?: string;
   executionAggregateCountBasis?: string;
   executionAggregateMaterializationExact?: boolean;
-  executionAggregateMaterializationState?:
-    | "exact"
-    | "inexact"
-    | "not_materialized";
+  executionAggregateMaterializationState?: "exact" | "inexact" | "not_materialized";
   executionDurationEndpointPolicy?: string;
   executionDurationEndpointContractKind?: string;
   executionDurationEndpointOrdering?: string;
@@ -909,26 +793,16 @@ function summarizeExecutionAnswerRequest(
   executionPersonalizationConstraintCount?: number;
   executionPersonalizationLifecycleCertificateCount?: number;
 }> {
-  const answer = program.nodes.find(
-    (node) => node.nodeId === program.answerNodeId,
-  );
-  const answerResult = result.nodes.find(
-    (node) => node.nodeId === program.answerNodeId,
-  );
-  const aggregate = answerResult?.values.find(
-    (value) => value.kind === "aggregate",
-  );
-  const duration = answerResult?.values.find(
-    (value) => value.kind === "temporal_duration",
-  );
+  const answer = program.nodes.find((node) => node.nodeId === program.answerNodeId);
+  const answerResult = result.nodes.find((node) => node.nodeId === program.answerNodeId);
+  const aggregate = answerResult?.values.find((value) => value.kind === "aggregate");
+  const duration = answerResult?.values.find((value) => value.kind === "temporal_duration");
   const personalization = answerResult?.values.find(
     (value) => value.kind === "personalization_profile",
   );
   const durationOperandResults = answer
     ? answer.operandNodeIds.flatMap((nodeId) => {
-        const operand = result.nodes.find(
-          (candidate) => candidate.nodeId === nodeId,
-        );
+        const operand = result.nodes.find((candidate) => candidate.nodeId === nodeId);
         return operand ? [operand] : [];
       })
     : [];
@@ -941,8 +815,7 @@ function summarizeExecutionAnswerRequest(
       ? {
           executionAggregateOperator: answer.aggregateRequest.operator,
           executionAggregationUnit: answer.aggregateRequest.aggregationUnit,
-          executionAggregateCountBasis:
-            answer.aggregateRequest.countBasis ?? "not_applicable",
+          executionAggregateCountBasis: answer.aggregateRequest.countBasis ?? "not_applicable",
           executionAggregateMaterializationState:
             aggregate?.kind === "aggregate"
               ? aggregate.materializationExact
@@ -951,23 +824,18 @@ function summarizeExecutionAnswerRequest(
               : "not_materialized",
           ...(aggregate?.kind === "aggregate"
             ? {
-                executionAggregateMaterializationExact:
-                  aggregate.materializationExact,
+                executionAggregateMaterializationExact: aggregate.materializationExact,
               }
             : {}),
         }
       : {}),
     ...(answer.durationRequest
       ? {
-          executionDurationEndpointPolicy:
-            answer.durationRequest.endpointPolicy,
-          executionDurationEndpointContractKind:
-            answer.durationRequest.endpointContract.kind,
-          ...(answer.durationRequest.endpointContract.kind ===
-          "distinct_evidence_pair"
+          executionDurationEndpointPolicy: answer.durationRequest.endpointPolicy,
+          executionDurationEndpointContractKind: answer.durationRequest.endpointContract.kind,
+          ...(answer.durationRequest.endpointContract.kind === "distinct_evidence_pair"
             ? {
-                executionDurationEndpointOrdering:
-                  answer.durationRequest.endpointContract.ordering,
+                executionDurationEndpointOrdering: answer.durationRequest.endpointContract.ordering,
               }
             : {}),
           executionDurationOperandGroupCount: answer.operandNodeIds.length,
@@ -987,9 +855,7 @@ function summarizeExecutionAnswerRequest(
             durationRawEndpoints.map((value) => value.durationEndpointRole),
           ),
           executionDurationStateBindingCertificateCount: new Set(
-            durationRawEndpoints.map(
-              (value) => value.stateBindingCertificateId,
-            ),
+            durationRawEndpoints.map((value) => value.stateBindingCertificateId),
           ).size,
           executionDurationEndpointCertificateMaterialized:
             duration?.kind === "temporal_duration" &&
@@ -1017,17 +883,14 @@ function summarizeExecutionAnswerRequest(
               : 0,
           executionPersonalizationLifecycleCertificateCount:
             personalization?.kind === "personalization_profile"
-              ? (personalization.coverageCertificate?.lifecycleCertificates
-                  .length ?? 0)
+              ? (personalization.coverageCertificate?.lifecycleCertificates.length ?? 0)
               : 0,
         }
       : {}),
   });
 }
 
-function countStringValues(
-  values: readonly string[],
-): Readonly<Record<string, number>> {
+function countStringValues(values: readonly string[]): Readonly<Record<string, number>> {
   const counts: Record<string, number> = {};
   for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
   return Object.freeze({ ...counts });

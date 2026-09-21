@@ -77,9 +77,7 @@ test("explicit image capability and visual policy participate in frozen desktop 
         },
       }),
     );
-    expect(
-      createDefaultLanguageModel(root).capabilities?.imageInput,
-    ).toBeUndefined();
+    expect(createDefaultLanguageModel(root).capabilities?.imageInput).toBeUndefined();
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -67,8 +67,7 @@ describe("约束生命周期（Constraint Lifecycle）", () => {
         '{"action":"final_answer","summary":"Done."}',
       ] as readonly string[],
       async complete() {
-        const text =
-          this.responses[0]! ?? '{"action":"final_answer","summary":"Done."}';
+        const text = this.responses[0]! ?? '{"action":"final_answer","summary":"Done."}';
         this.responses = this.responses.slice(1);
         return { text };
       },
@@ -77,8 +76,7 @@ describe("约束生命周期（Constraint Lifecycle）", () => {
       label: "aux-reconcile",
       capabilities: { contextWindow: 128_000 },
       async complete(messages: readonly ChatMessage[]) {
-        const user =
-          messages.find((m) => m.role === "user")?.content?.toString() ?? "";
+        const user = messages.find((m) => m.role === "user")?.content?.toString() ?? "";
         if (user.includes("Existing active constraints")) {
           // LLM 判定：旧约束被反转 → drop；新约束 add
           return {
@@ -142,14 +140,10 @@ describe("约束生命周期（Constraint Lifecycle）", () => {
     expect(r2.status).toBe("completed");
 
     // 调和事件：旧约束 superseded，新约束 active
-    const updated = events2.find(
-      (e) => e.event.type === "task.constraints.updated",
-    );
+    const updated = events2.find((e) => e.event.type === "task.constraints.updated");
     expect(updated?.event.type).toBe("task.constraints.updated");
     if (updated?.event.type === "task.constraints.updated") {
-      expect(updated.event.superseded).toContain(
-        "不要修改 src/a.txt，只看一下",
-      );
+      expect(updated.event.superseded).toContain("不要修改 src/a.txt，只看一下");
       expect(updated.event.active).toContain("重构 src/a.txt 为模块化结构");
     }
 
@@ -195,9 +189,7 @@ describe("约束生命周期（Constraint Lifecycle）", () => {
       },
     });
     expect(r.status).toBe("completed");
-    const updated = events.find(
-      (e) => e.event.type === "task.constraints.updated",
-    );
+    const updated = events.find((e) => e.event.type === "task.constraints.updated");
     expect(updated?.event.type).toBe("task.constraints.updated");
     if (updated?.event.type === "task.constraints.updated") {
       // 降级：ok=false，约束保留（不丢红线）

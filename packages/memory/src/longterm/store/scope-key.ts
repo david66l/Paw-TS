@@ -41,9 +41,7 @@ export function sameMemoryScope(a: MemoryScopeKey, b: MemoryScopeKey): boolean {
 /** Stable namespace for IDs, workers, and metrics; never used as authorization alone. */
 export function memoryScopeFingerprint(scope: MemoryScopeKey): string {
   return createHash("sha256")
-    .update(
-      `${scope.tenantId}\n${scope.userId}\n${scope.workspaceId}\n${scope.repositoryId}`,
-    )
+    .update(`${scope.tenantId}\n${scope.userId}\n${scope.workspaceId}\n${scope.repositoryId}`)
     .digest("hex")
     .slice(0, 20);
 }

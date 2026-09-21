@@ -1,9 +1,6 @@
 import type { ModelSettlement } from "@paw/agent-loop";
 import type { ChatMessage, ModelTokenUsage } from "@paw/core";
-import {
-  FALLBACK_MODEL_OUTPUT_TOKENS,
-  resolveModelOutputLimit,
-} from "@paw/models";
+import { FALLBACK_MODEL_OUTPUT_TOKENS, resolveModelOutputLimit } from "@paw/models";
 import type {
   ModelCompletionResult,
   ModelStreamChunk,
@@ -44,9 +41,7 @@ const CONTINUATION_INSTRUCTION = [
 export function resolveModelOutputRecoveryBudgetV1(
   nativeMaxOutputTokens?: number,
 ): ModelOutputRecoveryBudgetV1 {
-  const recoveryMaxOutputTokens = resolveModelOutputLimit(
-    nativeMaxOutputTokens,
-  );
+  const recoveryMaxOutputTokens = resolveModelOutputLimit(nativeMaxOutputTokens);
   return Object.freeze({
     defaultMaxOutputTokens: recoveryMaxOutputTokens,
     recoveryMaxOutputTokens,
@@ -61,9 +56,7 @@ export function createModelOutputRecoveryPluginV1(
   model: PawAgentLoopModel,
   options: ModelOutputRecoveryPluginOptionsV1 = {},
 ): PawAgentLoopModel {
-  const budget = resolveModelOutputRecoveryBudgetV1(
-    options.nativeMaxOutputTokens,
-  );
+  const budget = resolveModelOutputRecoveryBudgetV1(options.nativeMaxOutputTokens);
   const outputCeiling = Math.min(
     budget.recoveryMaxOutputTokens,
     options.reservedOutputTokens === undefined
@@ -71,8 +64,7 @@ export function createModelOutputRecoveryPluginV1(
       : resolveModelOutputLimit(options.reservedOutputTokens),
   );
   const maxContinuations =
-    options.maxContinuations ??
-    DEFAULT_MODEL_OUTPUT_RECOVERY_POLICY_V1.maxContinuations;
+    options.maxContinuations ?? DEFAULT_MODEL_OUTPUT_RECOVERY_POLICY_V1.maxContinuations;
   if (!Number.isSafeInteger(maxContinuations) || maxContinuations < 0) {
     throw new Error("maxContinuations must be a non-negative safe integer");
   }
@@ -95,10 +87,7 @@ export function createModelOutputRecoveryPluginV1(
           signal: callOptions.signal,
           onStreamEvent: stream.onEvent,
         });
-        if (
-          settlement.status !== "success" &&
-          settlement.status !== "truncated"
-        ) {
+        if (settlement.status !== "success" && settlement.status !== "truncated") {
           return settlement;
         }
 
@@ -125,11 +114,7 @@ export function createModelOutputRecoveryPluginV1(
           });
         }
 
-        currentRequest = continuationRequest(
-          currentRequest,
-          settlement.message,
-          outputCeiling,
-        );
+        currentRequest = continuationRequest(currentRequest, settlement.message, outputCeiling);
       }
     },
   };
@@ -159,11 +144,8 @@ function continuationRequest(
   const assistant: ChatMessage = Object.freeze({
     role: "assistant",
     content:
-      assistantContent ||
-      "[The previous response ended before producing visible assistant text.]",
-    ...(partial.reasoningPassback
-      ? { reasoningPassback: partial.reasoningPassback }
-      : {}),
+      assistantContent || "[The previous response ended before producing visible assistant text.]",
+    ...(partial.reasoningPassback ? { reasoningPassback: partial.reasoningPassback } : {}),
   });
   return Object.freeze({
     ...request,
@@ -198,9 +180,7 @@ function combineCompletions(
     text: assistantContent,
     nativeAssistantContent: assistantContent,
     ...(thinking ? { thinking } : {}),
-    ...(final.reasoningPassback
-      ? { reasoningPassback: final.reasoningPassback }
-      : {}),
+    ...(final.reasoningPassback ? { reasoningPassback: final.reasoningPassback } : {}),
     ...(usage ? { usage } : {}),
     ...(final.finishReason ? { finishReason: final.finishReason } : {}),
     ...(final.toolCalls && final.toolCalls.length > 0
@@ -209,20 +189,14 @@ function combineCompletions(
   });
 }
 
-function sumUsage(
-  usages: readonly (ModelTokenUsage | undefined)[],
-): ModelTokenUsage | undefined {
-  const present = usages.filter(
-    (usage): usage is ModelTokenUsage => usage !== undefined,
-  );
+function sumUsage(usages: readonly (ModelTokenUsage | undefined)[]): ModelTokenUsage | undefined {
+  const present = usages.filter((usage): usage is ModelTokenUsage => usage !== undefined);
   if (present.length === 0) return undefined;
   const sum = (field: keyof ModelTokenUsage): number | undefined => {
     const values = present
       .map((usage) => usage[field])
       .filter((value): value is number => value !== undefined);
-    return values.length === 0
-      ? undefined
-      : values.reduce((total, value) => total + value, 0);
+    return values.length === 0 ? undefined : values.reduce((total, value) => total + value, 0);
   };
   const promptTokens = sum("promptTokens");
   const completionTokens = sum("completionTokens");
@@ -242,9 +216,7 @@ function sumUsage(
   });
 }
 
-function createAttemptStream(
-  sink: (event: ModelStreamChunk) => void | Promise<void>,
-): {
+function createAttemptStream(sink: (event: ModelStreamChunk) => void | Promise<void>): {
   readonly onEvent: (event: ModelStreamChunk) => void | Promise<void>;
   readonly flushFinal: (
     completion: ModelCompletionResult,
@@ -271,9 +243,7 @@ function createAttemptStream(
       await sink({
         type: "done",
         ...(completion.usage ? { usage: completion.usage } : {}),
-        ...(completion.finishReason
-          ? { finishReason: completion.finishReason }
-          : {}),
+        ...(completion.finishReason ? { finishReason: completion.finishReason } : {}),
       });
     },
   };

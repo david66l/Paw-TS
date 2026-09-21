@@ -3,11 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { RunEventEnvelope } from "@paw/core";
-import type {
-  ChatMessage,
-  LanguageModel,
-  ModelCompletionResult,
-} from "@paw/models";
+import type { ChatMessage, LanguageModel, ModelCompletionResult } from "@paw/models";
 import { DesktopNextControls } from "../agent-host/paw-next-controls.js";
 import { DesktopNextEvents } from "../agent-host/paw-next-events.js";
 import {
@@ -24,11 +20,7 @@ setDefaultTimeout(30_000);
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) {
-    if (
-      !path
-        .resolve(root)
-        .startsWith(path.join(os.tmpdir(), "paw-desktop-next-"))
-    )
+    if (!path.resolve(root).startsWith(path.join(os.tmpdir(), "paw-desktop-next-")))
       throw new Error("Unsafe fixture path");
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -38,10 +30,7 @@ function root() {
   roots.push(dir);
   return dir;
 }
-function model(
-  responses: ModelCompletionResult[],
-  requests: string[] = [],
-): LanguageModel {
+function model(responses: ModelCompletionResult[], requests: string[] = []): LanguageModel {
   let index = 0;
   return {
     label: "openai:desktop-test",
@@ -69,9 +58,7 @@ const final = (text: string): ModelCompletionResult => ({
 
 test("memory recovery diagnostics reach the desktop event stream without source content", () => {
   const events: RunEventEnvelope[] = [];
-  const projection = new DesktopNextEvents("memory-run", (event) =>
-    events.push(event),
-  );
+  const projection = new DesktopNextEvents("memory-run", (event) => events.push(event));
   const diagnostic = {
     type: "recovery_pending",
     writeId: "write-id",
@@ -111,12 +98,9 @@ test("manual context maintenance skips short histories, persists estimates and p
   expect(result.message).toContain("暂无需要压缩");
   expect(requests.length).toBe(count);
   const context = readDesktopContext(workspaceRoot, "compact-short").nextBudget;
-  expect(
-    context.categories.reduce(
-      (sum: number, c: { tokens: number }) => sum + c.tokens,
-      0,
-    ),
-  ).toBe(context.selectedInputTokens);
+  expect(context.categories.reduce((sum: number, c: { tokens: number }) => sum + c.tokens, 0)).toBe(
+    context.selectedInputTokens,
+  );
   const next = await runDesktopNext("What name?", {
     ...options,
     model: model([final("Iris")]),
@@ -140,9 +124,7 @@ test("manual context maintenance commits a verified summary and continues with t
       (
         await runDesktopNext(`Discuss item ${index}`, {
           ...options,
-          model: model([
-            final(`Item ${index}: ` + "Historical detail. ".repeat(300)),
-          ]),
+          model: model([final(`Item ${index}: ` + "Historical detail. ".repeat(300))]),
         })
       ).ok,
     ).toBe(true);
@@ -151,8 +133,7 @@ test("manual context maintenance commits a verified summary and continues with t
     ...base,
     async complete(messages) {
       const system = messages[0]?.content ?? "";
-      if (system.includes("checkpoint evidence auditor"))
-        return final('{"status":"supported"}');
+      if (system.includes("checkpoint evidence auditor")) return final('{"status":"supported"}');
       const evidence = JSON.parse(
         (messages.at(-1)?.content ?? "").split("Journal evidence:\n")[1]!,
       ) as { seq: number; factType: string; text: string }[];
@@ -188,9 +169,8 @@ test("manual context maintenance commits a verified summary and continues with t
   const result = JSON.parse(compacted.text);
   expect(result.context.nextBudget.selectedInputTokens).toBeLessThan(before);
   expect(
-    result.context.nextBudget.categories.find(
-      (c: { id: string }) => c.id === "task_checkpoint",
-    ).tokens,
+    result.context.nextBudget.categories.find((c: { id: string }) => c.id === "task_checkpoint")
+      .tokens,
   ).toBeGreaterThan(0);
   const next = await runDesktopNext("Continue", {
     ...options,
@@ -214,9 +194,7 @@ test("manual context maintenance reaches the distiller and preserves history on 
   for (let index = 0; index < 7; index++) {
     const response = await runDesktopNext(`Discuss item ${index}`, {
       ...options,
-      model: model([
-        final(`Item ${index}: ` + "Historical detail. ".repeat(200)),
-      ]),
+      model: model([final(`Item ${index}: ` + "Historical detail. ".repeat(200))]),
     });
     expect(response.ok).toBe(true);
   }
@@ -226,9 +204,7 @@ test("manual context maintenance reaches the distiller and preserves history on 
     intent: "recover",
     operation: "compact",
   });
-  expect(requests.some((text) => text.includes("Journal evidence:"))).toBe(
-    true,
-  );
+  expect(requests.some((text) => text.includes("Journal evidence:"))).toBe(true);
   expect(JSON.parse(result.text).message).toContain("原上下文已保留");
   const next = await runDesktopNext("Continue", {
     ...options,
@@ -236,10 +212,7 @@ test("manual context maintenance reaches the distiller and preserves history on 
   });
   expect(next).toMatchObject({ ok: true });
 });
-const tool = (
-  name: string,
-  args: Record<string, unknown>,
-): ModelCompletionResult => ({
+const tool = (name: string, args: Record<string, unknown>): ModelCompletionResult => ({
   text: "",
   nativeAssistantContent: "",
   finishReason: "tool_calls",
@@ -277,17 +250,11 @@ test("desktop executes the final admitted tool batch without an extra model call
     resolveToolApproval: async () => true,
     onEvent: (event) => events.push(event),
   });
-  expect(fs.readFileSync(path.join(workspaceRoot, "final.txt"), "utf8")).toBe(
-    "last turn\n",
-  );
+  expect(fs.readFileSync(path.join(workspaceRoot, "final.txt"), "utf8")).toBe("last turn\n");
   expect(requests).toHaveLength(1);
   expect(result.ok).toBe(false);
-  expect(JSON.parse(result.text).message).toContain(
-    "model-turn-budget-exhausted",
-  );
-  expect(
-    events.some(({ event }) => event.type === "tool.result" && event.ok),
-  ).toBe(true);
+  expect(JSON.parse(result.text).message).toContain("model-turn-budget-exhausted");
+  expect(events.some(({ event }) => event.type === "tool.result" && event.ok)).toBe(true);
 });
 
 test("desktop still requires approval for final-turn tools", async () => {
@@ -299,10 +266,7 @@ test("desktop still requires approval for final-turn tools", async () => {
     settings: {},
     memoryEnabled: false,
     maxSteps: 1,
-    model: model(
-      [tool("workspace_write_file", { path: "denied.txt", content: "no" })],
-      requests,
-    ),
+    model: model([tool("workspace_write_file", { path: "denied.txt", content: "no" })], requests),
     resolveToolApproval: async () => {
       approvals++;
       return false;
@@ -340,9 +304,9 @@ test("desktop runs V3 and continues a durable conversation with prior model cont
   expect(JSON.parse(first.text).runId).toBe(JSON.parse(second.text).runId);
   expect(requests[0]).toContain("Iris noted");
   expect(events.some((e) => e.event.type === "run.completed")).toBe(true);
-  expect(
-    desktopCheckpointNamespace(workspaceRoot, JSON.parse(first.text).runId),
-  ).toStartWith("pawnextv1_");
+  expect(desktopCheckpointNamespace(workspaceRoot, JSON.parse(first.text).runId)).toStartWith(
+    "pawnextv1_",
+  );
 });
 
 test("denied desktop approval cannot write a file", async () => {
@@ -370,12 +334,8 @@ test("denied desktop approval cannot write a file", async () => {
   expect(prompts).toEqual(["workspace.write_file"]);
   expect(JSON.parse(result.text).status).toBe("await_user");
   expect(fs.existsSync(path.join(workspaceRoot, "denied.txt"))).toBe(false);
-  expect(
-    events.some((e) => e.event.type === "tool.result" && !e.event.ok),
-  ).toBe(true);
-  expect(
-    events.some((e) => (e.event.type as string) === "workspace.changes"),
-  ).toBe(false);
+  expect(events.some((e) => e.event.type === "tool.result" && !e.event.ok)).toBe(true);
+  expect(events.some((e) => (e.event.type as string) === "workspace.changes")).toBe(false);
 });
 
 test("clearing desktop history starts a new Run without the old conversation", async () => {
@@ -423,9 +383,7 @@ test("approved write uses the Paw Next checkpoint namespace", async () => {
       events.push(event);
     },
   });
-  expect(
-    fs.readFileSync(path.join(workspaceRoot, "approved.txt"), "utf8"),
-  ).toBe("approved");
+  expect(fs.readFileSync(path.join(workspaceRoot, "approved.txt"), "utf8")).toBe("approved");
   expect(JSON.parse(result.text).runId).toStartWith("desktop-next-");
   const changes = events
     .map(
@@ -439,25 +397,17 @@ test("approved write uses the Paw Next checkpoint namespace", async () => {
   expect(
     changes.some((e) =>
       e.fileChanges?.some(
-        (c) =>
-          c.path === "approved.txt" &&
-          c.added > 0 &&
-          c.diff?.includes("+approved"),
+        (c) => c.path === "approved.txt" && c.added > 0 && c.diff?.includes("+approved"),
       ),
     ),
   ).toBe(true);
-  expect(
-    events.some(
-      (e) => (e.event as { type: string }).type === "context.next_budget",
-    ),
-  ).toBe(true);
+  expect(events.some((e) => (e.event as { type: string }).type === "context.next_budget")).toBe(
+    true,
+  );
 });
 
 test("empty history never resets a durable Run; recovery reconciles a stale running index without executing again", async () => {
-  for (const history of [
-    [],
-    [{ role: "user" as const, content: "Earlier request" }],
-  ]) {
+  for (const history of [[], [{ role: "user" as const, content: "Earlier request" }]]) {
     const workspaceRoot = root();
     const requests: string[] = [];
     const options = {
@@ -471,9 +421,7 @@ test("empty history never resets a durable Run; recovery reconciles a stale runn
     };
     const first = JSON.parse((await runDesktopNext("Say hello", options)).text);
     const dir = path.join(workspaceRoot, ".paw", "desktop-next");
-    for (const name of fs
-      .readdirSync(dir)
-      .filter((name) => !name.endsWith(".monitor.json"))) {
+    for (const name of fs.readdirSync(dir).filter((name) => !name.endsWith(".monitor.json"))) {
       const file = path.join(dir, name);
       const record = JSON.parse(fs.readFileSync(file, "utf8"));
       fs.writeFileSync(file, JSON.stringify({ ...record, status: "running" }));
@@ -515,12 +463,9 @@ test("explicitly empty history continues unless reset is requested", async () =>
     resolveToolApproval: async () => true,
     onEvent() {},
   };
-  const first = JSON.parse(
-    (await runDesktopNext("Remember Iris", options)).text,
-  );
+  const first = JSON.parse((await runDesktopNext("Remember Iris", options)).text);
   const next = JSON.parse(
-    (await runDesktopNext("Recall", { ...options, conversationHistory: [] }))
-      .text,
+    (await runDesktopNext("Recall", { ...options, conversationHistory: [] })).text,
   );
   expect(next.runId).toBe(first.runId);
 });
@@ -538,13 +483,9 @@ test("later-segment recovery retries the persisted input identity without duplic
     onEvent() {},
   };
   await runDesktopNext("First request", options);
-  const second = JSON.parse(
-    (await runDesktopNext("Second request", options)).text,
-  );
+  const second = JSON.parse((await runDesktopNext("Second request", options)).text);
   const dir = path.join(workspaceRoot, ".paw", "desktop-next");
-  for (const name of fs
-    .readdirSync(dir)
-    .filter((name) => !name.endsWith(".monitor.json"))) {
+  for (const name of fs.readdirSync(dir).filter((name) => !name.endsWith(".monitor.json"))) {
     const file = path.join(dir, name);
     const record = JSON.parse(fs.readFileSync(file, "utf8"));
     expect(record.latestWork.content).toBe("Second request");
@@ -552,8 +493,7 @@ test("later-segment recovery retries the persisted input identity without duplic
   }
   const before = requests.length;
   const recovered = JSON.parse(
-    (await runDesktopNext("Second request", { ...options, intent: "recover" }))
-      .text,
+    (await runDesktopNext("Second request", { ...options, intent: "recover" })).text,
   );
   expect(recovered.runId).toBe(second.runId);
   expect(recovered.message).toBe(second.message);
@@ -584,13 +524,8 @@ test("a changed child model binding prevents silent model switching during recov
 
 test("child stream never contaminates the root assistant bubble", async () => {
   const events: RunEventEnvelope[] = [];
-  const projection = new DesktopNextEvents("root", (event) =>
-    events.push(event),
-  );
-  projection.stream(
-    { type: "text", delta: "child secret" },
-    { runId: "child" },
-  );
+  const projection = new DesktopNextEvents("root", (event) => events.push(event));
+  projection.stream({ type: "text", delta: "child secret" }, { runId: "child" });
   projection.stream({ type: "text", delta: "Hello" }, { runId: "root" });
   projection.stream({ type: "text", delta: " world" }, { runId: "root" });
   await projection.flush();
@@ -605,10 +540,7 @@ test("real V3 child admission, tool calls and settlement reach the desktop activ
   fs.writeFileSync(path.join(workspaceRoot, "evidence.txt"), "evidence");
   const childRequests: string[] = [];
   const childModel = model(
-    [
-      tool("workspace_read_file", { path: "evidence.txt" }),
-      final("Child read evidence"),
-    ],
+    [tool("workspace_read_file", { path: "evidence.txt" }), final("Child read evidence")],
     childRequests,
   );
   const result = await runDesktopNext("Ask a reviewer to read evidence.txt", {
@@ -635,15 +567,9 @@ test("real V3 child admission, tool calls and settlement reach the desktop activ
   expect(types).toContain("child.tool_call");
   expect(types).toContain("child.tool_result");
   expect(types).toContain("child.completed");
-  const childEvents = events.filter((event) =>
-    (event.event.type as string).startsWith("child."),
-  );
+  const childEvents = events.filter((event) => (event.event.type as string).startsWith("child."));
   expect(
-    new Set(
-      childEvents.map(
-        (event) => (event.event as unknown as { callId: string }).callId,
-      ),
-    ).size,
+    new Set(childEvents.map((event) => (event.event as unknown as { callId: string }).callId)).size,
   ).toBe(1);
 });
 
@@ -655,9 +581,7 @@ test("stopping while approval is pending settles as aborted without writing", as
     memoryEnabled: false,
     settings: {},
     abortSignal: controller.signal,
-    model: model([
-      tool("workspace_write_file", { path: "cancelled.txt", content: "no" }),
-    ]),
+    model: model([tool("workspace_write_file", { path: "cancelled.txt", content: "no" })]),
     resolveToolApproval: async () => {
       controller.abort();
       return new Promise<boolean>(() => {});
@@ -747,15 +671,11 @@ Implement only the assigned file.
     },
   });
   expect(allowed.ok).toBe(true);
-  expect(fs.readFileSync(path.join(workspaceRoot, "child.txt"), "utf8")).toBe(
-    "allowed",
+  expect(fs.readFileSync(path.join(workspaceRoot, "child.txt"), "utf8")).toBe("allowed");
+  expect(changes).toContainEqual(expect.objectContaining({ path: "child.txt", added: 1 }));
+  expect(readDesktopMonitor(workspaceRoot, "writer-monitor")?.tasks[0]?.files).toContain(
+    "child.txt",
   );
-  expect(changes).toContainEqual(
-    expect.objectContaining({ path: "child.txt", added: 1 }),
-  );
-  expect(
-    readDesktopMonitor(workspaceRoot, "writer-monitor")?.tasks[0]?.files,
-  ).toContain("child.txt");
   const controls = new DesktopNextControls();
   let childId = "";
   let approvalCancelled = false;
@@ -817,9 +737,7 @@ test("desktop host JSON protocol streams Paw Next through a local model server",
     hostname: "127.0.0.1",
     async fetch(request) {
       const body = await request.text();
-      if (
-        JSON.parse(body).messages?.[0]?.content?.includes("completion reviewer")
-      ) {
+      if (JSON.parse(body).messages?.[0]?.content?.includes("completion reviewer")) {
         deliveryReviews++;
         return Response.json({
           choices: [
@@ -845,11 +763,7 @@ test("desktop host JSON protocol streams Paw Next through a local model server",
           ],
         });
       }
-      if (
-        JSON.parse(body).messages?.[0]?.content?.startsWith(
-          "Choose an execution arrangement",
-        )
-      ) {
+      if (JSON.parse(body).messages?.[0]?.content?.startsWith("Choose an execution arrangement")) {
         arrangementRequests += 1;
         return Response.json({
           choices: [
@@ -906,8 +820,7 @@ test("desktop host JSON protocol streams Paw Next through a local model server",
       cwd: workspaceRoot,
       env: {
         ...process.env,
-        DATABASE_URL:
-          "postgresql://fixture:fixture@127.0.0.1:1/fixture?connect_timeout=1",
+        DATABASE_URL: "postgresql://fixture:fixture@127.0.0.1:1/fixture?connect_timeout=1",
       },
       stdin: "pipe",
       stdout: "pipe",
@@ -961,14 +874,11 @@ test("desktop host JSON protocol streams Paw Next through a local model server",
           acknowledgements.push(message);
           if (acknowledgements.length === 3) release();
         }
-        if (message.type === "run.done" || message.type === "error")
-          done = true;
+        if (message.type === "run.done" || message.type === "error") done = true;
       }
     }
     expect(arrangementRequests).toBe(1);
-    expect(
-      acknowledgements.find((ack) => ack.operationId === "wrong-run")?.ok,
-    ).toBe(false);
+    expect(acknowledgements.find((ack) => ack.operationId === "wrong-run")?.ok).toBe(false);
     expect(
       acknowledgements
         .filter((ack) => ack.ok)
@@ -986,9 +896,7 @@ test("desktop host JSON protocol streams Paw Next through a local model server",
       message: "Desktop V3 connected",
     });
     expect(result?.result?.runId).toStartWith("desktop-next-");
-    expect(
-      messages.some((message) => message.event?.event?.type === "model.chunk"),
-    ).toBe(true);
+    expect(messages.some((message) => message.event?.event?.type === "model.chunk")).toBe(true);
   } finally {
     release();
     clearTimeout(timeout);
@@ -1041,8 +949,7 @@ for (const continuing of [false, true]) {
           return final(`Answer ${turns}`);
         },
       },
-      onEvent: (e) =>
-        events.push(e.event as unknown as Record<string, unknown>),
+      onEvent: (e) => events.push(e.event as unknown as Record<string, unknown>),
     });
     await entered;
     try {
@@ -1072,9 +979,7 @@ for (const continuing of [false, true]) {
           ])
         ).status,
       ).toBe("already_accepted");
-      await expect(
-        controls.submit("steer-1", "Different content"),
-      ).rejects.toThrow("conflict");
+      await expect(controls.submit("steer-1", "Different content")).rejects.toThrow("conflict");
     } finally {
       release();
     }
@@ -1149,8 +1054,7 @@ test("desktop cancels only one child and settles it before root continues", asyn
     onEvent(e) {
       const event = e.event as unknown as Record<string, unknown>;
       events.push(event);
-      if (event.type === "child.control" && !childId)
-        childId = String(event.callId);
+      if (event.type === "child.control" && !childId) childId = String(event.callId);
     },
   });
   await entered;
@@ -1161,9 +1065,9 @@ test("desktop cancels only one child and settles it before root continues", asyn
   expect(result.ok).toBe(true);
   expect(parentRequests).toHaveLength(2);
   expect(events.filter((e) => e.type === "child.completed")).toHaveLength(1);
-  expect(
-    events.find((e) => e.type === "child.failed")?.originalEvent,
-  ).toMatchObject({ status: "cancelled" });
+  expect(events.find((e) => e.type === "child.failed")?.originalEvent).toMatchObject({
+    status: "cancelled",
+  });
   expect(() => controls.cancel(childId)).toThrow();
 });
 
@@ -1277,9 +1181,7 @@ test("desktop task overview captures dependencies, blocked tasks and completed c
   expect(monitor?.tasks.find((t) => t.name === "Review result")).toMatchObject({
     status: "blocked",
   });
-  expect(monitor?.tasks.find((t) => t.name === "Review input")?.scope).toEqual([
-    "src",
-  ]);
+  expect(monitor?.tasks.find((t) => t.name === "Review input")?.scope).toEqual(["src"]);
 });
 
 test("desktop monitors and stops a real background job, persisting final output", async () => {
@@ -1312,8 +1214,7 @@ test("desktop monitors and stops a real background job, persisting final output"
         type: string;
         snapshot?: { jobs: unknown[] };
       };
-      if (event.type === "monitor.snapshot" && event.snapshot?.jobs.length)
-        ready();
+      if (event.type === "monitor.snapshot" && event.snapshot?.jobs.length) ready();
     },
   });
   await started;
@@ -1345,11 +1246,7 @@ test("desktop monitors and stops a real background job, persisting final output"
     jobs: saved!.jobs.map((job) => ({ ...job, status: "running" })),
   };
   fs.writeFileSync(monitorFile, JSON.stringify(interrupted));
-  expect(readDesktopMonitor(workspaceRoot, "job")?.jobs[0]?.status).toBe(
-    "interrupted_orphaned",
-  );
+  expect(readDesktopMonitor(workspaceRoot, "job")?.jobs[0]?.status).toBe("interrupted_orphaned");
   // Reading a historical view neither reconnects an old PID nor rewrites its evidence.
-  expect(JSON.parse(fs.readFileSync(monitorFile, "utf8")).jobs[0].status).toBe(
-    "running",
-  );
+  expect(JSON.parse(fs.readFileSync(monitorFile, "utf8")).jobs[0].status).toBe("running");
 });

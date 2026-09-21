@@ -3,15 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { LanguageModel } from "@paw/models";
-import {
-  buildPawNextTaskProfileV3,
-  runFreshPawNextTaskV3,
-} from "@paw/paw-next";
+import { buildPawNextTaskProfileV3, runFreshPawNextTaskV3 } from "@paw/paw-next";
 import { desktopProfile, fingerprint } from "../agent-host/paw-next-profile.js";
 import { runDesktopNext } from "../agent-host/paw-next.js";
 
 test("desktop restores the exact legacy recall identity without replaying work or accepting model drift", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "paw-legacy-recall-"));
+  let cleanupFailure: Error | undefined;
   try {
     let calls = 0;
     const model: LanguageModel = {
@@ -34,13 +32,7 @@ test("desktop restores the exact legacy recall identity without replaying work o
         return { text, nativeAssistantContent: text, finishReason: "stop" };
       },
     };
-    const { environmentAudit: _audit, ...base } = desktopProfile(
-      root,
-      model,
-      {},
-      undefined,
-      false,
-    );
+    const { environmentAudit: _audit, ...base } = desktopProfile(root, model, {}, undefined, false);
     const profile = { ...base, legacyOutputRecall: true as const };
     const identity = {
       workspaceRoot: root,
@@ -62,10 +54,9 @@ test("desktop restores the exact legacy recall identity without replaying work o
       ...args,
       profile: { ...profile, configHash: first.configHash },
     });
-    expect(
-      (await runFreshPawNextTaskV3({ resolution, requestApproval })).state
-        .decision.kind,
-    ).toBe("completed");
+    expect((await runFreshPawNextTaskV3({ resolution, requestApproval })).state.decision.kind).toBe(
+      "completed",
+    );
     const record = {
       version: 1,
       liveSteering: true,
@@ -78,10 +69,7 @@ test("desktop restores the exact legacy recall identity without replaying work o
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `conversation-${fingerprint("legacy")}.json`);
     fs.writeFileSync(file, JSON.stringify(record));
-    fs.writeFileSync(
-      path.join(dir, `${identity.runId}.json`),
-      JSON.stringify(record),
-    );
+    fs.writeFileSync(path.join(dir, `${identity.runId}.json`), JSON.stringify(record));
     const before = calls;
     const options = {
       workspaceRoot: root,
@@ -98,12 +86,8 @@ test("desktop restores the exact legacy recall identity without replaying work o
     expect(result.ok, result.text).toBe(true);
     expect(JSON.parse(result.text).runId).toBe(identity.runId);
     expect(calls).toBe(before);
-    await expect(
-      runDesktopNext(identity.goal, { ...options, maxSteps: 17 }),
-    ).rejects.toThrow();
-    expect(JSON.parse(fs.readFileSync(file, "utf8")).configHash).toBe(
-      resolution.configHash,
-    );
+    await expect(runDesktopNext(identity.goal, { ...options, maxSteps: 17 })).rejects.toThrow();
+    expect(JSON.parse(fs.readFileSync(file, "utf8")).configHash).toBe(resolution.configHash);
     expect(JSON.parse(fs.readFileSync(file, "utf8"))).toMatchObject({
       configHash: resolution.configHash,
       legacyOutputRecall: true,
@@ -125,8 +109,11 @@ test("desktop restores the exact legacy recall identity without replaying work o
     if (
       path.dirname(root) !== path.resolve(os.tmpdir()) ||
       !path.basename(root).startsWith("paw-legacy-recall-")
-    )
-      throw new Error("Unexpected fixture path");
-    fs.rmSync(root, { recursive: true, force: true });
+    ) {
+      cleanupFailure = new Error("Unexpected fixture path");
+    } else {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   }
+  if (cleanupFailure) throw cleanupFailure;
 }, 30_000);

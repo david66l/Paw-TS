@@ -39,8 +39,7 @@ export function compileMemoryEvidenceSelectorGroupsV1(input: {
       (requirement) =>
         !requirement.requirementId.trim() ||
         (requirement.dependsOnRequirementIds ?? []).some(
-          (dependency) =>
-            dependency === requirement.requirementId || !byId.has(dependency),
+          (dependency) => dependency === requirement.requirementId || !byId.has(dependency),
         ),
     )
   ) {
@@ -60,10 +59,11 @@ export function compileMemoryEvidenceSelectorGroupsV1(input: {
   const find = (index: number): number => {
     let root = index;
     while (parent[root] !== root) root = parent[root] as number;
-    while (parent[index] !== index) {
-      const next = parent[index] as number;
-      parent[index] = root;
-      index = next;
+    let cursor = index;
+    while (parent[cursor] !== cursor) {
+      const next = parent[cursor] as number;
+      parent[cursor] = root;
+      cursor = next;
     }
     return root;
   };

@@ -15,11 +15,7 @@
 import type { RunEvent } from "@paw/core";
 import { getSql, parseJson } from "../../db/connection.js";
 import { generateId } from "../../db/modules/platform/idGen.js";
-import {
-  detectAdoption,
-  recordAdoption,
-  recordTaskSuccess,
-} from "../observability/ledger.js";
+import { detectAdoption, recordAdoption, recordTaskSuccess } from "../observability/ledger.js";
 import { appendOpLog, queryOpLog } from "../observability/op-log.js";
 import { hybridRecall } from "../retrieval/hybrid.js";
 import type {
@@ -33,11 +29,7 @@ import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
 import { type MemoryScopeKey, sameMemoryScope } from "../store/scope-key.js";
 import type { CorrectionConfirmer } from "./correction.js";
 import type { DistillInput, MemoryDistiller } from "./distiller.js";
-import {
-  type GovernorCandidate,
-  type GovernorLlm,
-  LongtermGovernor,
-} from "./governor.js";
+import { type GovernorCandidate, type GovernorLlm, LongtermGovernor } from "./governor.js";
 import { scanForSecrets } from "./secrets.js";
 import { addTrialLesson, graduateTrialLesson } from "./trial.js";
 
@@ -107,9 +99,7 @@ export interface GovernorHook {
     reason?: string;
   }>;
   /** 批量裁决（spec §5.6，默认路径）；实现后管线一次调用裁决整批 */
-  adjudicateBatch?(
-    items: { candidate: GovernorCandidate; similar: MemoryEntry[] }[],
-  ): Promise<
+  adjudicateBatch?(items: { candidate: GovernorCandidate; similar: MemoryEntry[] }[]): Promise<
     {
       op: "ADD" | "UPDATE" | "INVALIDATE" | "NOOP";
       targetId?: string;
@@ -174,11 +164,7 @@ export class MemoryWritePipeline {
 
   constructor(opts: WritePipelineOptions = {}) {
     this.scope = opts.scope ?? opts.engine?.scope;
-    if (
-      opts.scope &&
-      opts.engine?.scope &&
-      !sameMemoryScope(opts.scope, opts.engine.scope)
-    ) {
+    if (opts.scope && opts.engine?.scope && !sameMemoryScope(opts.scope, opts.engine.scope)) {
       throw new Error("Memory pipeline scope does not match its store engine");
     }
     this.engine = opts.engine ?? new PostgresMemoryStoreEngine(this.scope);
@@ -194,9 +180,7 @@ export class MemoryWritePipeline {
     this.emit = opts.emit;
     this.correctionConfirmer = opts.correctionConfirmer;
     this.isReadonly =
-      typeof opts.readonly === "function"
-        ? opts.readonly
-        : () => opts.readonly === true;
+      typeof opts.readonly === "function" ? opts.readonly : () => opts.readonly === true;
     this.now = opts.now ?? (() => new Date());
   }
 
@@ -354,14 +338,10 @@ export class MemoryWritePipeline {
 
   /** 单事件处理主流程（五道关） */
   async processEvent(event: MemoryWriteEvent): Promise<ProcessResult> {
-    if (
-      this.scope &&
-      (!event.scope || !sameMemoryScope(this.scope, event.scope))
-    ) {
+    if (this.scope && (!event.scope || !sameMemoryScope(this.scope, event.scope))) {
       throw new Error("Memory write event is outside the pipeline scope");
     }
-    const repo =
-      this.scope?.repositoryId ?? ("repo" in event ? (event.repo ?? "") : "");
+    const repo = this.scope?.repositoryId ?? ("repo" in event ? (event.repo ?? "") : "");
     const runId = "runId" in event ? event.runId : undefined;
 
     // ── 第一道（双道之一）：密钥拦截——蒸馏前 ──
@@ -387,9 +367,7 @@ export class MemoryWritePipeline {
       case "user_correction": {
         // #10：规则命中后交 LLM 确认；确认器不可用/否认 → 保守走蒸馏通道（confidence ≤0.6）
         const confirmed = this.correctionConfirmer
-          ? await this.correctionConfirmer
-              .confirm(event.text)
-              .catch(() => false)
+          ? await this.correctionConfirmer.confirm(event.text).catch(() => false)
           : false;
         if (confirmed) {
           return this.handleUserCorrection(event.text, {
@@ -411,12 +389,7 @@ export class MemoryWritePipeline {
 
       case "task_failed": {
         // 失败轨迹 → 试用通道（不直接入库，§5.3）；#7：LLM 蒸馏教训，超预算降级原文切片
-        return this.createTrial(
-          event.runId,
-          event.goal ?? "",
-          event.trajectory ?? "",
-          runId,
-        );
+        return this.createTrial(event.runId, event.goal ?? "", event.trajectory ?? "", runId);
       }
 
       case "task_succeeded": {
@@ -425,12 +398,7 @@ export class MemoryWritePipeline {
         if (verdict.kind === "test" || verdict.kind === "compile") {
           if (!verdict.passed) {
             // outcome=fail 转试用通道
-            return this.createTrial(
-              event.runId,
-              event.goal ?? "",
-              event.trajectory ?? "",
-              runId,
-            );
+            return this.createTrial(event.runId, event.goal ?? "", event.trajectory ?? "", runId);
           }
           const r = await this.consolidate(
             {
@@ -442,11 +410,7 @@ export class MemoryWritePipeline {
             { repo, runId },
           );
           // 效用结算（§7.1）+ 试用转正（§4.2）：注入过的正式条目 utility+1；随行 trial 验证成功 → episodic
-          await this.settleRunOutcome(
-            event.runId,
-            event.trajectory ?? "",
-            repo,
-          );
+          await this.settleRunOutcome(event.runId, event.trajectory ?? "", repo);
           return r;
         }
         if (verdict.kind === "user_accepted") {
@@ -459,11 +423,7 @@ export class MemoryWritePipeline {
             },
             { repo, runId },
           );
-          await this.settleRunOutcome(
-            event.runId,
-            event.trajectory ?? "",
-            repo,
-          );
+          await this.settleRunOutcome(event.runId, event.trajectory ?? "", repo);
           return r;
         }
         // 禁止盲改条款（§5.3）：无任何反馈信号不得固化
@@ -617,15 +577,9 @@ export class MemoryWritePipeline {
     });
     const result = await this.distiller!.distill(input);
     if (result.status === "degraded") {
-      return this.storeDegraded(
-        input,
-        opts,
-        "schema_validation_failed",
-        result.errors,
-      );
+      return this.storeDegraded(input, opts, "schema_validation_failed", result.errors);
     }
-    if (result.candidates.length === 0)
-      return { status: "noop", reason: "no_candidates" };
+    if (result.candidates.length === 0) return { status: "noop", reason: "no_candidates" };
 
     // ── 阶段一：密钥二道 + 构造草稿 + 相似召回 ──
     const nowIso = this.now().toISOString();
@@ -653,11 +607,7 @@ export class MemoryWritePipeline {
       const candidateText =
         candidate.kind === "semantic"
           ? (candidate.fact ?? "")
-          : [
-              candidate.whenToUse,
-              candidate.perspective,
-              ...(candidate.modification ?? []),
-            ]
+          : [candidate.whenToUse, candidate.perspective, ...(candidate.modification ?? [])]
               .filter(Boolean)
               .join("\n");
       const pre = scanForSecrets(candidateText);
@@ -754,8 +704,7 @@ export class MemoryWritePipeline {
       );
     } else {
       decisions = [];
-      for (const d of drafts)
-        decisions.push(await this.governor.adjudicate(d.draft, d.similar));
+      for (const d of drafts) decisions.push(await this.governor.adjudicate(d.draft, d.similar));
     }
 
     // ── 阶段三：应用裁决 ──
@@ -803,10 +752,7 @@ export class MemoryWritePipeline {
         // UPDATE 版本链（§5.6）：旧值追加进 history[]（semantic）；freq/utility/t_valid/created_at 由引擎 upsert 保留
         const old = await this.engine.get(decision.targetId);
         if (old?.kind === "semantic" && draft.kind === "semantic") {
-          draft.history = [
-            ...(old.history ?? []),
-            { fact: old.fact, tInvalid: nowIso },
-          ];
+          draft.history = [...(old.history ?? []), { fact: old.fact, tInvalid: nowIso }];
         }
         draft.id = decision.targetId;
       }
@@ -897,9 +843,7 @@ export class MemoryWritePipeline {
         await recordTaskSuccess(this.engine, ids);
 
         const entries = (
-          await Promise.all(
-            ids.map((id) => this.engine.get(id).catch(() => null)),
-          )
+          await Promise.all(ids.map((id) => this.engine.get(id).catch(() => null)))
         ).filter((e): e is MemoryEntry => e !== null);
         const adopted = detectAdoption(
           entries.map((e) => ({
@@ -909,8 +853,7 @@ export class MemoryWritePipeline {
           })),
           trajectoryText,
         );
-        if (adopted.length > 0)
-          await recordAdoption(runId, adopted, { by: "detectAdoption" });
+        if (adopted.length > 0) await recordAdoption(runId, adopted, { by: "detectAdoption" });
       }
 
       // 试用转正：本 run 随行注入过的 trial，在验证成功后入库正式库

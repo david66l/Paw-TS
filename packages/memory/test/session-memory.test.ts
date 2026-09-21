@@ -2,10 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  type SessionMemory,
-  SessionMemoryStore,
-} from "../src/session/session-memory.js";
+import { type SessionMemory, SessionMemoryStore } from "../src/session/session-memory.js";
 
 describe("SessionMemoryStore", () => {
   let tmpDir: string;
@@ -23,10 +20,7 @@ describe("SessionMemoryStore", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function makeMemory(
-    session: string,
-    overrides?: Partial<SessionMemory>,
-  ): SessionMemory {
+  function makeMemory(session: string, overrides?: Partial<SessionMemory>): SessionMemory {
     return {
       session,
       project: "test-project",

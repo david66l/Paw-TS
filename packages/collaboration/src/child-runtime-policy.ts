@@ -10,8 +10,7 @@ import {
 export const AGENT_SPEC_CHILD_RUNTIME_POLICY_VERSION_V1 =
   "paw.collaboration-child-runtime.v3:effect-profile-tools" as const;
 
-export const READ_ONLY_CHILD_RUNTIME_POLICY_VERSION_V1 =
-  AGENT_SPEC_CHILD_RUNTIME_POLICY_VERSION_V1;
+export const READ_ONLY_CHILD_RUNTIME_POLICY_VERSION_V1 = AGENT_SPEC_CHILD_RUNTIME_POLICY_VERSION_V1;
 
 export const AGENT_SPEC_CHILD_PERMISSION_POLICY_VERSION_V1 =
   "paw.collaboration-child-permissions.v3:effect-profile" as const;
@@ -25,9 +24,7 @@ ${collaborationRolePromptV1(role)}
 Answer only the assigned question. Inspect the smallest useful set of files, distinguish confirmed facts from hypotheses, and cite concrete paths or symbols in the final summary. You cannot edit files, run shell commands, dispatch another agent, or claim tests passed without visible verification evidence.`;
 }
 
-export function agentSpecChildSystemPromptV1(
-  agent: CollaborationAgentSpecV1,
-): string {
+export function agentSpecChildSystemPromptV1(agent: CollaborationAgentSpecV1): string {
   const capability =
     agent.effect === "mutate"
       ? "You may modify workspace files and run approved shell tools exposed by your AgentSpec. Keep changes inside the assigned task and report every changed file and verification result."
@@ -44,8 +41,9 @@ export const READ_ONLY_CHILD_SYSTEM_PROMPT_V1 = readOnlyChildSystemPromptV1(
   DEFAULT_COLLABORATION_ROLE_V1,
 );
 
-export const DEFAULT_AGENT_SPEC_CHILD_SYSTEM_PROMPT_V1 =
-  agentSpecChildSystemPromptV1(defaultAgentSpec());
+export const DEFAULT_AGENT_SPEC_CHILD_SYSTEM_PROMPT_V1 = agentSpecChildSystemPromptV1(
+  defaultAgentSpec(),
+);
 
 function defaultAgentSpec(): CollaborationAgentSpecV1 {
   const agent = resolveCollaborationAgentV1(

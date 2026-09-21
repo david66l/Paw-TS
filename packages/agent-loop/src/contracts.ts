@@ -195,9 +195,7 @@ export interface AgentLoopDependencies<
     TControlState
   >;
   readonly runConfig: TRunConfig;
-  readonly onModelStreamEvent?: (
-    event: TModelStreamEvent,
-  ) => void | Promise<void>;
+  readonly onModelStreamEvent?: (event: TModelStreamEvent) => void | Promise<void>;
 }
 
 export interface AgentLoopOptions {
@@ -206,7 +204,5 @@ export interface AgentLoopOptions {
   readonly loadStartupModelResponseEvidence?: (
     snapshot: SessionInputSnapshot<InputFactV1>,
     signal: AbortSignal,
-  ) =>
-    | VerifiedModelResponseEvidenceV1
-    | Promise<VerifiedModelResponseEvidenceV1>;
+  ) => VerifiedModelResponseEvidenceV1 | Promise<VerifiedModelResponseEvidenceV1>;
 }

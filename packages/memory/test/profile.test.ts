@@ -53,8 +53,7 @@ function makeMemEngine(): MemoryStoreEngine & {
       let rows = [...store.values()];
       if (filter.kind) rows = rows.filter((e) => e.kind === filter.kind);
       if (filter.repo) rows = rows.filter((e) => e.repo === filter.repo);
-      if (!filter.includeInvalidated)
-        rows = rows.filter((e) => e.tInvalid == null);
+      if (!filter.includeInvalidated) rows = rows.filter((e) => e.tInvalid == null);
       return rows.slice(0, filter.limit ?? 200);
     },
     async searchText(): Promise<ScoredId[]> {
@@ -78,16 +77,10 @@ function makeMemEngine(): MemoryStoreEngine & {
   };
 }
 
-function draft(
-  overrides: Partial<ProfileDraft> & { insight: string },
-): ProfileDraft {
+function draft(overrides: Partial<ProfileDraft> & { insight: string }): ProfileDraft {
   return {
     repo: "repo-profile-test",
-    evidence: [
-      "runs/a/trajectory#1",
-      "runs/b/trajectory#1",
-      "runs/c/trajectory#1",
-    ],
+    evidence: ["runs/a/trajectory#1", "runs/b/trajectory#1", "runs/c/trajectory#1"],
     ...overrides,
   };
 }
@@ -121,10 +114,7 @@ describe("isBehaviorDescription / validateProfileDraft", () => {
 describe("profileSimilarity", () => {
   test("共享 ≥2 长特征词有命中", () => {
     expect(
-      profileSimilarity(
-        "提交前必跑完整测试套件再合入",
-        "合入前必跑完整测试套件",
-      ),
+      profileSimilarity("提交前必跑完整测试套件再合入", "合入前必跑完整测试套件"),
     ).toBeGreaterThanOrEqual(2);
   });
 });
@@ -132,10 +122,11 @@ describe("profileSimilarity", () => {
 describe("admitProfile", () => {
   test("证据够 → ADD", async () => {
     const engine = makeMemEngine();
-    const r = await admitProfile(
-      draft({ insight: "提交前必跑完整测试套件再合入" }),
-      { engine, runId: "profile-add", recordOp: NOOP_RECORD_OP },
-    );
+    const r = await admitProfile(draft({ insight: "提交前必跑完整测试套件再合入" }), {
+      engine,
+      runId: "profile-add",
+      recordOp: NOOP_RECORD_OP,
+    });
     expect(r.status).toBe("written");
     if (r.status === "written") {
       expect(r.op).toBe("ADD");
@@ -180,10 +171,10 @@ describe("admitProfile", () => {
 
   test("证据不足 → rejected", async () => {
     const engine = makeMemEngine();
-    const r = await admitProfile(
-      draft({ insight: "提交前必跑完整测试", evidence: ["only-one"] }),
-      { engine, recordOp: NOOP_RECORD_OP },
-    );
+    const r = await admitProfile(draft({ insight: "提交前必跑完整测试", evidence: ["only-one"] }), {
+      engine,
+      recordOp: NOOP_RECORD_OP,
+    });
     expect(r).toEqual({ status: "rejected", reason: "evidence_below_3" });
     expect(engine.store.size).toBe(0);
   });

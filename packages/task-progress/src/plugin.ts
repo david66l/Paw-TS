@@ -1,12 +1,7 @@
 import path from "node:path";
 
 import type { ToolDefinition } from "@paw/core";
-import {
-  PROGRESS_READ,
-  TODO_WRITE,
-  type ToolRunResult,
-  toolDefinitions,
-} from "@paw/harness";
+import { PROGRESS_READ, TODO_WRITE, type ToolRunResult, toolDefinitions } from "@paw/harness";
 import {
   type RuntimeToolPluginEntryV1,
   type RuntimeToolPluginV1,
@@ -22,29 +17,21 @@ import {
 } from "./policy.js";
 
 export const TASK_PROGRESS_TOOL_PLUGIN_ID_V1 = "paw.task-progress" as const;
-export const TASK_PROGRESS_TOOL_PLUGIN_VERSION_V1 =
-  "paw.task-progress.v1:i100:d100:c500" as const;
+export const TASK_PROGRESS_TOOL_PLUGIN_VERSION_V1 = "paw.task-progress.v1:i100:d100:c500" as const;
 
 export function createTaskProgressToolPluginV1(input?: {
   readonly policy?: TaskProgressPolicyV1;
 }): RuntimeToolPluginV1 {
-  const policy = freezeTaskProgressPolicyV1(
-    input?.policy ?? DEFAULT_TASK_PROGRESS_POLICY_V1,
-  );
+  const policy = freezeTaskProgressPolicyV1(input?.policy ?? DEFAULT_TASK_PROGRESS_POLICY_V1);
   return Object.freeze({
     schemaVersion: "paw.runtime-tool-plugin.v1",
     pluginId: TASK_PROGRESS_TOOL_PLUGIN_ID_V1,
     pluginVersion: taskProgressPolicyIdentityV1(policy),
-    entries: Object.freeze([
-      createTodoWriteEntry(policy),
-      createProgressReadEntry(),
-    ]),
+    entries: Object.freeze([createTodoWriteEntry(policy), createProgressReadEntry()]),
   });
 }
 
-function createTodoWriteEntry(
-  policy: TaskProgressPolicyV1,
-): RuntimeToolPluginEntryV1 {
+function createTodoWriteEntry(policy: TaskProgressPolicyV1): RuntimeToolPluginEntryV1 {
   const definition = canonicalDefinition(TODO_WRITE, "workspace_todo_write");
   const entry: RuntimeToolPluginEntryV1 = {
     internalName: TODO_WRITE,
@@ -99,10 +86,7 @@ function createTodoWriteEntry(
 }
 
 function createProgressReadEntry(): RuntimeToolPluginEntryV1 {
-  const definition = canonicalDefinition(
-    PROGRESS_READ,
-    "workspace_progress_read",
-  );
+  const definition = canonicalDefinition(PROGRESS_READ, "workspace_progress_read");
   const entry: RuntimeToolPluginEntryV1 = {
     internalName: PROGRESS_READ,
     providerName: "workspace_progress_read",
@@ -140,13 +124,8 @@ function createProgressReadEntry(): RuntimeToolPluginEntryV1 {
   return Object.freeze(entry);
 }
 
-function canonicalDefinition(
-  internalName: string,
-  providerName: string,
-): ToolDefinition {
-  const matches = toolDefinitions().filter(
-    (item) => item.function.name === providerName,
-  );
+function canonicalDefinition(internalName: string, providerName: string): ToolDefinition {
+  const matches = toolDefinitions().filter((item) => item.function.name === providerName);
   if (matches.length !== 1) {
     throw new Error(`Harness schema is missing for ${internalName}`);
   }

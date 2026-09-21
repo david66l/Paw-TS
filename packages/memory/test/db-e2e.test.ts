@@ -60,36 +60,17 @@ afterAll(async () => {
   // 清理测试数据
   const sql = getSql();
   for (const mid of createdMemories) {
-    await sql.unsafe("DELETE FROM memory_index_states WHERE memory_id = $1", [
-      mid,
-    ]);
-    await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-      mid,
-    ]);
+    await sql.unsafe("DELETE FROM memory_index_states WHERE memory_id = $1", [mid]);
+    await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [mid]);
     await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [mid]);
   }
   if (taskId) {
-    await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [
-      taskId,
-    ]);
-    await sql.unsafe("DELETE FROM tool_result_records WHERE task_id = $1", [
-      taskId,
-    ]);
-    await sql.unsafe(
-      "DELETE FROM governance_decisions WHERE candidate_id LIKE $1",
-      [`cand_%`],
-    );
-    await sql.unsafe(
-      "DELETE FROM memory_candidates WHERE source_task_ids @> $1",
-      [[taskId]],
-    );
-    await sql.unsafe(
-      "DELETE FROM working_memory_snapshots WHERE task_id = $1",
-      [taskId],
-    );
-    await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [
-      taskId,
-    ]);
+    await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [taskId]);
+    await sql.unsafe("DELETE FROM tool_result_records WHERE task_id = $1", [taskId]);
+    await sql.unsafe("DELETE FROM governance_decisions WHERE candidate_id LIKE $1", [`cand_%`]);
+    await sql.unsafe("DELETE FROM memory_candidates WHERE source_task_ids @> $1", [[taskId]]);
+    await sql.unsafe("DELETE FROM working_memory_snapshots WHERE task_id = $1", [taskId]);
+    await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [taskId]);
     await sql.unsafe("DELETE FROM audit_records WHERE task_id = $1", [taskId]);
     await sql.unsafe("DELETE FROM task_sessions WHERE id = $1", [taskId]);
   }
@@ -99,9 +80,7 @@ afterAll(async () => {
     "SELECT id FROM memory_items WHERE title = 'Auto-MERGE' AND scope->>'repositoryId' IS NULL",
   )) as unknown as { id: string }[];
   for (const r of evo) {
-    await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-      r.id,
-    ]);
+    await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [r.id]);
     await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [r.id]);
   }
   await closeSql();
@@ -204,9 +183,7 @@ describe("Phase 1: Task Runtime", () => {
 
   test("1.4 revision 冲突保护", async () => {
     // 用过期的 revision=1 更新（当前 revision 已 > 1）→ 必须抛 RevisionConflictError
-    expect(wmMgr.update(taskId, 1, { goal: "stale" })).rejects.toThrow(
-      RevisionConflictError,
-    );
+    expect(wmMgr.update(taskId, 1, { goal: "stale" })).rejects.toThrow(RevisionConflictError);
   });
 
   test("1.5 并发 revision 冲突恢复", async () => {
@@ -339,8 +316,7 @@ describe("Phase 2: Execution & Tool Results", () => {
 
   test("2.5 超大工具结果截断", () => {
     const smallProcessor = new ToolResultProcessor({ maxOutputSize: 100 });
-    const longText =
-      "x".repeat(5000) + "\nError: something broke\n" + "y".repeat(5000);
+    const longText = "x".repeat(5000) + "\nError: something broke\n" + "y".repeat(5000);
     const result = smallProcessor.process({
       toolCallId: "call-big",
       toolName: "build",
@@ -421,9 +397,7 @@ describe("Phase 3: Memory Write Pipeline", () => {
     expect(candidates.length).toBeGreaterThan(0);
 
     // 应有 TASK_SUMMARY 候选
-    const summaryCand = candidates.find(
-      (c) => c.proposedType === "task_summary",
-    );
+    const summaryCand = candidates.find((c) => c.proposedType === "task_summary");
     expect(summaryCand).toBeDefined();
     expect(summaryCand!.proposedSubjectKey).toInclude(taskId);
 
@@ -433,9 +407,7 @@ describe("Phase 3: Memory Write Pipeline", () => {
     expect(failureCand!.reviewRequired).toBe(true);
 
     // 应有 USER_CONFIRMED_PREFERENCE 候选
-    const prefCand = candidates.find(
-      (c) => c.proposedType === "user_preference",
-    );
+    const prefCand = candidates.find((c) => c.proposedType === "user_preference");
     expect(prefCand).toBeDefined();
     expect(prefCand!.proposedConfidence).toBeGreaterThanOrEqual(0.8);
   });
@@ -443,9 +415,7 @@ describe("Phase 3: Memory Write Pipeline", () => {
   test("3.2 Governance 评估 + 自动批准低风险候选", async () => {
     // 查一个 TASK_SUMMARY 类型的候选（低风险，应自动批准）
     const candidates = await memoryCandidateDao.listBySourceTask(taskId);
-    const summaryCand = candidates.find(
-      (c) => c.proposedType === "task_summary",
-    );
+    const summaryCand = candidates.find((c) => c.proposedType === "task_summary");
     expect(summaryCand).toBeDefined();
 
     const { decision } = await governance.evaluate({
@@ -480,9 +450,7 @@ describe("Phase 3: Memory Write Pipeline", () => {
   test("3.4 GovernanceDecision 幂等执行", async () => {
     // 拿到一个已 APPROVED 的 decision
     const candidates = await memoryCandidateDao.listBySourceTask(taskId);
-    const prefCand = candidates.find(
-      (c) => c.proposedType === "user_preference",
-    );
+    const prefCand = candidates.find((c) => c.proposedType === "user_preference");
     if (!prefCand) return; // 可能没有偏好候选
 
     const { decision } = await governance.evaluate({
@@ -505,9 +473,7 @@ describe("Phase 3: Memory Write Pipeline", () => {
 
   test("3.5 同 subjectKey 去重", async () => {
     const candidates = await memoryCandidateDao.listBySourceTask(taskId);
-    const projectCand = candidates.find(
-      (c) => c.proposedType === "project_knowledge",
-    );
+    const projectCand = candidates.find((c) => c.proposedType === "project_knowledge");
     if (!projectCand) return;
 
     const { decision } = await governance.evaluate({
@@ -515,12 +481,9 @@ describe("Phase 3: Memory Write Pipeline", () => {
     });
     // project_knowledge: riskLevel=low, confidence=0.5, 阈值 0.6 → REQUEST_REVIEW
     // 如果已有同 subjectKey 的 active memory → APPROVE_MERGE
-    expect([
-      "APPROVE_CREATE",
-      "APPROVE_MERGE",
-      "REQUEST_REVIEW",
-      "PENDING_REVIEW",
-    ]).toContain(decision.status);
+    expect(["APPROVE_CREATE", "APPROVE_MERGE", "REQUEST_REVIEW", "PENDING_REVIEW"]).toContain(
+      decision.status,
+    );
 
     if (decision.status === "APPROVED") {
       await governanceDecisionDao.create(decision);
@@ -549,15 +512,10 @@ describe("Phase 3: Memory Write Pipeline", () => {
     // 清理（candidates 可能被外键引用，需先删依赖）
     const sql = getSql();
     for (const c of candidates) {
-      await sql.unsafe(
-        "DELETE FROM governance_decisions WHERE candidate_id = $1",
-        [c.id],
-      );
+      await sql.unsafe("DELETE FROM governance_decisions WHERE candidate_id = $1", [c.id]);
       await sql.unsafe("DELETE FROM memory_candidates WHERE id = $1", [c.id]);
     }
-    await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [
-      emptyTask.id,
-    ]);
+    await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [emptyTask.id]);
     await sql.unsafe("DELETE FROM task_sessions WHERE id = $1", [emptyTask.id]);
   });
 });
@@ -581,9 +539,7 @@ describe("Phase 4: Retrieval & Context Building", () => {
     expect(result.items.length).toBeGreaterThan(0);
 
     // 应该召回刚才写入的 task_summary
-    const taskSummaryHits = result.items.filter(
-      (i) => i.memory.type === "task_summary",
-    );
+    const taskSummaryHits = result.items.filter((i) => i.memory.type === "task_summary");
     expect(taskSummaryHits.length).toBeGreaterThan(0);
     expect(taskSummaryHits[0]!.memory.title).toInclude("Redis");
   });
@@ -591,11 +547,9 @@ describe("Phase 4: Retrieval & Context Building", () => {
   test("4.2 关键词搜索", async () => {
     const results = await retriever.keywordSearch("Redis", 5);
     expect(results.length).toBeGreaterThan(0);
-    expect(
-      results.some(
-        (r) => r.title.includes("Redis") || r.summary.includes("Redis"),
-      ),
-    ).toBe(true);
+    expect(results.some((r) => r.title.includes("Redis") || r.summary.includes("Redis"))).toBe(
+      true,
+    );
   });
 
   test("4.3 ContextBuilder 构建上下文", async () => {
@@ -628,9 +582,7 @@ describe("Phase 4: Retrieval & Context Building", () => {
     expect(result.renderedPrompt).toInclude("Redis caching");
 
     // Token 使用不超过预算
-    expect(result.tokenUsage.estimatedUsed).toBeLessThanOrEqual(
-      result.tokenUsage.totalBudget,
-    );
+    expect(result.tokenUsage.estimatedUsed).toBeLessThanOrEqual(result.tokenUsage.totalBudget);
   });
 
   test("4.4 Token Budget 超限降级", async () => {
@@ -651,9 +603,7 @@ describe("Phase 4: Retrieval & Context Building", () => {
     });
 
     // 验证基本结构正确 + budget 未超限
-    expect(result.tokenUsage.estimatedUsed).toBeLessThanOrEqual(
-      result.tokenUsage.totalBudget,
-    );
+    expect(result.tokenUsage.estimatedUsed).toBeLessThanOrEqual(result.tokenUsage.totalBudget);
     expect(result.renderedPrompt.length).toBeGreaterThan(0);
   });
 });
@@ -679,9 +629,7 @@ describe("Phase 5: Audit & Security", () => {
   });
 
   test("5.2 安全扫描 — 干净内容通过", () => {
-    const decision = securityGuard.scanContent(
-      "This is clean code output with no secrets.",
-    );
+    const decision = securityGuard.scanContent("This is clean code output with no secrets.");
     expect(decision.verdict).toBe("ALLOW");
   });
 
@@ -693,9 +641,7 @@ describe("Phase 5: Audit & Security", () => {
   });
 
   test("5.4 安全扫描 — PII 检测后脱敏", () => {
-    const decision = securityGuard.scanContent(
-      "Contact: user@example.com phone: 555-123-4567",
-    );
+    const decision = securityGuard.scanContent("Contact: user@example.com phone: 555-123-4567");
     expect(decision.verdict).toBe("ALLOW_WITH_REDACTION");
     if (decision.verdict === "ALLOW_WITH_REDACTION") {
       expect(decision.redactedContent).not.toInclude("user@example.com");
@@ -732,8 +678,7 @@ describe("Phase 6: Index & Outbox", () => {
     expect(report.candidates.length).toBeGreaterThanOrEqual(0);
     // 验证批次已持久化
     const sql = getSql();
-    const batch =
-      await sql`SELECT id FROM evolution_batches WHERE id = ${report.batch.id}`;
+    const batch = await sql`SELECT id FROM evolution_batches WHERE id = ${report.batch.id}`;
     expect(batch.length).toBe(1);
   });
 
@@ -766,7 +711,9 @@ describe("Phase 6: Index & Outbox", () => {
   });
 
   test("6.3 Code Consistency Validator", async () => {
-    const { CodeConsistencyValidator } = await import("../src/db/modules/evolution/codeConsistencyValidator.js");
+    const { CodeConsistencyValidator } = await import(
+      "../src/db/modules/evolution/codeConsistencyValidator.js"
+    );
     const validator = new CodeConsistencyValidator();
     // 无 adapter → 返回 UNKNOWN
     const result = await validator.check(
@@ -778,13 +725,7 @@ describe("Phase 6: Index & Outbox", () => {
     );
     expect(result.status).toBe("UNKNOWN");
     // 用户偏好 → IRRELEVANT
-    const result2 = await validator.check(
-      "mem-x",
-      "user_preference",
-      "test:key",
-      [],
-      "r",
-    );
+    const result2 = await validator.check("mem-x", "user_preference", "test:key", [], "r");
     expect(result2.status).toBe("IRRELEVANT");
   });
 
@@ -792,10 +733,9 @@ describe("Phase 6: Index & Outbox", () => {
     const sql = getSql();
     // 使用实际存在的 ID 避免 FK 约束失败
     const tid = taskId;
-    const wms = await sql.unsafe(
-      "SELECT id FROM working_memories WHERE task_id = $1 LIMIT 1",
-      [tid],
-    );
+    const wms = await sql.unsafe("SELECT id FROM working_memories WHERE task_id = $1 LIMIT 1", [
+      tid,
+    ]);
     const mems = await sql.unsafe("SELECT id FROM memory_items LIMIT 2");
 
     if (wms.length > 0 && mems.length >= 2) {
@@ -820,20 +760,14 @@ describe("Phase 6: Index & Outbox", () => {
         ["rr-test", "cand-test", "test"],
       );
 
-      const rels = await sql.unsafe(
-        "SELECT id FROM memory_relations WHERE id = 'rel-test'",
-      );
+      const rels = await sql.unsafe("SELECT id FROM memory_relations WHERE id = 'rel-test'");
       expect(rels.length).toBe(1);
-      const ent = await sql.unsafe(
-        "SELECT id FROM working_memory_entries WHERE id = 'wme-test'",
-      );
+      const ent = await sql.unsafe("SELECT id FROM working_memory_entries WHERE id = 'wme-test'");
       expect(ent.length).toBe(1);
 
       await sql.unsafe("DELETE FROM review_requests WHERE id = 'rr-test'");
       await sql.unsafe("DELETE FROM conflict_records WHERE id = 'cr-test'");
-      await sql.unsafe(
-        "DELETE FROM working_memory_entries WHERE id = 'wme-test'",
-      );
+      await sql.unsafe("DELETE FROM working_memory_entries WHERE id = 'wme-test'");
       await sql.unsafe("DELETE FROM memory_relations WHERE id = 'rel-test'");
     }
     // 验证表结构存在

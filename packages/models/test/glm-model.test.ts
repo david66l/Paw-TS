@@ -10,8 +10,7 @@ const originalFetch = global.fetch;
 const dirs: string[] = [];
 afterEach(() => {
   global.fetch = originalFetch;
-  for (const dir of dirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 test("GLM built-in and named presets use the official model and frozen reasoning profile", () => {
@@ -58,9 +57,7 @@ test("GLM built-in defaults work with a legacy key and local detection", () => {
   );
   const model = createDefaultLanguageModel(dir);
   expect(model.label).toBe("glm:glm-5.3-flash");
-  expect(model.runtimeProfile?.baseUrl).toBe(
-    "https://open.bigmodel.cn/api/paas/v4",
-  );
+  expect(model.runtimeProfile?.baseUrl).toBe("https://open.bigmodel.cn/api/paas/v4");
   expect(model.capabilities?.imageInput).toBeUndefined();
 });
 
@@ -108,12 +105,8 @@ test("GLM complete and streaming preserve native reasoning and never disable man
   };
   global.fetch = Object.assign(
     async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe(
-        "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-      );
-      expect(new Headers(init?.headers).get("Authorization")).toBe(
-        "Bearer test-glm",
-      );
+      expect(String(url)).toBe("https://open.bigmodel.cn/api/paas/v4/chat/completions");
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-glm");
       const body = JSON.parse(String(init?.body));
       captured.push(body);
       return body.stream
@@ -148,11 +141,9 @@ test("GLM complete and streaming preserve native reasoning and never disable man
     type: "reasoning_passback",
     delta: "next reasoning",
   });
-  expect(
-    chunks.some(
-      (chunk) => chunk.type === "tool_use" && chunk.input === '{"id":8}',
-    ),
-  ).toBe(true);
+  expect(chunks.some((chunk) => chunk.type === "tool_use" && chunk.input === '{"id":8}')).toBe(
+    true,
+  );
   for (const body of captured) {
     expect(body.thinking).toEqual({ type: "enabled", clear_thinking: false });
     expect(body.reasoning_effort).toBe("high");

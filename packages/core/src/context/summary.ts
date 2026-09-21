@@ -173,9 +173,7 @@ export function validateCompressionSummary(
   if (anchors.length > 0) {
     // 关键锚点必须存活；全部锚点抽样（最多校验 12 个，防长日志误杀）
     const sample = anchors.slice(0, 12);
-    const missing = sample.filter(
-      (a) => !trimmed.includes(a) && !a.includes(" "),
-    );
+    const missing = sample.filter((a) => !trimmed.includes(a) && !a.includes(" "));
     if (missing.length > 0 && missing[0] !== undefined) {
       return {
         ok: false,
@@ -193,10 +191,7 @@ export function validateCompressionSummary(
  * 公式：(压缩前 token - 压缩后 token) / 压缩前 token
  * 返回 0~1 之间的值。当 beforeTokens <= 0 时返回 0，防御除零错误。
  */
-export function compressionSavingsRatio(
-  beforeTokens: number,
-  afterTokens: number,
-): number {
+export function compressionSavingsRatio(beforeTokens: number, afterTokens: number): number {
   if (beforeTokens <= 0) return 0;
   return (beforeTokens - afterTokens) / beforeTokens;
 }

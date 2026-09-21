@@ -2,8 +2,7 @@ import type { ModelObservationEvent } from "./observation.js";
 
 /** Host wall-clock limits, independent of model effort and output-token limits. */
 export const MODEL_REQUEST_SUPERVISION_V1 = Object.freeze({
-  policyVersion:
-    "paw.model-request-supervision.v1:idle90000:reasoning600000:wall900000:no-retry",
+  policyVersion: "paw.model-request-supervision.v1:idle90000:reasoning600000:wall900000:no-retry",
   idleMs: 90_000,
   // The workflow benchmark still received active reasoning at the former 360 s
   // cutoff. Allow a longer bounded generation, then leave time for tool output.
@@ -18,13 +17,9 @@ export interface RequestSupervisionLimits {
 }
 
 /** No replay and no partial tool execution. The caller journals the unknown settlement. */
-export function superviseModelRequest(
-  parent: AbortSignal,
-  limits: RequestSupervisionLimits,
-) {
+export function superviseModelRequest(parent: AbortSignal, limits: RequestSupervisionLimits) {
   for (const value of [limits.idleMs, limits.reasoningOnlyMs, limits.wallMs]) {
-    if (!Number.isFinite(value) || value <= 0)
-      throw new Error("Invalid model supervision limit");
+    if (!Number.isFinite(value) || value <= 0) throw new Error("Invalid model supervision limit");
   }
   const controller = new AbortController();
   let started = performance.now();
@@ -34,9 +29,7 @@ export function superviseModelRequest(
   let closed = false;
   const stop = (code: string) =>
     controller.abort(
-      new Error(
-        `${code}; response usage unknown; no tools from this request executed`,
-      ),
+      new Error(`${code}; response usage unknown; no tools from this request executed`),
     );
   const abort = () => controller.abort(parent.reason);
   parent.addEventListener("abort", abort, { once: true });
@@ -45,28 +38,18 @@ export function superviseModelRequest(
     () => {
       const now = performance.now();
       if (now - started >= limits.wallMs) stop("ModelRequestWallTimeout");
-      else if (now - lastActivity >= limits.idleMs)
-        stop("ModelRequestIdleTimeout");
+      else if (now - lastActivity >= limits.idleMs) stop("ModelRequestIdleTimeout");
       else if (thinking && !action && now - started >= limits.reasoningOnlyMs)
         stop("ModelReasoningWithoutActionTimeout");
     },
-    Math.max(
-      1,
-      Math.min(
-        1000,
-        limits.idleMs / 4,
-        limits.reasoningOnlyMs / 4,
-        limits.wallMs / 4,
-      ),
-    ),
+    Math.max(1, Math.min(1000, limits.idleMs / 4, limits.reasoningOnlyMs / 4, limits.wallMs / 4)),
   );
   // A hard race also settles a provider that ignores AbortSignal. Its eventual
   // result is discarded; do not wait on generator.return(), which may also hang.
   let removeRaceListener = () => {};
   const interrupted = new Promise<never>((_, reject) => {
     const fail = () => reject(controller.signal.reason);
-    removeRaceListener = () =>
-      controller.signal.removeEventListener("abort", fail);
+    removeRaceListener = () => controller.signal.removeEventListener("abort", fail);
     controller.signal.addEventListener("abort", fail, { once: true });
     if (controller.signal.aborted) fail();
   });
@@ -98,10 +81,7 @@ export function superviseModelRequest(
     async run<T>(execute: () => Promise<T>): Promise<T> {
       try {
         controller.signal.throwIfAborted();
-        return await Promise.race([
-          Promise.resolve().then(execute),
-          interrupted,
-        ]);
+        return await Promise.race([Promise.resolve().then(execute), interrupted]);
       } finally {
         closed = true;
         clearInterval(timer);

@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { SessionInputSnapshot } from "@paw/agent-loop";
 import type { InputFactV1 } from "@paw/protocol";
 
-import {
-  RUN_DIAGNOSTICS_POLICY_VERSION_V1,
-  projectRunDiagnosticsV1,
-} from "../src/index.js";
+import { RUN_DIAGNOSTICS_POLICY_VERSION_V1, projectRunDiagnosticsV1 } from "../src/index.js";
 
 let seq = 0;
 
@@ -14,10 +11,7 @@ function fact(value: unknown): { seq: number; fact: InputFactV1 } {
   return { seq, fact: value as InputFactV1 };
 }
 
-function settledTurn(
-  turn: number,
-  hasToolCalls: boolean,
-): { seq: number; fact: InputFactV1 } {
+function settledTurn(turn: number, hasToolCalls: boolean): { seq: number; fact: InputFactV1 } {
   return fact({
     type: "model.settled",
     modelCallId: `model-${turn}`,

@@ -30,8 +30,6 @@ export function extractThinkBlocks(text: string): {
 
   return {
     text: cleanedText,
-    ...(thinkingParts.length > 0
-      ? { thinking: thinkingParts.join("\n\n") }
-      : {}),
+    ...(thinkingParts.length > 0 ? { thinking: thinkingParts.join("\n\n") } : {}),
   };
 }

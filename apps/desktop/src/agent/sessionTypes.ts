@@ -21,16 +21,10 @@ export function runtimeConversationId(id: string): string {
 }
 
 export function resetRuntimeConversation(id: string): void {
-  localStorage.setItem(
-    `paw-runtime-conversation:${id}`,
-    `${id}-${crypto.randomUUID()}`,
-  );
+  localStorage.setItem(`paw-runtime-conversation:${id}`, `${id}-${crypto.randomUUID()}`);
 }
 
-export function deriveSessionTitle(
-  messages: readonly UiMessage[],
-  fallback = "新对话",
-): string {
+export function deriveSessionTitle(messages: readonly UiMessage[], fallback = "新对话"): string {
   const firstUser = messages.find((m) => m.role === "user")?.content?.trim();
   if (!firstUser) return fallback;
   return firstUser.length > 28 ? `${firstUser.slice(0, 28)}…` : firstUser;
@@ -86,15 +80,11 @@ export function loadSessionsFromStorage(): {
             return base;
           })
         : [];
-      const history = Array.isArray(o.history)
-        ? (o.history as ConversationTurn[])
-        : [];
+      const history = Array.isArray(o.history) ? (o.history as ConversationTurn[]) : [];
       sessions.push({
         id,
         title:
-          typeof o.title === "string" && o.title.trim()
-            ? o.title
-            : deriveSessionTitle(messages),
+          typeof o.title === "string" && o.title.trim() ? o.title : deriveSessionTitle(messages),
         updatedAt: typeof o.updatedAt === "number" ? o.updatedAt : Date.now(),
         messages,
         history,
@@ -116,10 +106,7 @@ export function loadSessionsFromStorage(): {
 }
 
 /** 比较消息内容是否实质相同（忽略 streaming 标记） */
-export function sameSessionMessages(
-  a: readonly UiMessage[],
-  b: readonly UiMessage[],
-): boolean {
+export function sameSessionMessages(a: readonly UiMessage[], b: readonly UiMessage[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const x = a[i]!;
@@ -154,10 +141,7 @@ export function sameSessionHistory(
  * 持久化时按 updatedAt 截断，但**不**重排传入数组顺序。
  * 列表 UI 顺序由内存 state 决定；仅在真实内容变更时 touch updatedAt。
  */
-export function saveSessionsToStorage(
-  sessions: readonly ChatSession[],
-  activeId: string,
-): void {
+export function saveSessionsToStorage(sessions: readonly ChatSession[], activeId: string): void {
   try {
     // 超出上限时丢掉最旧（updatedAt 最小），保留其余的相对顺序
     let list = sessions.slice();

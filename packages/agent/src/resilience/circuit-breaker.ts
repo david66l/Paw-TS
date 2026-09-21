@@ -142,10 +142,7 @@ export class CircuitBreaker {
     if (this._state === "half_open") {
       // 探测失败 → 立即重新断开
       this.transitionToOpen();
-    } else if (
-      this._state === "closed" &&
-      this.failures >= this.opts.failureThreshold
-    ) {
+    } else if (this._state === "closed" && this.failures >= this.opts.failureThreshold) {
       // 连续失败达到阈值 → 断开
       this.transitionToOpen();
     }

@@ -40,10 +40,7 @@ export function createMemoryContextV1(
           );
         if (!receipt) return request;
         const section = createMemoryContextSectionV1(
-          receipt.fact as Extract<
-            InputFactV1,
-            { type: "memory.retrieval_settled" }
-          >,
+          receipt.fact as Extract<InputFactV1, { type: "memory.retrieval_settled" }>,
           receipt.seq,
         );
         const topicReceipt = [...snapshot.entries]
@@ -55,10 +52,7 @@ export function createMemoryContextV1(
           );
         const topicSections =
           topicReceipt?.fact.type === "memory.topic_evidence_settled"
-            ? createMemoryTopicEvidenceSectionsV1(
-                topicReceipt.fact,
-                topicReceipt.seq,
-              )
+            ? createMemoryTopicEvidenceSectionsV1(topicReceipt.fact, topicReceipt.seq)
             : Object.freeze([]);
         const personaReceipt = [...snapshot.entries]
           .reverse()
@@ -69,10 +63,7 @@ export function createMemoryContextV1(
           );
         const personaSection =
           personaReceipt?.fact.type === "memory.persona_projection_settled"
-            ? createMemoryPersonaEvidenceSectionV1(
-                personaReceipt.fact,
-                personaReceipt.seq,
-              )
+            ? createMemoryPersonaEvidenceSectionV1(personaReceipt.fact, personaReceipt.seq)
             : undefined;
         const rawEvidenceReceipt = [...snapshot.entries]
           .reverse()
@@ -83,10 +74,7 @@ export function createMemoryContextV1(
           );
         const rawEvidenceSection =
           rawEvidenceReceipt?.fact.type === "memory.raw_evidence_settled"
-            ? createMemoryRawEvidenceSectionV1(
-                rawEvidenceReceipt.fact,
-                rawEvidenceReceipt.seq,
-              )
+            ? createMemoryRawEvidenceSectionV1(rawEvidenceReceipt.fact, rawEvidenceReceipt.seq)
             : undefined;
         const coverageReceipt = [...snapshot.entries]
           .reverse()
@@ -97,10 +85,7 @@ export function createMemoryContextV1(
           );
         const coverageSection =
           coverageReceipt?.fact.type === "memory.evidence_coverage_settled"
-            ? createMemoryEvidenceCoverageSectionV1(
-                coverageReceipt.fact,
-                coverageReceipt.seq,
-              )
+            ? createMemoryEvidenceCoverageSectionV1(coverageReceipt.fact, coverageReceipt.seq)
             : undefined;
         if (
           !section &&
@@ -164,15 +149,8 @@ export function createToolDrivenMemoryContextV1(
   if (profile.mode === "off") return base;
   const basePlan = base.plan.bind(base);
   const guide = memoryToolGuideSection();
-  const resolvedByQueryId = new Map<
-    string,
-    Promise<ModelContextSectionV1 | undefined>
-  >();
-  const plan: JournalContextRuntimeV1["plan"] = async (
-    snapshot,
-    options,
-    projection,
-  ) => {
+  const resolvedByQueryId = new Map<string, Promise<ModelContextSectionV1 | undefined>>();
+  const plan: JournalContextRuntimeV1["plan"] = async (snapshot, options, projection) => {
     let additions: ModelContextSectionV1[] = [];
     try {
       const topicReceipt = [...snapshot.entries]
@@ -185,10 +163,7 @@ export function createToolDrivenMemoryContextV1(
         );
       const topicIndex =
         topicReceipt?.fact.type === "memory.topic_evidence_settled"
-          ? createMemoryTopicEvidenceSectionsV1(
-              topicReceipt.fact,
-              topicReceipt.seq,
-            )[0]
+          ? createMemoryTopicEvidenceSectionsV1(topicReceipt.fact, topicReceipt.seq)[0]
           : undefined;
       const personaReceipt = [...snapshot.entries]
         .reverse()
@@ -199,10 +174,7 @@ export function createToolDrivenMemoryContextV1(
         );
       const persona =
         personaReceipt?.fact.type === "memory.persona_projection_settled"
-          ? createMemoryPersonaEvidenceSectionV1(
-              personaReceipt.fact,
-              personaReceipt.seq,
-            )
+          ? createMemoryPersonaEvidenceSectionV1(personaReceipt.fact, personaReceipt.seq)
           : undefined;
       const query = projectCurrentMemoryQueryV1(snapshot, profile);
       let resolved: ModelContextSectionV1 | undefined;
@@ -213,8 +185,7 @@ export function createToolDrivenMemoryContextV1(
             .reverse()
             .find(
               (entry) =>
-                entry.fact.type === "input.promoted" &&
-                entry.fact.inputId === query.inputId,
+                entry.fact.type === "input.promoted" && entry.fact.inputId === query.inputId,
             )?.seq;
           const resolver = resolverOptions.contextResolver;
           pending = withMemoryDeadline(options.signal, (signal) =>
@@ -243,10 +214,7 @@ export function createToolDrivenMemoryContextV1(
               // rebuilding context must not repeatedly pay the same deadline.
               if (
                 options.signal.aborted ||
-                !(
-                  error instanceof Error &&
-                  error.name === "MemoryContextTimeout"
-                )
+                !(error instanceof Error && error.name === "MemoryContextTimeout")
               )
                 resolvedByQueryId.delete(query.queryId);
               resolverOptions.onDiagnostic?.(stableErrorCode(error));

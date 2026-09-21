@@ -11,33 +11,23 @@ import {
 
 describe("P1.4 估算器注册表", () => {
   test("deepseek/openai → cl100k（TiktokenEstimator）", () => {
-    expect(resolveEstimatorForModel("deepseek-v4-flash")).toBeInstanceOf(
-      TiktokenEstimator,
-    );
-    expect(resolveEstimatorForModel("openai/gpt-4o")).toBeInstanceOf(
-      TiktokenEstimator,
-    );
+    expect(resolveEstimatorForModel("deepseek-v4-flash")).toBeInstanceOf(TiktokenEstimator);
+    expect(resolveEstimatorForModel("openai/gpt-4o")).toBeInstanceOf(TiktokenEstimator);
   });
 
   test("qwen/glm → o200k（TiktokenEstimator）", () => {
-    expect(resolveEstimatorForModel("qwen2.5-14b-awq")).toBeInstanceOf(
-      TiktokenEstimator,
-    );
-    expect(resolveEstimatorForModel("glm-4-plus")).toBeInstanceOf(
-      TiktokenEstimator,
-    );
+    expect(resolveEstimatorForModel("qwen2.5-14b-awq")).toBeInstanceOf(TiktokenEstimator);
+    expect(resolveEstimatorForModel("glm-4-plus")).toBeInstanceOf(TiktokenEstimator);
   });
 
   test("claude/anthropic → ApproximateEstimator（cl100k 近似）", () => {
-    expect(
-      resolveEstimatorForModel("anthropic:claude-opus-4-6"),
-    ).toBeInstanceOf(ApproximateEstimator);
+    expect(resolveEstimatorForModel("anthropic:claude-opus-4-6")).toBeInstanceOf(
+      ApproximateEstimator,
+    );
   });
 
   test("未知模型 → FastEstimator（零依赖）", () => {
-    expect(resolveEstimatorForModel("local-llama3")).toBeInstanceOf(
-      FastEstimator,
-    );
+    expect(resolveEstimatorForModel("local-llama3")).toBeInstanceOf(FastEstimator);
   });
 
   test("注册表与主路径同一文本估算一致（AC-P1-9）", () => {
@@ -85,9 +75,7 @@ describe("P1.4 CalibratedEstimator usage 回填校准", () => {
     const raw = base.count(text);
     expect(est.count(text)).toBe(Math.ceil(raw * CONSERVATIVE_BIAS));
     const msgs = [{ role: "user" as const, content: text }];
-    expect(est.countMessages(msgs)).toBe(
-      Math.ceil(base.countMessages(msgs) * CONSERVATIVE_BIAS),
-    );
+    expect(est.countMessages(msgs)).toBe(Math.ceil(base.countMessages(msgs) * CONSERVATIVE_BIAS));
   });
 
   test("无效样本忽略（actual ≤ 0）", () => {

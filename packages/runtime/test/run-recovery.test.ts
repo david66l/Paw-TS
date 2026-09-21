@@ -3,10 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type {
-  SessionInputSnapshot,
-  VerifiedModelResponseEvidenceV1,
-} from "@paw/agent-loop";
+import type { SessionInputSnapshot, VerifiedModelResponseEvidenceV1 } from "@paw/agent-loop";
 import {
   type DurableJsonPayloadV1,
   type InputFactV1,
@@ -93,9 +90,7 @@ describe("canonical run recovery", () => {
     ];
 
     for (const item of cases) {
-      const plan = classifyRunRecoveryV1(
-        prefix([...toolModelFacts(1), ...item.tail]),
-      );
+      const plan = classifyRunRecoveryV1(prefix([...toolModelFacts(1), ...item.tail]));
       expect(plan.status, item.name).toBe("repair");
       if (plan.status !== "repair") throw new Error("expected repair plan");
       expect(plan.facts, item.name).toHaveLength(1);
@@ -120,14 +115,9 @@ describe("canonical run recovery", () => {
 
     expect(plan.status).toBe("repair");
     if (plan.status !== "repair") throw new Error("expected repair plan");
-    expect(plan.facts.map((fact) => fact.type)).toEqual([
-      "tool.settled",
-      "tool.settled",
-    ]);
+    expect(plan.facts.map((fact) => fact.type)).toEqual(["tool.settled", "tool.settled"]);
     expect(
-      plan.facts.map((fact) =>
-        fact.type === "tool.settled" ? [fact.callId, fact.status] : [],
-      ),
+      plan.facts.map((fact) => (fact.type === "tool.settled" ? [fact.callId, fact.status] : [])),
     ).toEqual([
       ["call-0", "unknown"],
       ["call-2", "unknown"],
@@ -161,10 +151,7 @@ describe("canonical run recovery", () => {
     for (const item of cases) {
       const canonical = prefix([...artifactToolModelFacts(1), ...item.tail]);
       const plan = classifyRunRecoveryV1(canonical, {
-        modelResponses: exactRecoveryEvidence(
-          canonical,
-          modelResponse([providerCall(0)]),
-        ),
+        modelResponses: exactRecoveryEvidence(canonical, modelResponse([providerCall(0)])),
       });
 
       expect(plan.status, item.name).toBe("repair");
@@ -190,18 +177,14 @@ describe("canonical run recovery", () => {
     const plan = classifyRunRecoveryV1(canonical, {
       modelResponses: exactRecoveryEvidence(
         canonical,
-        modelResponse(
-          Array.from({ length: 4 }, (_, index) => providerCall(index)),
-        ),
+        modelResponse(Array.from({ length: 4 }, (_, index) => providerCall(index))),
       ),
     });
 
     expect(plan.status).toBe("repair");
     if (plan.status !== "repair") throw new Error("expected repair plan");
     expect(
-      plan.facts.map((fact) =>
-        fact.type === "tool.settled" ? [fact.callId, fact.status] : [],
-      ),
+      plan.facts.map((fact) => (fact.type === "tool.settled" ? [fact.callId, fact.status] : [])),
     ).toEqual([
       ["call-0", "unknown"],
       ["call-2", "unknown"],
@@ -294,19 +277,14 @@ describe("canonical run recovery", () => {
           successfulBatches.push([...facts]);
           current = parseRunJournalPrefixV1([
             ...current,
-            ...facts.map((fact, index) =>
-              envelope(fact, expectedTailSeq + index + 1),
-            ),
+            ...facts.map((fact, index) => envelope(fact, expectedTailSeq + index + 1)),
           ]);
           return "committed";
         },
       },
       loadModelResponseEvidence(canonical) {
         loadedTails.push(canonical.length);
-        return exactRecoveryEvidence(
-          canonical,
-          modelResponse([providerCall(0)]),
-        );
+        return exactRecoveryEvidence(canonical, modelResponse([providerCall(0)]));
       },
     });
 
@@ -524,10 +502,7 @@ describe("canonical run recovery", () => {
     const cases: readonly {
       readonly name: string;
       readonly responseCalls: readonly ProviderToolCall[];
-      readonly observed: readonly Extract<
-        InputFactV1,
-        { type: "tool.call_observed" }
-      >[];
+      readonly observed: readonly Extract<InputFactV1, { type: "tool.call_observed" }>[];
     }[] = [
       {
         name: "callId",
@@ -542,10 +517,7 @@ describe("canonical run recovery", () => {
       {
         name: "sourceIndex",
         responseCalls: [providerCall(0), providerCall(1)],
-        observed: [
-          observedFact(1, { order: 0 }),
-          observedFact(0, { order: 1 }),
-        ],
+        observed: [observedFact(1, { order: 0 }), observedFact(0, { order: 1 })],
       },
       {
         name: "args",
@@ -619,27 +591,19 @@ describe("canonical run recovery", () => {
   });
 
   test("R5 lets two repair workers race from one tail but commits only one batch", async () => {
-    const session = new MemoryRecoverySession(
-      prefix([...toolModelFacts(1)]),
-      2,
-    );
+    const session = new MemoryRecoverySession(prefix([...toolModelFacts(1)]), 2);
 
     const results = await Promise.all([
       repairRunRecoveryV1({ session }),
       repairRunRecoveryV1({ session }),
     ]);
 
-    expect(results.map(({ status }) => status).sort()).toEqual([
-      "clean",
-      "repaired",
-    ]);
+    expect(results.map(({ status }) => status).sort()).toEqual(["clean", "repaired"]);
     expect(session.committedBatches).toHaveLength(1);
     expect(session.committedBatches[0]).toHaveLength(1);
     expect(
       session.currentPrefix.filter(
-        (entry) =>
-          entry.record.kind === "input_fact" &&
-          entry.record.fact.type === "tool.settled",
+        (entry) => entry.record.kind === "input_fact" && entry.record.fact.type === "tool.settled",
       ),
     ).toHaveLength(1);
   });
@@ -670,17 +634,10 @@ describe("canonical run recovery", () => {
     ]);
     crashAfterRepairCommit = true;
 
-    await expect(repairRunRecoveryV1({ session: first })).rejects.toThrow(
-      "simulated crash",
+    await expect(repairRunRecoveryV1({ session: first })).rejects.toThrow("simulated crash");
+    expect(await releaseFileSessionExecutionLeaseV1(firstLease, root, "session", "run")).toBe(
+      "released",
     );
-    expect(
-      await releaseFileSessionExecutionLeaseV1(
-        firstLease,
-        root,
-        "session",
-        "run",
-      ),
-    ).toBe("released");
 
     const committedHead = readFileSessionJournalCommitIndexV1({
       workspaceRoot: root,
@@ -702,18 +659,11 @@ describe("canonical run recovery", () => {
     const canonical = await reopened.readCanonicalPrefix();
     expect(
       canonical.filter(
-        (entry) =>
-          entry.record.kind === "input_fact" &&
-          entry.record.fact.type === "model.settled",
+        (entry) => entry.record.kind === "input_fact" && entry.record.fact.type === "model.settled",
       ),
     ).toHaveLength(1);
     reopened.close();
-    await releaseFileSessionExecutionLeaseV1(
-      secondLease,
-      root,
-      "session",
-      "run",
-    );
+    await releaseFileSessionExecutionLeaseV1(secondLease, root, "session", "run");
   });
 
   test("R7 loses the fence during repair without making the orphan artifact authoritative", async () => {
@@ -751,9 +701,9 @@ describe("canonical run recovery", () => {
     ]);
     armTakeover = true;
 
-    await expect(
-      repairRunRecoveryV1({ session: first }),
-    ).rejects.toBeInstanceOf(SessionExecutionLeaseLostError);
+    await expect(repairRunRecoveryV1({ session: first })).rejects.toBeInstanceOf(
+      SessionExecutionLeaseLostError,
+    );
     const index = readFileSessionJournalCommitIndexV1({
       workspaceRoot: root,
       sessionId: "session",
@@ -801,13 +751,8 @@ class MemoryRecoverySession {
     if ((this.currentPrefix.at(-1)?.seq ?? 0) !== expectedTailSeq) {
       return "conflict";
     }
-    const next = facts.map((fact, index) =>
-      envelope(fact, expectedTailSeq + index + 1),
-    );
-    this.currentPrefix = parseRunJournalPrefixV1([
-      ...this.currentPrefix,
-      ...next,
-    ]);
+    const next = facts.map((fact, index) => envelope(fact, expectedTailSeq + index + 1));
+    this.currentPrefix = parseRunJournalPrefixV1([...this.currentPrefix, ...next]);
     this.committedBatches.push([...facts]);
     return "committed";
   }
@@ -869,9 +814,7 @@ function providerCall(
   };
 }
 
-function modelFactsWithResponseCalls(
-  calls: readonly ProviderToolCall[],
-): InputFactV1[] {
+function modelFactsWithResponseCalls(calls: readonly ProviderToolCall[]): InputFactV1[] {
   return [
     {
       type: "model.dispatch_recorded",
@@ -921,9 +864,7 @@ function exactRecoveryEvidence(
 ): VerifiedModelResponseEvidenceV1 {
   const snapshot = recoverySnapshot(canonical);
   const settlementEnvelope = canonical.find(
-    (entry) =>
-      entry.record.kind === "input_fact" &&
-      entry.record.fact.type === "model.settled",
+    (entry) => entry.record.kind === "input_fact" && entry.record.fact.type === "model.settled",
   );
   if (
     !settlementEnvelope ||
@@ -962,9 +903,7 @@ function recoverySnapshot(
   canonical: readonly RunJournalEnvelopeV1[],
 ): SessionInputSnapshot<InputFactV1> {
   const entries = canonical.flatMap((entry) =>
-    entry.record.kind === "input_fact"
-      ? [{ seq: entry.seq, fact: entry.record.fact }]
-      : [],
+    entry.record.kind === "input_fact" ? [{ seq: entry.seq, fact: entry.record.fact }] : [],
   );
   return {
     entries,
@@ -1003,9 +942,7 @@ function observedFact(
   };
 }
 
-function dispatchFact(
-  index: number,
-): Extract<InputFactV1, { type: "tool.dispatch_recorded" }> {
+function dispatchFact(index: number): Extract<InputFactV1, { type: "tool.dispatch_recorded" }> {
   return {
     type: "tool.dispatch_recorded",
     callId: `call-${index}`,
@@ -1019,9 +956,7 @@ function dispatchFact(
 function permissionFact(
   index: number,
   resolution: "allow_once" | "deny",
-  overrides: Partial<
-    Extract<InputFactV1, { type: "tool.permission_resolved" }>
-  > = {},
+  overrides: Partial<Extract<InputFactV1, { type: "tool.permission_resolved" }>> = {},
 ): Extract<InputFactV1, { type: "tool.permission_resolved" }> {
   return {
     type: "tool.permission_resolved",
@@ -1036,9 +971,7 @@ function permissionFact(
   };
 }
 
-function completedToolFact(
-  index: number,
-): Extract<InputFactV1, { type: "tool.settled" }> {
+function completedToolFact(index: number): Extract<InputFactV1, { type: "tool.settled" }> {
   return {
     type: "tool.settled",
     callId: `call-${index}`,
@@ -1047,10 +980,7 @@ function completedToolFact(
   };
 }
 
-function invalidToolRuntimeFailure(): Extract<
-  InputFactV1,
-  { type: "runtime.failed" }
-> {
+function invalidToolRuntimeFailure(): Extract<InputFactV1, { type: "runtime.failed" }> {
   return {
     type: "runtime.failed",
     area: "runtime",
@@ -1060,17 +990,11 @@ function invalidToolRuntimeFailure(): Extract<
   };
 }
 
-function prefix(
-  facts: readonly InputFactV1[],
-): readonly RunJournalEnvelopeV1[] {
-  return parseRunJournalPrefixV1(
-    facts.map((fact, index) => envelope(fact, index + 1)),
-  );
+function prefix(facts: readonly InputFactV1[]): readonly RunJournalEnvelopeV1[] {
+  return parseRunJournalPrefixV1(facts.map((fact, index) => envelope(fact, index + 1)));
 }
 
-function prefixUnchecked(
-  facts: readonly InputFactV1[],
-): readonly RunJournalEnvelopeV1[] {
+function prefixUnchecked(facts: readonly InputFactV1[]): readonly RunJournalEnvelopeV1[] {
   return facts.map((fact, index) => envelope(fact, index + 1));
 }
 

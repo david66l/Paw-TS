@@ -48,10 +48,7 @@ export interface PublicWebTransportResultV1 extends PublicWebHopResponseV1 {
 }
 
 export interface PublicWebTransportV1 {
-  getText(
-    url: string,
-    signal?: AbortSignal,
-  ): Promise<PublicWebTransportResultV1>;
+  getText(url: string, signal?: AbortSignal): Promise<PublicWebTransportResultV1>;
 }
 
 export interface PublicWebTransportDependenciesV1 {
@@ -78,11 +75,8 @@ export interface CreatePublicWebTransportOptionsV1 {
 export function createPublicWebTransportV1(
   options: CreatePublicWebTransportOptionsV1 = {},
 ): PublicWebTransportV1 {
-  const policy = freezeWebAccessPolicyV1(
-    options.policy ?? DEFAULT_WEB_ACCESS_POLICY_V1,
-  );
-  const resolveAddresses =
-    options.dependencies?.resolveAddresses ?? resolvePublicAddressesV1;
+  const policy = freezeWebAccessPolicyV1(options.policy ?? DEFAULT_WEB_ACCESS_POLICY_V1);
+  const resolveAddresses = options.dependencies?.resolveAddresses ?? resolvePublicAddressesV1;
   const requestHop = options.dependencies?.requestHop ?? requestPinnedHop;
   const transport: PublicWebTransportV1 = {
     async getText(input, signal) {
@@ -95,10 +89,7 @@ export function createPublicWebTransportV1(
           throw new Error("Web request redirect loop detected");
         }
         seen.add(canonicalUrl);
-        const addresses = await resolveAddresses(
-          normalizedHostname(current),
-          signal,
-        );
+        const addresses = await resolveAddresses(normalizedHostname(current), signal);
         throwIfAborted(signal);
         if (addresses.length === 0) {
           throw new Error("Web host resolved to no address");
@@ -111,8 +102,7 @@ export function createPublicWebTransportV1(
             throw new Error("Web DNS result has an invalid address family");
           }
         }
-        const selected =
-          addresses.find((address) => address.family === 4) ?? addresses[0];
+        const selected = addresses.find((address) => address.family === 4) ?? addresses[0];
         if (!selected) throw new Error("Web host resolved to no address");
         const response = await requestHop(
           {
@@ -169,10 +159,7 @@ export function parsePublicWebUrlV1(input: string): URL {
     throw new Error("Web URL hostname is invalid");
   }
   const lower = hostname.toLowerCase();
-  if (
-    lower === "localhost" ||
-    BLOCKED_HOST_SUFFIXES.some((suffix) => lower.endsWith(suffix))
-  ) {
+  if (lower === "localhost" || BLOCKED_HOST_SUFFIXES.some((suffix) => lower.endsWith(suffix))) {
     throw new Error("Web URL hostname is not public");
   }
   const ipFamily = net.isIP(hostname);
@@ -203,21 +190,17 @@ export async function resolvePublicAddressesV1(
   throwIfAborted(signal);
   const family = net.isIP(hostname);
   if (family === 4 || family === 6) {
-    return Object.freeze([
-      Object.freeze({ address: hostname, family: family as 4 | 6 }),
-    ]);
+    return Object.freeze([Object.freeze({ address: hostname, family: family as 4 | 6 })]);
   }
-  const answers = await new Promise<readonly PublicWebAddressV1[]>(
-    (resolve, reject) => {
-      dnsLookup(hostname, { all: true, verbatim: true }, (error, results) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(results as readonly PublicWebAddressV1[]);
-      });
-    },
-  );
+  const answers = await new Promise<readonly PublicWebAddressV1[]>((resolve, reject) => {
+    dnsLookup(hostname, { all: true, verbatim: true }, (error, results) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(results as readonly PublicWebAddressV1[]);
+    });
+  });
   throwIfAborted(signal);
   return Object.freeze(
     answers.map((answer) =>
@@ -261,9 +244,7 @@ function requestPinnedHop(
         path: `${input.url.pathname}${input.url.search}`,
         method: "GET",
         lookup,
-        ...(input.url.protocol === "https:"
-          ? { servername: normalizedHostname(input.url) }
-          : {}),
+        ...(input.url.protocol === "https:" ? { servername: normalizedHostname(input.url) } : {}),
         headers: {
           Accept:
             "text/html,application/xhtml+xml,application/json,text/plain,application/xml;q=0.9,*/*;q=0.1",
@@ -320,13 +301,10 @@ function requestPinnedHop(
 }
 
 /** @internal Supports both Node's single-address and Bun's all-address lookup. */
-export function createPinnedLookupV1(
-  address: PublicWebAddressV1,
-): http.RequestOptions["lookup"] {
+export function createPinnedLookupV1(address: PublicWebAddressV1): http.RequestOptions["lookup"] {
   return ((...args: unknown[]) => {
     const callback = args.at(-1) as (...callbackArgs: unknown[]) => void;
-    const options =
-      args.length >= 3 ? (args[1] as { all?: boolean }) : undefined;
+    const options = args.length >= 3 ? (args[1] as { all?: boolean }) : undefined;
     if (options?.all) {
       callback(null, [{ address: address.address, family: address.family }]);
       return;
@@ -335,24 +313,18 @@ export function createPinnedLookupV1(
   }) as http.RequestOptions["lookup"];
 }
 
-function normalizeHeaders(
-  headers: http.IncomingHttpHeaders,
-): Readonly<Record<string, string>> {
+function normalizeHeaders(headers: http.IncomingHttpHeaders): Readonly<Record<string, string>> {
   const normalized: Record<string, string> = {};
   for (const [name, value] of Object.entries(headers)) {
     if (value === undefined) continue;
-    normalized[name.toLowerCase()] = Array.isArray(value)
-      ? value.join(", ")
-      : String(value);
+    normalized[name.toLowerCase()] = Array.isArray(value) ? value.join(", ") : String(value);
   }
   return Object.freeze(normalized);
 }
 
 function normalizedHostname(url: URL): string {
   const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
-  return hostname.startsWith("[") && hostname.endsWith("]")
-    ? hostname.slice(1, -1)
-    : hostname;
+  return hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
 }
 
 function isPublicIpv4(input: string): boolean {
@@ -384,12 +356,7 @@ function isPublicIpv6(input: string): boolean {
   // Only global unicast 2000::/3 is eligible.
   if (((bytes[0] as number) & 0xe0) !== 0x20) return false;
   // Documentation 2001:db8::/32 and benchmarking 2001:2::/48.
-  if (
-    bytes[0] === 0x20 &&
-    bytes[1] === 0x01 &&
-    bytes[2] === 0x0d &&
-    bytes[3] === 0xb8
-  ) {
+  if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x0d && bytes[3] === 0xb8) {
     return false;
   }
   if (
@@ -413,18 +380,12 @@ function parseIpv6(input: string): readonly number[] | undefined {
     const bytes = ipv4Tail.split(".").map(Number);
     if (
       bytes.length !== 4 ||
-      bytes.some(
-        (value) => !Number.isInteger(value) || value < 0 || value > 255,
-      )
+      bytes.some((value) => !Number.isInteger(value) || value < 0 || value > 255)
     ) {
       return undefined;
     }
-    const high = (((bytes[0] as number) << 8) | (bytes[1] as number)).toString(
-      16,
-    );
-    const low = (((bytes[2] as number) << 8) | (bytes[3] as number)).toString(
-      16,
-    );
+    const high = (((bytes[0] as number) << 8) | (bytes[1] as number)).toString(16);
+    const low = (((bytes[2] as number) << 8) | (bytes[3] as number)).toString(16);
     candidate = `${candidate.slice(0, -ipv4Tail.length)}${high}:${low}`;
   }
   const compressed = candidate.includes("::");
@@ -439,11 +400,7 @@ function parseIpv6(input: string): readonly number[] | undefined {
     return undefined;
   }
   const groups = compressed
-    ? [
-        ...left,
-        ...Array<string>(8 - left.length - right.length).fill("0"),
-        ...right,
-      ]
+    ? [...left, ...Array<string>(8 - left.length - right.length).fill("0"), ...right]
     : left;
   if (groups.length !== 8) return undefined;
   const bytes: number[] = [];

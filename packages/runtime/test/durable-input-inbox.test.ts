@@ -40,9 +40,9 @@ describe("Paw Next durable input inbox", () => {
       status: "already_accepted",
       inputId: "input-1",
     });
-    await expect(
-      inbox.accept({ ...request, content: "different instruction" }),
-    ).rejects.toThrow("idempotency conflict");
+    await expect(inbox.accept({ ...request, content: "different instruction" })).rejects.toThrow(
+      "idempotency conflict",
+    );
     expect((await session.readInputSnapshot()).entries).toHaveLength(1);
     session.close();
   });
@@ -73,12 +73,8 @@ describe("Paw Next durable input inbox", () => {
         content: "different immutable body",
       }),
     ]);
-    expect(
-      conflictResults.filter((result) => result.status === "fulfilled"),
-    ).toHaveLength(1);
-    expect(
-      conflictResults.filter((result) => result.status === "rejected"),
-    ).toHaveLength(1);
+    expect(conflictResults.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(conflictResults.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect((await conflictInbox.inspect()).acceptedCount).toBe(1);
     conflictSession.close();
   });
@@ -118,10 +114,7 @@ describe("Paw Next durable input inbox", () => {
     await inbox.accept(input("steer-2", "steer"));
 
     await inbox.reportSafeBoundary("before_first_model_request");
-    expect(await inbox.consumePromotedInputIds()).toEqual([
-      "steer-1",
-      "steer-2",
-    ]);
+    expect(await inbox.consumePromotedInputIds()).toEqual(["steer-1", "steer-2"]);
     await appendCompletedModel(session, 1);
     await inbox.reportSafeBoundary("after_model_turn_without_tool_calls");
     expect(await inbox.consumePromotedInputIds()).toEqual([]);
@@ -175,19 +168,14 @@ describe("Paw Next durable input inbox", () => {
     const reversed = new DurableInputInboxV1(reversedSession);
     await reversed.accept(input("queue-1", "queue"));
     await reversed.accept(input("queue-2", "queue"));
-    const accepted = (await reversedSession.readInputSnapshot()).entries.map(
-      (entry) => entry.fact,
-    );
+    const accepted = (await reversedSession.readInputSnapshot()).entries.map((entry) => entry.fact);
     const queueOne = accepted.find(
       (fact) => fact.type === "input.accepted" && fact.inputId === "queue-1",
     );
     const queueTwo = accepted.find(
       (fact) => fact.type === "input.accepted" && fact.inputId === "queue-2",
     );
-    if (
-      queueOne?.type !== "input.accepted" ||
-      queueTwo?.type !== "input.accepted"
-    ) {
+    if (queueOne?.type !== "input.accepted" || queueTwo?.type !== "input.accepted") {
       throw new Error("queue fixture is incomplete");
     }
     await reversedSession.appendInputFacts([
@@ -205,9 +193,7 @@ describe("Paw Next durable input inbox", () => {
     const multiAccepted = (await multiSession.readInputSnapshot()).entries
       .map((entry) => entry.fact)
       .filter((fact) => fact.type === "input.accepted");
-    await multiSession.appendInputFacts(
-      multiAccepted.map(promotedFromAccepted),
-    );
+    await multiSession.appendInputFacts(multiAccepted.map(promotedFromAccepted));
     await expect(multi.inspect()).rejects.toThrow("more than one queue item");
     multiSession.close();
   });
@@ -225,9 +211,9 @@ describe("Paw Next durable input inbox", () => {
         requestHash: "request-1",
       },
     ]);
-    await expect(
-      inbox.reportSafeBoundary("after_model_turn_without_tool_calls"),
-    ).rejects.toThrow("unfinished model or tool work");
+    await expect(inbox.reportSafeBoundary("after_model_turn_without_tool_calls")).rejects.toThrow(
+      "unfinished model or tool work",
+    );
     session.close();
   });
 
@@ -290,9 +276,9 @@ describe("Paw Next durable input inbox", () => {
       },
     ]);
 
-    await expect(
-      inbox.reportSafeBoundary("after_tool_batch_settled"),
-    ).rejects.toThrow("unfinished model or tool work");
+    await expect(inbox.reportSafeBoundary("after_tool_batch_settled")).rejects.toThrow(
+      "unfinished model or tool work",
+    );
     session.close();
   });
 
@@ -537,9 +523,7 @@ describe("Paw Next in-process session coordinator", () => {
       },
     });
 
-    await expect(coordinator.wake()).rejects.toThrow(
-      "simulated executor crash",
-    );
+    await expect(coordinator.wake()).rejects.toThrow("simulated executor crash");
     fail = false;
     await coordinator.wake();
     expect(deliveries).toEqual([["queue-1"]]);
@@ -565,9 +549,7 @@ function promotedFromAccepted(accepted: InputAcceptedFactV1) {
     delivery: accepted.delivery,
     content: accepted.content,
     contentHash: accepted.contentHash,
-    ...(accepted.attachments === undefined
-      ? {}
-      : { attachments: accepted.attachments }),
+    ...(accepted.attachments === undefined ? {} : { attachments: accepted.attachments }),
   };
 }
 
@@ -581,10 +563,7 @@ function openSession(root: string): FileRunSessionV1 {
   return openFencedTestSession(root);
 }
 
-async function appendCompletedModel(
-  session: FileRunSessionV1,
-  turn: number,
-): Promise<void> {
+async function appendCompletedModel(session: FileRunSessionV1, turn: number): Promise<void> {
   const modelCallId = `model-${turn}`;
   await session.appendInputFacts([
     {
@@ -624,9 +603,9 @@ test("live admission guard rejects late input without losing acknowledgement of 
     throw new Error("admission closed");
   };
   expect((await inbox.accept(request, closed)).status).toBe("already_accepted");
-  await expect(
-    inbox.accept(input("late-input", "steer"), closed),
-  ).rejects.toThrow("admission closed");
+  await expect(inbox.accept(input("late-input", "steer"), closed)).rejects.toThrow(
+    "admission closed",
+  );
   expect((await inbox.inspect()).acceptedCount).toBe(1);
   session.close();
 });

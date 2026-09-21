@@ -2,14 +2,10 @@ import type { MemoryEntry } from "@paw/memory/longterm";
 import type { JsonValue } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
 export const PAW_MEMORY_FACET_VERSION_V2 = "paw.memory-facet.v2" as const;
-export const PAW_MEMORY_FACET_MEMBERSHIP_VERSION_V2 =
-  "paw.memory-facet-membership.v2" as const;
+export const PAW_MEMORY_FACET_MEMBERSHIP_VERSION_V2 = "paw.memory-facet-membership.v2" as const;
 export const PAW_MEMORY_FACET_STATE_PROJECTOR_VERSION_V2 =
   "paw.memory-facet-state-projector.v2" as const;
 export const PAW_MEMORY_FACET_PROFILE_BRIDGE_MAX_CHARS_V2 = 320 as const;
@@ -98,10 +94,7 @@ export interface MemoryFacetStateProjectorEventV2 {
  */
 export function isMemoryFacetSourceEntryV2(
   entry: MemoryEntry,
-): entry is Extract<
-  MemoryEntry,
-  { kind: "semantic" | "episodic" | "profile" }
-> {
+): entry is Extract<MemoryEntry, { kind: "semantic" | "episodic" | "profile" }> {
   if (entry.kind === "semantic" || entry.kind === "episodic") return true;
   return (
     entry.kind === "profile" &&
@@ -143,11 +136,7 @@ export function createMemoryFacetV2(
   }>,
 ): MemoryFacetV2 {
   const canonicalKey = normalizeMemoryFacetKeyV2(input.canonicalKey);
-  const displayName = displayText(
-    input.displayName,
-    "MemoryFacetDisplayNameInvalid",
-    160,
-  );
+  const displayName = displayText(input.displayName, "MemoryFacetDisplayNameInvalid", 160);
   const aliases = Object.freeze(
     [...new Set((input.aliases ?? []).map((item) => alias(item)))]
       .filter((item) => item !== alias(displayName))
@@ -174,10 +163,7 @@ export function createMemoryFacetMembershipV2(
   }>,
 ): MemoryFacetMembershipV2 {
   const facetId = identity(input.facetId, "MemoryFacetMembershipFacetInvalid");
-  const memoryId = identity(
-    input.memoryId,
-    "MemoryFacetMembershipMemoryInvalid",
-  );
+  const memoryId = identity(input.memoryId, "MemoryFacetMembershipMemoryInvalid");
   assertRoleAndLink(input.role, input.linkKind);
   const targetMemoryIds = Object.freeze(
     [
@@ -274,10 +260,7 @@ export function projectMemoryFacetStateV2(
       unresolved: [] as MemoryFacetEvidenceStateV2[],
     };
     for (const membership of memberships) {
-      const state = evidenceState(
-        requiredEntry(entries, membership.memoryId),
-        membership.role,
-      );
+      const state = evidenceState(requiredEntry(entries, membership.memoryId), membership.role);
       if (unresolvedIds.has(membership.memoryId)) {
         buckets.unresolved.push(state);
         continue;
@@ -306,10 +289,7 @@ export function projectMemoryFacetStateV2(
     }
     for (const values of Object.values(buckets)) values.sort(compareEvidence);
     const frozenBuckets = Object.fromEntries(
-      Object.entries(buckets).map(([key, value]) => [
-        key,
-        Object.freeze(value),
-      ]),
+      Object.entries(buckets).map(([key, value]) => [key, Object.freeze(value)]),
     ) as unknown as Omit<
       MemoryFacetStateProjectionV2,
       "schemaVersion" | "facet" | "membershipRevision" | "projectionRevision"
@@ -320,9 +300,7 @@ export function projectMemoryFacetStateV2(
       membershipRevision,
       ...frozenBuckets,
     };
-    const projectionRevision = hashCanonicalJsonV1(
-      body as unknown as JsonValue,
-    );
+    const projectionRevision = hashCanonicalJsonV1(body as unknown as JsonValue);
     const projection = Object.freeze({
       ...body,
       projectionRevision,
@@ -368,18 +346,13 @@ function assertFacet(facet: MemoryFacetV2): MemoryFacetV2 {
   return facet;
 }
 
-function uniqueEntries(
-  entries: readonly MemoryEntry[],
-): Map<string, MemoryEntry> {
+function uniqueEntries(entries: readonly MemoryEntry[]): Map<string, MemoryEntry> {
   const byId = new Map<string, MemoryEntry>();
   for (const entry of entries) {
     if (!entry.id.trim() || byId.has(entry.id)) {
       throw namedError("MemoryFacetEntryInvalid");
     }
-    if (
-      !validIso(entry.tValid) ||
-      (entry.tInvalid !== null && !validIso(entry.tInvalid))
-    ) {
+    if (!validIso(entry.tValid) || (entry.tInvalid !== null && !validIso(entry.tInvalid))) {
       throw namedError("MemoryFacetEntryTimeInvalid");
     }
     byId.set(entry.id, entry);
@@ -420,9 +393,7 @@ function validatedMemberships(
     }
   }
   return Object.freeze(
-    [...byMemoryId.values()].sort((left, right) =>
-      left.memoryId.localeCompare(right.memoryId),
-    ),
+    [...byMemoryId.values()].sort((left, right) => left.memoryId.localeCompare(right.memoryId)),
   );
 }
 
@@ -470,25 +441,14 @@ function compareEvidence(
   );
 }
 
-function requiredEntry(
-  entries: ReadonlyMap<string, MemoryEntry>,
-  memoryId: string,
-): MemoryEntry {
+function requiredEntry(entries: ReadonlyMap<string, MemoryEntry>, memoryId: string): MemoryEntry {
   const entry = entries.get(memoryId);
   if (!entry) throw namedError("MemoryFacetEntryMissing");
   return entry;
 }
 
-function assertRoleAndLink(
-  role: MemoryFacetMemberRoleV2,
-  linkKind: MemoryFacetLinkKindV2,
-): void {
-  const roles: readonly MemoryFacetMemberRoleV2[] = [
-    "state",
-    "event",
-    "cause",
-    "condition",
-  ];
+function assertRoleAndLink(role: MemoryFacetMemberRoleV2, linkKind: MemoryFacetLinkKindV2): void {
+  const roles: readonly MemoryFacetMemberRoleV2[] = ["state", "event", "cause", "condition"];
   const links: readonly MemoryFacetLinkKindV2[] = [
     "initial",
     "same_state",
@@ -520,11 +480,7 @@ function assertRoleAndLink(
   }
 }
 
-function displayText(
-  value: string,
-  errorName: string,
-  maxChars: number,
-): string {
+function displayText(value: string, errorName: string, maxChars: number): string {
   if (typeof value !== "string") throw namedError(errorName);
   const normalized = value.trim().replace(/\s+/g, " ");
   if (!normalized || normalized.length > maxChars || hasControl(normalized)) {
@@ -534,9 +490,7 @@ function displayText(
 }
 
 function alias(value: string): string {
-  return displayText(value, "MemoryFacetAliasInvalid", 160)
-    .normalize("NFKC")
-    .toLocaleLowerCase();
+  return displayText(value, "MemoryFacetAliasInvalid", 160).normalize("NFKC").toLocaleLowerCase();
 }
 
 function identity(value: string, errorName: string): string {

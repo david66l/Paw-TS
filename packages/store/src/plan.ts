@@ -19,11 +19,7 @@
  *    FAILED/BLOCKED/RUNNING 均视为"未完成"。
  */
 
-import {
-  type PlanItem,
-  type PlanItemStatus,
-  PlanItemStatus as S,
-} from "./plan-item.js";
+import { type PlanItem, type PlanItemStatus, PlanItemStatus as S } from "./plan-item.js";
 
 /**
  * 工作流计划 —— 有序任务集合，支持依赖关系管理。
@@ -40,12 +36,7 @@ export class Plan {
   revision: number;
   last_updated_at: string;
 
-  constructor(
-    workflow_id: string,
-    items: PlanItem[] = [],
-    revision = 0,
-    last_updated_at = "",
-  ) {
+  constructor(workflow_id: string, items: PlanItem[] = [], revision = 0, last_updated_at = "") {
     this.workflow_id = workflow_id;
     this.items = items;
     this.revision = revision;
@@ -89,9 +80,7 @@ export class Plan {
    * @returns 找到的下一个待执行项，无则返回 undefined
    */
   nextPending(): PlanItem | undefined {
-    const completed = new Set(
-      this.items.filter((i) => i.status === S.COMPLETED).map((i) => i.id),
-    );
+    const completed = new Set(this.items.filter((i) => i.status === S.COMPLETED).map((i) => i.id));
     for (const item of this.items) {
       if (item.status === S.PENDING) {
         if (item.depends_on.every((dep) => completed.has(dep))) {
@@ -108,8 +97,6 @@ export class Plan {
    * 注意：FAILED 或 BLOCKED 的项会导致返回 false。
    */
   get allComplete(): boolean {
-    return this.items.every(
-      (i) => i.status === S.COMPLETED || i.status === S.SKIPPED,
-    );
+    return this.items.every((i) => i.status === S.COMPLETED || i.status === S.SKIPPED);
   }
 }

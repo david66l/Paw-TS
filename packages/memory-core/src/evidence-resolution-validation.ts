@@ -23,10 +23,8 @@ export function validateMemoryEvidenceQueryPlanBoundary(input: {
   const boundary = classifyMemoryEvidenceIntentBoundaryV1(input.query, intent);
   if (
     plan.plannerVersion !== input.plannerVersion ||
-    (boundary.answerShape === "fixed" &&
-      plan.answerShape !== intent.answerShape) ||
-    (boundary.temporalMode === "fixed" &&
-      plan.temporalMode !== intent.temporalMode) ||
+    (boundary.answerShape === "fixed" && plan.answerShape !== intent.answerShape) ||
+    (boundary.temporalMode === "fixed" && plan.temporalMode !== intent.temporalMode) ||
     (boundary.roleConstraint === "fixed" &&
       plan.roleConstraint !== intent.roleConstraint &&
       !isMixedRoleEnvelope(plan, intent.roleConstraint)) ||
@@ -48,8 +46,7 @@ export function validateMemoryEvidenceQueryPlanBoundary(input: {
     const minimumEvidence = requirement.minimumEvidence ?? 1;
     const relation = requirement.relation ?? "direct";
     const coverageMode =
-      requirement.coverageMode ??
-      (requirement.temporalMode === "latest" ? "latest" : "any");
+      requirement.coverageMode ?? (requirement.temporalMode === "latest" ? "latest" : "any");
     if (
       typeof requirement.requirementId !== "string" ||
       requirement.requirementId.trim() !== requirement.requirementId ||
@@ -62,14 +59,8 @@ export function validateMemoryEvidenceQueryPlanBoundary(input: {
       typeof requirement.searchText !== "string" ||
       requirement.searchText.trim().length < 1 ||
       requirement.searchText.length > 512 ||
-      !memoryEvidenceLeafTemporalModeAllowedV1(
-        plan.temporalMode,
-        requirement.temporalMode,
-      ) ||
-      !requirementRoleAllowed(
-        requirement.roleConstraint,
-        plan.roleConstraint,
-      ) ||
+      !memoryEvidenceLeafTemporalModeAllowedV1(plan.temporalMode, requirement.temporalMode) ||
+      !requirementRoleAllowed(requirement.roleConstraint, plan.roleConstraint) ||
       !relations.has(relation) ||
       !coverageModes.has(coverageMode) ||
       !Number.isSafeInteger(minimumEvidence) ||
@@ -108,9 +99,7 @@ export function validateMemoryEvidenceQueryPlanBoundary(input: {
   }
   if (dagPlan) {
     const derivedEnvelope =
-      requirementRoles.size === 1
-        ? plan.requirements[0]?.roleConstraint
-        : ("any" as const);
+      requirementRoles.size === 1 ? plan.requirements[0]?.roleConstraint : ("any" as const);
     if (plan.roleConstraint !== derivedEnvelope) {
       throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
     }
@@ -126,9 +115,7 @@ function isMixedRoleEnvelope(
   plan: Awaited<ReturnType<MemoryEvidenceQueryPlannerV3["plan"]>>,
   classifiedRole: MemoryEvidenceQueryIntentV3["roleConstraint"],
 ): boolean {
-  const roles = new Set(
-    plan.requirements.map((requirement) => requirement.roleConstraint),
-  );
+  const roles = new Set(plan.requirements.map((requirement) => requirement.roleConstraint));
   return (
     plan.roleConstraint === "any" &&
     roles.has("user") &&
@@ -145,21 +132,14 @@ function requirementRoleAllowed(
 }
 
 function validateRequirementDag(
-  requirements: Awaited<
-    ReturnType<MemoryEvidenceQueryPlannerV3["plan"]>
-  >["requirements"],
+  requirements: Awaited<ReturnType<MemoryEvidenceQueryPlannerV3["plan"]>>["requirements"],
 ): void {
   const withDag = requirements.filter(
     (requirement) => requirement.dependencyRelation !== undefined,
   );
   if (withDag.length === 0) return;
-  const byId = new Map(
-    requirements.map((requirement) => [requirement.requirementId, requirement]),
-  );
-  if (
-    withDag.length !== requirements.length ||
-    byId.size !== requirements.length
-  ) {
+  const byId = new Map(requirements.map((requirement) => [requirement.requirementId, requirement]));
+  if (withDag.length !== requirements.length || byId.size !== requirements.length) {
     throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
   }
   for (const requirement of requirements) {
@@ -167,18 +147,13 @@ function validateRequirementDag(
     if (
       new Set(dependencies).size !== dependencies.length ||
       dependencies.some(
-        (dependency) =>
-          dependency === requirement.requirementId || !byId.has(dependency),
+        (dependency) => dependency === requirement.requirementId || !byId.has(dependency),
       ) ||
-      (requirement.dependencyRelation === "independent") !==
-        (dependencies.length === 0) ||
+      (requirement.dependencyRelation === "independent") !== (dependencies.length === 0) ||
       (requirement.dependencyRelation === "responds_to" &&
         (requirement.roleConstraint !== "assistant" ||
-          !dependencies.some(
-            (dependency) => byId.get(dependency)?.roleConstraint === "user",
-          ))) ||
-      (requirement.dependencyRelation === "supersedes" &&
-        requirement.temporalMode === "any")
+          !dependencies.some((dependency) => byId.get(dependency)?.roleConstraint === "user"))) ||
+      (requirement.dependencyRelation === "supersedes" && requirement.temporalMode === "any")
     ) {
       throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
     }
@@ -191,8 +166,7 @@ function validateRequirementDag(
     }
     if (visited.has(requirementId)) return;
     visiting.add(requirementId);
-    for (const dependency of byId.get(requirementId)?.dependsOnRequirementIds ??
-      []) {
+    for (const dependency of byId.get(requirementId)?.dependsOnRequirementIds ?? []) {
       visit(dependency);
     }
     visiting.delete(requirementId);
@@ -212,12 +186,7 @@ export function mergeEvidenceHits(
     const evidenceRef = hit.evidenceRef.trim();
     const content = hit.content.trim().replace(/\s+/gu, " ");
     const contentKey = `${hit.sourceId.trim()}\0${content}`;
-    if (
-      !evidenceRef ||
-      !content ||
-      seenRefs.has(evidenceRef) ||
-      seenContent.has(contentKey)
-    ) {
+    if (!evidenceRef || !content || seenRefs.has(evidenceRef) || seenContent.has(contentKey)) {
       continue;
     }
     seenRefs.add(evidenceRef);
@@ -235,11 +204,7 @@ export function boundedQuery(query: string): string {
   return value;
 }
 
-export function boundedInteger(
-  value: number,
-  minimum: number,
-  maximum: number,
-): number {
+export function boundedInteger(value: number, minimum: number, maximum: number): number {
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
     throw namedError("MemoryEvidenceResolverBudgetInvalid");
   }

@@ -79,9 +79,7 @@ describe("ManagedJobRegistryV1", () => {
     registry.attachController("run-a");
     registry.attachController("run-b");
     const job = startFake(registry, "run-a");
-    expect(() => registry.get("run-b", job.id)).toThrow(
-      "belongs to another owner",
-    );
+    expect(() => registry.get("run-b", job.id)).toThrow("belongs to another owner");
     expect(registry.list("run-b")).toEqual([]);
     expect(registry.get("run-a", job.id).ownerId).toBe("run-a");
     job.done.resolve({ status: "completed" });
@@ -163,9 +161,7 @@ describe("ManagedJobRegistryV1", () => {
     registry.attachController("run-a");
     const seen: string[] = [];
     registry.onDone((snapshot) => {
-      seen.push(
-        `${snapshot.status}:${registry.get("run-a", snapshot.id).status}`,
-      );
+      seen.push(`${snapshot.status}:${registry.get("run-a", snapshot.id).status}`);
       throw new Error("contained listener");
     });
     const job = startFake(registry, "run-a");
@@ -192,9 +188,7 @@ describe("ManagedJobRegistryV1", () => {
     await registry.disposeOwner("run-a", 5);
     expect(cancelled).toBe(true);
     expect(registry.list("run-a")).toEqual([]);
-    expect(() => startFake(registry, "run-a")).toThrow(
-      "no controller attached",
-    );
+    expect(() => startFake(registry, "run-a")).toThrow("no controller attached");
   });
 });
 

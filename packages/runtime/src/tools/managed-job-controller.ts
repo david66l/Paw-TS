@@ -88,20 +88,13 @@ export function projectRuntimeActivitiesV1(
   const activities = Object.freeze([...entries.values()]);
   return Object.freeze({
     activities,
-    active: Object.freeze(
-      activities.filter((activity) => activity.settlement === undefined),
-    ),
-    ...(latestUnobservedSettlement === undefined
-      ? {}
-      : { latestUnobservedSettlement }),
+    active: Object.freeze(activities.filter((activity) => activity.settlement === undefined)),
+    ...(latestUnobservedSettlement === undefined ? {} : { latestUnobservedSettlement }),
   });
 }
 
 /** Runtime-level policy wrapper; the generic Agent Loop remains job-agnostic. */
-export function withRuntimeActivityControlV1<
-  TRunConfig,
-  TState extends LoopControlState,
->(
+export function withRuntimeActivityControlV1<TRunConfig, TState extends LoopControlState>(
   base: ControlReducer<InputFactV1, TRunConfig, TState>,
 ): ControlReducer<InputFactV1, TRunConfig, TState> {
   return {
@@ -119,16 +112,13 @@ export function withRuntimeActivityControlV1<
       const decision = activities.latestUnobservedSettlement
         ? ({ kind: "continue" } as const)
         : activities.active.length > 0 &&
-            (baseDecision.kind === "completed" ||
-              baseDecision.kind === "await_user")
+            (baseDecision.kind === "completed" || baseDecision.kind === "await_user")
           ? ({
               kind: "await_external",
               reason: "runtime-activities-pending",
             } as const)
           : baseDecision;
-      return decision === baseDecision
-        ? state
-        : Object.freeze({ ...state, decision });
+      return decision === baseDecision ? state : Object.freeze({ ...state, decision });
     },
   };
 }
@@ -193,9 +183,7 @@ export class RuntimeManagedJobControllerV1 {
           activityId: job.id,
           status: "unknown",
           settledAt: job.finishedAt ?? this.clock(),
-          summary:
-            job.detail ??
-            "Paw restarted before the background activity settled",
+          summary: job.detail ?? "Paw restarted before the background activity settled",
         }),
       ),
     );
@@ -212,24 +200,16 @@ export class RuntimeManagedJobControllerV1 {
       ownerId: this.options.runId,
       kind: "shell",
       label: activityLabel(input.command),
-      ...(input.outputLimitBytes === undefined
-        ? {}
-        : { outputLimitBytes: input.outputLimitBytes }),
+      ...(input.outputLimitBytes === undefined ? {} : { outputLimitBytes: input.outputLimitBytes }),
       run: () => {
-        producer = startManagedShellInWorkspaceV1(
-          this.options.workspaceRoot,
-          input.command,
-          {
-            ...(input.cwd ? { cwd: input.cwd } : {}),
-            ...(this.options.shellSandbox
-              ? { shellSandbox: this.options.shellSandbox }
-              : {}),
-            ...(input.outputLimitBytes === undefined
-              ? {}
-              : { outputLimitBytes: input.outputLimitBytes }),
-            skipApprovalGate: true,
-          },
-        );
+        producer = startManagedShellInWorkspaceV1(this.options.workspaceRoot, input.command, {
+          ...(input.cwd ? { cwd: input.cwd } : {}),
+          ...(this.options.shellSandbox ? { shellSandbox: this.options.shellSandbox } : {}),
+          ...(input.outputLimitBytes === undefined
+            ? {}
+            : { outputLimitBytes: input.outputLimitBytes }),
+          skipApprovalGate: true,
+        });
         return producer.hooks;
       },
     });
@@ -242,11 +222,7 @@ export class RuntimeManagedJobControllerV1 {
       this.publishSnapshot(jobId);
     } catch (error) {
       this.failedStarts.add(jobId);
-      this.registry.kill(
-        this.options.runId,
-        jobId,
-        "activity start fact failed",
-      );
+      this.registry.kill(this.options.runId, jobId, "activity start fact failed");
       throw error;
     }
     return Object.freeze({
@@ -270,9 +246,7 @@ export class RuntimeManagedJobControllerV1 {
     const recovered = this.recoveredJobs.get(id);
     if (recovered) {
       return Object.freeze({
-        text:
-          recovered.detail ??
-          "Recovered managed job metadata; process output is unavailable.",
+        text: recovered.detail ?? "Recovered managed job metadata; process output is unavailable.",
         snapshot: recovered,
       });
     }
@@ -287,17 +261,11 @@ export class RuntimeManagedJobControllerV1 {
       : this.registry.peek(this.options.runId, id);
   }
 
-  wait(
-    id: string,
-    timeoutMs: number,
-    signal?: AbortSignal,
-  ): Promise<ManagedJobWaitV1> {
+  wait(id: string, timeoutMs: number, signal?: AbortSignal): Promise<ManagedJobWaitV1> {
     this.assertOpen();
     const recovered = this.recoveredJobs.get(id);
     if (recovered) {
-      return Promise.resolve(
-        Object.freeze({ timedOut: false, snapshot: recovered }),
-      );
+      return Promise.resolve(Object.freeze({ timedOut: false, snapshot: recovered }));
     }
     return this.registry.wait(this.options.runId, id, timeoutMs, signal);
   }
@@ -381,14 +349,11 @@ export class RuntimeManagedJobControllerV1 {
   }
 
   private assertOpen(): void {
-    if (this.closed)
-      throw new Error("Runtime managed job controller is closed");
+    if (this.closed) throw new Error("Runtime managed job controller is closed");
   }
 }
 
-function highestShellCounter(
-  activities: readonly RuntimeActivityProjectionEntryV1[],
-): number {
+function highestShellCounter(activities: readonly RuntimeActivityProjectionEntryV1[]): number {
   return activities.reduce((highest, activity) => {
     const match = activity.activityId.match(/^shell-(\d+)$/);
     const value = match?.[1] === undefined ? 0 : Number(match[1]);
@@ -458,8 +423,7 @@ function singleLine(value: string): string {
   let replacingControls = false;
   for (const character of value) {
     const code = character.charCodeAt(0);
-    const isControl =
-      code <= 0x1f || code === 0x7f || code === 0x2028 || code === 0x2029;
+    const isControl = code <= 0x1f || code === 0x7f || code === 0x2028 || code === 0x2029;
     if (isControl) {
       if (!replacingControls) result += " ";
       replacingControls = true;

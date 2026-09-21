@@ -50,8 +50,7 @@ describe("unified memory context resolver", () => {
         async resolve(requests) {
           archiveCalls += 1;
           return requests.map((request) => {
-            const content =
-              "The user explicitly chose Compose because cloud cost was high.";
+            const content = "The user explicitly chose Compose because cloud cost was high.";
             return { ...request, content, contentHash: hashTextV1(content) };
           });
         },
@@ -60,9 +59,7 @@ describe("unified memory context resolver", () => {
         plannerVersion: "resolver-planner-test-v1",
         async plan(input) {
           plannerCalls += 1;
-          expect(input.evidence.map((item) => item.memoryId)).toEqual([
-            "memory-1",
-          ]);
+          expect(input.evidence.map((item) => item.memoryId)).toEqual(["memory-1"]);
           return [
             {
               description: "The user's deployment choice and its reason",
@@ -77,9 +74,7 @@ describe("unified memory context resolver", () => {
       verifier: {
         verifierVersion: "resolver-verifier-test-v1",
         async verify(input) {
-          expect(input.requirements[0]?.candidateMemoryIds).toEqual([
-            "memory-1",
-          ]);
+          expect(input.requirements[0]?.candidateMemoryIds).toEqual(["memory-1"]);
           expect(input.spans).toHaveLength(1);
           return {
             verifierVersion: "resolver-verifier-test-v1",
@@ -156,9 +151,7 @@ describe("unified memory context resolver", () => {
           }));
         },
         async search(query) {
-          expect(query.query).toBe(
-            "The user's attendance and reaction to the named workshop",
-          );
+          expect(query.query).toBe("The user's attendance and reaction to the named workshop");
           expect(query.maxSpans).toBe(1);
           return [
             {
@@ -180,8 +173,7 @@ describe("unified memory context resolver", () => {
         async plan() {
           return [
             {
-              description:
-                "The user's attendance and reaction to the named workshop",
+              description: "The user's attendance and reaction to the named workshop",
               priority: "required",
               minimumEvidence: 1,
               coveredMemoryIds: ["memory-1"],
@@ -196,9 +188,7 @@ describe("unified memory context resolver", () => {
           const requirement = input.requirements[0]!;
           const l0 = input.evidence.find((item) => item.layer === "L0")!;
           expect(requirement.candidateMemoryIds).toContain(l0.memoryId);
-          expect(
-            input.spans.some((span) => span.memoryIds.includes(l0.memoryId)),
-          ).toBe(true);
+          expect(input.spans.some((span) => span.memoryIds.includes(l0.memoryId))).toBe(true);
           return {
             verifierVersion: "resolver-verifier-l0-audit-test-v1",
             verificationRevision: "verification-l0-audit",
@@ -352,9 +342,7 @@ function card(): MemoryCardV1 {
   return Object.freeze({
     id: "memory-1",
     revision: 1,
-    contentHash: hashTextV1(
-      "High cloud cost caused the user to choose Compose.",
-    ),
+    contentHash: hashTextV1("High cloud cost caused the user to choose Compose."),
     kind: "episodic",
     statement: "High cloud cost caused the user to choose Compose.",
     applicability: "reference",

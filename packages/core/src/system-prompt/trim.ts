@@ -190,18 +190,8 @@ const EMERGENCY_TRIM_STEPS: TrimStep[] = [
  * @param input - 裁剪输入参数，包含原始选项、预算、初始内容及依赖函数
  * @returns 最终的系统提示词构建结果，包含裁剪后的内容和裁剪追踪记录
  */
-export function trimSystemPromptToBudget(
-  input: TrimSystemPromptInput,
-): SystemPromptBuildResult {
-  const {
-    opts,
-    systemBudget,
-    initialContent,
-    initialTokens,
-    estimate,
-    assemble,
-    truncate,
-  } = input;
+export function trimSystemPromptToBudget(input: TrimSystemPromptInput): SystemPromptBuildResult {
+  const { opts, systemBudget, initialContent, initialTokens, estimate, assemble, truncate } = input;
 
   // 初始内容已在预算内，无需裁剪
   if (initialTokens <= systemBudget) {

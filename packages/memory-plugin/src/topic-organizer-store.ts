@@ -4,10 +4,7 @@ import {
   type MemoryStoreEngine,
   PostgresMemoryStoreEngine,
 } from "@paw/memory/longterm";
-import type {
-  MemoryTopicMemberProposalV1,
-  MemoryTopicProposalV1,
-} from "@paw/protocol";
+import type { MemoryTopicMemberProposalV1, MemoryTopicProposalV1 } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import type { PawNextMemoryScopeV1 } from "./profile.js";
@@ -51,10 +48,8 @@ export function createPostgresMemoryTopicOrganizerStoreV1(
 ): MemoryTopicOrganizerStoreV1 {
   const scope = Object.freeze({ ...input.scope });
   const engine = input.engine ?? new PostgresMemoryStoreEngine(scope);
-  const graph =
-    input.graph ?? createPostgresMemoryTemporalGraphStoreV1({ scope });
-  const projections =
-    input.projections ?? createPostgresMemoryTopicProjectionStoreV1({ scope });
+  const graph = input.graph ?? createPostgresMemoryTemporalGraphStoreV1({ scope });
+  const projections = input.projections ?? createPostgresMemoryTopicProjectionStoreV1({ scope });
   assertScopedEngine(engine, scope);
   assertExactScope(graph.scope, scope, "MemoryTopicGraphScopeMismatch");
   assertExactScope(projections.scope, scope, "MemoryTopicStoreScopeMismatch");
@@ -95,9 +90,7 @@ export function createPostgresMemoryTopicOrganizerStoreV1(
         sourceRevision,
         entries: Object.freeze(entries.map(toExtractionEntry)),
         existingTopics: Object.freeze(
-          topics.map(({ projectionHash: _projectionHash, ...topic }) =>
-            Object.freeze(topic),
-          ),
+          topics.map(({ projectionHash: _projectionHash, ...topic }) => Object.freeze(topic)),
         ),
       });
       emit(input.onEvent, {
@@ -111,10 +104,7 @@ export function createPostgresMemoryTopicOrganizerStoreV1(
       return result;
     },
 
-    async apply(
-      request: Parameters<MemoryTopicOrganizerStoreV1["apply"]>[0],
-      signal: AbortSignal,
-    ) {
+    async apply(request: Parameters<MemoryTopicOrganizerStoreV1["apply"]>[0], signal: AbortSignal) {
       const started = Date.now();
       if (signal.aborted) throw abortError();
       assertExactScope(request.scope, scope, "MemoryTopicApplyScopeMismatch");
@@ -141,9 +131,7 @@ export function createPostgresMemoryTopicOrganizerStoreV1(
           scope,
           family: rawProposal.family,
           canonicalName: rawProposal.canonicalName,
-          ...(rawProposal.targetTopicId
-            ? { targetTopicId: rawProposal.targetTopicId }
-            : {}),
+          ...(rawProposal.targetTopicId ? { targetTopicId: rawProposal.targetTopicId } : {}),
           members: completeMembers,
           confidence: rawProposal.confidence,
         });
@@ -163,10 +151,7 @@ export function createPostgresMemoryTopicOrganizerStoreV1(
           graphRevision,
           createdAt: new Date(request.claimedAt).toISOString(),
         });
-        const committed = await projections.replaceProjection(
-          projection,
-          signal,
-        );
+        const committed = await projections.replaceProjection(projection, signal);
         topicIds.push(committed.topicId);
         snapshotIds.push(committed.snapshotId);
       }
@@ -221,13 +206,8 @@ function toExtractionEntry(entry: Exclude<MemoryEntry, { kind: "vault_ref" }>) {
   return Object.freeze({
     id: entry.id,
     kind: entry.kind,
-    statement: [entry.whenToUse, entry.perspective, ...entry.modification].join(
-      "\n",
-    ),
-    keywords: Object.freeze([
-      entry.issueType,
-      ...(entry.branch ? [entry.branch] : []),
-    ]),
+    statement: [entry.whenToUse, entry.perspective, ...entry.modification].join("\n"),
+    keywords: Object.freeze([entry.issueType, ...(entry.branch ? [entry.branch] : [])]),
     confidence: entry.confidence,
   });
 }
@@ -264,11 +244,7 @@ function expandMembers(
     const from = members.get(relation.fromMemoryId);
     const to = members.get(relation.toMemoryId);
     const relatedId =
-      from && !to
-        ? relation.toMemoryId
-        : to && !from
-          ? relation.fromMemoryId
-          : undefined;
+      from && !to ? relation.toMemoryId : to && !from ? relation.fromMemoryId : undefined;
     if (!relatedId) continue;
     members.set(
       relatedId,
@@ -288,19 +264,11 @@ function expandMembers(
 }
 
 function memberPriority(member: MemoryTopicMemberProposalV1): number {
-  const basis =
-    member.basis === "user_asserted"
-      ? 3
-      : member.basis === "model_proposed"
-        ? 2
-        : 1;
+  const basis = member.basis === "user_asserted" ? 3 : member.basis === "model_proposed" ? 2 : 1;
   return basis * 10 + (member.role === "primary" ? 1 : 0);
 }
 
-async function listExistingTopics(
-  scope: PawNextMemoryScopeV1,
-  signal: AbortSignal,
-) {
+async function listExistingTopics(scope: PawNextMemoryScopeV1, signal: AbortSignal) {
   if (signal.aborted) throw abortError();
   const sql = getSql();
   const rows = await sql`
@@ -378,19 +346,14 @@ async function listActiveMembers(
 }
 
 function uniqueIds(ids: readonly string[], limit: number): readonly string[] {
-  const values = [
-    ...new Set(ids.map((id) => id.trim()).filter(Boolean)),
-  ].sort();
+  const values = [...new Set(ids.map((id) => id.trim()).filter(Boolean))].sort();
   if (values.length === 0 || values.length > limit) {
     throw namedError("MemoryTopicSourceIdsInvalid");
   }
   return Object.freeze(values);
 }
 
-function assertScopedEngine(
-  engine: MemoryStoreEngine,
-  scope: PawNextMemoryScopeV1,
-): void {
+function assertScopedEngine(engine: MemoryStoreEngine, scope: PawNextMemoryScopeV1): void {
   if (!engine.scope) throw namedError("MemoryTopicEngineScopeMissing");
   assertExactScope(engine.scope, scope, "MemoryTopicEngineScopeMismatch");
 }

@@ -70,14 +70,9 @@ export interface BuildLoopV2LiveTerminalArtifactInputV1 {
   readonly review?: LoopV2LiveReviewArtifactV1;
 }
 
-export function loopV2LiveTerminalArtifactPath(
-  workspaceRoot: string,
-  runId: string,
-): string {
+export function loopV2LiveTerminalArtifactPath(workspaceRoot: string, runId: string): string {
   if (!workspaceRoot.trim() || !runId.trim()) {
-    throw new Error(
-      "Loop v2 live terminal artifact path requires workspace and runId",
-    );
+    throw new Error("Loop v2 live terminal artifact path requires workspace and runId");
   }
   return path.join(
     path.resolve(workspaceRoot),
@@ -110,16 +105,14 @@ export function buildLoopV2LiveTerminalArtifactV1(
   }
 
   const legacyTerminal = normalizeLegacyTerminal(input.legacyTerminal);
-  const interruptedBy =
-    legacyTerminal.status === "completed" ? undefined : legacyTerminal.status;
+  const interruptedBy = legacyTerminal.status === "completed" ? undefined : legacyTerminal.status;
   const artifact = candidateArtifactEvidence(candidate);
   const v2Outcome = deriveRunOutcomeV2({
     candidateProposed: candidate !== undefined,
     ...(candidate
       ? {
           readiness: candidate.assessment.readiness,
-          verificationRequired:
-            candidate.policy.verificationAuthority !== "not_required",
+          verificationRequired: candidate.policy.verificationAuthority !== "not_required",
           externalVerification:
             candidate.policy.verificationAuthority === "external"
               ? ("pending" as const)
@@ -131,9 +124,7 @@ export function buildLoopV2LiveTerminalArtifactV1(
     ...(interruptedBy
       ? {
           interruptedBy,
-          ...(legacyTerminal.reasonCode
-            ? { interruptionReason: legacyTerminal.reasonCode }
-            : {}),
+          ...(legacyTerminal.reasonCode ? { interruptionReason: legacyTerminal.reasonCode } : {}),
         }
       : {}),
   });
@@ -204,17 +195,11 @@ export function compareLoopV2TerminalV1(
   outcome: RunOutcomeV2,
 ): LoopV2TerminalComparisonV1 {
   if (legacy.status === outcome.executionStatus) return "equal";
-  if (
-    legacy.status === "completed" &&
-    outcome.executionStatus === "external_pending"
-  ) {
+  if (legacy.status === "completed" && outcome.executionStatus === "external_pending") {
     return "legacy_completed_v2_external_pending";
   }
   if (legacy.status === "completed") return "legacy_more_permissive";
-  if (
-    outcome.executionStatus === "completed" ||
-    outcome.executionStatus === "external_pending"
-  ) {
+  if (outcome.executionStatus === "completed" || outcome.executionStatus === "external_pending") {
     return "v2_more_permissive";
   }
   return "different_noncompletion";
@@ -283,8 +268,7 @@ function candidateArtifactEvidence(
   if (
     !candidate ||
     status === "none" ||
-    (!candidate.policy.requireProductMutation &&
-      candidate.assessment.mutationRevision === 0)
+    (!candidate.policy.requireProductMutation && candidate.assessment.mutationRevision === 0)
   ) {
     return undefined;
   }
@@ -295,9 +279,7 @@ function candidateArtifactEvidence(
   };
 }
 
-function normalizeLegacyTerminal(
-  value: LoopV2LegacyTerminalV1,
-): LoopV2LegacyTerminalV1 {
+function normalizeLegacyTerminal(value: LoopV2LegacyTerminalV1): LoopV2LegacyTerminalV1 {
   if (
     value.status !== "completed" &&
     value.status !== "incomplete" &&

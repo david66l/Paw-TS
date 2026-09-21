@@ -2,10 +2,7 @@ import { createHash } from "node:crypto";
 import type { AgentToolCallAction } from "@paw/core";
 
 const REMINDER_THRESHOLDS = new Set([3, 5, 8]);
-const TRANSPARENT_TOOLS = new Set([
-  "workspace.todo_write",
-  "workspace.acceptance_update",
-]);
+const TRANSPARENT_TOOLS = new Set(["workspace.todo_write", "workspace.acceptance_update"]);
 const ARGUMENT_PREVIEW_CHARS = 500;
 
 export interface RepeatToolState {
@@ -35,11 +32,7 @@ function stableStringify(value: unknown): string {
 }
 
 function callKey(tool: string, canonicalArguments: string): string {
-  return createHash("sha256")
-    .update(tool)
-    .update("\0")
-    .update(canonicalArguments)
-    .digest("hex");
+  return createHash("sha256").update(tool).update("\0").update(canonicalArguments).digest("hex");
 }
 
 function previewArguments(canonicalArguments: string): string {
@@ -49,11 +42,7 @@ function previewArguments(canonicalArguments: string): string {
   return `${canonicalArguments.slice(0, ARGUMENT_PREVIEW_CHARS)}…(+${canonicalArguments.length - ARGUMENT_PREVIEW_CHARS} chars)`;
 }
 
-function reminder(
-  tool: string,
-  count: number,
-  canonicalArguments: string,
-): string {
+function reminder(tool: string, count: number, canonicalArguments: string): string {
   if (count === 3) {
     return "[Loop reminder] You have made the exact same tool call with identical arguments three consecutive times. Re-read the latest result and use materially different arguments or a different approach if more evidence is needed. The call was not blocked.";
   }

@@ -16,11 +16,7 @@
  */
 
 import type { ModelCompleteOptions } from "./model-options.js";
-import type {
-  ChatMessage,
-  ModelCompletionResult,
-  ModelStreamChunk,
-} from "./types.js";
+import type { ChatMessage, ModelCompletionResult, ModelStreamChunk } from "./types.js";
 
 /** 声明模型的能力 — 上下文窗口、最大输出等。 */
 export interface ModelCapabilities {

@@ -105,9 +105,6 @@ export function section(heading: string, body: string): string {
  * @param items - 列表项数组（自动过滤 null/false）
  * @returns 完整的 markdown 章节字符串
  */
-export function sectionBullets(
-  heading: string,
-  items: readonly (string | null | false)[],
-): string {
+export function sectionBullets(heading: string, items: readonly (string | null | false)[]): string {
   return section(heading, bullets(items));
 }

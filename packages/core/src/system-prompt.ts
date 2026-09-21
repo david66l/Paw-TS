@@ -37,10 +37,7 @@
 import { truncateTextToTokenBudget } from "./context/budget.js";
 import { assembleSystemPrompt } from "./system-prompt/assembler.js";
 import { trimSystemPromptToBudget } from "./system-prompt/trim.js";
-import type {
-  SystemPromptBuildResult,
-  SystemPromptOptions,
-} from "./system-prompt/types.js";
+import type { SystemPromptBuildResult, SystemPromptOptions } from "./system-prompt/types.js";
 import { estimateTokens } from "./token-estimate.js";
 
 // 重新导出类型，方便调用方 import

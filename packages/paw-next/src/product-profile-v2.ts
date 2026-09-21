@@ -1,11 +1,7 @@
 import path from "node:path";
 
 import type { ShellSandboxConfig } from "@paw/harness";
-import type {
-  LanguageModel,
-  PawModelTransport,
-  PawProviderProtocol,
-} from "@paw/models";
+import type { LanguageModel, PawModelTransport, PawProviderProtocol } from "@paw/models";
 import {
   type FileDurableJsonPayloadRuntimePolicyV1,
   type FrozenPermissionConfigV1,
@@ -30,8 +26,7 @@ import {
 import type { PawNextProductProfileV1 } from "./product-profile.js";
 import type { PawNextStartupRunIdentityV1 } from "./startup-scan.js";
 
-export const PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V2 =
-  "paw.next-product-profiles.v2" as const;
+export const PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V2 = "paw.next-product-profiles.v2" as const;
 export const DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V2 =
   ".paw/paw-next-product-profiles.v2.json" as const;
 
@@ -93,28 +88,20 @@ export interface BuiltPawNextTaskProfileV2 {
 export function loadPawNextProductProfileStoreV2(
   options: LoadPawNextProductProfileStoreOptionsV2,
 ): PawNextProductProfileStoreV2 {
-  const workspaceRoot = canonicalPawNextWorkspaceInternal(
-    options.workspaceRoot,
-  );
+  const workspaceRoot = canonicalPawNextWorkspaceInternal(options.workspaceRoot);
   const raw = readStrictPawNextWorkspaceJsonInternal(
     workspaceRoot,
-    options.profilePath ??
-      path.join(workspaceRoot, DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V2),
+    options.profilePath ?? path.join(workspaceRoot, DEFAULT_PAW_NEXT_PRODUCT_PROFILE_FILE_V2),
     "Paw Next V2 product profile",
   );
-  const root = exactRecordInternal(raw, "V2 profile store", [
-    "schemaVersion",
-    "profiles",
-  ]);
+  const root = exactRecordInternal(raw, "V2 profile store", ["schemaVersion", "profiles"]);
   if (root.schemaVersion !== PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V2) {
     throw new Error("Unsupported Paw Next V2 product profile schemaVersion");
   }
   if (!Array.isArray(root.profiles)) {
     throw new Error("Paw Next V2 product profiles must be an array");
   }
-  const profiles = root.profiles.map((value, index) =>
-    parseProfileV2(value, `profiles[${index}]`),
-  );
+  const profiles = root.profiles.map((value, index) => parseProfileV2(value, `profiles[${index}]`));
   assertUniqueProfiles(profiles);
   return Object.freeze({
     schemaVersion: PAW_NEXT_PRODUCT_PROFILE_SCHEMA_VERSION_V2,
@@ -162,8 +149,7 @@ export function buildPawNextTaskProfileV2(
     inputId: taskOptions.inputId,
     goal: taskOptions.goal,
     model: taskOptions.model,
-    profileIdentity:
-      taskOptions.profileIdentity as PawNextProductProfileIdentityV1,
+    profileIdentity: taskOptions.profileIdentity as PawNextProductProfileIdentityV1,
     credentialBindingHash: taskOptions.credentialBindingHash as string,
     providerProtocol: taskOptions.providerProtocol as PawProviderProtocol,
     transport: taskOptions.transport as PawModelTransport,
@@ -176,11 +162,8 @@ export function buildPawNextTaskProfileV2(
     estimationMarginTokens: taskOptions.estimationMarginTokens as number,
     estimatorId: taskOptions.estimatorId as string,
     estimatorVersion: taskOptions.estimatorVersion as string,
-    heartbeatPolicy:
-      taskOptions.heartbeatPolicy as SessionLeaseHeartbeatPolicyV1,
-    ...(taskOptions.shellSandbox === undefined
-      ? {}
-      : { shellSandbox: taskOptions.shellSandbox }),
+    heartbeatPolicy: taskOptions.heartbeatPolicy as SessionLeaseHeartbeatPolicyV1,
+    ...(taskOptions.shellSandbox === undefined ? {} : { shellSandbox: taskOptions.shellSandbox }),
     payloadRuntime: profile.payloadRuntime,
   });
   return Object.freeze({
@@ -192,10 +175,7 @@ export function buildPawNextTaskProfileV2(
   });
 }
 
-function parseProfileV2(
-  value: unknown,
-  label: string,
-): PawNextProductProfileV2 {
+function parseProfileV2(value: unknown, label: string): PawNextProductProfileV2 {
   const record = exactRecordInternal(value, label, [
     "profileId",
     "revision",
@@ -234,9 +214,7 @@ function parseProfileV2(
   });
 }
 
-function assertUniqueProfiles(
-  profiles: readonly PawNextProductProfileV2[],
-): void {
+function assertUniqueProfiles(profiles: readonly PawNextProductProfileV2[]): void {
   const revisions = new Set<string>();
   const hashes = new Set<string>();
   for (const profile of profiles) {

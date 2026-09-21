@@ -44,9 +44,9 @@ describe("product evidence adapter", () => {
       },
     };
 
-    expect(() =>
-      createProductMemoryEvidenceIndexV1({ profile, provider, archive }),
-    ).toThrow("MemoryProductEvidenceArchiveScopeMismatch");
+    expect(() => createProductMemoryEvidenceIndexV1({ profile, provider, archive })).toThrow(
+      "MemoryProductEvidenceArchiveScopeMismatch",
+    );
   });
 
   test("keeps L0 evidence when the L1 provider fails", async () => {
@@ -82,10 +82,7 @@ describe("product evidence adapter", () => {
       },
     });
 
-    const result = await index.search(
-      "Which city did I visit?",
-      new AbortController().signal,
-    );
+    const result = await index.search("Which city did I visit?", new AbortController().signal);
 
     expect(result.degradedChannels).toEqual(["l1"]);
     expect(result.lists.map((list) => list.channel)).toEqual(["l0"]);
@@ -146,10 +143,7 @@ describe("product evidence adapter", () => {
     });
 
     const packet = projectEvidenceFirstMemoryContextPacketV1(
-      await evidenceResolver.resolve(
-        "Which city did I visit?",
-        new AbortController().signal,
-      ),
+      await evidenceResolver.resolve("Which city did I visit?", new AbortController().signal),
     );
 
     expect(packet.requirements[0]?.status).toBe("covered");
@@ -198,10 +192,7 @@ describe("product evidence adapter", () => {
       },
     });
 
-    const result = await index.search(
-      "Which city did I visit?",
-      new AbortController().signal,
-    );
+    const result = await index.search("Which city did I visit?", new AbortController().signal);
 
     expect(result.degradedChannels).toEqual(["l0"]);
     expect(result.lists.map((list) => list.channel)).toEqual(["l1"]);
@@ -291,9 +282,7 @@ describe("product evidence adapter", () => {
   });
 
   test("uses the immutable source root before the evidence fragment", () => {
-    expect(evidenceSourceIdV1("runs/run-1/trajectory#step-9")).toBe(
-      "runs/run-1/trajectory",
-    );
+    expect(evidenceSourceIdV1("runs/run-1/trajectory#step-9")).toBe("runs/run-1/trajectory");
   });
 
   test("never declares a failed complex plan sufficient from one selected source", async () => {
@@ -330,8 +319,7 @@ describe("product evidence adapter", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           throw Object.assign(new Error("planner failed"), {
             name: "PlannerFailed",
@@ -411,12 +399,10 @@ describe("product evidence adapter", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "recommend",
             temporalMode: "any",
             roleConstraint: "user",
@@ -467,13 +453,9 @@ describe("product evidence adapter", () => {
 
     const unrenderedChallenge = projectEvidenceFirstMemoryContextPacketV1({
       ...resolution,
-      packetSources: resolution.packetSources.filter(
-        (source) => source.sourceId !== "session-b",
-      ),
+      packetSources: resolution.packetSources.filter((source) => source.sourceId !== "session-b"),
     });
-    expect(
-      unrenderedChallenge.requirements[0]?.contradictingMemoryIds,
-    ).toHaveLength(0);
+    expect(unrenderedChallenge.requirements[0]?.contradictingMemoryIds).toHaveLength(0);
     expect(unrenderedChallenge.verification.contradictionCount).toBe(1);
     expect(unrenderedChallenge.stop).toBe("partial");
   });
@@ -571,8 +553,7 @@ describe("product evidence adapter", () => {
             selectorVersion: "test-requirement-selector.v1",
             selectionRevision: "test-selection",
             assessments: requirements.map((requirement) => {
-              const selected =
-                requirement.requirementId === "alpha" ? "ref-a" : "ref-b";
+              const selected = requirement.requirementId === "alpha" ? "ref-a" : "ref-b";
               return {
                 requirementId: requirement.requirementId,
                 supportingEvidenceRefs: [selected],
@@ -586,12 +567,10 @@ describe("product evidence adapter", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "aggregate" as const,
             temporalMode: "any" as const,
             roleConstraint: "user" as const,

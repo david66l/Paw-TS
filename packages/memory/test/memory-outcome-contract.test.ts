@@ -1,13 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  type MemoryOutcomeContractV1,
-  classifyMemoryCompletion,
-} from "../src/index.js";
+import { type MemoryOutcomeContractV1, classifyMemoryCompletion } from "../src/index.js";
 
-function contract(
-  patch: Partial<MemoryOutcomeContractV1> = {},
-): MemoryOutcomeContractV1 {
+function contract(patch: Partial<MemoryOutcomeContractV1> = {}): MemoryOutcomeContractV1 {
   return {
     schemaVersion: 1,
     runStatus: "completed",
@@ -80,9 +75,9 @@ describe("MemoryOutcomeContract", () => {
         })),
       },
     };
-    expect(
-      classifyMemoryCompletion({ status: "completed", outcome: stale }),
-    ).toBe("unverified_completion");
+    expect(classifyMemoryCompletion({ status: "completed", outcome: stale })).toBe(
+      "unverified_completion",
+    );
     expect(
       classifyMemoryCompletion({
         status: "completed",

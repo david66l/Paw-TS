@@ -8,10 +8,7 @@ import {
   parseTaskGraphEventsV1,
   replayTaskGraphV1,
 } from "../src/task-graph.js";
-import {
-  TaskStateManager,
-  formatTaskStateForContext,
-} from "../src/task-state.js";
+import { TaskStateManager, formatTaskStateForContext } from "../src/task-state.js";
 
 describe("TaskGraphV1", () => {
   test("keeps model completion as a claim rather than host completion", () => {
@@ -44,9 +41,7 @@ describe("TaskGraphV1", () => {
       status: "claimed_done",
       provenance: "model_proposal",
     });
-    expect(graph.nodes.some((node) => node.status === "host_observed")).toBe(
-      false,
-    );
+    expect(graph.nodes.some((node) => node.status === "host_observed")).toBe(false);
   });
 
   test("blocks missing and cyclic proposal dependencies without blocking the loop", () => {
@@ -98,10 +93,7 @@ describe("TaskGraphV1", () => {
   });
 
   test("projects only settled host facts as observed milestones", () => {
-    let events = appendTaskGraphPlanV1(
-      [],
-      [{ id: "plan-1", task_id: "fix", depends_on: [] }],
-    );
+    let events = appendTaskGraphPlanV1([], [{ id: "plan-1", task_id: "fix", depends_on: [] }]);
     events = appendTaskGraphFactsV1(events, {
       filesRead: 2,
       shellRevision: 3,
@@ -115,18 +107,9 @@ describe("TaskGraphV1", () => {
 
     const graph = replayTaskGraphV1(events);
     expect(
-      graph.nodes
-        .filter((node) => node.provenance === "host_fact")
-        .map((node) => node.id),
-    ).toEqual([
-      "host:investigation",
-      "host:mutation",
-      "host:verification",
-      "host:diff_inspection",
-    ]);
-    expect(
-      graph.nodes.find((node) => node.id === "host:verification"),
-    ).toMatchObject({
+      graph.nodes.filter((node) => node.provenance === "host_fact").map((node) => node.id),
+    ).toEqual(["host:investigation", "host:mutation", "host:verification", "host:diff_inspection"]);
+    expect(graph.nodes.find((node) => node.id === "host:verification")).toMatchObject({
       status: "host_observed",
     });
   });
@@ -144,9 +127,10 @@ describe("TaskGraphV1", () => {
         lastToolOk: false,
       }),
     );
-    expect(
-      codeFailed.nodes.find((node) => node.id === "host:verification"),
-    ).toMatchObject({ status: "blocked", reason: "code_failed" });
+    expect(codeFailed.nodes.find((node) => node.id === "host:verification")).toMatchObject({
+      status: "blocked",
+      reason: "code_failed",
+    });
 
     const stale = replayTaskGraphV1(
       appendTaskGraphFactsV1([], {
@@ -160,9 +144,10 @@ describe("TaskGraphV1", () => {
         lastToolOk: true,
       }),
     );
-    expect(
-      stale.nodes.find((node) => node.id === "host:verification"),
-    ).toMatchObject({ status: "blocked", reason: "stale_verification" });
+    expect(stale.nodes.find((node) => node.id === "host:verification")).toMatchObject({
+      status: "blocked",
+      reason: "stale_verification",
+    });
   });
 
   test("a later harness diagnostic does not erase a current host pass", () => {
@@ -204,10 +189,7 @@ describe("TaskGraphV1", () => {
 
   test("strict replay is identical after JSON persistence and rejects corruption", () => {
     const events = appendTaskGraphFactsV1(
-      appendTaskGraphPlanV1(
-        [],
-        [{ id: "plan-1", task_id: "inspect", depends_on: [] }],
-      ),
+      appendTaskGraphPlanV1([], [{ id: "plan-1", task_id: "inspect", depends_on: [] }]),
       {
         filesRead: 1,
         shellRevision: 0,
@@ -247,12 +229,8 @@ describe("TaskGraphV1", () => {
     );
 
     const before = replayTaskGraphV1(state.snapshot().taskGraphEvents);
-    const restored = new TaskStateManager(
-      "ignored",
-      JSON.parse(JSON.stringify(state.snapshot())),
-    );
-    const eventCountBeforePlanRestore =
-      restored.snapshot().taskGraphEvents?.length;
+    const restored = new TaskStateManager("ignored", JSON.parse(JSON.stringify(state.snapshot())));
+    const eventCountBeforePlanRestore = restored.snapshot().taskGraphEvents?.length;
     restored.setPlan([
       {
         id: "plan-1",
@@ -261,9 +239,7 @@ describe("TaskGraphV1", () => {
         depends_on: [],
       },
     ]);
-    expect(restored.snapshot().taskGraphEvents).toHaveLength(
-      eventCountBeforePlanRestore ?? 0,
-    );
+    expect(restored.snapshot().taskGraphEvents).toHaveLength(eventCountBeforePlanRestore ?? 0);
     const after = replayTaskGraphV1(restored.snapshot().taskGraphEvents);
     expect(after).toEqual(before);
     expect(formatTaskStateForContext(restored.snapshot())).toContain(

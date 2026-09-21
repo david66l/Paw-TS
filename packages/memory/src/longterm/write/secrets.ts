@@ -84,7 +84,5 @@ export function scanForSecrets(text: string): SecretScanResult {
     return token;
   });
 
-  return count > 0
-    ? { action: "redact", text: redacted, count }
-    : { action: "pass" };
+  return count > 0 ? { action: "redact", text: redacted, count } : { action: "pass" };
 }

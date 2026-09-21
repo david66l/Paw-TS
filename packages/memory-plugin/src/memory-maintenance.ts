@@ -47,12 +47,9 @@ export function createMemoryMaintenanceControllerV1(
         input.timeoutMs ?? MEMORY_MAINTENANCE_DEADLINE_MS,
       );
       const session: MemoryWriterControllerOptionsV1["session"] = {
-        readInputSnapshot: () =>
-          operation.run(() => input.writer.session.readInputSnapshot()),
+        readInputSnapshot: () => operation.run(() => input.writer.session.readInputSnapshot()),
         commitInputFacts: (tail, facts) =>
-          operation.run(() =>
-            input.writer.session.commitInputFacts(tail, facts),
-          ),
+          operation.run(() => input.writer.session.commitInputFacts(tail, facts)),
       };
       try {
         const writer = createMemoryWriterControllerV1({
@@ -62,15 +59,12 @@ export function createMemoryMaintenanceControllerV1(
           extractor: {
             extractorVersion: input.writer.extractor.extractorVersion,
             extract: (request) =>
-              operation.run((signal) =>
-                input.writer.extractor.extract(request, signal),
-              ),
+              operation.run((signal) => input.writer.extractor.extract(request, signal)),
           },
           ...(input.writer.conflictResolver
             ? {
                 conflictResolver: {
-                  resolverVersion:
-                    input.writer.conflictResolver.resolverVersion,
+                  resolverVersion: input.writer.conflictResolver.resolverVersion,
                   resolve: (request) =>
                     operation.run((signal) =>
                       input.writer.conflictResolver!.resolve(request, signal),
@@ -80,22 +74,16 @@ export function createMemoryMaintenanceControllerV1(
             : {}),
           store: {
             recall: (query, limit) =>
-              operation.run((signal) =>
-                input.writer.store.recall(query, limit, signal),
-              ),
+              operation.run((signal) => input.writer.store.recall(query, limit, signal)),
             apply: (request) =>
-              operation.run((signal) =>
-                input.writer.store.apply(request, signal),
-              ),
+              operation.run((signal) => input.writer.store.apply(request, signal)),
           },
           ...(input.writer.evidenceArchive
             ? {
                 evidenceArchive: {
                   scope: input.writer.evidenceArchive.scope,
                   async put(spans) {
-                    const fresh = spans.filter(
-                      (span) => span.sourceSeq > archivedThroughSeq,
-                    );
+                    const fresh = spans.filter((span) => span.sourceSeq > archivedThroughSeq);
                     if (fresh.length === 0) return;
                     await operation.run((signal) =>
                       input.writer.evidenceArchive!.put(fresh, signal),
@@ -130,9 +118,7 @@ export function createMemoryMaintenanceControllerV1(
           // Background delivery may repeat. Topic writes change the catalog
           // revision themselves; that must not turn one source write into new
           // organization jobs every time its locator is delivered again.
-          const facts = (await session.readInputSnapshot()).entries.map(
-            (entry) => entry.fact,
-          );
+          const facts = (await session.readInputSnapshot()).entries.map((entry) => entry.fact);
           const completedSource = facts.some(
             (fact) =>
               fact.type === "memory.topic_organization_claimed" &&
@@ -165,19 +151,13 @@ export function createMemoryMaintenanceControllerV1(
           extractor: {
             extractorVersion: input.organizer.extractor.extractorVersion,
             extract: (request) =>
-              operation.run((signal) =>
-                input.organizer.extractor.extract(request, signal),
-              ),
+              operation.run((signal) => input.organizer.extractor.extract(request, signal)),
           },
           store: {
             prepare: (request) =>
-              operation.run((signal) =>
-                input.organizer.store.prepare(request, signal),
-              ),
+              operation.run((signal) => input.organizer.store.prepare(request, signal)),
             apply: (request) =>
-              operation.run((signal) =>
-                input.organizer.store.apply(request, signal),
-              ),
+              operation.run((signal) => input.organizer.store.apply(request, signal)),
           },
         });
         const organized = await organizer.settleSourceWrite(source);
@@ -189,28 +169,20 @@ export function createMemoryMaintenanceControllerV1(
             extractor: {
               extractorVersion: dossier.extractor.extractorVersion,
               extract: (request) =>
-                operation.run((signal) =>
-                  dossier.extractor.extract(request, signal),
-                ),
+                operation.run((signal) => dossier.extractor.extract(request, signal)),
             },
             store: {
               scope: dossier.store.scope,
-              getExact: (key) =>
-                operation.run((signal) => dossier.store.getExact(key, signal)),
+              getExact: (key) => operation.run((signal) => dossier.store.getExact(key, signal)),
               getCurrent: (topicId) =>
-                operation.run((signal) =>
-                  dossier.store.getCurrent(topicId, signal),
-                ),
-              put: (value) =>
-                operation.run((signal) => dossier.store.put(value, signal)),
+                operation.run((signal) => dossier.store.getCurrent(topicId, signal)),
+              put: (value) => operation.run((signal) => dossier.store.put(value, signal)),
             },
           });
           const entries = await operation.run((signal) => catalog.load(signal));
           for (const topicId of organized.topicIds) {
             operation.signal.throwIfAborted();
-            const candidate = entries.find(
-              (item) => item.projection.topic.id === topicId,
-            );
+            const candidate = entries.find((item) => item.projection.topic.id === topicId);
             if (!candidate) continue;
             try {
               await projector.project(candidate, operation.signal);

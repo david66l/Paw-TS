@@ -100,11 +100,7 @@ function runGitAsync(
         ...(signal ? { signal } : {}),
       },
       (error, stdout, stderr) => {
-        resolve(
-          error
-            ? { ok: false, error: stderr || error.message }
-            : { ok: true, stdout },
-        );
+        resolve(error ? { ok: false, error: stderr || error.message } : { ok: true, stdout });
       },
     );
     child.stdin?.end();
@@ -115,9 +111,7 @@ export async function gitStatusAsync(
   workspaceRoot: string,
   signal?: AbortSignal,
 ): Promise<GitStatusResult> {
-  return parseGitStatus(
-    await runGitAsync(workspaceRoot, ["status", "--porcelain", "-b"], signal),
-  );
+  return parseGitStatus(await runGitAsync(workspaceRoot, ["status", "--porcelain", "-b"], signal));
 }
 
 function parseGitStatus(r: ReturnType<typeof runGit>): GitStatusResult {
@@ -138,9 +132,7 @@ function parseGitStatus(r: ReturnType<typeof runGit>): GitStatusResult {
     // Branch line starts with "##"
     if (line.startsWith("## ")) {
       const branchInfo = line.slice(3);
-      const match = branchInfo.match(
-        /^([^\.\s]+)(?:\.\.\.([^\s]+))?\s*(?:\[([^\]]+)\])?/,
-      );
+      const match = branchInfo.match(/^([^\.\s]+)(?:\.\.\.([^\s]+))?\s*(?:\[([^\]]+)\])?/);
       if (match) {
         branch = match[1]!;
         const remote = match[3];
@@ -188,12 +180,7 @@ export function gitLog(workspaceRoot: string, maxCount = 10): GitLogResult {
 }
 
 function gitLogArgs(maxCount: number): string[] {
-  return [
-    "log",
-    `--max-count=${maxCount}`,
-    "--pretty=format:%H|%an|%ad|%s",
-    "--date=short",
-  ];
+  return ["log", `--max-count=${maxCount}`, "--pretty=format:%H|%an|%ad|%s", "--date=short"];
 }
 
 export async function gitLogAsync(
@@ -201,9 +188,7 @@ export async function gitLogAsync(
   maxCount = 10,
   signal?: AbortSignal,
 ): Promise<GitLogResult> {
-  return parseGitLog(
-    await runGitAsync(workspaceRoot, gitLogArgs(maxCount), signal),
-  );
+  return parseGitLog(await runGitAsync(workspaceRoot, gitLogArgs(maxCount), signal));
 }
 
 function parseGitLog(r: ReturnType<typeof runGit>): GitLogResult {
@@ -233,10 +218,7 @@ function parseGitLog(r: ReturnType<typeof runGit>): GitLogResult {
   return { commits };
 }
 
-export function gitDiff(
-  workspaceRoot: string,
-  filePath?: string,
-): GitDiffResult {
+export function gitDiff(workspaceRoot: string, filePath?: string): GitDiffResult {
   const args = filePath ? ["diff", "--", filePath] : ["diff"];
   const r = runGit(workspaceRoot, args);
   if (!r.ok) {
@@ -258,10 +240,7 @@ export async function gitDiffAsync(
   return r.ok ? { diff: r.stdout } : { error: r.error };
 }
 
-export function gitCommit(
-  workspaceRoot: string,
-  message: string,
-): GitCommitResult {
+export function gitCommit(workspaceRoot: string, message: string): GitCommitResult {
   const r = runGit(workspaceRoot, ["commit", "-m", message]);
   if (!r.ok) {
     return { ok: false, error: r.error };

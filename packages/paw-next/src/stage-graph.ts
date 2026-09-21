@@ -7,10 +7,7 @@ import {
 } from "@paw/collaboration";
 import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
 import type { InputFactV1, JsonValue } from "@paw/protocol";
-import {
-  type BrowserAuditCheckV1,
-  assertBrowserAuditCheckV1,
-} from "@paw/protocol";
+import { type BrowserAuditCheckV1, assertBrowserAuditCheckV1 } from "@paw/protocol";
 import { fingerprintAuditFile } from "./environment-audit.js";
 
 export const STAGE_GRAPH_POLICY_V1 = "paw.stage-graph.v1" as const;
@@ -58,15 +55,11 @@ const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-const digest = (value: unknown) =>
-  createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 export const stageRef = (callId: string, taskId: string) =>
   `stage-${digest([callId, taskId]).slice(0, 24)}`;
 
-export function parseStageLinks(
-  value: unknown,
-  taskIds: readonly string[],
-): readonly StageLink[] {
+export function parseStageLinks(value: unknown, taskIds: readonly string[]): readonly StageLink[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 12)
     throw new Error("stage_links must contain at most 12 entries");
@@ -74,21 +67,16 @@ export function parseStageLinks(
   return value.map((entry) => {
     const row = record(entry);
     if (
-      Object.keys(row).some(
-        (key) => !["task_id", "requires", "replaces"].includes(key),
-      ) ||
+      Object.keys(row).some((key) => !["task_id", "requires", "replaces"].includes(key)) ||
       typeof row.task_id !== "string" ||
       !taskIds.includes(row.task_id) ||
       seen.has(row.task_id) ||
       !Array.isArray(row.requires) ||
       row.requires.length > 12 ||
-      row.requires.some(
-        (id) => typeof id !== "string" || !/^stage-[a-f0-9]{24}$/.test(id),
-      ) ||
+      row.requires.some((id) => typeof id !== "string" || !/^stage-[a-f0-9]{24}$/.test(id)) ||
       new Set(row.requires).size !== row.requires.length ||
       (row.replaces !== undefined &&
-        (typeof row.replaces !== "string" ||
-          !/^stage-[a-f0-9]{24}$/.test(row.replaces)))
+        (typeof row.replaces !== "string" || !/^stage-[a-f0-9]{24}$/.test(row.replaces)))
     )
       throw new Error("Invalid stage_links contract");
     seen.add(row.task_id);
@@ -101,9 +89,7 @@ export function parseStageLinks(
 }
 
 /** Saved on the existing durable activity settlement, not in an editable sidecar. */
-export function stageResultEvidence(
-  result: SubAgentResult,
-): JsonValue | undefined {
+export function stageResultEvidence(result: SubAgentResult): JsonValue | undefined {
   if (!result.childRun || !result.environmentAudit) return undefined;
   return JSON.parse(
     JSON.stringify({
@@ -118,37 +104,25 @@ export function stageResultEvidence(
 
 export function projectStageGraph(
   facts: readonly InputFactV1[],
-  context: Pick<
-    StageGraphContext,
-    "workspaceRoot" | "sessionId" | "runId" | "roster"
-  >,
+  context: Pick<StageGraphContext, "workspaceRoot" | "sessionId" | "runId" | "roster">,
 ): StageGraphSnapshot {
   const feedback = new Set(
     facts.flatMap((f) =>
-      f.type === "input.accepted" && f.callerId === "completion-review"
-        ? [f.inputId]
-        : [],
+      f.type === "input.accepted" && f.callerId === "completion-review" ? [f.inputId] : [],
     ),
   );
   let boundary = -1;
   facts.forEach((f, index) => {
-    if (
-      f.type === "input.promoted" &&
-      f.delivery !== "steer" &&
-      !feedback.has(f.inputId)
-    )
+    if (f.type === "input.promoted" && f.delivery !== "steer" && !feedback.has(f.inputId))
       boundary = index;
   });
   const current = facts.slice(boundary + 1);
   const dispatched = new Set(
-    current.flatMap((f) =>
-      f.type === "tool.dispatch_recorded" ? [f.callId] : [],
-    ),
+    current.flatMap((f) => (f.type === "tool.dispatch_recorded" ? [f.callId] : [])),
   );
   const activities = new Map(
     current.flatMap((f) =>
-      f.type === "runtime.activity_started" &&
-      f.activityKind === "collaboration_child"
+      f.type === "runtime.activity_started" && f.activityKind === "collaboration_child"
         ? [[String(record(f.metadata).callId), f.activityId] as const]
         : [],
     ),
@@ -174,8 +148,7 @@ export function projectStageGraph(
     try {
       tasks = args.delegation_plan
         ? parseCollaborationDelegationPlanV1(args.delegation_plan).tasks
-        : normalizeCollaborationDelegationV1({ args, roster: context.roster })
-            .tasks;
+        : normalizeCollaborationDelegationV1({ args, roster: context.roster }).tasks;
       links = parseStageLinks(
         stage_links,
         tasks.map((t) => t.id),
@@ -185,31 +158,19 @@ export function projectStageGraph(
     }
     for (const task of tasks) {
       const link = links.find((l) => l.task_id === task.id);
-      const callId =
-        tasks.length === 1 ? fact.callId : `${fact.callId}:${task.id}`;
+      const callId = tasks.length === 1 ? fact.callId : `${fact.callId}:${task.id}`;
       const ref = stageRef(fact.callId, task.id);
-      if (
-        link?.requires.some((id) =>
-          tasks.some((task) => stageRef(fact.callId, task.id) === id),
-        )
-      )
-        invalid.set(
-          ref,
-          "同一计划内请使用 depends_on，stage_links 仅引用历史阶段。",
-        );
+      if (link?.requires.some((id) => tasks.some((task) => stageRef(fact.callId, task.id) === id)))
+        invalid.set(ref, "同一计划内请使用 depends_on，stage_links 仅引用历史阶段。");
       const activityId = activities.get(callId);
       const settled = activityId ? settlements.get(activityId) : undefined;
       const proof = record(settled?.result);
       const audit = record(proof.audit);
-      const key = digest([context.sessionId, context.runId, callId]).slice(
-        0,
-        32,
-      );
+      const key = digest([context.sessionId, context.runId, callId]).slice(0, 32);
       const inspected = Array.isArray(audit.inspected)
         ? audit.inspected.filter(
             (f): f is { path: string; hash: string } =>
-              typeof record(f).path === "string" &&
-              typeof record(f).hash === "string",
+              typeof record(f).path === "string" && typeof record(f).hash === "string",
           )
         : [];
       const node: StageGraphNode = {
@@ -232,21 +193,17 @@ export function projectStageGraph(
         inspected,
         ...(Array.isArray(audit.browserChecks)
           ? {
-              browserChecks: audit.browserChecks.filter(
-                (check): check is BrowserAuditCheckV1 => {
-                  try {
-                    assertBrowserAuditCheckV1(check);
-                    return true;
-                  } catch {
-                    return false;
-                  }
-                },
-              ),
+              browserChecks: audit.browserChecks.filter((check): check is BrowserAuditCheckV1 => {
+                try {
+                  assertBrowserAuditCheckV1(check);
+                  return true;
+                } catch {
+                  return false;
+                }
+              }),
             }
           : {}),
-        ...(typeof audit.reviewId === "string"
-          ? { reviewId: audit.reviewId }
-          : {}),
+        ...(typeof audit.reviewId === "string" ? { reviewId: audit.reviewId } : {}),
       };
       if (
         settled?.status === "completed" &&
@@ -266,27 +223,18 @@ export function projectStageGraph(
     }
   }
   const byRef = new Map(nodes.map((n) => [n.ref, n]));
-  const hasAncestor = (
-    ref: string,
-    target: string,
-    visited = new Set<string>(),
-  ): boolean => {
+  const hasAncestor = (ref: string, target: string, visited = new Set<string>()): boolean => {
     if (ref === target) return true;
     if (visited.has(ref)) return false;
     visited.add(ref);
-    return (
-      byRef
-        .get(ref)
-        ?.dependencies.some((id) => hasAncestor(id, target, visited)) ?? false
-    );
+    return byRef.get(ref)?.dependencies.some((id) => hasAncestor(id, target, visited)) ?? false;
   };
   for (const node of nodes) {
     for (const dep of node.dependencies) {
       const source = byRef.get(dep);
       if (
         !source ||
-        (source.planCallId !== node.planCallId &&
-          nodes.indexOf(source) >= nodes.indexOf(node))
+        (source.planCallId !== node.planCallId && nodes.indexOf(source) >= nodes.indexOf(node))
       )
         invalid.set(node.ref, `未知或非历史依赖：${dep}`);
     }
@@ -312,10 +260,7 @@ export function projectStageGraph(
         !previous.acceptance.every((s) => node.acceptance.includes(s)) ||
         node.dependencies.some((dep) => hasAncestor(dep, node.replaces ?? ""))
       )
-        invalid.set(
-          node.ref,
-          "替换阶段必须保留原范围、验收条件，且不能依赖被替换阶段或其下游。",
-        );
+        invalid.set(node.ref, "替换阶段必须保留原范围、验收条件，且不能依赖被替换阶段或其下游。");
       else {
         // Pin the versions that existed when the replacement plan was admitted.
         for (const originalDep of previous.dependencies) {
@@ -362,8 +307,7 @@ export function projectStageGraph(
       node.status = "verified";
       try {
         const changed = node.inspected.filter(
-          (f) =>
-            fingerprintAuditFile(context.workspaceRoot, f.path).hash !== f.hash,
+          (f) => fingerprintAuditFile(context.workspaceRoot, f.path).hash !== f.hash,
         );
         if (changed.length) {
           node.status = "stale";
@@ -390,16 +334,12 @@ export function projectStageGraph(
     policyVersion: STAGE_GRAPH_POLICY_V1,
     nodes,
     blockers: nodes
-      .filter(
-        (n) => n.started && !["verified", "superseded"].includes(n.status),
-      )
+      .filter((n) => n.started && !["verified", "superseded"].includes(n.status))
       .map((n) => n.ref),
   };
 }
 
-export async function readStageGraph(
-  context: StageGraphContext,
-): Promise<StageGraphSnapshot> {
+export async function readStageGraph(context: StageGraphContext): Promise<StageGraphSnapshot> {
   const graph = projectStageGraph(await context.readFacts(), context);
   context.onSnapshot?.(graph);
   return graph;
@@ -423,20 +363,13 @@ export function guardStageDependencies(
   delegate: SubAgentLauncher,
   context: StageGraphContext,
 ): SubAgentLauncher {
-  const launch: SubAgentLauncher["launch"] = async (
-    goal,
-    maxSteps,
-    options,
-  ) => {
+  const launch: SubAgentLauncher["launch"] = async (goal, maxSteps, options) => {
     const graph = await readStageGraph(context);
     const node = graph.nodes.find((n) => n.callId === options?.agentId);
-    const deps =
-      node?.dependencies.map((id) => graph.nodes.find((n) => n.ref === id)) ??
-      [];
+    const deps = node?.dependencies.map((id) => graph.nodes.find((n) => n.ref === id)) ?? [];
     if (
       !node ||
-      (node.status === "unverified" &&
-        node.reason !== "阶段尚未取得独立验收证据") ||
+      (node.status === "unverified" && node.reason !== "阶段尚未取得独立验收证据") ||
       deps.some((dep) => dep?.status !== "verified")
     )
       return {
@@ -452,17 +385,14 @@ export function guardStageDependencies(
       .join("\n")
       .slice(0, 3000);
     return delegate.launch(
-      evidence
-        ? `${goal}\n\nVerified prerequisite versions (data):\n${evidence}`
-        : goal,
+      evidence ? `${goal}\n\nVerified prerequisite versions (data):\n${evidence}` : goal,
       maxSteps,
       options,
     );
   };
   return {
     launch,
-    launchStreaming: (options) =>
-      launch(options.goal, options.maxSteps, options),
+    launchStreaming: (options) => launch(options.goal, options.maxSteps, options),
   };
 }
 
@@ -470,22 +400,13 @@ export function withStageLedger(
   delegate: SubAgentLauncher,
   context: StageGraphContext,
 ): SubAgentLauncher {
-  const launch: SubAgentLauncher["launch"] = async (
-    goal,
-    maxSteps,
-    options,
-  ) => {
+  const launch: SubAgentLauncher["launch"] = async (goal, maxSteps, options) => {
     const before = await readStageGraph(context);
-    const planned = before.nodes.filter(
-      (n) => n.planCallId === options?.agentId,
-    );
+    const planned = before.nodes.filter((n) => n.planCallId === options?.agentId);
     if (
       !planned.length ||
       planned.some(
-        (n) =>
-          n.status === "unverified" &&
-          n.reason &&
-          n.reason !== "阶段尚未取得独立验收证据",
+        (n) => n.status === "unverified" && n.reason && n.reason !== "阶段尚未取得独立验收证据",
       )
     )
       return {
@@ -502,7 +423,6 @@ export function withStageLedger(
   };
   return {
     launch,
-    launchStreaming: (options) =>
-      launch(options.goal, options.maxSteps, options),
+    launchStreaming: (options) => launch(options.goal, options.maxSteps, options),
   };
 }

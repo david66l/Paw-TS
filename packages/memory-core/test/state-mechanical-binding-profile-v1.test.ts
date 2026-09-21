@@ -114,9 +114,7 @@ describe("mechanical binding profile v1", () => {
     expect(profiles).toHaveLength(1);
     const profile = profiles[0];
     if (!profile) throw new Error("fixture");
-    expect(profile.policyVersion).toBe(
-      PAW_MEMORY_STATE_MECHANICAL_BINDING_PROFILE_POLICY_V1,
-    );
+    expect(profile.policyVersion).toBe(PAW_MEMORY_STATE_MECHANICAL_BINDING_PROFILE_POLICY_V1);
     expect(Object.values(profile.proofs).every(Boolean)).toBe(true);
     expect(profile.unresolvedSemanticClaims).toEqual({
       subjectBinding: true,

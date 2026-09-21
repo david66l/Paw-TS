@@ -147,11 +147,7 @@ describe("latest canonical assistant text", () => {
     ] as const;
 
     for (const mutate of mutations) {
-      const inlineFixture = assistantFixture(
-        "completed",
-        "inline metadata",
-        false,
-      );
+      const inlineFixture = assistantFixture("completed", "inline metadata", false);
       const inlineDrift = mapSnapshot(inlineFixture.snapshot, (fact) =>
         fact.type === "model.settled" ? mutate(fact) : fact,
       );
@@ -162,11 +158,7 @@ describe("latest canonical assistant text", () => {
         }),
       ).toThrow();
 
-      const artifactFixture = assistantFixture(
-        "completed",
-        "artifact metadata",
-        true,
-      );
+      const artifactFixture = assistantFixture("completed", "artifact metadata", true);
       const artifactSnapshot = mapSnapshot(artifactFixture.snapshot, (fact) =>
         fact.type === "model.settled" ? mutate(fact) : fact,
       );
@@ -209,9 +201,7 @@ function assistantFixture(
   return {
     snapshot,
     prefix: prefixOf(snapshot),
-    artifacts: artifact
-      ? new Map([["artifact:latest-assistant", response]])
-      : new Map(),
+    artifacts: artifact ? new Map([["artifact:latest-assistant", response]]) : new Map(),
   };
 }
 
@@ -291,9 +281,7 @@ function inline(value: JsonValue): DurableJsonPayloadV1 {
   return { kind: "inline", value, hash: hashValue(value) };
 }
 
-function snapshotOf(
-  facts: readonly InputFactV1[],
-): SessionInputSnapshot<InputFactV1> {
+function snapshotOf(facts: readonly InputFactV1[]): SessionInputSnapshot<InputFactV1> {
   return {
     entries: facts.map((fact, index) => ({ seq: index + 1, fact })),
     tailSeq: facts.length,
@@ -301,9 +289,7 @@ function snapshotOf(
   };
 }
 
-function prefixOf(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): readonly RunJournalEnvelopeV1[] {
+function prefixOf(snapshot: SessionInputSnapshot<InputFactV1>): readonly RunJournalEnvelopeV1[] {
   return snapshot.entries.map((entry) => ({
     schemaVersion: RUN_JOURNAL_SCHEMA_VERSION_V1,
     sessionId: "session-assistant",
@@ -331,9 +317,6 @@ function stableStringify(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${stableStringify(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key] as JsonValue)}`)
     .join(",")}}`;
 }

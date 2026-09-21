@@ -47,10 +47,7 @@ describe("buildSystemPromptWithBudget", () => {
   });
 
   it("trims memory detail when over system budget", () => {
-    const hugeIndex = Array.from(
-      { length: 300 },
-      (_, i) => `- [m${i}](m${i}.md)`,
-    ).join("\n");
+    const hugeIndex = Array.from({ length: 300 }, (_, i) => `- [m${i}](m${i}.md)`).join("\n");
     const memories = Array.from({ length: 5 }, (_, i) =>
       makeMemory(`mem-${i}`, "detail ".repeat(500)),
     );
@@ -76,10 +73,7 @@ describe("buildSystemPromptWithBudget", () => {
   });
 
   it("guarantees assembled prompt fits within system budget", () => {
-    const hugeIndex = Array.from(
-      { length: 300 },
-      (_, i) => `- [m${i}](m${i}.md)`,
-    ).join("\n");
+    const hugeIndex = Array.from({ length: 300 }, (_, i) => `- [m${i}](m${i}.md)`).join("\n");
     const memories = Array.from({ length: 5 }, (_, i) =>
       makeMemory(`mem-${i}`, "detail ".repeat(500)),
     );

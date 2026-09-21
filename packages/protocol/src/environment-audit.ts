@@ -11,14 +11,11 @@ export interface VisualAuditCheckV1 {
   }[];
 }
 
-export function assertVisualAuditCheckV1(
-  value: unknown,
-): asserts value is VisualAuditCheckV1 {
+export function assertVisualAuditCheckV1(value: unknown): asserts value is VisualAuditCheckV1 {
   const fail = () => {
     throw new Error("Invalid visual audit check");
   };
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return fail();
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fail();
   const r = value as Record<string, unknown>;
   const text = (v: unknown, max: number) =>
     typeof v === "string" && v.trim().length > 0 && v.length <= max;
@@ -61,9 +58,7 @@ export interface BrowserAuditCheckV1 {
   readonly checkedAt: number;
 }
 
-export function assertBrowserAuditCheckV1(
-  value: unknown,
-): asserts value is BrowserAuditCheckV1 {
+export function assertBrowserAuditCheckV1(value: unknown): asserts value is BrowserAuditCheckV1 {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Invalid browser audit check");
   const r = value as Record<string, unknown>;
@@ -71,8 +66,7 @@ export function assertBrowserAuditCheckV1(
     Object.keys(r)
       .filter((k) => k !== "visual")
       .sort()
-      .join(",") !==
-      "assertions,callId,checkedAt,observationHash,scenarioHash,url" ||
+      .join(",") !== "assertions,callId,checkedAt,observationHash,scenarioHash,url" ||
     typeof r.callId !== "string" ||
     !r.callId.trim() ||
     r.callId.length > 512 ||
@@ -122,8 +116,7 @@ export function assertEnvironmentAuditEvidenceV1(
   const fail = () => {
     throw new Error("Invalid environment audit evidence");
   };
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return fail();
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fail();
   const r = value as Record<string, unknown>;
   if (
     Object.keys(r)
@@ -145,14 +138,11 @@ export function assertEnvironmentAuditEvidenceV1(
     r.inspected.length > 64 ||
     !Array.isArray(r.unmetCriteria) ||
     r.unmetCriteria.length > 32 ||
-    !r.unmetCriteria.every(
-      (s) => typeof s === "string" && s.trim() && s.length <= 1000,
-    )
+    !r.unmetCriteria.every((s) => typeof s === "string" && s.trim() && s.length <= 1000)
   )
     return fail();
   if (r.browserChecks !== undefined) {
-    if (!Array.isArray(r.browserChecks) || r.browserChecks.length > 12)
-      return fail();
+    if (!Array.isArray(r.browserChecks) || r.browserChecks.length > 12) return fail();
     const calls = new Set<string>();
     for (const check of r.browserChecks) {
       assertBrowserAuditCheckV1(check);

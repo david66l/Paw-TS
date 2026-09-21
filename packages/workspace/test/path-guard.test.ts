@@ -88,18 +88,14 @@ describe("checkWorkspacePath", () => {
     };
 
     expect(checkWorkspacePath(root, "src/a.ts", { policy }).allowed).toBe(true);
-    expect(checkWorkspacePath(root, "test/a.ts", { policy }).risk).toBe(
-      "out_of_scope",
-    );
+    expect(checkWorkspacePath(root, "test/a.ts", { policy }).risk).toBe("out_of_scope");
     expect(
       checkWorkspacePath(root, "src/a.ts", {
         operation: "write",
         policy,
       }).allowed,
     ).toBe(false);
-    expect(
-      checkWorkspacePath(root, "src/private/key.ts", { policy }).allowed,
-    ).toBe(false);
+    expect(checkWorkspacePath(root, "src/private/key.ts", { policy }).allowed).toBe(false);
 
     fs.rmSync(root, { recursive: true, force: true });
   });
@@ -110,9 +106,7 @@ describe("isPathInsideRoot", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "Paw-Case-Root-"));
     try {
       const alternate = root.toLowerCase();
-      expect(isPathInsideRoot(root, alternate)).toBe(
-        process.platform === "win32",
-      );
+      expect(isPathInsideRoot(root, alternate)).toBe(process.platform === "win32");
       if (process.platform === "win32")
         expect(checkWorkspacePath(root, alternate).allowed).toBe(true);
       expect(isPathInsideRoot(root, `${alternate}-sibling`)).toBe(false);

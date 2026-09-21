@@ -19,9 +19,7 @@ function rowToCandidate(row: Record<string, unknown>): MemoryCandidate {
     proposedConfidence: row.proposed_confidence as number,
     sourceTaskIds: row.source_task_ids as string[],
     sourceRefs: parseJson(row.source_refs) as MemoryCandidate["sourceRefs"],
-    evidenceRefs: parseJson(
-      row.evidence_refs,
-    ) as MemoryCandidate["evidenceRefs"],
+    evidenceRefs: parseJson(row.evidence_refs) as MemoryCandidate["evidenceRefs"],
     possibleDuplicateIds: row.possible_duplicate_ids as string[],
     possibleConflictIds: row.possible_conflict_ids as string[],
     riskLevel: row.risk_level as MemoryCandidate["riskLevel"],
@@ -63,13 +61,8 @@ export const memoryCandidateDao = {
 
   async findById(id: string): Promise<MemoryCandidate | null> {
     const sql = getSql();
-    const rows = await sql.unsafe(
-      "SELECT * FROM memory_candidates WHERE id = $1",
-      [id],
-    );
-    return rows.length > 0
-      ? rowToCandidate(rows[0] as Record<string, unknown>)
-      : null;
+    const rows = await sql.unsafe("SELECT * FROM memory_candidates WHERE id = $1", [id]);
+    return rows.length > 0 ? rowToCandidate(rows[0] as Record<string, unknown>) : null;
   },
 
   async updateStatus(
@@ -85,22 +78,12 @@ export const memoryCandidateDao = {
         possible_conflict_ids = COALESCE($4, possible_conflict_ids),
         updated_at = now()
        WHERE id = $1 RETURNING *`,
-      [
-        id,
-        status,
-        opts?.possibleDuplicateIds ?? null,
-        opts?.possibleConflictIds ?? null,
-      ],
+      [id, status, opts?.possibleDuplicateIds ?? null, opts?.possibleConflictIds ?? null],
     );
-    return rows.length > 0
-      ? rowToCandidate(rows[0] as Record<string, unknown>)
-      : null;
+    return rows.length > 0 ? rowToCandidate(rows[0] as Record<string, unknown>) : null;
   },
 
-  async listByStatus(
-    status: CandidateStatus,
-    limit = 50,
-  ): Promise<MemoryCandidate[]> {
+  async listByStatus(status: CandidateStatus, limit = 50): Promise<MemoryCandidate[]> {
     const sql = getSql();
     const rows = await sql.unsafe(
       "SELECT * FROM memory_candidates WHERE status = $1 ORDER BY created_at DESC LIMIT $2",

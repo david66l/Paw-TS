@@ -34,9 +34,7 @@ contextBridge.exposeInMainWorld("pawDesktop", {
       ...opts,
       requestId: `compact-${opts.conversationId}`,
     });
-    return (
-      result.data ?? { ok: false, message: result.error || "上下文压缩失败。" }
-    );
+    return result.data ?? { ok: false, message: result.error || "上下文压缩失败。" };
   },
   submitInput: (opts) => ipcRenderer.invoke("agent:submit-input", opts),
   cancelChild: (opts) => ipcRenderer.invoke("agent:cancel-child", opts),
@@ -47,18 +45,15 @@ contextBridge.exposeInMainWorld("pawDesktop", {
 
   respondAskUser: (opts) => ipcRenderer.invoke("agent:ask-respond", opts),
 
-  finalizeConversation: (opts) =>
-    ipcRenderer.invoke("agent:finalize-conversation", opts),
+  finalizeConversation: (opts) => ipcRenderer.invoke("agent:finalize-conversation", opts),
 
   listMemories: (opts) => ipcRenderer.invoke("agent:list-memories", opts || {}),
 
   doctor: (opts) => ipcRenderer.invoke("agent:doctor", opts || {}),
 
-  listCheckpoints: (opts) =>
-    ipcRenderer.invoke("agent:checkpoint-list", opts || {}),
+  listCheckpoints: (opts) => ipcRenderer.invoke("agent:checkpoint-list", opts || {}),
 
-  undoCheckpoint: (opts) =>
-    ipcRenderer.invoke("agent:checkpoint-undo", opts || {}),
+  undoCheckpoint: (opts) => ipcRenderer.invoke("agent:checkpoint-undo", opts || {}),
 
   listRuns: (opts) => ipcRenderer.invoke("agent:runs-list", opts || {}),
 

@@ -14,8 +14,7 @@ describe("memory atom conflict resolver", () => {
     const atom = memoryAtom({
       atomId: "new-state",
       action: "store",
-      statement:
-        "Malia abandoned complex mind maps after they became overwhelming.",
+      statement: "Malia abandoned complex mind maps after they became overwhelming.",
     });
     const store: MemoryAtomWriterStoreV1 = {
       async recall() {
@@ -129,9 +128,7 @@ describe("memory atom conflict resolver", () => {
   });
 });
 
-function memoryAtom(
-  overrides: Partial<MemoryAtomProposalV1> = {},
-): MemoryAtomProposalV1 {
+function memoryAtom(overrides: Partial<MemoryAtomProposalV1> = {}): MemoryAtomProposalV1 {
   return Object.freeze({
     schemaVersion: "paw.memory-atom-proposal.v1",
     atomId: "atom-1",

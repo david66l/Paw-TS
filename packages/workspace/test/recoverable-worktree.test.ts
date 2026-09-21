@@ -36,25 +36,18 @@ describe("createRecoverableWorktreeV1", () => {
       });
       expect(first.recovered).toBe(false);
       expect(first.snapshotIdentity).toBe("revision-1");
-      expect(
-        fs.readFileSync(path.join(first.worktreeRoot, "tracked.txt"), "utf8"),
-      ).toBe("local\n");
-      expect(
-        fs.readFileSync(path.join(first.worktreeRoot, "untracked.txt"), "utf8"),
-      ).toBe("new\n");
+      expect(fs.readFileSync(path.join(first.worktreeRoot, "tracked.txt"), "utf8")).toBe("local\n");
+      expect(fs.readFileSync(path.join(first.worktreeRoot, "untracked.txt"), "utf8")).toBe("new\n");
 
-      fs.writeFileSync(
-        path.join(first.worktreeRoot, "child.txt"),
-        "preserved\n",
-      );
+      fs.writeFileSync(path.join(first.worktreeRoot, "child.txt"), "preserved\n");
       recovered = createRecoverableWorktreeV1(root, "child-1", {
         snapshotIdentity: "a-new-parent-revision-must-not-replace-the-snapshot",
       });
       expect(recovered.recovered).toBe(true);
       expect(recovered.snapshotIdentity).toBe("revision-1");
-      expect(
-        fs.readFileSync(path.join(recovered.worktreeRoot, "child.txt"), "utf8"),
-      ).toBe("preserved\n");
+      expect(fs.readFileSync(path.join(recovered.worktreeRoot, "child.txt"), "utf8")).toBe(
+        "preserved\n",
+      );
 
       recovered.cleanup();
       expect(fs.existsSync(recovered.worktreeRoot)).toBe(false);

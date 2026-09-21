@@ -11,10 +11,7 @@ import type {
  * assertion. Keeping the two axes separate lets dialogue recall remain useful
  * without weakening the user-fact boundary.
  */
-export type MemoryEvidenceUseV1 =
-  | "user_fact"
-  | "assistant_report"
-  | "shared_dialogue_artifact";
+export type MemoryEvidenceUseV1 = "user_fact" | "assistant_report" | "shared_dialogue_artifact";
 
 export type MemoryEvidenceOriginRoleV1 = "user" | "assistant" | "any";
 

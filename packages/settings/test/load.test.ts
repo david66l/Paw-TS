@@ -31,9 +31,9 @@ describe("loadPawSettingsLocal", () => {
   });
 
   test("throws on missing file", () => {
-    expect(() =>
-      loadPawSettingsLocal(path.join(os.tmpdir(), "nope-paw-settings.json")),
-    ).toThrow(PawError);
+    expect(() => loadPawSettingsLocal(path.join(os.tmpdir(), "nope-paw-settings.json"))).toThrow(
+      PawError,
+    );
   });
 
   test("rejects reasoning effort when thinking is disabled", () => {

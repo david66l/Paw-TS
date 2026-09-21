@@ -31,11 +31,7 @@ function otherObserved(seq: number): InputFactV1 {
   } as InputFactV1;
 }
 
-function settled(
-  seq: number,
-  status: "completed" | "failed",
-  callId = `call-${seq}`,
-): InputFactV1 {
+function settled(seq: number, status: "completed" | "failed", callId = `call-${seq}`): InputFactV1 {
   return {
     type: "tool.settled",
     callId,
@@ -78,20 +74,14 @@ describe("projectPendingContextCompactRequestV1", () => {
   });
 
   test("a failed request never counts", () => {
-    expect(
-      projectPendingContextCompactRequestV1([
-        compactObserved(1),
-        settled(1, "failed"),
-      ]),
-    ).toBe(false);
+    expect(projectPendingContextCompactRequestV1([compactObserved(1), settled(1, "failed")])).toBe(
+      false,
+    );
   });
 
   test("no request means no pending compaction", () => {
     expect(
-      projectPendingContextCompactRequestV1([
-        otherObserved(1),
-        settled(1, "completed", "other-1"),
-      ]),
+      projectPendingContextCompactRequestV1([otherObserved(1), settled(1, "completed", "other-1")]),
     ).toBe(false);
   });
 

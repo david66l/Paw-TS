@@ -37,11 +37,7 @@ describe("strict read-only committed File Run prefix", () => {
     expect(Object.isFrozen(prefix[0])).toBe(true);
     expect(Object.isFrozen(prefix[0]?.record)).toBe(true);
     expect(
-      Object.isFrozen(
-        prefix[0]?.record.kind === "input_fact"
-          ? prefix[0].record.fact
-          : undefined,
-      ),
+      Object.isFrozen(prefix[0]?.record.kind === "input_fact" ? prefix[0].record.fact : undefined),
     ).toBe(true);
     expect(rawTree(fixture.root)).toEqual(before);
   });
@@ -114,11 +110,7 @@ describe("strict read-only committed File Run prefix", () => {
           const child = spawnSync(
             process.execPath,
             [
-              path.join(
-                import.meta.dir,
-                "fixtures",
-                "readonly-sibling-commit-child.ts",
-              ),
+              path.join(import.meta.dir, "fixtures", "readonly-sibling-commit-child.ts"),
               fixture.root,
               fixture.sessionId,
               "sibling-run",
@@ -126,9 +118,7 @@ describe("strict read-only committed File Run prefix", () => {
             { encoding: "utf8" },
           );
           if (child.status !== 0) {
-            throw new Error(
-              `sibling commit fixture failed: ${child.stderr || child.stdout}`,
-            );
+            throw new Error(`sibling commit fixture failed: ${child.stderr || child.stdout}`);
           }
         },
       }),
@@ -147,10 +137,7 @@ describe("strict read-only committed File Run prefix", () => {
 
   test("missing, hash-damaged, and sequence-damaged committed artifacts fail closed", async () => {
     const missing = await committedRun();
-    fs.renameSync(
-      onlyArtifact(missing.root),
-      path.join(missing.root, "missing-artifact"),
-    );
+    fs.renameSync(onlyArtifact(missing.root), path.join(missing.root, "missing-artifact"));
     assertReadFailsWithoutMutation(missing, /missing/i);
 
     const damaged = await committedRun();
@@ -163,10 +150,7 @@ describe("strict read-only committed File Run prefix", () => {
 
   test("external hardlinks, artifact symlinks, and artifact-directory junctions fail closed", async () => {
     const linked = await committedRun();
-    fs.linkSync(
-      onlyArtifact(linked.root),
-      path.join(linked.root, "external-hardlink"),
-    );
+    fs.linkSync(onlyArtifact(linked.root), path.join(linked.root, "external-hardlink"));
     assertReadFailsWithoutMutation(linked, /hardlink/i);
 
     const symbolic = await committedRun();
@@ -182,11 +166,7 @@ describe("strict read-only committed File Run prefix", () => {
     const artifacts = path.dirname(onlyArtifact(redirected.root));
     const outside = path.join(redirected.root, "outside-artifacts");
     fs.renameSync(artifacts, outside);
-    fs.symlinkSync(
-      outside,
-      artifacts,
-      process.platform === "win32" ? "junction" : "dir",
-    );
+    fs.symlinkSync(outside, artifacts, process.platform === "win32" ? "junction" : "dir");
     assertReadFailsWithoutMutation(redirected, /real directory|symbolic/i);
   });
 
@@ -281,10 +261,7 @@ async function malformedSequenceRun(): Promise<PrefixFixture> {
   const content = `${JSON.stringify(artifact)}\n`;
   const contentHash = hash(content);
   const artifactFileName = `0000000000000001-0000000000000001-${contentHash}.json`;
-  fs.writeFileSync(
-    path.join(runDirectory(root), "journal-artifacts", artifactFileName),
-    content,
-  );
+  fs.writeFileSync(path.join(runDirectory(root), "journal-artifacts", artifactFileName), content);
   const nextHead = {
     tailSeq: 1,
     prefixHash: hash(JSON.stringify([envelope])),
@@ -337,10 +314,7 @@ function fixture(root: string): PrefixFixture {
   };
 }
 
-function assertReadFailsWithoutMutation(
-  fixtureValue: PrefixFixture,
-  expected: RegExp,
-): void {
+function assertReadFailsWithoutMutation(fixtureValue: PrefixFixture, expected: RegExp): void {
   const before = rawTree(fixtureValue.root);
   expect(() => readCommittedFileRunPrefixV1(fixtureValue)).toThrow(expected);
   expect(rawTree(fixtureValue.root)).toEqual(before);
@@ -356,14 +330,7 @@ function onlyArtifact(root: string): string {
 }
 
 function runDirectory(root: string): string {
-  return path.join(
-    root,
-    ".paw",
-    "paw-next",
-    "sessions",
-    hash(SESSION_ID),
-    hash(RUN_ID),
-  );
+  return path.join(root, ".paw", "paw-next", "sessions", hash(SESSION_ID), hash(RUN_ID));
 }
 
 function rawTree(root: string): readonly string[] {
@@ -379,9 +346,7 @@ function rawTree(root: string): readonly string[] {
         output.push(`dir:${relative}`);
         visit(full);
       } else {
-        output.push(
-          `file:${relative}:${stat.nlink}:${hash(fs.readFileSync(full))}`,
-        );
+        output.push(`file:${relative}:${stat.nlink}:${hash(fs.readFileSync(full))}`);
       }
     }
   }
@@ -389,11 +354,7 @@ function rawTree(root: string): readonly string[] {
   return output;
 }
 
-function trySymlink(
-  target: string,
-  linkPath: string,
-  type: fs.symlink.Type,
-): boolean {
+function trySymlink(target: string, linkPath: string, type: fs.symlink.Type): boolean {
   try {
     fs.symlinkSync(target, linkPath, type);
     return true;

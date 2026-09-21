@@ -74,13 +74,8 @@ export function createCompletionReviewControllerV1(options: {
       ): Promise<CompletionReviewSettledFactV1> {
         const reviewId = `completion-review-${candidate.candidateHash.slice(0, 32)}${attempt ? "-retry-1" : ""}`;
         const snapshot = await options.session.readInputSnapshot();
-        if (retryTailSeq !== undefined && snapshot.tailSeq !== retryTailSeq)
-          return fallback!;
-        const existing = findReview(
-          snapshot,
-          reviewId,
-          candidate.candidateHash,
-        );
+        if (retryTailSeq !== undefined && snapshot.tailSeq !== retryTailSeq) return fallback!;
+        const existing = findReview(snapshot, reviewId, candidate.candidateHash);
         if (existing.settlement) return existing.settlement;
         options.signal.throwIfAborted();
         if (!existing.claimed) {
@@ -106,29 +101,21 @@ export function createCompletionReviewControllerV1(options: {
             const snapshot = await options.session.readInputSnapshot();
             // Linearize retry eligibility with its durable claim. A queued
             // input racing the guard must not silently start an obsolete audit.
-            if (retryTailSeq !== undefined && snapshot.tailSeq !== retryTailSeq)
-              return false;
-            const projected = findReview(
-              snapshot,
-              reviewId,
-              candidate.candidateHash,
-            );
+            if (retryTailSeq !== undefined && snapshot.tailSeq !== retryTailSeq) return false;
+            const projected = findReview(snapshot, reviewId, candidate.candidateHash);
             if (projected.claimed) return true;
-            const committed = await options.session.commitInputFacts(
-              snapshot.tailSeq,
-              [
-                {
-                  type: "completion.review_claimed",
-                  reviewId,
-                  candidateHash: candidate.candidateHash,
-                  policyVersion: COMPLETION_REVIEW_POLICY_VERSION_V1,
-                  reviewerId: options.reviewer.reviewerId,
-                  triggers: Object.freeze([...new Set(triggers)]),
-                  sourceThroughSeq: candidate.sourceThroughSeq,
-                  claimedAt: clock(),
-                },
-              ],
-            );
+            const committed = await options.session.commitInputFacts(snapshot.tailSeq, [
+              {
+                type: "completion.review_claimed",
+                reviewId,
+                candidateHash: candidate.candidateHash,
+                policyVersion: COMPLETION_REVIEW_POLICY_VERSION_V1,
+                reviewerId: options.reviewer.reviewerId,
+                triggers: Object.freeze([...new Set(triggers)]),
+                sourceThroughSeq: candidate.sourceThroughSeq,
+                claimedAt: clock(),
+              },
+            ]);
             if (committed === "committed") return true;
           }
         }
@@ -146,22 +133,15 @@ function findReview(
   settlement?: CompletionReviewSettledFactV1;
 }> {
   const claims = snapshot.entries.filter(
-    (entry) =>
-      entry.fact.type === "completion.review_claimed" &&
-      entry.fact.reviewId === reviewId,
+    (entry) => entry.fact.type === "completion.review_claimed" && entry.fact.reviewId === reviewId,
   );
   if (claims.length > 1) throw new Error("Duplicate completion review claim");
   const claim = claims[0]?.fact;
-  if (
-    claim?.type === "completion.review_claimed" &&
-    claim.candidateHash !== candidateHash
-  ) {
+  if (claim?.type === "completion.review_claimed" && claim.candidateHash !== candidateHash) {
     throw new Error("Completion review candidate identity drifted");
   }
   const settlements = snapshot.entries.filter(
-    (entry) =>
-      entry.fact.type === "completion.review_settled" &&
-      entry.fact.reviewId === reviewId,
+    (entry) => entry.fact.type === "completion.review_settled" && entry.fact.reviewId === reviewId,
   );
   if (settlements.length > 1) {
     throw new Error("Duplicate completion review settlement");
@@ -181,9 +161,7 @@ function toSettlement(
   if (result.status === "completed") {
     return Object.freeze({
       type: "completion.review_settled",
-      ...(result.environmentAudit
-        ? { environmentAudit: result.environmentAudit }
-        : {}),
+      ...(result.environmentAudit ? { environmentAudit: result.environmentAudit } : {}),
       reviewId,
       status: "completed",
       verdict: result.verdict,
@@ -194,9 +172,7 @@ function toSettlement(
   }
   return Object.freeze({
     type: "completion.review_settled",
-    ...(result.environmentAudit
-      ? { environmentAudit: result.environmentAudit }
-      : {}),
+    ...(result.environmentAudit ? { environmentAudit: result.environmentAudit } : {}),
     reviewId,
     status: result.status,
     verdict: "unknown",

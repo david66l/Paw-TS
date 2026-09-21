@@ -22,9 +22,7 @@ describe("extractThinkBlocks", () => {
   });
 
   test("handles multiple <think> blocks", () => {
-    const result = extractThinkBlocks(
-      "<think>first</think> text <think>second</think>",
-    );
+    const result = extractThinkBlocks("<think>first</think> text <think>second</think>");
     expect(result.text).toBe("text");
     expect(result.thinking).toBe("first\n\nsecond");
   });

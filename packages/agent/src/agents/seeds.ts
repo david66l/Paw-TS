@@ -112,8 +112,7 @@ export const SEED_KEJI: CreateAgentInput = {
   memoryExtraction: "off",
   tools:
     "read_file, list_dir, search, glob, grep, git_status, git_diff, git_log, symbol_search, lsp",
-  outputFormat:
-    "Return a short review: blocking issues first, then nits. If all good, say so.",
+  outputFormat: "Return a short review: blocking issues first, then nits. If all good, say so.",
   capabilities: ["review"],
   prompt: `你是柯基，代码审查员。
 只读审查，不修改文件。关注正确性、类型安全与集成问题。简洁输出。`,
@@ -131,8 +130,7 @@ export const SEED_XIANLUO: CreateAgentInput = {
   model: "flash",
   maxSteps: 10,
   memoryExtraction: "off",
-  tools:
-    "read_file, list_dir, search, glob, grep, web_fetch, web_search, git_status",
+  tools: "read_file, list_dir, search, glob, grep, web_fetch, web_search, git_status",
   outputFormat: "Return a concise research note: packages, key APIs, pitfalls.",
   capabilities: ["investigation"],
   prompt: `你是暹罗，技术调研员。
@@ -151,10 +149,8 @@ export const SEED_BUOU: CreateAgentInput = {
   model: "flash",
   maxSteps: 12,
   memoryExtraction: "off",
-  tools:
-    "read_file, list_dir, search, glob, grep, run_shell, git_status, git_diff",
-  outputFormat:
-    "Return test results (pass/fail) if suite exists; else 2–4 suggested cases.",
+  tools: "read_file, list_dir, search, glob, grep, run_shell, git_status, git_diff",
+  outputFormat: "Return test results (pass/fail) if suite exists; else 2–4 suggested cases.",
   capabilities: ["testing"],
   prompt: `你是布偶，QA。
 尽量只读：可运行测试命令并报告结果；不要改业务代码。若无测试，给出建议用例。`,
@@ -219,6 +215,4 @@ export const DEFAULT_AGENT_SEEDS: readonly CreateAgentInput[] = [
 ];
 
 /** 桌面花名册稳定排序（id 列表） */
-export const AGENT_ROSTER_ORDER: readonly string[] = DEFAULT_AGENT_SEEDS.map(
-  (s) => s.id,
-);
+export const AGENT_ROSTER_ORDER: readonly string[] = DEFAULT_AGENT_SEEDS.map((s) => s.id);

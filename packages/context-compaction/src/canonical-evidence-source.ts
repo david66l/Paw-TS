@@ -11,22 +11,16 @@ import {
 export interface CanonicalPayloadCheckpointEvidenceSourceOptionsV1 {
   readonly snapshots: Pick<Session<InputFactV1, unknown>, "readInputSnapshot">;
   readonly loadPayloadEvidence: (
-    snapshot: Awaited<
-      ReturnType<Session<InputFactV1, unknown>["readInputSnapshot"]>
-    >,
+    snapshot: Awaited<ReturnType<Session<InputFactV1, unknown>["readInputSnapshot"]>>,
     signal: AbortSignal,
-  ) =>
-    | VerifiedCanonicalPayloadEvidenceV1
-    | Promise<VerifiedCanonicalPayloadEvidenceV1>;
+  ) => VerifiedCanonicalPayloadEvidenceV1 | Promise<VerifiedCanonicalPayloadEvidenceV1>;
 }
 
 /** Resolves only canonical, location-bound payloads from the active run. */
 export function createCanonicalPayloadCheckpointEvidenceSourceV1(
   options: CanonicalPayloadCheckpointEvidenceSourceOptionsV1,
 ): CheckpointEvidenceSourceV1 {
-  const readSnapshot = options.snapshots.readInputSnapshot.bind(
-    options.snapshots,
-  );
+  const readSnapshot = options.snapshots.readInputSnapshot.bind(options.snapshots);
   const loadPayloadEvidence = options.loadPayloadEvidence.bind(options);
   return Object.freeze({
     async load(
@@ -36,19 +30,12 @@ export function createCanonicalPayloadCheckpointEvidenceSourceV1(
       const snapshot = await readSnapshot();
       const evidence = await loadPayloadEvidence(snapshot, callOptions.signal);
       evidence.assertSnapshot(snapshot);
-      const currentBySeq = new Map(
-        snapshot.entries.map((entry) => [entry.seq, entry.fact]),
-      );
+      const currentBySeq = new Map(snapshot.entries.map((entry) => [entry.seq, entry.fact]));
       const resolved: CheckpointResolvedPayloadV1[] = [];
       for (const source of input.sourceEntries) {
         const current = currentBySeq.get(source.seq);
-        if (
-          !current ||
-          JSON.stringify(current) !== JSON.stringify(source.fact)
-        ) {
-          throw new Error(
-            "Checkpoint source changed before payload resolution",
-          );
+        if (!current || JSON.stringify(current) !== JSON.stringify(source.fact)) {
+          throw new Error("Checkpoint source changed before payload resolution");
         }
         const occurrence = payloadOccurrence(source.seq, source.fact);
         if (!occurrence) continue;
@@ -73,12 +60,8 @@ function payloadOccurrence(
   fact: InputFactV1,
 ):
   | Readonly<{
-      location: Parameters<
-        VerifiedCanonicalPayloadEvidenceV1["requirePayload"]
-      >[0]["location"];
-      payload: Parameters<
-        VerifiedCanonicalPayloadEvidenceV1["requirePayload"]
-      >[0]["payload"];
+      location: Parameters<VerifiedCanonicalPayloadEvidenceV1["requirePayload"]>[0]["location"];
+      payload: Parameters<VerifiedCanonicalPayloadEvidenceV1["requirePayload"]>[0]["payload"];
     }>
   | undefined {
   if (fact.type === "model.settled" && fact.response) {

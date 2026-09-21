@@ -43,9 +43,7 @@ export function AskUserCard({
           <MessageCircleQuestion size={18} />
         </span>
         <span className={styles.title}>Paw 想问你</span>
-        {timeoutSec ? (
-          <span className={styles.timeout}>参考限时 {timeoutSec}s</span>
-        ) : null}
+        {timeoutSec ? <span className={styles.timeout}>参考限时 {timeoutSec}s</span> : null}
       </div>
 
       <div className={styles.question}>{question}</div>

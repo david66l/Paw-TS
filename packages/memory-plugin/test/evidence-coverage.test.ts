@@ -57,9 +57,7 @@ describe("memory evidence coverage planner", () => {
     const proposal = await planner.plan(
       {
         query: "Why Compose?",
-        evidence: [
-          { memoryId: "memory-1", layer: "L1", statement: "Because cost" },
-        ],
+        evidence: [{ memoryId: "memory-1", layer: "L1", statement: "Because cost" }],
         topics: [],
         maxRequirements: 4,
         maxExpansionTopics: 3,
@@ -253,21 +251,10 @@ describe("memory evidence coverage planner", () => {
     });
 
     expect(plan.requirements).toHaveLength(2);
-    expect(plan.coverage.map((item) => item.status)).toEqual([
-      "covered",
-      "covered",
-    ]);
-    expect(plan.coverage.map((item) => item.topicIds)).toEqual([
-      [],
-      [topic.projection.topic.id],
-    ]);
-    expect(plan.supplementalStates.map((state) => state.memoryId)).toEqual([
-      "diet-1",
-    ]);
-    expect(requested).toEqual([
-      "journal:run-1#input-fact-2",
-      "journal:run-2#input-fact-3",
-    ]);
+    expect(plan.coverage.map((item) => item.status)).toEqual(["covered", "covered"]);
+    expect(plan.coverage.map((item) => item.topicIds)).toEqual([[], [topic.projection.topic.id]]);
+    expect(plan.supplementalStates.map((state) => state.memoryId)).toEqual(["diet-1"]);
+    expect(requested).toEqual(["journal:run-1#input-fact-2", "journal:run-2#input-fact-3"]);
     expect(plan.spans).toHaveLength(2);
   });
 
@@ -342,10 +329,7 @@ describe("memory evidence coverage planner", () => {
       throw new Error("expected coverage receipt");
     }
     expect(receipt.fact.status).toBe("completed");
-    const section = createMemoryEvidenceCoverageSectionV1(
-      receipt.fact,
-      receipt.seq,
-    );
+    const section = createMemoryEvidenceCoverageSectionV1(receipt.fact, receipt.seq);
     expect(section?.content).toContain("paw.memory-evidence-coverage.v1");
     expect(section?.content).toContain("covered");
   });
@@ -424,16 +408,10 @@ function dietCatalog(): readonly MemoryTopicEvidenceCatalogItemV1[] {
     graphRevision: "graph-1",
     createdAt: "2026-08-01T00:00:00.000Z",
   });
-  return Object.freeze([
-    Object.freeze({ projection, entries: Object.freeze([diet]) }),
-  ]);
+  return Object.freeze([Object.freeze({ projection, entries: Object.freeze([diet]) })]);
 }
 
-function semanticEntry(
-  id: string,
-  fact: string,
-  evidenceRef: string,
-): MemoryEntry {
+function semanticEntry(id: string, fact: string, evidenceRef: string): MemoryEntry {
   return Object.freeze({
     id,
     kind: "semantic" as const,

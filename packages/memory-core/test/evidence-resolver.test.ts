@@ -16,8 +16,7 @@ import {
 
 function requiredAt<T>(values: readonly T[], index: number): T {
   const value = values[index];
-  if (value === undefined)
-    throw new Error(`Missing test value at index ${index}`);
+  if (value === undefined) throw new Error(`Missing test value at index ${index}`);
   return value;
 }
 
@@ -34,9 +33,7 @@ function sourceLocalHydrator(contents: Readonly<Record<string, string>>) {
               {
                 evidenceRef,
                 sourceKind:
-                  turnOrder % 2 === 0
-                    ? ("assistant_output" as const)
-                    : ("user_input" as const),
+                  turnOrder % 2 === 0 ? ("assistant_output" as const) : ("user_input" as const),
                 turnOrder,
                 content,
                 contentHash: hashTextV1(content),
@@ -136,10 +133,7 @@ describe("shared evidence resolver v1", () => {
         },
       ],
       requirements,
-      candidateEvidenceRefs: new Set([
-        userHit.evidenceRef,
-        assistantHit.evidenceRef,
-      ]),
+      candidateEvidenceRefs: new Set([userHit.evidenceRef, assistantHit.evidenceRef]),
       candidateEvidenceRefsByRequirement: new Map([
         ["user-request", new Set([userHit.evidenceRef])],
         ["assistant-answer", new Set([assistantHit.evidenceRef])],
@@ -154,9 +148,7 @@ describe("shared evidence resolver v1", () => {
     });
 
     expect(result[0]?.supportingEvidenceRefs).toEqual([userHit.evidenceRef]);
-    expect(result[1]?.supportingEvidenceRefs).toEqual([
-      assistantHit.evidenceRef,
-    ]);
+    expect(result[1]?.supportingEvidenceRefs).toEqual([assistantHit.evidenceRef]);
   });
 
   test("compiles exact included assistant turns instead of the source-local anchor", () => {
@@ -320,9 +312,7 @@ describe("shared evidence resolver v1", () => {
     const result = await resolver.resolve(query, new AbortController().signal);
 
     expect(result.intent.roleConstraint).toBe("assistant");
-    expect(result.primaryHits.map((hit) => hit.evidenceRef)).toContain(
-      "assistant-ref",
-    );
+    expect(result.primaryHits.map((hit) => hit.evidenceRef)).toContain("assistant-ref");
     const packet = result.packetSources.map((source) => source.text).join("\n");
     expect(packet).toContain("Project Lantern");
     expect(packet).not.toContain("working title");
@@ -377,18 +367,13 @@ describe("shared evidence resolver v1", () => {
       maxSources: 1,
     });
 
-    const result = await resolver.resolve(
-      "Which city did I visit?",
-      new AbortController().signal,
-    );
+    const result = await resolver.resolve("Which city did I visit?", new AbortController().signal);
 
     expect(result.intent.roleConstraint).toBe("user");
-    expect(result.sources.map((source) => source.sourceId)).toEqual([
-      "user-session",
-    ]);
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("assistant invented city");
+    expect(result.sources.map((source) => source.sourceId)).toEqual(["user-session"]);
+    expect(result.packetSources.map((source) => source.text).join("\n")).not.toContain(
+      "assistant invented city",
+    );
   });
 
   test("keeps explicit user-origin history closed even beside an assistant repetition", async () => {
@@ -459,9 +444,9 @@ describe("shared evidence resolver v1", () => {
       supportSelector: {
         selectorVersion: "test-selector.v1",
         async select(input) {
-          expect(
-            input.candidates.map((candidate) => candidate.evidenceRef),
-          ).toEqual(["session#turn-1"]);
+          expect(input.candidates.map((candidate) => candidate.evidenceRef)).toEqual([
+            "session#turn-1",
+          ]);
           return {
             selectorVersion: "test-selector.v1",
             selectionRevision: "user-origin-selection",
@@ -483,12 +468,10 @@ describe("shared evidence resolver v1", () => {
 
     expect(result.intent.roleConstraint).toBe("user");
     expect(locatorCalls).toBe(0);
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).toContain("Porto");
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("invented city");
+    expect(result.packetSources.map((source) => source.text).join("\n")).toContain("Porto");
+    expect(result.packetSources.map((source) => source.text).join("\n")).not.toContain(
+      "invented city",
+    );
   });
 
   test("opens a certified assistant candidate without weakening primary user authority", async () => {
@@ -602,10 +585,7 @@ describe("shared evidence resolver v1", () => {
           locatorCalls += 1;
           expect(request.requirement.roleConstraint).toBe("user");
           expect(request.assistantDialogueCandidate).toBe(true);
-          expect(request.lockedSourceIds).toEqual([
-            "user-source",
-            "assistant-source",
-          ]);
+          expect(request.lockedSourceIds).toEqual(["user-source", "assistant-source"]);
           const content = "The proposed label was Northstar.";
           return {
             locatorVersion: "test-source-local.v1",
@@ -615,10 +595,7 @@ describe("shared evidence resolver v1", () => {
                 sourceId: "assistant-source",
                 evidenceRef: "assistant-source#turn-1",
                 anchorEvidenceRef: "assistant-source#turn-1",
-                contextEvidenceRefs: [
-                  "assistant-source#turn-1",
-                  "assistant-source#turn-2",
-                ],
+                contextEvidenceRefs: ["assistant-source#turn-1", "assistant-source#turn-2"],
                 sourceKind: "user_input" as const,
                 content: "Please propose a label for the plan.",
                 authority: "user_asserted" as const,
@@ -640,10 +617,7 @@ describe("shared evidence resolver v1", () => {
                 sourceId: "assistant-source",
                 evidenceRef: "assistant-source#turn-2",
                 anchorEvidenceRef: "assistant-source#turn-2",
-                contextEvidenceRefs: [
-                  "assistant-source#turn-1",
-                  "assistant-source#turn-2",
-                ],
+                contextEvidenceRefs: ["assistant-source#turn-1", "assistant-source#turn-2"],
                 sourceKind: "assistant_output" as const,
                 content,
                 authority: "context_only" as const,
@@ -668,8 +642,7 @@ describe("shared evidence resolver v1", () => {
               denseCandidates: 2,
               anchorCount: 2,
               includedTurnCount: 4,
-              renderedChars:
-                "Please propose a label for the plan.".length + content.length,
+              renderedChars: "Please propose a label for the plan.".length + content.length,
               cacheHit: false,
               durationMs: 1,
             },
@@ -704,9 +677,7 @@ describe("shared evidence resolver v1", () => {
               (candidate) => candidate.certifiedAssistantDialogue,
             );
             expect(
-              payload.candidates.filter(
-                (candidate) => candidate.certifiedAssistantDialogue,
-              ),
+              payload.candidates.filter((candidate) => candidate.certifiedAssistantDialogue),
             ).toHaveLength(1);
             expect(certified).toMatchObject({
               sourceKind: "assistant_output",
@@ -736,48 +707,37 @@ describe("shared evidence resolver v1", () => {
 
     expect(result.intent.roleConstraint).toBe("user");
     expect(locatorCalls).toBe(1);
-    expect(result.sources.map((source) => source.sourceId)).toEqual([
-      "user-source",
-    ]);
+    expect(result.sources.map((source) => source.sourceId)).toEqual(["user-source"]);
     expect(result.sourceLocalization).toMatchObject({
       executor: "per_leaf_v25",
       status: "completed",
       selectedCandidateCount: 1,
     });
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).toContain("Northstar");
-    expect(
-      result.packetSources.flatMap((source) => source.evidenceBindings),
-    ).toContainEqual({
+    expect(result.packetSources.map((source) => source.text).join("\n")).toContain("Northstar");
+    expect(result.packetSources.flatMap((source) => source.evidenceBindings)).toContainEqual({
       evidenceRef: "assistant-source#turn-2",
       evidenceUse: "shared_dialogue_artifact",
     });
-    expect(
-      result.packetSources.flatMap((source) => source.evidenceBindings),
-    ).not.toContainEqual({
+    expect(result.packetSources.flatMap((source) => source.evidenceBindings)).not.toContainEqual({
       evidenceRef: "assistant-source#turn-4",
       evidenceUse: "shared_dialogue_artifact",
     });
-    const expectedBindings = result.packetSources.flatMap(
-      (source) => source.evidenceBindings,
-    );
+    const expectedBindings = result.packetSources.flatMap((source) => source.evidenceBindings);
     expect(
       projectEvidenceFirstMemoryContextPacketV1(result).evidence.flatMap(
         (evidence) => evidence.evidenceBindings ?? [],
       ),
     ).toEqual(expectedBindings);
-    expect(
-      projectEvidenceFirstMemoryAnswerContractV1(result).evidenceBindings,
-    ).toEqual(expectedBindings);
+    expect(projectEvidenceFirstMemoryAnswerContractV1(result).evidenceBindings).toEqual(
+      expectedBindings,
+    );
     expect(result.requirementEvidence[0]).toMatchObject({
       supportingEvidenceRefs: ["assistant-source#turn-2"],
       candidateEvidenceRefs: [],
       contradictingEvidenceRefs: [],
     });
     expect(
-      projectEvidenceFirstMemoryAnswerContractV1(result).requirements[0]
-        ?.supportingEvidenceRefs,
+      projectEvidenceFirstMemoryAnswerContractV1(result).requirements[0]?.supportingEvidenceRefs,
     ).toEqual(["assistant-source#turn-2"]);
   });
 
@@ -786,12 +746,10 @@ describe("shared evidence resolver v1", () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -875,12 +833,10 @@ describe("shared evidence resolver v1", () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -898,9 +854,7 @@ describe("shared evidence resolver v1", () => {
             assessments: [
               {
                 requirementId: requiredAt(input.requirements, 0).requirementId,
-                supportingEvidenceRefs: [
-                  requiredAt(input.candidates, 0).evidenceRef,
-                ],
+                supportingEvidenceRefs: [requiredAt(input.candidates, 0).evidenceRef],
                 contradictingEvidenceRefs: [],
                 unknownEvidenceRefs: [],
               },
@@ -921,19 +875,11 @@ describe("shared evidence resolver v1", () => {
     // verdict. Requirements keep lane-ranked locked-source candidates bound,
     // so the packet stays requirement-bound instead of collapsing to zero
     // evidence with unbound candidate fallback.
-    expect(result.notebook.coverage.map((item) => item.status)).toEqual([
-      "covered",
-      "covered",
-    ]);
-    expect(
-      result.sourceLocalization.deterministicSupportFloor?.policyVersion,
-    ).toBe(
+    expect(result.notebook.coverage.map((item) => item.status)).toEqual(["covered", "covered"]);
+    expect(result.sourceLocalization.deterministicSupportFloor?.policyVersion).toBe(
       "paw.memory-deterministic-support-floor.v1:nonempty-requirement-packet",
     );
-    expect(
-      result.sourceLocalization.deterministicSupportFloor
-        ?.flooredRequirementCount,
-    ).toBe(2);
+    expect(result.sourceLocalization.deterministicSupportFloor?.flooredRequirementCount).toBe(2);
     expect(result.packetSources.length).toBeGreaterThan(0);
   });
 
@@ -996,12 +942,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -1046,12 +990,12 @@ describe("shared evidence resolver v1", () => {
         disposition: "role_ineligible",
       }),
     );
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("uncertified assistant name");
-    expect(
-      result.packetSources.flatMap((source) => source.evidenceRefs),
-    ).toContain("session#turn-1");
+    expect(result.packetSources.map((source) => source.text).join("\n")).not.toContain(
+      "uncertified assistant name",
+    );
+    expect(result.packetSources.flatMap((source) => source.evidenceRefs)).toContain(
+      "session#turn-1",
+    );
   });
 
   test("keeps locator-only included assistant turns closed without an exact binding", async () => {
@@ -1116,12 +1060,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -1184,9 +1126,7 @@ describe("shared evidence resolver v1", () => {
           selectorCalls += 1;
           expect(input.certifiedAssistantDialogueEvidenceRefs).toBeUndefined();
           expect(
-            input.candidates.find(
-              (candidate) => candidate.evidenceRef === "session#turn-2",
-            ),
+            input.candidates.find((candidate) => candidate.evidenceRef === "session#turn-2"),
           ).toMatchObject({
             sourceKind: "assistant_output",
             authority: "context_only",
@@ -1226,12 +1166,8 @@ describe("shared evidence resolver v1", () => {
     // assistant turn stays closed: it is never bound as requirement support
     // (locator context rendering is unchanged by the floor).
     expect(result.notebook.coverage[0]?.status).toBe("covered");
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual([
-      "session#turn-1",
-    ]);
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).not.toContain(
-      "session#turn-2",
-    );
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual(["session#turn-1"]);
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).not.toContain("session#turn-2");
   });
 
   test("late-binds a user slot to exact assistant evidence without widening discovery", async () => {
@@ -1313,12 +1249,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "user" as const,
@@ -1331,13 +1265,10 @@ describe("shared evidence resolver v1", () => {
         locatorVersion: "test-source-local.v1",
         async locate(request) {
           expect(request.requirement.roleConstraint).toBe("any");
-          expect(request.requirement.searchText).toBe(
-            "project name from earlier conversation",
-          );
+          expect(request.requirement.searchText).toBe("project name from earlier conversation");
           expect(request.assistantDialogueCandidate).toBe(true);
           expect(request.respondingAssistantMaterialization).toMatchObject({
-            originalQuery:
-              "Which project name came from our earlier conversation?",
+            originalQuery: "Which project name came from our earlier conversation?",
             sourcePriorityIds: ["session"],
             maxPromptAnchorsPerSource: 1,
             authorization: {
@@ -1394,9 +1325,7 @@ describe("shared evidence resolver v1", () => {
       dialoguePredecessorVerifier: {
         verifierVersion: "test-dialogue-predecessor-verifier.v1",
         async verify(input) {
-          expect(input.targets).toEqual([
-            { sourceId: "session", evidenceRef: "session#turn-2" },
-          ]);
+          expect(input.targets).toEqual([{ sourceId: "session", evidenceRef: "session#turn-2" }]);
           return {
             verifierVersion: "test-dialogue-predecessor-verifier.v1",
             verificationRevision: "verified-exact-assistant-turn",
@@ -1436,12 +1365,8 @@ describe("shared evidence resolver v1", () => {
             selectionRevision: "selected-exact-assistant-turn",
             assessments: [
               {
-                requirementId:
-                  input.requirements[0]?.requirementId ??
-                  requirement.requirementId,
-                supportingEvidenceRefs: [
-                  ...(input.candidateScopes?.[0]?.evidenceRefs ?? []),
-                ],
+                requirementId: input.requirements[0]?.requirementId ?? requirement.requirementId,
+                supportingEvidenceRefs: [...(input.candidateScopes?.[0]?.evidenceRefs ?? [])],
                 contradictingEvidenceRefs: [],
                 unknownEvidenceRefs: [],
               },
@@ -1461,20 +1386,14 @@ describe("shared evidence resolver v1", () => {
       roleCandidates: ["user", "assistant"],
     });
     expect(observedCertifiedRefs).toEqual(["session#turn-2"]);
-    expect(observedCandidateScope).toEqual([
-      "session#turn-2",
-      "session#turn-1",
-      "session#turn-3",
-    ]);
+    expect(observedCandidateScope).toEqual(["session#turn-2", "session#turn-1", "session#turn-3"]);
     expect(observedAssistantCandidate).toMatchObject({
       content: assistantContent,
       sourceKind: "assistant_output",
       authority: "context_only",
       contextEvidenceRefs: ["session#turn-1", "session#turn-2"],
     });
-    expect(result.supportAssessments[0]?.supportingEvidenceRefs).toEqual([
-      "session#turn-2",
-    ]);
+    expect(result.supportAssessments[0]?.supportingEvidenceRefs).toEqual(["session#turn-2"]);
     expect(result.requirements[0]).toMatchObject({
       roleConstraint: "any",
       roleCandidates: ["user", "assistant"],
@@ -1500,16 +1419,10 @@ describe("shared evidence resolver v1", () => {
         }),
       ]),
     );
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual([
-      "session#turn-2",
-    ]);
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).not.toContain(
-      "session#turn-1",
-    );
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual(["session#turn-2"]);
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).not.toContain("session#turn-1");
     expect(result.packetSources[0]?.text).toContain("Northstar");
-    expect(projectEvidenceFirstMemoryContextPacketV1(result).stop).toBe(
-      "sufficient",
-    );
+    expect(projectEvidenceFirstMemoryContextPacketV1(result).stop).toBe("sufficient");
   });
 
   test("uses bounded source-only discovery for assistant evidence without changing fusion", async () => {
@@ -1580,12 +1493,10 @@ describe("shared evidence resolver v1", () => {
       },
       maxSources: 1,
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -1664,9 +1575,7 @@ describe("shared evidence resolver v1", () => {
     );
 
     expect(lockedSources).toEqual(["session-1", "session-2"]);
-    expect(result.sources.map((source) => source.sourceId)).toEqual([
-      "session-1",
-    ]);
+    expect(result.sources.map((source) => source.sourceId)).toEqual(["session-1"]);
     expect(result.sourceLocalization).toMatchObject({
       status: "completed",
       addedCandidateCount: 1,
@@ -1674,15 +1583,11 @@ describe("shared evidence resolver v1", () => {
     });
     expect(result.packetSources[0]?.text).toContain("cobalt");
     expect(result.packetSources[0]?.text).not.toContain("forged locator prose");
-    expect(
-      result.packetSources.flatMap((source) => source.evidenceBindings),
-    ).toContainEqual({
+    expect(result.packetSources.flatMap((source) => source.evidenceBindings)).toContainEqual({
       evidenceRef: "session-2#turn-2",
       evidenceUse: "assistant_report",
     });
-    expect(
-      result.packetSources.flatMap((source) => source.evidenceBindings),
-    ).not.toContainEqual({
+    expect(result.packetSources.flatMap((source) => source.evidenceBindings)).not.toContainEqual({
       evidenceRef: "session-2#turn-2",
       evidenceUse: "shared_dialogue_artifact",
     });
@@ -1734,12 +1639,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -1843,12 +1746,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -1861,15 +1762,10 @@ describe("shared evidence resolver v1", () => {
         locatorVersion: "test-source-local.v1",
         async locate(request) {
           located.push(request.requirement.requirementId);
-          if (
-            failSecond &&
-            request.requirement.requirementId === "assistant-answer-2"
-          ) {
+          if (failSecond && request.requirement.requirementId === "assistant-answer-2") {
             throw new Error("second locator failed");
           }
-          const suffix = request.requirement.requirementId.endsWith("1")
-            ? "2"
-            : "4";
+          const suffix = request.requirement.requirementId.endsWith("1") ? "2" : "4";
           const userTurn = Number(suffix) - 1;
           const content = `assistant answer ${suffix}`;
           const evidenceRef = `session-1#turn-${suffix}`;
@@ -1881,10 +1777,7 @@ describe("shared evidence resolver v1", () => {
                 sourceId: "session-1",
                 evidenceRef,
                 anchorEvidenceRef: evidenceRef,
-                contextEvidenceRefs: [
-                  `session-1#turn-${userTurn}`,
-                  evidenceRef,
-                ],
+                contextEvidenceRefs: [`session-1#turn-${userTurn}`, evidenceRef],
                 sourceKind: "assistant_output" as const,
                 content,
                 authority: "context_only" as const,
@@ -1925,9 +1818,7 @@ describe("shared evidence resolver v1", () => {
       supportSelector: {
         selectorVersion: "test-selector.v1",
         async select(input) {
-          selectorCandidateRefs = input.candidates.map(
-            (candidate) => candidate.evidenceRef,
-          );
+          selectorCandidateRefs = input.candidates.map((candidate) => candidate.evidenceRef);
           selectorCertifiedRefs = input.certifiedAssistantDialogueEvidenceRefs;
           return {
             selectorVersion: "test-selector.v1",
@@ -1935,9 +1826,7 @@ describe("shared evidence resolver v1", () => {
             assessments: requirements.map((requirement, index) => ({
               requirementId: requirement.requirementId,
               supportingEvidenceRefs:
-                failSecond && index === 1
-                  ? []
-                  : [`session-1#turn-${index === 0 ? 2 : 4}`],
+                failSecond && index === 1 ? [] : [`session-1#turn-${index === 0 ? 2 : 4}`],
               contradictingEvidenceRefs: [],
               unknownEvidenceRefs: [],
             })),
@@ -1952,10 +1841,7 @@ describe("shared evidence resolver v1", () => {
     );
 
     expect(located).toEqual(["assistant-answer-1", "assistant-answer-2"]);
-    expect(selectorCertifiedRefs).toEqual([
-      "session-1#turn-2",
-      "session-1#turn-4",
-    ]);
+    expect(selectorCertifiedRefs).toEqual(["session-1#turn-2", "session-1#turn-4"]);
     expect(result.sourceLocalization).toMatchObject({
       executor: "per_leaf_v25",
       status: "completed",
@@ -1972,9 +1858,9 @@ describe("shared evidence resolver v1", () => {
     });
     expect(result.packetSources[0]?.text).toContain("assistant answer 2");
     expect(result.packetSources[0]?.text).toContain("assistant answer 4");
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("unselected assistant fallback must stay closed");
+    expect(result.packetSources.map((source) => source.text).join("\n")).not.toContain(
+      "unselected assistant fallback must stay closed",
+    );
 
     failSecond = true;
     located.length = 0;
@@ -1999,9 +1885,9 @@ describe("shared evidence resolver v1", () => {
     });
     expect(fallback.packetSources[0]?.text).toContain("assistant answer 2");
     expect(fallback.packetSources[0]?.text).not.toContain("assistant answer 4");
-    expect(
-      fallback.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("unselected assistant fallback must stay closed");
+    expect(fallback.packetSources.map((source) => source.text).join("\n")).not.toContain(
+      "unselected assistant fallback must stay closed",
+    );
   });
 
   test("keeps semantically unknown dialogue candidates out of the answer packet", async () => {
@@ -2015,104 +1901,101 @@ describe("shared evidence resolver v1", () => {
       coverageMode: "any" as const,
       minimumEvidence: 1,
     };
-    const resolverInput: Parameters<typeof createMemoryEvidenceResolverV1>[0] =
-      {
-        index: {
-          indexVersion: "test-index.v1",
-          async search() {
-            return {
-              lists: [
-                {
-                  channel: "l0" as const,
-                  retrieverId: "global",
-                  weight: 1,
-                  candidates: [
-                    {
-                      candidateId: "global-ref",
-                      sourceId: "session-1",
-                      evidenceRef: "session-1#turn-1",
-                      sourceKind: "user_input" as const,
-                      authority: "user_asserted" as const,
-                    },
-                  ],
-                },
-              ],
-              hits: [
-                {
-                  sourceId: "session-1",
-                  evidenceRef: "session-1#turn-1",
-                  content: "baseline only",
-                  authority: "user_asserted" as const,
-                  turnOrder: 1,
-                },
-              ],
-            };
-          },
-        },
-        planner: {
-          plannerVersion:
-            "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
-          async plan() {
-            return {
-              plannerVersion:
-                "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
-              answerShape: "lookup" as const,
-              temporalMode: "any" as const,
-              roleConstraint: "assistant" as const,
-              needsPlanning: true,
-              requirements: [requirement],
-            };
-          },
-        },
-        sourceLocalLocator: {
-          locatorVersion: "test-source-local.v1",
-          async locate() {
-            const content = "local secret answer";
-            return {
-              locatorVersion: "test-source-local.v1",
-              locatorRevision: "local-revision",
-              hits: [
-                {
-                  sourceId: "session-1",
-                  evidenceRef: "session-1#turn-2",
-                  anchorEvidenceRef: "session-1#turn-2",
-                  contextEvidenceRefs: ["session-1#turn-1", "session-1#turn-2"],
-                  sourceKind: "assistant_output" as const,
-                  content,
-                  authority: "context_only" as const,
-                  turnOrder: 2,
-                  includedTurns: [
-                    {
-                      evidenceRef: "session-1#turn-1",
-                      sourceKind: "user_input" as const,
-                      turnOrder: 1,
-                    },
-                    {
-                      evidenceRef: "session-1#turn-2",
-                      sourceKind: "assistant_output" as const,
-                      turnOrder: 2,
-                    },
-                  ],
-                },
-              ],
-              degradedChannels: [] as const,
-              telemetry: {
-                lexicalCandidates: 1,
-                denseCandidates: 0,
-                anchorCount: 1,
-                includedTurnCount: 2,
-                renderedChars: content.length,
-                cacheHit: false,
-                durationMs: 1,
+    const resolverInput: Parameters<typeof createMemoryEvidenceResolverV1>[0] = {
+      index: {
+        indexVersion: "test-index.v1",
+        async search() {
+          return {
+            lists: [
+              {
+                channel: "l0" as const,
+                retrieverId: "global",
+                weight: 1,
+                candidates: [
+                  {
+                    candidateId: "global-ref",
+                    sourceId: "session-1",
+                    evidenceRef: "session-1#turn-1",
+                    sourceKind: "user_input" as const,
+                    authority: "user_asserted" as const,
+                  },
+                ],
               },
-            };
-          },
+            ],
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-1",
+                content: "baseline only",
+                authority: "user_asserted" as const,
+                turnOrder: 1,
+              },
+            ],
+          };
         },
-        sourceLocalHydrator: sourceLocalHydrator({
-          "session-1#turn-1": "baseline only",
-          "session-1#turn-2": "local secret answer",
-        }),
-      };
+      },
+      planner: {
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        async plan() {
+          return {
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            answerShape: "lookup" as const,
+            temporalMode: "any" as const,
+            roleConstraint: "assistant" as const,
+            needsPlanning: true,
+            requirements: [requirement],
+          };
+        },
+      },
+      sourceLocalLocator: {
+        locatorVersion: "test-source-local.v1",
+        async locate() {
+          const content = "local secret answer";
+          return {
+            locatorVersion: "test-source-local.v1",
+            locatorRevision: "local-revision",
+            hits: [
+              {
+                sourceId: "session-1",
+                evidenceRef: "session-1#turn-2",
+                anchorEvidenceRef: "session-1#turn-2",
+                contextEvidenceRefs: ["session-1#turn-1", "session-1#turn-2"],
+                sourceKind: "assistant_output" as const,
+                content,
+                authority: "context_only" as const,
+                turnOrder: 2,
+                includedTurns: [
+                  {
+                    evidenceRef: "session-1#turn-1",
+                    sourceKind: "user_input" as const,
+                    turnOrder: 1,
+                  },
+                  {
+                    evidenceRef: "session-1#turn-2",
+                    sourceKind: "assistant_output" as const,
+                    turnOrder: 2,
+                  },
+                ],
+              },
+            ],
+            degradedChannels: [] as const,
+            telemetry: {
+              lexicalCandidates: 1,
+              denseCandidates: 0,
+              anchorCount: 1,
+              includedTurnCount: 2,
+              renderedChars: content.length,
+              cacheHit: false,
+              durationMs: 1,
+            },
+          };
+        },
+      },
+      sourceLocalHydrator: sourceLocalHydrator({
+        "session-1#turn-1": "baseline only",
+        "session-1#turn-2": "local secret answer",
+      }),
+    };
     const selector = {
       selectorVersion: "test-selector.v1",
       async select(input: {
@@ -2155,19 +2038,15 @@ describe("shared evidence resolver v1", () => {
       selectedCandidateCount: 0,
     });
     expect(rejected.packetSources).toEqual(baseline.packetSources);
-    expect(rejected.packetSources[0]?.text ?? "").not.toContain(
-      "local secret answer",
-    );
+    expect(rejected.packetSources[0]?.text ?? "").not.toContain("local secret answer");
 
     const ambiguous = await createMemoryEvidenceResolverV1({
       ...resolverInput,
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "any" as const,
@@ -2186,19 +2065,17 @@ describe("shared evidence resolver v1", () => {
       addedCandidateCount: 1,
       selectedCandidateCount: 0,
     });
-    expect(
-      ambiguous.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("local secret answer");
+    expect(ambiguous.packetSources.map((source) => source.text).join("\n")).not.toContain(
+      "local secret answer",
+    );
 
     const userOwnedDialogueArtifact = await createMemoryEvidenceResolverV1({
       ...resolverInput,
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "user" as const,
@@ -2223,9 +2100,7 @@ describe("shared evidence resolver v1", () => {
                 requirementId: requirement.requirementId,
                 supportingEvidenceRefs: [],
                 contradictingEvidenceRefs: [],
-                unknownEvidenceRefs: input.candidates.map(
-                  (candidate) => candidate.evidenceRef,
-                ),
+                unknownEvidenceRefs: input.candidates.map((candidate) => candidate.evidenceRef),
               },
             ],
           };
@@ -2242,9 +2117,7 @@ describe("shared evidence resolver v1", () => {
       selectedCandidateCount: 0,
     });
     expect(
-      userOwnedDialogueArtifact.packetSources
-        .map((source) => source.text)
-        .join("\n"),
+      userOwnedDialogueArtifact.packetSources.map((source) => source.text).join("\n"),
     ).not.toContain("local secret answer");
     expect(userOwnedDialogueArtifact.requirementEvidence[0]).toMatchObject({
       supportingEvidenceRefs: [],
@@ -2252,8 +2125,8 @@ describe("shared evidence resolver v1", () => {
       contradictingEvidenceRefs: [],
     });
     expect(
-      projectEvidenceFirstMemoryAnswerContractV1(userOwnedDialogueArtifact)
-        .requirements[0]?.candidateEvidenceRefs,
+      projectEvidenceFirstMemoryAnswerContractV1(userOwnedDialogueArtifact).requirements[0]
+        ?.candidateEvidenceRefs,
     ).toEqual(["session-1#turn-1"]);
 
     const result = await createMemoryEvidenceResolverV1({
@@ -2270,9 +2143,7 @@ describe("shared evidence resolver v1", () => {
       reasonCode: "selector_failed",
       addedCandidateCount: 0,
     });
-    expect(result.packetSources[0]?.text ?? "").not.toContain(
-      "local secret answer",
-    );
+    expect(result.packetSources[0]?.text ?? "").not.toContain("local secret answer");
   });
 
   test("does not expose an ordinary source-local user fact that remains semantically unknown", async () => {
@@ -2328,12 +2199,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "aggregate" as const,
             temporalMode: "any" as const,
             roleConstraint: "user" as const,
@@ -2409,9 +2278,7 @@ describe("shared evidence resolver v1", () => {
     const result = await resolver.resolve(query, new AbortController().signal);
 
     expect(result.notebook.coverage[0]?.status).toBe("partial");
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual([
-      "session-1#turn-1",
-    ]);
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual(["session-1#turn-1"]);
     expect(result.sourceLocalization).toMatchObject({
       executor: "plan_scoped_v24",
       status: "completed",
@@ -2422,12 +2289,10 @@ describe("shared evidence resolver v1", () => {
     expect(result.packetSources[0]?.text).not.toContain(
       "I later changed the second part of the plan.",
     );
-    expect(result.packetSources.map((source) => source.sourceId)).toEqual([
-      "session-1",
-    ]);
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("unrelated session");
+    expect(result.packetSources.map((source) => source.sourceId)).toEqual(["session-1"]);
+    expect(result.packetSources.map((source) => source.text).join("\n")).not.toContain(
+      "unrelated session",
+    );
   });
 
   test("retries a failed recommendation selector against the immutable baseline once", async () => {
@@ -2481,12 +2346,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "recommend" as const,
             temporalMode: "any" as const,
             roleConstraint: "user" as const,
@@ -2542,9 +2405,7 @@ describe("shared evidence resolver v1", () => {
         selectorVersion: "test-selector.v1",
         async select(input) {
           selectorCalls += 1;
-          const refs = input.candidates.map(
-            (candidate) => candidate.evidenceRef,
-          );
+          const refs = input.candidates.map((candidate) => candidate.evidenceRef);
           candidateRefsByAttempt.push(refs);
           if (semanticUnknown) {
             return {
@@ -2552,9 +2413,7 @@ describe("shared evidence resolver v1", () => {
               selectionRevision: "semantic-unknown-selection",
               assessments: [
                 {
-                  requirementId:
-                    input.requirements[0]?.requirementId ??
-                    requirement.requirementId,
+                  requirementId: input.requirements[0]?.requirementId ?? requirement.requirementId,
                   supportingEvidenceRefs: [],
                   contradictingEvidenceRefs: [],
                   unknownEvidenceRefs: refs,
@@ -2572,9 +2431,7 @@ describe("shared evidence resolver v1", () => {
             selectionRevision: "baseline-recommendation-selection",
             assessments: [
               {
-                requirementId:
-                  input.requirements[0]?.requirementId ??
-                  requirement.requirementId,
+                requirementId: input.requirements[0]?.requirementId ?? requirement.requirementId,
                 supportingEvidenceRefs: ["session-1#turn-1"],
                 contradictingEvidenceRefs: [],
                 unknownEvidenceRefs: refs.filter(
@@ -2605,9 +2462,9 @@ describe("shared evidence resolver v1", () => {
       selectorCommittedAttempt: "baseline",
       addedCandidateCount: 0,
     });
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("localized preference candidate");
+    expect(result.packetSources.map((source) => source.text).join("\n")).not.toContain(
+      "localized preference candidate",
+    );
 
     semanticUnknown = true;
     const unknown = await resolver.resolve(
@@ -2787,25 +2644,17 @@ describe("shared evidence resolver v1", () => {
     expect(strictCalls).toBe(0);
     expect(groupedCalls).toBe(1);
     expect(result.supportSelectorStatus).toBe("partial");
-    expect(result.supportAssessments.map((item) => item.requirementId)).toEqual(
-      ["independent-b"],
-    );
+    expect(result.supportAssessments.map((item) => item.requirementId)).toEqual(["independent-b"]);
     // The failed group's requirement keeps lane-ranked candidates bound by the
     // deterministic support floor; the committed group keeps its selection.
-    expect(result.notebook.coverage.map((item) => item.status)).toEqual([
-      "covered",
-      "covered",
-    ]);
+    expect(result.notebook.coverage.map((item) => item.status)).toEqual(["covered", "covered"]);
     expect(result.sourceLocalization).toMatchObject({
       selectorGroupCount: 2,
       selectorCommittedGroupCount: 1,
       selectorFailedGroupCount: 1,
       selectorTotalAttemptCount: 1,
     });
-    expect(
-      result.sourceLocalization.deterministicSupportFloor
-        ?.flooredRequirementCount,
-    ).toBe(1);
+    expect(result.sourceLocalization.deterministicSupportFloor?.flooredRequirementCount).toBe(1);
   });
 
   test("rolls back an ordinary plan-scoped localization as one transaction", async () => {
@@ -2869,12 +2718,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "compare" as const,
             temporalMode: "range" as const,
             roleConstraint: "user" as const,
@@ -2933,9 +2780,7 @@ describe("shared evidence resolver v1", () => {
       supportSelector: {
         selectorVersion: "test-selector.v1",
         async select(input) {
-          selectorCandidateRefs = input.candidates.map(
-            (candidate) => candidate.evidenceRef,
-          );
+          selectorCandidateRefs = input.candidates.map((candidate) => candidate.evidenceRef);
           return {
             selectorVersion: "test-selector.v1",
             selectionRevision: "baseline-after-plan-rollback",
@@ -2946,10 +2791,7 @@ describe("shared evidence resolver v1", () => {
               unknownEvidenceRefs: input.candidates
                 .filter((candidate) =>
                   input.candidateScopes
-                    ?.find(
-                      (scope) =>
-                        scope.requirementId === requirement.requirementId,
-                    )
+                    ?.find((scope) => scope.requirementId === requirement.requirementId)
                     ?.evidenceRefs.includes(candidate.evidenceRef),
                 )
                 .map((candidate) => candidate.evidenceRef),
@@ -2979,12 +2821,10 @@ describe("shared evidence resolver v1", () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -3009,39 +2849,21 @@ describe("shared evidence resolver v1", () => {
       new AbortController().signal,
     );
 
-    expect(result.sources.map((source) => source.sourceId)).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
-    expect(result.notebook.sources.map((source) => source.sourceId)).toEqual([
-      "c",
-      "b",
-    ]);
-    expect(result.packetSources.map((source) => source.sourceId)).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
-    expect(result.packetSources.some((source) => source.sourceId === "c")).toBe(
-      true,
-    );
+    expect(result.sources.map((source) => source.sourceId)).toEqual(["a", "b", "c"]);
+    expect(result.notebook.sources.map((source) => source.sourceId)).toEqual(["c", "b"]);
+    expect(result.packetSources.map((source) => source.sourceId)).toEqual(["a", "b", "c"]);
+    expect(result.packetSources.some((source) => source.sourceId === "c")).toBe(true);
   });
 
   test("uses primary exact hits for deterministic lookups", async () => {
     const resolver = createMemoryEvidenceResolverV1({ index: index() });
-    const result = await resolver.resolve(
-      "Which city did I visit?",
-      new AbortController().signal,
-    );
+    const result = await resolver.resolve("Which city did I visit?", new AbortController().signal);
     expect(result.plannerStatus).toBe("not_needed");
     expect(result).not.toHaveProperty("directCertificateStatus");
     expect(result.notebook.coverage).toHaveLength(0);
     expect(result.primaryHits).toHaveLength(2);
     expect(result.packetSources).toHaveLength(2);
-    expect(result.packetSources[0]?.text).toContain(
-      "Primary exact memory evidence",
-    );
+    expect(result.packetSources[0]?.text).toContain("Primary exact memory evidence");
   });
 
   test("requires semantic support even for a lexically obvious direct hit", async () => {
@@ -3088,9 +2910,7 @@ describe("shared evidence resolver v1", () => {
             assessments: [
               {
                 requirementId: requiredAt(input.requirements, 0).requirementId,
-                supportingEvidenceRefs: [
-                  requiredAt(input.candidates, 0).evidenceRef,
-                ],
+                supportingEvidenceRefs: [requiredAt(input.candidates, 0).evidenceRef],
                 contradictingEvidenceRefs: [],
                 unknownEvidenceRefs: [],
               },
@@ -3109,22 +2929,15 @@ describe("shared evidence resolver v1", () => {
     expect(result.supportSelectorStatus).toBe("completed");
     expect(result.notebook.coverage[0]?.status).toBe("covered");
     expect(result.packetSources[0]?.answerRole).toBe("supporting");
-    expect(projectEvidenceFirstMemoryContextPacketV1(result).stop).toBe(
-      "sufficient",
-    );
+    expect(projectEvidenceFirstMemoryContextPacketV1(result).stop).toBe("sufficient");
     expect(selectorCalls).toBe(1);
   });
 
   test("uses the same planner path for single-source and multi-source lookups", async () => {
     const forceValues: Array<boolean | undefined> = [];
     const planner = {
-      plannerVersion:
-        "paw.memory-evidence-query-planner.v11:closure-deficiency-replan" as const,
-      async plan(
-        _query: string,
-        _signal: AbortSignal,
-        options?: Readonly<{ force?: boolean }>,
-      ) {
+      plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan" as const,
+      async plan(_query: string, _signal: AbortSignal, options?: Readonly<{ force?: boolean }>) {
         forceValues.push(options?.force);
         return {
           plannerVersion:
@@ -3214,13 +3027,11 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           plannerCalls += 1;
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup",
             temporalMode: "any",
             roleConstraint: "user",
@@ -3242,10 +3053,7 @@ describe("shared evidence resolver v1", () => {
       },
     });
 
-    const result = await resolver.resolve(
-      "Which city did I visit?",
-      new AbortController().signal,
-    );
+    const result = await resolver.resolve("Which city did I visit?", new AbortController().signal);
 
     expect(plannerCalls).toBe(1);
     expect(result.plannerStatus).toBe("completed");
@@ -3256,12 +3064,10 @@ describe("shared evidence resolver v1", () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -3310,9 +3116,7 @@ describe("shared evidence resolver v1", () => {
     expect(result.requirements[0]?.requirementId).toBe("root-requirement");
     expect(result.notebook.coverage[0]?.status).toBe("covered");
     expect(result.closureVerdict).toBe("pass");
-    expect(projectEvidenceFirstMemoryContextPacketV1(result).stop).toBe(
-      "sufficient",
-    );
+    expect(projectEvidenceFirstMemoryContextPacketV1(result).stop).toBe("sufficient");
   });
 
   test("creates a root requirement for a multi-source lookup", async () => {
@@ -3339,18 +3143,12 @@ describe("shared evidence resolver v1", () => {
       },
     });
 
-    const result = await resolver.resolve(
-      "Which city did I visit?",
-      new AbortController().signal,
-    );
+    const result = await resolver.resolve("Which city did I visit?", new AbortController().signal);
 
     expect(selectedRequirementId).toBe("root-requirement");
     expect(result.plannerStatus).toBe("not_needed");
     expect(result.supportSelectorStatus).toBe("completed");
-    expect(result.packetSources.map((source) => source.sourceId)).toEqual([
-      "a",
-      "b",
-    ]);
+    expect(result.packetSources.map((source) => source.sourceId)).toEqual(["a", "b"]);
     expect(result.packetSources[1]?.answerRole).toBe("candidate");
   });
 
@@ -3395,12 +3193,10 @@ describe("shared evidence resolver v1", () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "aggregate",
             temporalMode: "any",
             roleConstraint: "user",
@@ -3443,19 +3239,12 @@ describe("shared evidence resolver v1", () => {
     );
 
     expect(result.supportSelectorStatus).toBe("completed");
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual([
-      "ref-b-focused",
-    ]);
-    expect(result.notebook.sources.map((source) => source.sourceId)).toEqual([
-      "b",
-    ]);
-    expect(
-      result.packetSources.find((source) => source.sourceId === "a")
-        ?.answerRole,
-    ).toBe("candidate");
-    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).not.toContain(
-      "ref-a",
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toEqual(["ref-b-focused"]);
+    expect(result.notebook.sources.map((source) => source.sourceId)).toEqual(["b"]);
+    expect(result.packetSources.find((source) => source.sourceId === "a")?.answerRole).toBe(
+      "candidate",
     );
+    expect(result.notebook.coverage[0]?.selectedEvidenceRefs).not.toContain("ref-a");
   });
 
   test("expands only aggregate evidence budgets beyond the direct lookup cap", async () => {
@@ -3492,16 +3281,12 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan(query) {
           const aggregate = query.startsWith("How many");
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
-            answerShape: aggregate
-              ? ("aggregate" as const)
-              : ("lookup" as const),
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            answerShape: aggregate ? ("aggregate" as const) : ("lookup" as const),
             temporalMode: "any" as const,
             roleConstraint: "user" as const,
             needsPlanning: aggregate,
@@ -3512,9 +3297,7 @@ describe("shared evidence resolver v1", () => {
                 searchText: "milestones completed",
                 temporalMode: "any" as const,
                 roleConstraint: "user" as const,
-                relation: aggregate
-                  ? ("comparative" as const)
-                  : ("direct" as const),
+                relation: aggregate ? ("comparative" as const) : ("direct" as const),
                 coverageMode: aggregate ? ("all" as const) : ("any" as const),
                 minimumEvidence: aggregate ? 2 : 1,
               },
@@ -3551,9 +3334,7 @@ describe("shared evidence resolver v1", () => {
 
     expect(result.plannerStatus).toBe("completed");
     expect(result.supportSelectorStatus).toBe("completed");
-    expect(result.supportAssessments[0]?.supportingEvidenceRefs).toHaveLength(
-      6,
-    );
+    expect(result.supportAssessments[0]?.supportingEvidenceRefs).toHaveLength(6);
     expect(result.notebook.coverage[0]?.selectedEvidenceRefs).toHaveLength(6);
     expect(result.notebook.sources).toHaveLength(6);
 
@@ -3568,12 +3349,10 @@ describe("shared evidence resolver v1", () => {
     const resolver = createMemoryEvidenceResolverV1({
       index: index(),
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup",
             temporalMode: "latest",
             roleConstraint: "user",
@@ -3612,25 +3391,16 @@ describe("shared evidence resolver v1", () => {
       },
     });
 
-    const result = await resolver.resolve(
-      "What is my current city?",
-      new AbortController().signal,
-    );
+    const result = await resolver.resolve("What is my current city?", new AbortController().signal);
     // Floor-bound latest-mode candidates stay requirement-bound in the packet.
     // The code-owned state reducer — not the selector — owns latest selection:
     // one observation resolves current, conflicting peers stay ambiguous, so
     // coverage is partial and the answer never claims unresolved state.
     expect(result.notebook.coverage[0]?.status).toBe("partial");
-    expect(result.packetSources.map((source) => source.answerRole)).toContain(
-      "current",
-    );
-    expect(
-      result.packetSources.map((source) => source.answerRole),
-    ).not.toContain("candidate");
+    expect(result.packetSources.map((source) => source.answerRole)).toContain("current");
+    expect(result.packetSources.map((source) => source.answerRole)).not.toContain("candidate");
     expect(result.packetSources.length).toBeGreaterThan(0);
-    expect(result.packetSources[0]?.text).toContain(
-      "Primary exact memory evidence",
-    );
+    expect(result.packetSources[0]?.text).toContain("Primary exact memory evidence");
   });
 
   test("keeps ordinal-matched L0 as an unverified fallback when semantic selection misses it", async () => {
@@ -3691,12 +3461,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan() {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "any" as const,
             roleConstraint: "assistant" as const,
@@ -3830,20 +3598,13 @@ describe("shared evidence resolver v1", () => {
       },
     });
 
-    const result = await resolver.resolve(
-      "What is my current city?",
-      new AbortController().signal,
-    );
+    const result = await resolver.resolve("What is my current city?", new AbortController().signal);
 
     expect(result.closureMode).toBe("observe");
     expect(result.closureVerdict).toBe("insufficient");
     expect(result.closureRepairMode).toBe("none");
-    expect(result.requirements.map((item) => item.requirementId)).toEqual([
-      "city",
-    ]);
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).toContain("Seattle");
+    expect(result.requirements.map((item) => item.requirementId)).toEqual(["city"]);
+    expect(result.packetSources.map((source) => source.text).join("\n")).toContain("Seattle");
     expect(plannerCalls).toBe(1);
     expect(auditorCalls).toBe(1);
   });
@@ -3911,8 +3672,7 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan(_query, _signal, options) {
           const requirements = options?.revision
             ? [
@@ -3927,8 +3687,7 @@ describe("shared evidence resolver v1", () => {
               ]
             : [oldRequirement, currentRequirement];
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "compare" as const,
             temporalMode: "range" as const,
             roleConstraint: "user" as const,
@@ -3949,11 +3708,7 @@ describe("shared evidence resolver v1", () => {
               supportingEvidenceRefs:
                 selectorCalls === 1 && requirement.requirementId === "current"
                   ? []
-                  : [
-                      requirement.requirementId === "old"
-                        ? "old-ref"
-                        : "current-ref",
-                    ],
+                  : [requirement.requirementId === "old" ? "old-ref" : "current-ref"],
               contradictingEvidenceRefs: [],
               unknownEvidenceRefs: [],
             })),
@@ -4010,18 +3765,12 @@ describe("shared evidence resolver v1", () => {
     expect(result.closureRepairCount).toBe(1);
     expect(result.closureRepairMode).toBe("replan");
     expect(result.requirements).toHaveLength(3);
-    expect(
-      result.notebook.coverage.every((item) => item.status === "covered"),
-    ).toBe(true);
+    expect(result.notebook.coverage.every((item) => item.status === "covered")).toBe(true);
     expect(selectorCalls).toBe(2);
     expect(auditorCalls).toBe(2);
+    expect(searchTexts.filter((text) => text === "current commute")).toHaveLength(1);
     expect(
-      searchTexts.filter((text) => text === "current commute"),
-    ).toHaveLength(1);
-    expect(
-      result.sourceAcquisition.requirementContributions.map(
-        (lane) => lane.requirementId,
-      ),
+      result.sourceAcquisition.requirementContributions.map((lane) => lane.requirementId),
     ).toEqual(["old", "current"]);
   });
 
@@ -4076,21 +3825,17 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan(_query, _signal, options) {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "latest" as const,
             roleConstraint: "user" as const,
             needsPlanning: true,
             requirements: [
               {
-                requirementId: options?.revision
-                  ? "current-location"
-                  : "location",
+                requirementId: options?.revision ? "current-location" : "location",
                 label: options?.revision ? "Current location" : "Location",
                 searchText: options?.revision ? "current location" : "location",
                 temporalMode: "latest" as const,
@@ -4113,9 +3858,7 @@ describe("shared evidence resolver v1", () => {
             assessments: input.requirements.map((requirement) => ({
               requirementId: requirement.requirementId,
               supportingEvidenceRefs: [
-                requirement.requirementId === "location"
-                  ? "old-ref"
-                  : "current-ref",
+                requirement.requirementId === "location" ? "old-ref" : "current-ref",
               ],
               contradictingEvidenceRefs: [],
               unknownEvidenceRefs: [],
@@ -4168,15 +3911,9 @@ describe("shared evidence resolver v1", () => {
       repairMode: "replan",
     });
     expect(result.closureVerdict).toBe("pass");
-    expect(result.requirements.map((item) => item.requirementId)).toEqual([
-      "current-location",
-    ]);
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).toContain("Seattle");
-    expect(
-      result.packetSources.map((source) => source.text).join("\n"),
-    ).not.toContain("Portland");
+    expect(result.requirements.map((item) => item.requirementId)).toEqual(["current-location"]);
+    expect(result.packetSources.map((source) => source.text).join("\n")).toContain("Seattle");
+    expect(result.packetSources.map((source) => source.text).join("\n")).not.toContain("Portland");
     expect(selectorCalls).toBe(2);
     expect(auditorCalls).toBe(2);
   });
@@ -4218,12 +3955,10 @@ describe("shared evidence resolver v1", () => {
         },
       },
       planner: {
-        plannerVersion:
-          "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+        plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
         async plan(_query, _signal, options) {
           return {
-            plannerVersion:
-              "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
+            plannerVersion: "paw.memory-evidence-query-planner.v11:closure-deficiency-replan",
             answerShape: "lookup" as const,
             temporalMode: "latest" as const,
             roleConstraint: "user" as const,

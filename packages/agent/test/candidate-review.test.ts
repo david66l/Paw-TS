@@ -21,9 +21,7 @@ import { TaskStateManager } from "../src/task-state.js";
 describe("candidate solution review", () => {
   test("parses only an explicit terminal verdict and defaults malformed output to partial", () => {
     expect(
-      parseCandidateReview(
-        "Missing exception detail.\nREPORT_GROUNDING: PASS\nVERDICT: FAIL",
-      ),
+      parseCandidateReview("Missing exception detail.\nREPORT_GROUNDING: PASS\nVERDICT: FAIL"),
     ).toMatchObject({
       verdict: "fail",
       reportGrounding: "pass",
@@ -58,8 +56,7 @@ describe("candidate solution review", () => {
     const excerpts = extractCandidateDeliberation([
       {
         role: "assistant",
-        thinking:
-          "The safer implementation preserves the original error position.",
+        thinking: "The safer implementation preserves the original error position.",
         content:
           'Preparing report. {"action":"final_answer","summary":"Inline repro passed and upstream matched."}',
       },
@@ -68,12 +65,8 @@ describe("candidate solution review", () => {
         content: "An alternative risks dropping the structured error detail.",
       },
     ]);
-    expect(excerpts.join("\n")).toContain(
-      "preserves the original error position",
-    );
-    expect(excerpts.join("\n")).toContain(
-      "dropping the structured error detail",
-    );
+    expect(excerpts.join("\n")).toContain("preserves the original error position");
+    expect(excerpts.join("\n")).toContain("dropping the structured error detail");
     expect(excerpts.join("\n")).not.toContain("Inline repro passed");
     expect(excerpts.join("\n")).not.toContain("upstream matched");
   });
@@ -198,9 +191,7 @@ describe("candidate solution review", () => {
         async complete(messages) {
           receivedMessages = messages.length;
           expect(messages[1]?.content).toContain("Information preservation");
-          expect(messages[1]?.content).toContain(
-            "Canonical representation and precision",
-          );
+          expect(messages[1]?.content).toContain("Canonical representation and precision");
           expect(messages[1]?.content).toContain(
             '"Parseable" or "looks standard" is not sufficient',
           );
@@ -208,9 +199,7 @@ describe("candidate solution review", () => {
           expect(messages[1]?.content).toContain(
             'message = f"Invalid regular expression: {value}"',
           );
-          expect(messages[1]?.content).toContain(
-            "Host-recorded verification ledger",
-          );
+          expect(messages[1]?.content).toContain("Host-recorded verification ledger");
           expect(messages[1]?.content).toContain("Return plain text only");
           return {
             text: "The generic message loses required error detail.\nREPORT_GROUNDING: PASS\nVERDICT: FAIL",
@@ -350,15 +339,9 @@ describe("candidate solution review", () => {
         label: "grounding-review-fixture",
         async complete(messages) {
           const prompt = messages[1]?.content ?? "";
-          expect(prompt).toContain(
-            "[r0; pre-change/stale] code_failed: python -m pytest",
-          );
-          expect(prompt).toContain(
-            "[r1; current candidate] code_failed: python -m pytest",
-          );
-          expect(prompt).toContain(
-            "A baseline-equivalence claim requires a comparable command",
-          );
+          expect(prompt).toContain("[r0; pre-change/stale] code_failed: python -m pytest");
+          expect(prompt).toContain("[r1; current candidate] code_failed: python -m pytest");
+          expect(prompt).toContain("A baseline-equivalence claim requires a comparable command");
           return {
             text: "The code is semantically sound, but the summary says all tests passed while the current ledger records a failure.\nREPORT_GROUNDING: FAIL\nVERDICT: PASS",
           };
@@ -463,9 +446,7 @@ describe("candidate solution review", () => {
       events
         .filter((event) => event.event.type === "candidate.review")
         .map((event) =>
-          event.event.type === "candidate.review"
-            ? event.event.reportGrounding
-            : undefined,
+          event.event.type === "candidate.review" ? event.event.reportGrounding : undefined,
         ),
     ).toEqual(["fail", "pass"]);
     expect(modelCalls).toBe(3);
@@ -553,8 +534,7 @@ describe("candidate solution review", () => {
           : {
               text: JSON.stringify({
                 action: "final_answer",
-                summary:
-                  "Implemented. [skip_verify: deterministic review fixture]",
+                summary: "Implemented. [skip_verify: deterministic review fixture]",
               }),
             };
       },
@@ -620,8 +600,7 @@ describe("candidate solution review", () => {
           return {
             text: JSON.stringify({
               action: "final_answer",
-              summary:
-                "Added regex validation. [skip_verify: deterministic review fixture]",
+              summary: "Added regex validation. [skip_verify: deterministic review fixture]",
             }),
           };
         }
@@ -743,8 +722,7 @@ describe("candidate solution review", () => {
           {
             text: JSON.stringify({
               action: "final_answer",
-              summary:
-                "No blocking semantic issue.\nREPORT_GROUNDING: PASS\nVERDICT: PASS",
+              summary: "No blocking semantic issue.\nREPORT_GROUNDING: PASS\nVERDICT: PASS",
             }),
             usage: { promptTokens: 120, completionTokens: 30 },
           },

@@ -16,9 +16,7 @@ import {
 } from "@paw/collaboration";
 
 /** Composition-boundary adapter. It reuses AgentSpec data, never the old loop. */
-export function loadPawNextCollaborationRosterV1(
-  workspaceRoot: string,
-): CollaborationRosterV1 {
+export function loadPawNextCollaborationRosterV1(workspaceRoot: string): CollaborationRosterV1 {
   const byId = new Map<string, CollaborationAgentSpecV1>(
     DEFAULT_COLLABORATION_ROSTER_V1.agents.map((agent) => [agent.id, agent]),
   );
@@ -36,9 +34,7 @@ function adaptAgentSpec(spec: AgentSpec): CollaborationAgentSpecV1 {
   const validation = validateAgentSpec(spec);
   if (!validation.ok) {
     throw new Error(
-      `Invalid AgentSpec ${spec.id}: ${validation.errors
-        .map((error) => error.message)
-        .join("; ")}`,
+      `Invalid AgentSpec ${spec.id}: ${validation.errors.map((error) => error.message).join("; ")}`,
     );
   }
   const capabilities = inferCapabilities(spec);
@@ -47,11 +43,7 @@ function adaptAgentSpec(spec: AgentSpec): CollaborationAgentSpecV1 {
     spec.childPolicy === "read_write" &&
     (spec.tools === "inherit" ||
       tools.some((tool) =>
-        [
-          "workspace.write_file",
-          "workspace.edit_file",
-          "workspace.apply_patch",
-        ].includes(tool),
+        ["workspace.write_file", "workspace.edit_file", "workspace.apply_patch"].includes(tool),
       ));
   const executesTests =
     capabilities.includes("testing") &&
@@ -77,22 +69,17 @@ function adaptAgentSpec(spec: AgentSpec): CollaborationAgentSpecV1 {
   };
 }
 
-function inferCapabilities(
-  spec: AgentSpec,
-): readonly CollaborationCapabilityV1[] {
+function inferCapabilities(spec: AgentSpec): readonly CollaborationCapabilityV1[] {
   if (spec.capabilities?.length) {
     const invalid = spec.capabilities.filter(
       (capability) => !isCollaborationCapabilityV1(capability),
     );
     if (invalid.length > 0) {
-      throw new Error(
-        `AgentSpec ${spec.id} has unsupported capabilities: ${invalid.join(", ")}`,
-      );
+      throw new Error(`AgentSpec ${spec.id} has unsupported capabilities: ${invalid.join(", ")}`);
     }
     return spec.capabilities as readonly CollaborationCapabilityV1[];
   }
-  const text =
-    `${spec.id} ${spec.role} ${spec.description ?? ""}`.toLowerCase();
+  const text = `${spec.id} ${spec.role} ${spec.description ?? ""}`.toLowerCase();
   const capabilities = new Set<CollaborationCapabilityV1>();
   if (/investigat|research|调研|调查|分析/.test(text)) {
     capabilities.add("investigation");
@@ -110,11 +97,7 @@ function inferCapabilities(
     spec.childPolicy === "read_write" &&
     (spec.tools === "inherit" ||
       tools.some((tool) =>
-        [
-          "workspace.write_file",
-          "workspace.edit_file",
-          "workspace.apply_patch",
-        ].includes(tool),
+        ["workspace.write_file", "workspace.edit_file", "workspace.apply_patch"].includes(tool),
       ));
   if (mayWrite && capabilities.size === 0) {
     capabilities.add("implementation");

@@ -55,9 +55,7 @@ import type { RunMetrics } from "./run-metrics.js";
  * @param envelopes - 按时间顺序排列的只读事件信封数组
  * @returns 完整的运行指标对象
  */
-export function evaluateRunFromEnvelopes(
-  envelopes: readonly RunEventEnvelope[],
-): RunMetrics {
+export function evaluateRunFromEnvelopes(envelopes: readonly RunEventEnvelope[]): RunMetrics {
   // 状态变量初始化
   let firstTs = -1; // 首条事件时间戳（-1 表示未初始化）
   let lastTs = 0; // 末条事件时间戳
@@ -114,8 +112,7 @@ export function evaluateRunFromEnvelopes(
         }
         if (ev.usage) {
           // 累加 prompt 和 completion 的 token 消耗
-          totalTokens +=
-            (ev.usage.promptTokens ?? 0) + (ev.usage.completionTokens ?? 0);
+          totalTokens += (ev.usage.promptTokens ?? 0) + (ev.usage.completionTokens ?? 0);
         }
         break;
       }

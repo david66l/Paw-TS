@@ -66,10 +66,7 @@ export function createPhaseEffortModel(
     complete: model.complete.bind(model),
     ...(stream
       ? {
-          async *completeStream(
-            messages: readonly ChatMessage[],
-            options?: ModelCompleteOptions,
-          ) {
+          async *completeStream(messages: readonly ChatMessage[], options?: ModelCompleteOptions) {
             if (!options?.tools?.length) {
               yield* stream(messages, options);
               return;
@@ -78,10 +75,7 @@ export function createPhaseEffortModel(
             call += 1;
             const phase: ReasoningEffortPhase =
               current < policy.planningCalls ? "planning" : "execution";
-            const effort =
-              phase === "planning"
-                ? policy.planningEffort
-                : policy.executionEffort;
+            const effort = phase === "planning" ? policy.planningEffort : policy.executionEffort;
             report({ call: current, phase, effort });
             yield* stream(messages, {
               ...options,

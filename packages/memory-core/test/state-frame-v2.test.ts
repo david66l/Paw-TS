@@ -98,10 +98,7 @@ function acceptingVerifier() {
   });
 }
 
-function emptyDialogueRegistry(
-  lockedSourceIds: readonly string[],
-  originRevision: string,
-) {
+function emptyDialogueRegistry(lockedSourceIds: readonly string[], originRevision: string) {
   return compileMemoryDialogueCertificateRegistryV1({
     lockedSourceIds,
     proofs: [],
@@ -115,9 +112,7 @@ function selectorSnapshotForShadow(input: {
   query: string;
   intent: MemoryEvidenceQueryIntentV3;
   requirements: readonly MemoryEvidenceRequirementV3[];
-  temporalConstraints: readonly ReturnType<
-    typeof bindMemoryEvidenceTemporalConstraintV1
-  >[];
+  temporalConstraints: readonly ReturnType<typeof bindMemoryEvidenceTemporalConstraintV1>[];
   lockedSourceIds: readonly string[];
   assessments: readonly Readonly<MemoryEvidenceTriageAssessmentV1>[];
 }) {
@@ -144,8 +139,7 @@ function selectorSnapshotForShadow(input: {
       };
     }),
     lockedSourceIds: input.lockedSourceIds,
-    originRevision: compileMemoryQueryAnswerOriginV1(input.query)
-      .originRevision,
+    originRevision: compileMemoryQueryAnswerOriginV1(input.query).originRevision,
     selectorVersion: "test-selector",
     selectionRevision: "test-selection",
     committedAttempt: "baseline",
@@ -168,10 +162,7 @@ describe("proof-carrying locked-source state frame v2", () => {
     const slots = slotsFor(requirements);
     expect(slots).toHaveLength(2);
     expect(slots[0]?.groupId).not.toBe(slots[1]?.groupId);
-    expect(slots.map((slot) => slot.operation)).toEqual([
-      "resolve_latest",
-      "resolve_latest",
-    ]);
+    expect(slots.map((slot) => slot.operation)).toEqual(["resolve_latest", "resolve_latest"]);
     expect(slots[0]?.queryAnchor).toEqual({
       start: 0,
       end: query.length,
@@ -187,9 +178,7 @@ describe("proof-carrying locked-source state frame v2", () => {
       ...baseIntent,
       answerShape: "recommend",
     });
-    expect(recommendationSlots[0]?.groupId).toBe(
-      recommendationSlots[1]?.groupId,
-    );
+    expect(recommendationSlots[0]?.groupId).toBe(recommendationSlots[1]?.groupId);
   });
 
   test("validates exact spans against an immutable source lock", () => {
@@ -382,14 +371,8 @@ describe("proof-carrying locked-source state frame v2", () => {
         episodeOrder: 3,
       },
     ]);
-    const bind = (
-      evidenceRef: string,
-      value: string,
-      modality: "observed" | "plan",
-    ) => {
-      const item = sourceLock.items.find(
-        (candidate) => candidate.evidenceRef === evidenceRef,
-      );
+    const bind = (evidenceRef: string, value: string, modality: "observed" | "plan") => {
+      const item = sourceLock.items.find((candidate) => candidate.evidenceRef === evidenceRef);
       const start = item?.content.indexOf(value) ?? -1;
       return bindMemoryStateObservationV2({
         slot: slot as MemoryStateSlotSpecV2,
@@ -443,12 +426,7 @@ describe("proof-carrying locked-source state frame v2", () => {
         observedAt: "2025-02-01T00:00:00Z",
       },
     ]);
-    const bind = (
-      evidenceRef: string,
-      content: string,
-      value: string,
-      date: string,
-    ) =>
+    const bind = (evidenceRef: string, content: string, value: string, date: string) =>
       bindMemoryStateObservationV2({
         slot: slot as MemoryStateSlotSpecV2,
         sourceLock,
@@ -509,12 +487,7 @@ describe("proof-carrying locked-source state frame v2", () => {
         observedAt: "2025-02-01T00:00:00Z",
       },
     ]);
-    const bind = (
-      evidenceRef: string,
-      content: string,
-      value: string,
-      eventTime: string,
-    ) =>
+    const bind = (evidenceRef: string, content: string, value: string, eventTime: string) =>
       bindMemoryStateObservationV2({
         slot: slot as MemoryStateSlotSpecV2,
         sourceLock,
@@ -825,11 +798,7 @@ describe("proof-carrying locked-source state frame v2", () => {
         observedAt: "2025-02-01T00:00:00Z",
       },
     ]);
-    const bind = (
-      evidenceRef: string,
-      content: string,
-      predicateKind: "assert" | "retract",
-    ) => {
+    const bind = (evidenceRef: string, content: string, predicateKind: "assert" | "retract") => {
       const start = content.indexOf("Paris");
       return bindMemoryStateObservationV2({
         slot: slot as MemoryStateSlotSpecV2,
@@ -888,9 +857,7 @@ describe("proof-carrying locked-source state frame v2", () => {
       },
     ]);
     const bind = (evidenceRef: string, value: string) => {
-      const item = sourceLock.items.find(
-        (candidate) => candidate.evidenceRef === evidenceRef,
-      );
+      const item = sourceLock.items.find((candidate) => candidate.evidenceRef === evidenceRef);
       const start = item?.content.indexOf(value) ?? -1;
       return bindMemoryStateObservationV2({
         slot: base as MemoryStateSlotSpecV2,
@@ -971,10 +938,7 @@ describe("proof-carrying locked-source state frame v2", () => {
       }),
       bindingInput,
     );
-    expect(groups.map((group) => group.status)).toEqual([
-      "completed",
-      "fallback",
-    ]);
+    expect(groups.map((group) => group.status)).toEqual(["completed", "fallback"]);
     expect(groups[0]?.observations).toHaveLength(1);
     expect(groups[1]?.observations).toHaveLength(0);
   });
@@ -1094,9 +1058,7 @@ describe("proof-carrying locked-source state frame v2", () => {
                 const evidence = payload.evidence.find(
                   (item) => item.evidenceRef === slot.eligibleEvidenceRefs[0],
                 );
-                const value = evidence?.content.includes("alpha")
-                  ? "alpha"
-                  : "beta";
+                const value = evidence?.content.includes("alpha") ? "alpha" : "beta";
                 return {
                   slotId: slot.slotId,
                   evidenceRef: evidence?.evidenceRef,
@@ -1343,10 +1305,7 @@ describe("proof-carrying locked-source state frame v2", () => {
     expect(result.selectorFailedGroupCount).toBe(1);
     expect(result.unassessedRequirementCount).toBe(1);
     expect(result.sourceLockItemCount).toBe(1);
-    expect(result.frame?.slots.map((slot) => slot.status)).toEqual([
-      "complete",
-      "missing",
-    ]);
+    expect(result.frame?.slots.map((slot) => slot.status)).toEqual(["complete", "missing"]);
   });
 
   test("keeps rejected proposals out of reducer coverage", async () => {
@@ -1453,10 +1412,7 @@ describe("proof-carrying locked-source state frame v2", () => {
         assessments: supportAssessments,
       }),
       lockedSourceIds: ["source-home"],
-      dialogueCertificateRegistry: emptyDialogueRegistry(
-        ["source-home"],
-        origin.originRevision,
-      ),
+      dialogueCertificateRegistry: emptyDialogueRegistry(["source-home"], origin.originRevision),
       signal: new AbortController().signal,
     });
     expect(result.status).toBe("partial");
@@ -1520,10 +1476,7 @@ describe("proof-carrying locked-source state frame v2", () => {
         assessments: supportAssessments,
       }),
       lockedSourceIds: ["source-home"],
-      dialogueCertificateRegistry: emptyDialogueRegistry(
-        ["source-home"],
-        origin.originRevision,
-      ),
+      dialogueCertificateRegistry: emptyDialogueRegistry(["source-home"], origin.originRevision),
       signal: new AbortController().signal,
     });
     expect(result.status).toBe("fallback");
@@ -1703,9 +1656,7 @@ describe("proof-carrying locked-source state frame v2", () => {
   });
 
   test("keeps an unresolved any-role requirement as a blocked execution leaf", async () => {
-    const requirements = [
-      { ...requirement("unresolved-role"), roleConstraint: "any" as const },
-    ];
+    const requirements = [{ ...requirement("unresolved-role"), roleConstraint: "any" as const }];
     const temporalConstraints = requirements.map((item) =>
       bindMemoryEvidenceTemporalConstraintV1({
         query,
@@ -1773,9 +1724,7 @@ describe("proof-carrying locked-source state frame v2", () => {
   });
 
   test("keeps planner identity immutable after selector role late binding", async () => {
-    const requirements = [
-      { ...requirement("late-bound-role"), roleConstraint: "any" as const },
-    ];
+    const requirements = [{ ...requirement("late-bound-role"), roleConstraint: "any" as const }];
     const temporalConstraints = requirements.map((item) =>
       bindMemoryEvidenceTemporalConstraintV1({
         query,
@@ -1863,9 +1812,8 @@ describe("proof-carrying locked-source state frame v2", () => {
       signal: new AbortController().signal,
     });
     expect(
-      shadow.executionProgram?.nodes.find(
-        (node) => node.operation === "read_requirement",
-      )?.resolvedRole,
+      shadow.executionProgram?.nodes.find((node) => node.operation === "read_requirement")
+        ?.resolvedRole,
     ).toBe("user");
     expect(shadow.executionResult?.status).toBe("partial");
   });
@@ -1979,10 +1927,7 @@ describe("proof-carrying locked-source state frame v2", () => {
             content: `[user] ${userContent}\n[assistant] ${assistantContent}`,
             authority: "user_confirmed_dialogue",
             sourceKind: "assistant_output",
-            contextEvidenceRefs: [
-              "source-dialogue#turn-1",
-              "source-dialogue#turn-2",
-            ],
+            contextEvidenceRefs: ["source-dialogue#turn-1", "source-dialogue#turn-2"],
           },
         ],
       ],

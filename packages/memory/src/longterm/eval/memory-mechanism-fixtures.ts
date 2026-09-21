@@ -18,27 +18,12 @@ import {
 import type { MemoryRuntime } from "../../runtime/types.js";
 import { runLifecycleOnce } from "../lifecycle/janitor.js";
 import { queryOpLog } from "../observability/op-log.js";
-import {
-  type RerankerLlm,
-  TriggeredRetriever,
-} from "../retrieval/triggered.js";
-import type {
-  EpisodicExperience,
-  ProfileInsight,
-  SemanticFact,
-} from "../store/engine.js";
+import { type RerankerLlm, TriggeredRetriever } from "../retrieval/triggered.js";
+import type { EpisodicExperience, ProfileInsight, SemanticFact } from "../store/engine.js";
 import { deriveEntryId } from "../store/id.js";
 import { PostgresMemoryStoreEngine } from "../store/postgres-engine.js";
-import {
-  PROFILE_CAP,
-  admitProfile,
-  enforceProfileCapacity,
-} from "../write/profile.js";
-import {
-  addTrialLesson,
-  getTrialLesson,
-  listTrialLessons,
-} from "../write/trial.js";
+import { PROFILE_CAP, admitProfile, enforceProfileCapacity } from "../write/profile.js";
+import { addTrialLesson, getTrialLesson, listTrialLessons } from "../write/trial.js";
 import type { LlmStats } from "./llm-client.js";
 import type { JudgeLlm } from "./replay.js";
 
@@ -114,11 +99,7 @@ function uniqueRepo(prefix: string, ts: string): string {
   return `${prefix}-${ts}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 }
 
-function makeSemantic(
-  repo: string,
-  fact: string,
-  keywords?: string[],
-): SemanticFact {
+function makeSemantic(repo: string, fact: string, keywords?: string[]): SemanticFact {
   const now = new Date().toISOString();
   return {
     id: "",
@@ -183,10 +164,7 @@ async function cleanupScope(repo: string, runPrefix: string): Promise<void> {
   `.catch(() => undefined);
 }
 
-async function countResidual(
-  repo: string,
-  runPrefix: string,
-): Promise<MechReport["residual"]> {
+async function countResidual(repo: string, runPrefix: string): Promise<MechReport["residual"]> {
   const sql = getSql();
   const [m] = (await sql`
     SELECT count(*)::int AS n FROM memory_items WHERE scope->>'repositoryId' = ${repo}
@@ -247,15 +225,10 @@ async function runTrialSuite(opts: {
   const ownTmp = !opts.workspaceRoot;
 
   const distill = async (prompt: string) => {
-    if (
-      prompt.includes("失败复盘") ||
-      prompt.includes("试用教训") ||
-      prompt.includes("trial")
-    ) {
+    if (prompt.includes("失败复盘") || prompt.includes("试用教训") || prompt.includes("trial")) {
       return JSON.stringify({
         lesson: "我不该在没有锁定依赖版本时升级核心包。",
-        whenToUse:
-          "When MechJadePeerError appears after a core package upgrade",
+        whenToUse: "When MechJadePeerError appears after a core package upgrade",
         keywords: ["MechJadePeerError", "peer", "upgrade"],
       });
     }
@@ -307,13 +280,7 @@ async function runTrialSuite(opts: {
       await drainOutbox();
 
       const trials = await listTrialLessons(failBegun.taskId);
-      assertions.push(
-        assert(
-          "失败后进入 trial 池",
-          trials.length === 1,
-          `n=${trials.length}`,
-        ),
-      );
+      assertions.push(assert("失败后进入 trial 池", trials.length === 1, `n=${trials.length}`));
       const trialId = trials[0]?.id;
       if (trialId) writes.push({ kind: "trial", id: trialId, op: "ADD" });
 
@@ -326,11 +293,7 @@ async function runTrialSuite(opts: {
       `) as unknown as { n: number }[];
       // 此时不应有 graduated（尚未成功）
       assertions.push(
-        assert(
-          "失败时无 trial_graduated 正式条",
-          (formal[0]?.n ?? 0) === 0,
-          `n=${formal[0]?.n}`,
-        ),
+        assert("失败时无 trial_graduated 正式条", (formal[0]?.n ?? 0) === 0, `n=${formal[0]?.n}`),
       );
 
       // filler 防空库短路
@@ -373,15 +336,8 @@ async function runTrialSuite(opts: {
         runId: okBegun.taskId,
         op: "read.inject.trial",
       });
-      const injectOk =
-        trialId != null && trialLogs.some((l) => l.entryIds.includes(trialId));
-      assertions.push(
-        assert(
-          "op-log read.inject.trial",
-          injectOk,
-          `logs=${trialLogs.length}`,
-        ),
-      );
+      const injectOk = trialId != null && trialLogs.some((l) => l.entryIds.includes(trialId));
+      assertions.push(assert("op-log read.inject.trial", injectOk, `logs=${trialLogs.length}`));
       if (injectOk) injectStatuses.push("trial");
 
       // 再跑过测试并完成 → settle 转正
@@ -402,23 +358,14 @@ async function runTrialSuite(opts: {
       await drainOutbox();
 
       if (trialId) {
-        assertions.push(
-          assert(
-            "转正后 trial 池删除",
-            (await getTrialLesson(trialId)) === null,
-          ),
-        );
+        assertions.push(assert("转正后 trial 池删除", (await getTrialLesson(trialId)) === null));
       }
       const gradLogs = await queryOpLog({
         runId: okBegun.taskId,
         op: "write.graduated",
       });
       assertions.push(
-        assert(
-          "op-log write.graduated",
-          gradLogs.length >= 1,
-          `n=${gradLogs.length}`,
-        ),
+        assert("op-log write.graduated", gradLogs.length >= 1, `n=${gradLogs.length}`),
       );
       const memId = gradLogs[0]?.entryIds[0];
       if (memId) {
@@ -429,9 +376,7 @@ async function runTrialSuite(opts: {
           assert(
             "正式条 source=trial_graduated",
             entry?.kind === "episodic" && entry.source === "trial_graduated",
-            entry
-              ? `${entry.kind}/${(entry as EpisodicExperience).source}`
-              : "missing",
+            entry ? `${entry.kind}/${(entry as EpisodicExperience).source}` : "missing",
           ),
         );
       }
@@ -456,23 +401,16 @@ async function runTrialSuite(opts: {
       const assertions: MechAssertion[] = [];
       const origin = `${runPrefix}-fail2`;
       const again = `${runPrefix}-again`;
-      const trial = await addTrialLesson(
-        "我不该忽略 MechQuartzTimeout。",
-        origin,
-        {
-          whenToUse:
-            "When MechQuartzTimeoutError appears in flaky integration tests",
-          keywords: ["MechQuartzTimeoutError"],
-          distilled: true,
-        },
-      );
+      const trial = await addTrialLesson("我不该忽略 MechQuartzTimeout。", origin, {
+        whenToUse: "When MechQuartzTimeoutError appears in flaky integration tests",
+        keywords: ["MechQuartzTimeoutError"],
+        distilled: true,
+      });
       const engine = new PostgresMemoryStoreEngine();
       await engine.put(
-        makeSemantic(
-          repo,
-          "MechQuartzTimeoutError means integration timeout too low",
-          ["MechQuartzTimeoutError"],
-        ),
+        makeSemantic(repo, "MechQuartzTimeoutError means integration timeout too low", [
+          "MechQuartzTimeoutError",
+        ]),
       );
 
       const begun = await runtime.beginTask({
@@ -499,19 +437,13 @@ async function runTrialSuite(opts: {
       const still = await getTrialLesson(trial.id);
       assertions.push(assert("再次失败仍留在 trial 池", still != null));
       assertions.push(
-        assert(
-          "attemptsLeft 递减",
-          (still?.attemptsLeft ?? 0) <= 2,
-          `left=${still?.attemptsLeft}`,
-        ),
+        assert("attemptsLeft 递减", (still?.attemptsLeft ?? 0) <= 2, `left=${still?.attemptsLeft}`),
       );
       const grad = await queryOpLog({
         runId: begun.taskId,
         op: "write.graduated",
       });
-      assertions.push(
-        assert("无 write.graduated", grad.length === 0, `n=${grad.length}`),
-      );
+      assertions.push(assert("无 write.graduated", grad.length === 0, `n=${grad.length}`));
 
       results.push({
         id: "trial-fail-again-no-graduate",
@@ -540,9 +472,7 @@ async function runTrialSuite(opts: {
       });
       const engine = new PostgresMemoryStoreEngine();
       await engine.put(
-        makeSemantic(repo, "MechTopazBlindError synthetic keyword", [
-          "MechTopazBlindError",
-        ]),
+        makeSemantic(repo, "MechTopazBlindError synthetic keyword", ["MechTopazBlindError"]),
       );
 
       const begun = await runtime.beginTask({
@@ -575,9 +505,7 @@ async function runTrialSuite(opts: {
       });
       await drainOutbox();
 
-      assertions.push(
-        assert("盲改成功不转正", (await getTrialLesson(trial.id)) != null),
-      );
+      assertions.push(assert("盲改成功不转正", (await getTrialLesson(trial.id)) != null));
       const grad = await queryOpLog({
         runId: begun.taskId,
         op: "write.graduated",
@@ -650,8 +578,7 @@ async function runGateSuite(opts: {
       });
       const pkg = await retriever.retrieve({
         type: "explicit_query",
-        question:
-          "MechGateAlphaError during migration freeze window how to proceed?",
+        question: "MechGateAlphaError during migration freeze window how to proceed?",
         repo,
         runId,
       });
@@ -729,9 +656,7 @@ async function runGateSuite(opts: {
       }
       const rendered = pkg.render();
       if (pkg.items.some((i) => i.status === "reference")) {
-        assertions.push(
-          assert("措辞含历史参考", rendered.includes("历史参考（可能不适用）")),
-        );
+        assertions.push(assert("措辞含历史参考", rendered.includes("历史参考（可能不适用）")));
       } else if (weakHit) {
         assertions.push(assert("弱相关命中弱条目", true));
       } else {
@@ -739,13 +664,9 @@ async function runGateSuite(opts: {
       }
       const gates = await queryOpLog({ runId, op: "read.gate" });
       if (gates.length > 0) {
-        assertions.push(
-          assert("source=heuristic", gates[0]!.detail?.source === "heuristic"),
-        );
+        assertions.push(assert("source=heuristic", gates[0]!.detail?.source === "heuristic"));
       } else {
-        assertions.push(
-          assert("无命中时无 gate 日志可接受", pkg.items.length === 0),
-        );
+        assertions.push(assert("无命中时无 gate 日志可接受", pkg.items.length === 0));
       }
 
       results.push({
@@ -782,23 +703,16 @@ async function runGateSuite(opts: {
       });
       const pkg = await retriever.retrieve({
         type: "explicit_query",
-        question:
-          "MechGateAlphaError during migration freeze window how to proceed?",
+        question: "MechGateAlphaError during migration freeze window how to proceed?",
         repo,
         runId,
       });
       const hit = pkg.items.find((i) => i.id === epiId);
       assertions.push(assert("召回条目", hit != null));
       assertions.push(
-        assert(
-          "rerank → reference",
-          hit?.status === "reference",
-          `status=${hit?.status}`,
-        ),
+        assert("rerank → reference", hit?.status === "reference", `status=${hit?.status}`),
       );
-      assertions.push(
-        assert("措辞历史参考", pkg.render().includes("历史参考（可能不适用）")),
-      );
+      assertions.push(assert("措辞历史参考", pkg.render().includes("历史参考（可能不适用）")));
       const gates = await queryOpLog({ runId, op: "read.gate" });
       assertions.push(
         assert(
@@ -847,26 +761,17 @@ async function runGateSuite(opts: {
       });
       const pkg = await retriever.retrieve({
         type: "explicit_query",
-        question:
-          "MechGateAlphaError during migration freeze window how to proceed?",
+        question: "MechGateAlphaError during migration freeze window how to proceed?",
         repo,
         runId,
       });
       const hit = pkg.items.find((i) => i.id === epiId);
       assertions.push(
-        assert(
-          "rerank → verified",
-          hit?.status === "verified",
-          `status=${hit?.status}`,
-        ),
+        assert("rerank → verified", hit?.status === "verified", `status=${hit?.status}`),
       );
-      assertions.push(
-        assert("措辞建议策略", pkg.render().includes("建议策略")),
-      );
+      assertions.push(assert("措辞建议策略", pkg.render().includes("建议策略")));
       const gates = await queryOpLog({ runId, op: "read.gate" });
-      assertions.push(
-        assert("source=rerank", gates[0]?.detail?.source === "rerank"),
-      );
+      assertions.push(assert("source=rerank", gates[0]?.detail?.source === "rerank"));
 
       results.push({
         id: "gate-rerank-applicable",
@@ -891,9 +796,7 @@ async function runGateSuite(opts: {
 // Profile
 // ═══════════════════════════════════════════════════════════════
 
-async function runProfileSuite(opts: { ts: string; keep?: boolean }): Promise<
-  MechCaseResult[]
-> {
+async function runProfileSuite(opts: { ts: string; keep?: boolean }): Promise<MechCaseResult[]> {
   const results: MechCaseResult[] = [];
   const runPrefix = `mech-prof-${opts.ts}`;
   const repo = uniqueRepo(`mech-prof`, opts.ts);
@@ -913,9 +816,7 @@ async function runProfileSuite(opts: { ts: string; keep?: boolean }): Promise<
         },
         { engine, runId: `${runPrefix}-e1` },
       );
-      assertions.push(
-        assert("1 条证据拒绝", r1.status === "rejected", JSON.stringify(r1)),
-      );
+      assertions.push(assert("1 条证据拒绝", r1.status === "rejected", JSON.stringify(r1)));
       assertions.push(
         assert(
           "reason 含 evidence_below",
@@ -963,14 +864,9 @@ async function runProfileSuite(opts: { ts: string; keep?: boolean }): Promise<
         { engine, runId: `${runPrefix}-add` },
       );
       assertions.push(
-        assert(
-          "3 条证据 ADD",
-          add.status === "written" && add.op === "ADD",
-          JSON.stringify(add),
-        ),
+        assert("3 条证据 ADD", add.status === "written" && add.op === "ADD", JSON.stringify(add)),
       );
-      if (add.status === "written")
-        writes.push({ kind: "profile", id: add.memoryId, op: "ADD" });
+      if (add.status === "written") writes.push({ kind: "profile", id: add.memoryId, op: "ADD" });
 
       const edit = await admitProfile(
         {
@@ -982,29 +878,16 @@ async function runProfileSuite(opts: { ts: string; keep?: boolean }): Promise<
         { engine, runId: `${runPrefix}-edit` },
       );
       assertions.push(
-        assert(
-          "同主题 EDIT",
-          edit.status === "edited" && edit.op === "EDIT",
-          JSON.stringify(edit),
-        ),
+        assert("同主题 EDIT", edit.status === "edited" && edit.op === "EDIT", JSON.stringify(edit)),
       );
       if (edit.status === "edited") {
         writes.push({ kind: "profile", id: edit.memoryId, op: "EDIT" });
         assertions.push(
-          assert(
-            "EDIT 不新增 id",
-            add.status === "written" && edit.memoryId === add.memoryId,
-          ),
+          assert("EDIT 不新增 id", add.status === "written" && edit.memoryId === add.memoryId),
         );
       }
       const active = await engine.query({ kind: "profile", repo, limit: 50 });
-      assertions.push(
-        assert(
-          "同主题仅 1 条活跃画像",
-          active.length === 1,
-          `n=${active.length}`,
-        ),
-      );
+      assertions.push(assert("同主题仅 1 条活跃画像", active.length === 1, `n=${active.length}`));
 
       const bad = await admitProfile(
         {
@@ -1018,8 +901,7 @@ async function runProfileSuite(opts: { ts: string; keep?: boolean }): Promise<
       assertions.push(
         assert(
           "不可操作描述拒绝",
-          bad.status === "rejected" &&
-            bad.reason === "not_behavior_description",
+          bad.status === "rejected" && bad.reason === "not_behavior_description",
           JSON.stringify(bad),
         ),
       );
@@ -1070,9 +952,7 @@ function orthogonalInsight(i: number): string {
   return topics[i] ?? `Unique orthogonal profile behavior number ${i}`;
 }
 
-async function runCapSuite(opts: { ts: string; keep?: boolean }): Promise<
-  MechCaseResult[]
-> {
+async function runCapSuite(opts: { ts: string; keep?: boolean }): Promise<MechCaseResult[]> {
   const results: MechCaseResult[] = [];
   const runPrefix = `mech-cap-${opts.ts}`;
   const repo = uniqueRepo(`mech-cap`, opts.ts);
@@ -1097,9 +977,7 @@ async function runCapSuite(opts: { ts: string; keep?: boolean }): Promise<
           },
           { engine, runId: `${runPrefix}-fill-${i}` },
         );
-        assertions.push(
-          assert(`填入#${i}`, r.status === "written", JSON.stringify(r)),
-        );
+        assertions.push(assert(`填入#${i}`, r.status === "written", JSON.stringify(r)));
         if (r.status === "written") {
           writes.push({ kind: "profile", id: r.memoryId, op: "ADD" });
           // 人为拉开效用：靠前的更低
@@ -1110,9 +988,7 @@ async function runCapSuite(opts: { ts: string; keep?: boolean }): Promise<
         }
       }
       let active = await engine.query({ kind: "profile", repo, limit: 50 });
-      assertions.push(
-        assert("满员 15", active.length === PROFILE_CAP, `n=${active.length}`),
-      );
+      assertions.push(assert("满员 15", active.length === PROFILE_CAP, `n=${active.length}`));
 
       const sixteenth = await admitProfile(
         {
@@ -1132,25 +1008,15 @@ async function runCapSuite(opts: { ts: string; keep?: boolean }): Promise<
           JSON.stringify(sixteenth),
         ),
       );
-      if (
-        sixteenth.status === "written" &&
-        "removedId" in sixteenth &&
-        sixteenth.removedId
-      ) {
+      if (sixteenth.status === "written" && "removedId" in sixteenth && sixteenth.removedId) {
         invalidatedIds.push(sixteenth.removedId);
         writes.push({ kind: "profile", id: sixteenth.memoryId, op: "ADD" });
         writes.push({ kind: "profile", id: sixteenth.removedId, op: "REMOVE" });
       }
-      active = (
-        await engine.query({ kind: "profile", repo, limit: 50 })
-      ).filter((e) => e.tInvalid == null);
-      assertions.push(
-        assert(
-          "腾位后仍 15",
-          active.length === PROFILE_CAP,
-          `n=${active.length}`,
-        ),
+      active = (await engine.query({ kind: "profile", repo, limit: 50 })).filter(
+        (e) => e.tInvalid == null,
       );
+      assertions.push(assert("腾位后仍 15", active.length === PROFILE_CAP, `n=${active.length}`));
 
       results.push({
         id: "cap-evict-lowest-utility",
@@ -1197,8 +1063,7 @@ async function runCapSuite(opts: { ts: string; keep?: boolean }): Promise<
       assertions.push(
         assert(
           "无可腾位拒绝",
-          blocked.status === "rejected" &&
-            blocked.reason === "profile_cap_no_removable",
+          blocked.status === "rejected" && blocked.reason === "profile_cap_no_removable",
           JSON.stringify(blocked),
         ),
       );
@@ -1248,23 +1113,17 @@ async function runCapSuite(opts: { ts: string; keep?: boolean }): Promise<
         repo: repo3,
         limit: 50,
       });
-      assertions.push(
-        assert("制造超限 ≥16", active.length >= 16, `n=${active.length}`),
-      );
+      assertions.push(assert("制造超限 ≥16", active.length >= 16, `n=${active.length}`));
 
       const report = await runLifecycleOnce({
         engine,
         config: { repo: repo3, profileCap: PROFILE_CAP },
       });
-      active = (
-        await engine.query({ kind: "profile", repo: repo3, limit: 50 })
-      ).filter((e) => e.tInvalid == null);
+      active = (await engine.query({ kind: "profile", repo: repo3, limit: 50 })).filter(
+        (e) => e.tInvalid == null,
+      );
       assertions.push(
-        assert(
-          "lifecycle 后 ≤15",
-          active.length <= PROFILE_CAP,
-          `n=${active.length}`,
-        ),
+        assert("lifecycle 后 ≤15", active.length <= PROFILE_CAP, `n=${active.length}`),
       );
       assertions.push(
         assert(
@@ -1336,15 +1195,11 @@ export function renderMechReport(r: MechReport): string {
   return lines.join("\n");
 }
 
-export async function runMechanismSuite(
-  opts: MechRunOptions = {},
-): Promise<MechReport> {
+export async function runMechanismSuite(opts: MechRunOptions = {}): Promise<MechReport> {
   const wall0 = Date.now();
   const now = opts.now ?? (() => new Date());
   const ts = now().getTime().toString(36);
-  const want = new Set<MechSuiteName>(
-    opts.suites ?? ["trial", "gate", "profile", "cap"],
-  );
+  const want = new Set<MechSuiteName>(opts.suites ?? ["trial", "gate", "profile", "cap"]);
   const details: MechCaseResult[] = [];
   const warnings: string[] = [];
 
@@ -1407,28 +1262,22 @@ export async function runMechanismSuite(
       [`mech-prof`, `mech-prof-${ts}`],
       [`mech-cap`, `mech-cap-${ts}`],
     ] as const) {
-      const r = await countResidual(uniqueRepo(repoP, ts), runP).catch(
-        () => null,
-      );
+      const r = await countResidual(uniqueRepo(repoP, ts), runP).catch(() => null);
       if (r && (r.memoryItems > 0 || r.trials > 0)) {
-        warnings.push(
-          `残留 ${repoP}: items=${r.memoryItems} trials=${r.trials}`,
-        );
+        warnings.push(`残留 ${repoP}: items=${r.memoryItems} trials=${r.trials}`);
       }
     }
   }
 
   const bySuite = (s: MechSuiteName) => details.filter((d) => d.suite === s);
   const passedSuites = (["trial", "gate", "profile", "cap"] as const).filter(
-    (s) =>
-      want.has(s) && bySuite(s).length > 0 && bySuite(s).every((d) => d.passed),
+    (s) => want.has(s) && bySuite(s).length > 0 && bySuite(s).every((d) => d.passed),
   );
   const failedCases = details.filter((d) => !d.passed);
   const passed =
     details.length === 0
       ? null
-      : failedCases.length === 0 &&
-        warnings.filter((w) => w.startsWith("残留")).length === 0;
+      : failedCases.length === 0 && warnings.filter((w) => w.startsWith("残留")).length === 0;
 
   return {
     suite: "memory-mechanism",
@@ -1439,23 +1288,11 @@ export async function runMechanismSuite(
       用例数: details.length,
       通过用例: details.filter((d) => d.passed).length,
       失败用例: failedCases.length,
-      trial通过:
-        bySuite("trial").every((d) => d.passed) && bySuite("trial").length > 0
-          ? 1
-          : 0,
-      gate通过:
-        bySuite("gate").every((d) => d.passed) && bySuite("gate").length > 0
-          ? 1
-          : 0,
+      trial通过: bySuite("trial").every((d) => d.passed) && bySuite("trial").length > 0 ? 1 : 0,
+      gate通过: bySuite("gate").every((d) => d.passed) && bySuite("gate").length > 0 ? 1 : 0,
       profile通过:
-        bySuite("profile").every((d) => d.passed) &&
-        bySuite("profile").length > 0
-          ? 1
-          : 0,
-      cap通过:
-        bySuite("cap").every((d) => d.passed) && bySuite("cap").length > 0
-          ? 1
-          : 0,
+        bySuite("profile").every((d) => d.passed) && bySuite("profile").length > 0 ? 1 : 0,
+      cap通过: bySuite("cap").every((d) => d.passed) && bySuite("cap").length > 0 ? 1 : 0,
       通过套件数: passedSuites.length,
     },
     details,

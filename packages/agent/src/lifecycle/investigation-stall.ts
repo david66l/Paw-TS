@@ -24,25 +24,18 @@ export interface ProgressBaselineV1 {
   readonly shellCommandRevision: number;
 }
 
-export function computeProgressBaselineV1(
-  state: TaskState,
-  turn: number,
-): ProgressBaselineV1 {
+export function computeProgressBaselineV1(state: TaskState, turn: number): ProgressBaselineV1 {
   return {
     turn,
     mutationRevision: state.mutationRevision ?? 0,
     filesChanged: state.filesChanged.length,
-    lastVerificationRevision:
-      state.testResults.at(-1)?.shellCommandRevision ?? 0,
+    lastVerificationRevision: state.testResults.at(-1)?.shellCommandRevision ?? 0,
     filesRead: state.filesRead.length,
     shellCommandRevision: state.shellCommandRevision ?? 0,
   };
 }
 
-function hasMeaningfulDelta(
-  baseline: ProgressBaselineV1,
-  current: ProgressBaselineV1,
-): boolean {
+function hasMeaningfulDelta(baseline: ProgressBaselineV1, current: ProgressBaselineV1): boolean {
   return (
     baseline.mutationRevision !== current.mutationRevision ||
     baseline.filesChanged !== current.filesChanged ||

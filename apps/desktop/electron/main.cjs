@@ -341,8 +341,7 @@ function setupIpc() {
         ? path.resolve(payload.workspaceRoot)
         : REPO_ROOT;
     const conversationId =
-      typeof payload?.conversationId === "string" &&
-      payload.conversationId.trim()
+      typeof payload?.conversationId === "string" && payload.conversationId.trim()
         ? payload.conversationId.trim()
         : undefined;
     // 宿主可能尚未 ready，短暂等待
@@ -463,11 +462,7 @@ function setupIpc() {
 
   /** 渲染进程回答模型的 ask_user 提问 */
   ipcMain.handle("agent:ask-respond", (_evt, payload) => {
-    if (
-      agentProc &&
-      typeof payload?.requestId === "string" &&
-      typeof payload?.askId === "string"
-    ) {
+    if (agentProc && typeof payload?.requestId === "string" && typeof payload?.askId === "string") {
       writeAgent({
         type: "ask.respond",
         requestId: payload.requestId,
@@ -489,12 +484,8 @@ function setupIpc() {
       typeof payload?.workspaceRoot === "string" && payload.workspaceRoot.trim()
         ? path.resolve(payload.workspaceRoot)
         : REPO_ROOT;
-    const limit =
-      typeof payload?.limit === "number" && payload.limit > 0
-        ? payload.limit
-        : 40;
-    const memoryType =
-      typeof payload?.type === "string" ? payload.type : undefined;
+    const limit = typeof payload?.limit === "number" && payload.limit > 0 ? payload.limit : 40;
+    const memoryType = typeof payload?.type === "string" ? payload.type : undefined;
 
     const tryWrite = () => {
       writeAgent({
@@ -552,24 +543,20 @@ function setupIpc() {
       typeof payload?.requestId === "string" && payload.requestId
         ? payload.requestId
         : newReqId("cpl");
-    const runId =
-      typeof payload?.runId === "string" ? payload.runId.trim() : "";
+    const runId = typeof payload?.runId === "string" ? payload.runId.trim() : "";
     const workspaceRoot =
       typeof payload?.workspaceRoot === "string" && payload.workspaceRoot.trim()
         ? path.resolve(payload.workspaceRoot)
         : REPO_ROOT;
-    writeWhenReady(
-      { type: "checkpoint.list", requestId, workspaceRoot, runId },
-      () => {
-        sendToRenderer("agent:checkpoint-list-done", {
-          requestId,
-          ok: false,
-          runId,
-          items: [],
-          error: "Agent 宿主启动超时",
-        });
-      },
-    );
+    writeWhenReady({ type: "checkpoint.list", requestId, workspaceRoot, runId }, () => {
+      sendToRenderer("agent:checkpoint-list-done", {
+        requestId,
+        ok: false,
+        runId,
+        items: [],
+        error: "Agent 宿主启动超时",
+      });
+    });
     return { ok: true, requestId };
   });
 
@@ -578,24 +565,20 @@ function setupIpc() {
       typeof payload?.requestId === "string" && payload.requestId
         ? payload.requestId
         : newReqId("cpu");
-    const runId =
-      typeof payload?.runId === "string" ? payload.runId.trim() : "";
+    const runId = typeof payload?.runId === "string" ? payload.runId.trim() : "";
     const workspaceRoot =
       typeof payload?.workspaceRoot === "string" && payload.workspaceRoot.trim()
         ? path.resolve(payload.workspaceRoot)
         : REPO_ROOT;
-    writeWhenReady(
-      { type: "checkpoint.undo", requestId, workspaceRoot, runId },
-      () => {
-        sendToRenderer("agent:checkpoint-undo-done", {
-          requestId,
-          ok: false,
-          runId,
-          restored: null,
-          error: "Agent 宿主启动超时",
-        });
-      },
-    );
+    writeWhenReady({ type: "checkpoint.undo", requestId, workspaceRoot, runId }, () => {
+      sendToRenderer("agent:checkpoint-undo-done", {
+        requestId,
+        ok: false,
+        runId,
+        restored: null,
+        error: "Agent 宿主启动超时",
+      });
+    });
     return { ok: true, requestId };
   });
 
@@ -624,29 +607,22 @@ function setupIpc() {
       typeof payload?.requestId === "string" && payload.requestId
         ? payload.requestId
         : newReqId("rnld");
-    const runId =
-      typeof payload?.runId === "string" ? payload.runId.trim() : "";
+    const runId = typeof payload?.runId === "string" ? payload.runId.trim() : "";
     const workspaceRoot =
       typeof payload?.workspaceRoot === "string" && payload.workspaceRoot.trim()
         ? path.resolve(payload.workspaceRoot)
         : REPO_ROOT;
-    const limit =
-      typeof payload?.limit === "number" && payload.limit > 0
-        ? payload.limit
-        : 200;
-    writeWhenReady(
-      { type: "runs.load", requestId, workspaceRoot, runId, limit },
-      () => {
-        sendToRenderer("agent:runs-load-done", {
-          requestId,
-          ok: false,
-          runId,
-          events: [],
-          total: 0,
-          error: "Agent 宿主启动超时",
-        });
-      },
-    );
+    const limit = typeof payload?.limit === "number" && payload.limit > 0 ? payload.limit : 200;
+    writeWhenReady({ type: "runs.load", requestId, workspaceRoot, runId, limit }, () => {
+      sendToRenderer("agent:runs-load-done", {
+        requestId,
+        ok: false,
+        runId,
+        events: [],
+        total: 0,
+        error: "Agent 宿主启动超时",
+      });
+    });
     return { ok: true, requestId };
   });
 
@@ -710,9 +686,7 @@ function setupIpc() {
         type: "settings.set",
         requestId,
         workspaceRoot,
-        ...(typeof payload?.provider === "string"
-          ? { provider: payload.provider }
-          : {}),
+        ...(typeof payload?.provider === "string" ? { provider: payload.provider } : {}),
         ...(payload?.approvalMode === "ask" || payload?.approvalMode === "auto"
           ? { approvalMode: payload.approvalMode }
           : {}),
@@ -734,9 +708,7 @@ function setupIpc() {
   ipcMain.handle("agent:finalize-conversation", (_evt, payload) => {
     startAgentHost();
     const conversationId =
-      typeof payload?.conversationId === "string"
-        ? payload.conversationId.trim()
-        : "";
+      typeof payload?.conversationId === "string" ? payload.conversationId.trim() : "";
     if (!conversationId) {
       return { ok: false, reason: "missing conversationId" };
     }
@@ -745,9 +717,7 @@ function setupIpc() {
         ? payload.requestId
         : `fin-${Date.now()}`;
     const finalMessage =
-      typeof payload?.finalMessage === "string"
-        ? payload.finalMessage
-        : undefined;
+      typeof payload?.finalMessage === "string" ? payload.finalMessage : undefined;
 
     const tryWrite = () => {
       writeAgent({

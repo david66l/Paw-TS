@@ -104,14 +104,10 @@ export function projectCanonicalDurableJsonPayloadBindingsV1(
   ): void => {
     const frozenBinding = freezeBinding(binding);
     if (payload.kind === "artifact_ref") {
-      const key = canonicalJsonStringifyV1(
-        frozenBinding as unknown as JsonValue,
-      );
+      const key = canonicalJsonStringifyV1(frozenBinding as unknown as JsonValue);
       const existing = artifactBindings.get(payload.artifactRef);
       if (existing !== undefined && existing !== key) {
-        throw new Error(
-          "Durable JSON payload artifact ref is reused across canonical bindings",
-        );
+        throw new Error("Durable JSON payload artifact ref is reused across canonical bindings");
       }
       artifactBindings.set(payload.artifactRef, key);
     }
@@ -144,8 +140,7 @@ export function projectCanonicalDurableJsonPayloadBindingsV1(
       }
       case "input.promoted": {
         const acceptedSeq = acceptedInputSeqs.get(fact.inputId);
-        const originSeq =
-          fact.delivery === "initial" ? envelope.seq : acceptedSeq;
+        const originSeq = fact.delivery === "initial" ? envelope.seq : acceptedSeq;
         if (originSeq === undefined) {
           throw new Error("Promoted input has no canonical payload origin");
         }
@@ -241,9 +236,7 @@ export function projectCanonicalDurableJsonPayloadBindingsV1(
             claim.checkpointId !== fact.checkpointId ||
             claim.settlementSeq === undefined
           ) {
-            throw new Error(
-              "Recorded checkpoint has no canonical distillation origin",
-            );
+            throw new Error("Recorded checkpoint has no canonical distillation origin");
           }
           originSeq = claim.settlementSeq;
         }
@@ -309,9 +302,7 @@ function addAttachmentOccurrences(
   }
 }
 
-function freezeBinding(
-  binding: DurableJsonPayloadBindingV1,
-): DurableJsonPayloadBindingV1 {
+function freezeBinding(binding: DurableJsonPayloadBindingV1): DurableJsonPayloadBindingV1 {
   return Object.freeze({
     originSeq: binding.originSeq,
     field: Object.freeze({ ...binding.field }),

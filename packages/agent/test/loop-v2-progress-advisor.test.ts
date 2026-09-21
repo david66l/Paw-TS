@@ -36,10 +36,7 @@ function bootstrap(): WorkingDecisionStateV2 {
   ).state;
 }
 
-function action(
-  tool: string,
-  args: Record<string, unknown>,
-): ProgressAdvisorActionV2 {
+function action(tool: string, args: Record<string, unknown>): ProgressAdvisorActionV2 {
   return { tool, args, repeatTracking: "tracked" };
 }
 
@@ -121,9 +118,7 @@ describe("Loop Kernel v2 progress advisor", () => {
     let state = bootstrap();
     let advisor = createProgressAdvisorStateV2(RUN_ID);
     const deltas: boolean[] = [];
-    const advice = [] as ReturnType<
-      typeof advanceProgressAdvisorV2
-    >["advice"][number][];
+    const advice = [] as ReturnType<typeof advanceProgressAdvisorV2>["advice"][number][];
     const repeatedAction = action("workspace.read_file", {
       path: "src/worker.ts",
       offset: 11,

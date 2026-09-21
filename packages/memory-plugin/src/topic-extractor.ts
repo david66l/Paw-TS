@@ -9,8 +9,7 @@ import {
   deriveMemoryTopicIdV1,
 } from "./topic-trajectory.js";
 
-export const PAW_MEMORY_TOPIC_EXTRACTOR_VERSION_V1 =
-  "paw.memory-topic-extractor.json.v1" as const;
+export const PAW_MEMORY_TOPIC_EXTRACTOR_VERSION_V1 = "paw.memory-topic-extractor.json.v1" as const;
 
 export interface MemoryTopicExtractionEntryV1 {
   readonly id: string;
@@ -53,20 +52,14 @@ export function createJsonMemoryTopicExtractorV1(
   }
   return Object.freeze({
     extractorVersion: PAW_MEMORY_TOPIC_EXTRACTOR_VERSION_V1,
-    async extract(
-      extraction: MemoryTopicExtractionInputV1,
-      signal: AbortSignal,
-    ) {
+    async extract(extraction: MemoryTopicExtractionInputV1, signal: AbortSignal) {
       if (signal.aborted) throw abortError();
-      const result = await input.model.complete(
-        buildMemoryTopicExtractionRequestV1(extraction),
-        { signal },
-      );
+      const result = await input.model.complete(buildMemoryTopicExtractionRequestV1(extraction), {
+        signal,
+      });
       if (signal.aborted || result.status === "cancelled") throw abortError();
       if (result.status !== "completed") {
-        throw namedError(
-          `MemoryTopicExtractor_${stableCode(result.errorCode)}`,
-        );
+        throw namedError(`MemoryTopicExtractor_${stableCode(result.errorCode)}`);
       }
       return parseMemoryTopicExtractionV1(result.text, extraction);
     },
@@ -112,24 +105,19 @@ export function parseMemoryTopicExtractionV1(
     throw namedError("MemoryTopicExtractorTooManyTopics");
   }
   const entries = new Set(input.entries.map((entry) => entry.id));
-  const existing = new Map(
-    input.existingTopics.map((topic) => [topic.id, topic]),
-  );
+  const existing = new Map(input.existingTopics.map((topic) => [topic.id, topic]));
   const identities = new Set<string>();
   let totalMembers = 0;
   const proposals = parsed.topics.map((value) => {
     const raw = record(value, "MemoryTopicExtractorTopicInvalid");
     const rawTopicId = raw.topicId;
-    const existingTopic =
-      typeof rawTopicId === "string" ? existing.get(rawTopicId) : undefined;
+    const existingTopic = typeof rawTopicId === "string" ? existing.get(rawTopicId) : undefined;
     // A constrained model may emit a plausible but unknown ID instead of null.
     // Never target that identity; safely canonicalize it into a new topic.
     const canonicalName = existingTopic
       ? existingTopic.canonicalName
       : safeTopicName(raw.canonicalName);
-    const family = existingTopic
-      ? existingTopic.family
-      : topicFamily(raw.family);
+    const family = existingTopic ? existingTopic.family : topicFamily(raw.family);
     if (!Array.isArray(raw.members) || raw.members.length === 0) {
       throw namedError("MemoryTopicExtractorMembersInvalid");
     }
@@ -139,11 +127,7 @@ export function parseMemoryTopicExtractionV1(
     }
     let members = raw.members.map((memberValue) => {
       const member = record(memberValue, "MemoryTopicExtractorMemberInvalid");
-      const memoryId = boundedString(
-        member.memoryId,
-        256,
-        "MemoryTopicExtractorMemberInvalid",
-      );
+      const memoryId = boundedString(member.memoryId, 256, "MemoryTopicExtractorMemberInvalid");
       if (!entries.has(memoryId)) {
         throw namedError("MemoryTopicExtractorMemberUnknown");
       }
@@ -160,8 +144,7 @@ export function parseMemoryTopicExtractionV1(
     if (!members.some((member) => member.role === "primary")) {
       const promoted = [...members].sort(
         (left, right) =>
-          right.confidence - left.confidence ||
-          left.memoryId.localeCompare(right.memoryId),
+          right.confidence - left.confidence || left.memoryId.localeCompare(right.memoryId),
       )[0];
       if (!promoted) throw namedError("MemoryTopicExtractorPrimaryMissing");
       members = members.map((member) =>
@@ -236,12 +219,7 @@ function topicFamily(value: unknown): MemoryTopicFamilyV1 {
 }
 
 function confidence(value: unknown): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value < 0 ||
-    value > 1
-  ) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
     throw namedError("MemoryTopicExtractorConfidenceInvalid");
   }
   return value;
@@ -257,12 +235,8 @@ function boundedString(value: unknown, max: number, errorName: string): string {
 function jsonObject(text: string): Record<string, unknown> {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start)
-    throw namedError("MemoryTopicExtractorJsonInvalid");
-  return record(
-    JSON.parse(text.slice(start, end + 1)),
-    "MemoryTopicExtractorJsonInvalid",
-  );
+  if (start < 0 || end <= start) throw namedError("MemoryTopicExtractorJsonInvalid");
+  return record(JSON.parse(text.slice(start, end + 1)), "MemoryTopicExtractorJsonInvalid");
 }
 
 function record(value: unknown, errorName: string): Record<string, unknown> {

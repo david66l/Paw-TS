@@ -24,11 +24,10 @@ function fixture(name: string, delayMs: number): string {
     "utf8",
   );
   mkdirSync(path.join(root, ".paw"));
-  writeFileSync(
-    path.join(root, ".paw", "memory-config.json"),
-    '{"enable":false}',
-    { encoding: "utf8", flag: "w" },
-  );
+  writeFileSync(path.join(root, ".paw", "memory-config.json"), '{"enable":false}', {
+    encoding: "utf8",
+    flag: "w",
+  });
   return root;
 }
 
@@ -113,12 +112,8 @@ describe("managed jobs in the real agent loop", () => {
     expect(approvals[0]?.tool).toBe("workspace.job_start");
     expect(policyTools).toContain("workspace.run_shell");
     expect(policyTools).not.toContain("workspace.job_start");
-    const settledIndex = events.findIndex(
-      (event) => event.event.type === "job.settled",
-    );
-    const completedIndex = events.findIndex(
-      (event) => event.event.type === "run.completed",
-    );
+    const settledIndex = events.findIndex((event) => event.event.type === "job.settled");
+    const completedIndex = events.findIndex((event) => event.event.type === "run.completed");
     expect(settledIndex).toBeGreaterThan(-1);
     expect(settledIndex).toBeLessThan(completedIndex);
     const saved = stateStore.load("managed-job-complete");
@@ -152,8 +147,7 @@ describe("managed jobs in the real agent loop", () => {
           if (calls === 3) {
             sawCompletionNudge = messages.some(
               (message) =>
-                message.role === "user" &&
-                message.content.includes("Managed jobs are unfinished"),
+                message.role === "user" && message.content.includes("Managed jobs are unfinished"),
             );
           }
           if (calls === 4) {
@@ -198,15 +192,11 @@ describe("managed jobs in the real agent loop", () => {
     expect(sawCompletionNudge).toBe(true);
     expect(sawStaleControlAfterSettlement).toBe(false);
     expect(result.message).not.toContain("Done too early");
-    expect(events.some((event) => event.event.type === "job.settled")).toBe(
-      true,
-    );
+    expect(events.some((event) => event.event.type === "job.settled")).toBe(true);
     expect(
       stateStore
         .load("managed-job-premature-final")
-        ?.messages.some((message) =>
-          message.content.startsWith("[Managed jobs are unfinished:"),
-        ),
+        ?.messages.some((message) => message.content.startsWith("[Managed jobs are unfinished:")),
     ).toBe(false);
   });
 
@@ -270,14 +260,11 @@ describe("managed jobs in the real agent loop", () => {
             (message) =>
               message.role === "user" &&
               message.content.includes("Managed job recovery v1") &&
-              message.content
-                .toLowerCase()
-                .includes("old pids were not reattached"),
+              message.content.toLowerCase().includes("old pids were not reattached"),
           );
           sawOrphanedList ||= messages.some(
             (message) =>
-              message.role === "user" &&
-              message.content.includes("interrupted_orphaned"),
+              message.role === "user" && message.content.includes("interrupted_orphaned"),
           );
           return resumedCalls === 1
             ? { text: '{"tool":"workspace.job_list","args":{}}' }
@@ -298,9 +285,7 @@ describe("managed jobs in the real agent loop", () => {
     expect(resumedResult.status).toBe("completed");
     expect(sawRecoveryNotice).toBe(true);
     expect(sawOrphanedList).toBe(true);
-    expect(events.some((event) => event.event.type === "job.recovery")).toBe(
-      true,
-    );
+    expect(events.some((event) => event.event.type === "job.recovery")).toBe(true);
     const saved = stateStore.load("managed-job-resume");
     expect(saved?.executionEnvironment).toMatchObject({
       recovery: {

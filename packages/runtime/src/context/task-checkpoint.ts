@@ -27,8 +27,7 @@ export interface TaskCheckpointSourceInputV1 {
   readonly sourceThroughSeq: number;
 }
 
-export interface CreateTaskCheckpointInputV1
-  extends TaskCheckpointSourceInputV1 {
+export interface CreateTaskCheckpointInputV1 extends TaskCheckpointSourceInputV1 {
   readonly checkpoint: TaskCheckpointV1;
   readonly distillationClaimId?: string;
   readonly checkpointPayload?: DurableJsonPayloadV1;
@@ -61,13 +60,7 @@ export async function createAndCommitTaskCheckpointV1(
   signal: AbortSignal,
 ): Promise<TaskCheckpointCommitResultV1> {
   const snapshot = await session.readInputSnapshot();
-  return createAndCommitTaskCheckpointFromSnapshotV1(
-    session,
-    snapshot,
-    input,
-    codec,
-    signal,
-  );
+  return createAndCommitTaskCheckpointFromSnapshotV1(session, snapshot, input, codec, signal);
 }
 
 /** Commit against the exact snapshot already used by an evidence projection. */
@@ -78,12 +71,7 @@ export async function createAndCommitTaskCheckpointFromSnapshotV1(
   codec: TaskCheckpointPayloadCodecV1,
   signal: AbortSignal,
 ): Promise<TaskCheckpointCommitResultV1> {
-  const fact = await prepareTaskCheckpointFactV1(
-    snapshot,
-    input,
-    codec,
-    signal,
-  );
+  const fact = await prepareTaskCheckpointFactV1(snapshot, input, codec, signal);
   const status = await session.commitInputFacts(snapshot.tailSeq, [fact]);
   return status === "committed" ? { status, fact } : { status };
 }
@@ -94,16 +82,8 @@ async function prepareTaskCheckpointFactV1(
   codec: TaskCheckpointPayloadCodecV1,
   signal: AbortSignal,
 ): Promise<ContextCheckpointRecordedFactV1> {
-  const binding = await bindTaskCheckpointSourceV1(
-    snapshot,
-    input,
-    codec,
-    signal,
-  );
-  if (
-    input.distillationClaimId !== undefined &&
-    !isStableId(input.distillationClaimId)
-  ) {
+  const binding = await bindTaskCheckpointSourceV1(snapshot, input, codec, signal);
+  if (input.distillationClaimId !== undefined && !isStableId(input.distillationClaimId)) {
     throw new Error("Task checkpoint distillation claim id is invalid");
   }
   const checkpoint = parseTaskCheckpointV1(input.checkpoint);
@@ -111,19 +91,14 @@ async function prepareTaskCheckpointFactV1(
   for (const item of checkpointItems(checkpoint)) {
     for (const sourceSeq of item.sourceSeqs) {
       if (!sourceSeqs.has(sourceSeq)) {
-        throw new Error(
-          `Task checkpoint references missing input fact seq ${sourceSeq}`,
-        );
+        throw new Error(`Task checkpoint references missing input fact seq ${sourceSeq}`);
       }
     }
   }
 
-  const checkpointValue = immutableCanonicalJsonCloneV1(
-    checkpoint as unknown as JsonValue,
-  );
+  const checkpointValue = immutableCanonicalJsonCloneV1(checkpoint as unknown as JsonValue);
   parseTaskCheckpointV1(checkpointValue);
-  const payload =
-    input.checkpointPayload ?? (await codec.encode(checkpointValue, signal));
+  const payload = input.checkpointPayload ?? (await codec.encode(checkpointValue, signal));
   throwIfAborted(signal);
   const checkpointHash = await codec.hash(checkpointValue);
   assertHash(checkpointHash, "checkpoint content");
@@ -175,11 +150,7 @@ export async function bindTaskCheckpointSourceV1(
       readonly fact: ContextCheckpointRecordedFactV1;
     } => entry.fact.type === "context.checkpoint_recorded",
   );
-  if (
-    priorCheckpoints.some(
-      (entry) => entry.fact.checkpointId === input.checkpointId,
-    )
-  ) {
+  if (priorCheckpoints.some((entry) => entry.fact.checkpointId === input.checkpointId)) {
     throw new Error("Task checkpoint id already exists in this run");
   }
   const latestCheckpoint = priorCheckpoints.at(-1)?.fact;
@@ -190,14 +161,9 @@ export async function bindTaskCheckpointSourceV1(
   ) {
     throw new Error("Task checkpoint source range must monotonically expand");
   }
-  planTaskCheckpointReplacementV1(
-    snapshot,
-    input.sourceFromSeq,
-    input.sourceThroughSeq,
-  );
+  planTaskCheckpointReplacementV1(snapshot, input.sourceFromSeq, input.sourceThroughSeq);
   const sourceEntries = snapshot.entries.filter(
-    (entry) =>
-      entry.seq >= input.sourceFromSeq && entry.seq <= input.sourceThroughSeq,
+    (entry) => entry.seq >= input.sourceFromSeq && entry.seq <= input.sourceThroughSeq,
   );
   if (sourceEntries.length === 0) {
     throw new Error("Task checkpoint source range has no input facts");
@@ -214,9 +180,7 @@ export async function bindTaskCheckpointSourceV1(
   return {
     expectedTailSeq: snapshot.tailSeq,
     sourceInputHash,
-    ...(latestCheckpoint
-      ? { supersedesCheckpointId: latestCheckpoint.checkpointId }
-      : {}),
+    ...(latestCheckpoint ? { supersedesCheckpointId: latestCheckpoint.checkpointId } : {}),
     sourceEntries: sourceValue as unknown as readonly {
       readonly seq: number;
       readonly fact: InputFactV1;
@@ -224,9 +188,7 @@ export async function bindTaskCheckpointSourceV1(
   };
 }
 
-function assertSnapshotOrder(
-  snapshot: SessionInputSnapshot<InputFactV1>,
-): void {
+function assertSnapshotOrder(snapshot: SessionInputSnapshot<InputFactV1>): void {
   let previousSeq = 0;
   for (const entry of snapshot.entries) {
     if (entry.seq <= previousSeq || entry.seq > snapshot.tailSeq) {
@@ -234,17 +196,12 @@ function assertSnapshotOrder(
     }
     previousSeq = entry.seq;
   }
-  if (
-    snapshot.tailSeq < snapshot.latestInputSeq ||
-    snapshot.latestInputSeq !== previousSeq
-  ) {
+  if (snapshot.tailSeq < snapshot.latestInputSeq || snapshot.latestInputSeq !== previousSeq) {
     throw new Error("Task checkpoint snapshot metadata is inconsistent");
   }
 }
 
-function checkpointItems(
-  checkpoint: TaskCheckpointV1,
-): readonly TaskCheckpointItemV1[] {
+function checkpointItems(checkpoint: TaskCheckpointV1): readonly TaskCheckpointItemV1[] {
   return [
     ...(checkpoint.goal ? [checkpoint.goal] : []),
     ...checkpoint.confirmedFacts,
@@ -286,8 +243,6 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
     throw signal.reason instanceof Error
       ? signal.reason
-      : new Error(
-          String(signal.reason ?? "Task checkpoint generation aborted"),
-        );
+      : new Error(String(signal.reason ?? "Task checkpoint generation aborted"));
   }
 }

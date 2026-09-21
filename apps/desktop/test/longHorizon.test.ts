@@ -2,19 +2,14 @@ import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type {
-  ChatMessage,
-  LanguageModel,
-  ModelCompletionResult,
-} from "@paw/models";
+import type { ChatMessage, LanguageModel, ModelCompletionResult } from "@paw/models";
 import { DesktopNextControls } from "../agent-host/paw-next-controls.js";
 import { readDesktopMonitor, runDesktopNext } from "../agent-host/paw-next.js";
 
 setDefaultTimeout(60_000);
 const roots: string[] = [];
 afterEach(() => {
-  for (const root of roots.splice(0))
-    fs.rmSync(root, { recursive: true, force: true });
+  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 let sequence = 0;
 const final = (text: string): ModelCompletionResult => ({
@@ -22,10 +17,7 @@ const final = (text: string): ModelCompletionResult => ({
   nativeAssistantContent: text,
   finishReason: "stop",
 });
-const tool = (
-  name: string,
-  args: Record<string, unknown>,
-): ModelCompletionResult => ({
+const tool = (name: string, args: Record<string, unknown>): ModelCompletionResult => ({
   text: "",
   nativeAssistantContent: "",
   finishReason: "tool_calls",
@@ -98,8 +90,7 @@ Paw stage executor. Implement only the assigned file.
             }),
           );
         const file = text.includes("SECOND_STAGE") ? "two.txt" : "one.txt";
-        if (auditCalls % 2 === 1)
-          return tool("workspace_read_file", { path: file });
+        if (auditCalls % 2 === 1) return tool("workspace_read_file", { path: file });
         return final(
           JSON.stringify({
             completion: "complete",
@@ -120,9 +111,7 @@ Paw stage executor. Implement only the assigned file.
             content: "checked",
           });
         return final(
-          text.includes("SECOND_STAGE")
-            ? "Second stage done"
-            : "first-executor-trace-secret",
+          text.includes("SECOND_STAGE") ? "Second stage done" : "first-executor-trace-secret",
         );
       }
       managerCalls++;
@@ -159,26 +148,20 @@ Paw stage executor. Implement only the assigned file.
 
 test("long-task manager runs isolated stages, audits dependencies, and recovers without repeating execution", async () => {
   const f = fixture();
-  const result = await runDesktopNext(
-    "Create one.txt and two.txt containing checked",
-    f.options,
-  );
+  const result = await runDesktopNext("Create one.txt and two.txt containing checked", f.options);
   expect(JSON.parse(result.text)).toMatchObject({
     status: "completed",
     acceptance: "verified",
   });
   expect(fs.readFileSync(path.join(f.root, "two.txt"), "utf8")).toBe("checked");
-  const second = f.executorInputs.filter((text) =>
-    text.includes("SECOND_STAGE"),
-  );
+  const second = f.executorInputs.filter((text) => text.includes("SECOND_STAGE"));
   expect(second.length).toBe(2);
   // Only the bounded dependency result is shared; the first executor's tool trace is absent.
   expect(second[0]).not.toContain('"path":"one.txt","content":"checked"');
   expect(f.counts().auditCalls).toBe(6);
   expect(
-    readDesktopMonitor(f.root, "managed")?.tasks.filter(
-      (task) => task.audit?.status === "verified",
-    ).length,
+    readDesktopMonitor(f.root, "managed")?.tasks.filter((task) => task.audit?.status === "verified")
+      .length,
   ).toBe(2);
   const before = f.counts();
   await runDesktopNext("Create one.txt and two.txt containing checked", {
@@ -191,22 +174,15 @@ test("long-task manager runs isolated stages, audits dependencies, and recovers 
 
 test("unverified stage blocks dependent execution even when the executor claimed success", async () => {
   const f = fixture(true);
-  const result = await runDesktopNext(
-    "Create one.txt and two.txt containing checked",
-    f.options,
-  );
+  const result = await runDesktopNext("Create one.txt and two.txt containing checked", f.options);
   expect(JSON.parse(result.text)).toMatchObject({
     status: "incomplete",
     acceptance: "unverified",
   });
   expect(fs.existsSync(path.join(f.root, "two.txt"))).toBe(false);
-  expect(f.executorInputs.some((text) => text.includes("SECOND_STAGE"))).toBe(
-    false,
-  );
+  expect(f.executorInputs.some((text) => text.includes("SECOND_STAGE"))).toBe(false);
   expect(
-    readDesktopMonitor(f.root, "managed")?.tasks.some(
-      (task) => task.status === "blocked",
-    ),
+    readDesktopMonitor(f.root, "managed")?.tasks.some((task) => task.status === "blocked"),
   ).toBe(true);
 });
 
@@ -244,40 +220,32 @@ test("accepted live requirements stop the remaining old plan and reach the Manag
   });
   let held = false;
   const requests: string[] = [];
-  const running = runDesktopNext(
-    "Create one.txt and two.txt containing checked",
-    {
-      ...f.options,
-      controls,
-      model: {
-        ...f.model,
-        async complete(messages, options) {
-          const text = JSON.stringify(messages);
-          requests.push(text);
-          if (
-            !held &&
-            text.includes("Paw stage executor") &&
-            !text.includes("Paw environment auditor")
-          ) {
-            held = true;
-            enter();
-            await gate;
-          }
-          return f.model.complete(messages, options);
-        },
+  const running = runDesktopNext("Create one.txt and two.txt containing checked", {
+    ...f.options,
+    controls,
+    model: {
+      ...f.model,
+      async complete(messages, options) {
+        const text = JSON.stringify(messages);
+        requests.push(text);
+        if (
+          !held &&
+          text.includes("Paw stage executor") &&
+          !text.includes("Paw environment auditor")
+        ) {
+          held = true;
+          enter();
+          await gate;
+        }
+        return f.model.complete(messages, options);
       },
     },
-  );
+  });
   await entered;
   try {
-    expect(
-      (
-        await controls.submit(
-          "changed-goal",
-          "只保留 one.txt，不要创建 two.txt",
-        )
-      ).status,
-    ).toBe("accepted");
+    expect((await controls.submit("changed-goal", "只保留 one.txt，不要创建 two.txt")).status).toBe(
+      "accepted",
+    );
   } finally {
     release();
   }
@@ -285,9 +253,7 @@ test("accepted live requirements stop the remaining old plan and reach the Manag
   expect(fs.existsSync(path.join(f.root, "two.txt"))).toBe(false);
   expect(
     requests.some(
-      (text) =>
-        text.includes("Paw long-task Manager") &&
-        text.includes("只保留 one.txt"),
+      (text) => text.includes("Paw long-task Manager") && text.includes("只保留 one.txt"),
     ),
   ).toBe(true);
   expect(f.executorInputs.length).toBe(2);
@@ -299,82 +265,76 @@ test("Manager repairs an unverified stage using a fresh executor before final ac
   let rejected = false;
   let repairCalls = 0;
   const repairInputs: string[] = [];
-  const result = await runDesktopNext(
-    "Create one.txt and two.txt containing checked",
-    {
-      ...f.options,
-      model: {
-        ...f.model,
-        async complete(messages, options) {
-          const text = JSON.stringify(messages);
-          if (text.includes("Paw environment auditor")) {
-            const response = await f.model.complete(messages, options);
-            if (!rejected && response.finishReason === "stop") {
-              rejected = true;
-              return final(
-                JSON.stringify({
-                  completion: "incomplete",
-                  summary: "Needs a separate recheck",
-                  evidencePaths: ["one.txt"],
-                  unmetCriteria: ["Recheck the first stage before proceeding"],
-                }),
-              );
-            }
-            return response;
+  const result = await runDesktopNext("Create one.txt and two.txt containing checked", {
+    ...f.options,
+    model: {
+      ...f.model,
+      async complete(messages, options) {
+        const text = JSON.stringify(messages);
+        if (text.includes("Paw environment auditor")) {
+          const response = await f.model.complete(messages, options);
+          if (!rejected && response.finishReason === "stop") {
+            rejected = true;
+            return final(
+              JSON.stringify({
+                completion: "incomplete",
+                summary: "Needs a separate recheck",
+                evidencePaths: ["one.txt"],
+                unmetCriteria: ["Recheck the first stage before proceeding"],
+              }),
+            );
           }
-          if (text.includes("Paw stage executor")) {
-            if (
-              text.includes("FRESH_REPAIR") &&
-              !text.includes("SECOND_STAGE")
-            ) {
-              if (++repairCalls === 1) {
-                repairInputs.push(text);
-                return tool("workspace_read_file", { path: "one.txt" });
-              }
-              return final("Rechecked one.txt: it contains checked.");
+          return response;
+        }
+        if (text.includes("Paw stage executor")) {
+          if (text.includes("FRESH_REPAIR") && !text.includes("SECOND_STAGE")) {
+            if (++repairCalls === 1) {
+              repairInputs.push(text);
+              return tool("workspace_read_file", { path: "one.txt" });
             }
-            return f.model.complete(messages, options);
+            return final("Rechecked one.txt: it contains checked.");
           }
-          if (++rootCalls === 2)
-            return tool("workspace_delegate", {
-              goal: "Repair and finish",
-              kind: "implementation",
-              stage_links: [
-                {
-                  task_id: "repair",
-                  requires: [],
-                  replaces: readDesktopMonitor(f.root, "managed")?.tasks.find(
-                    (task) => task.name.includes("FIRST_STAGE"),
-                  )?.stageRef,
-                },
-              ],
-              tasks: [
-                {
-                  id: "repair",
-                  goal: "FRESH_REPAIR: recheck one.txt contains checked",
-                  kind: "implementation",
-                  agent_id: "writer",
-                  scope: ["one.txt"],
-                  acceptance: ["one.txt contains checked"],
-                  max_steps: 4,
-                },
-                {
-                  id: "next",
-                  goal: "SECOND_STAGE: create two.txt containing checked",
-                  kind: "implementation",
-                  agent_id: "writer",
-                  scope: ["two.txt"],
-                  acceptance: ["two.txt contains checked"],
-                  depends_on: ["repair"],
-                  max_steps: 4,
-                },
-              ],
-            });
           return f.model.complete(messages, options);
-        },
+        }
+        if (++rootCalls === 2)
+          return tool("workspace_delegate", {
+            goal: "Repair and finish",
+            kind: "implementation",
+            stage_links: [
+              {
+                task_id: "repair",
+                requires: [],
+                replaces: readDesktopMonitor(f.root, "managed")?.tasks.find((task) =>
+                  task.name.includes("FIRST_STAGE"),
+                )?.stageRef,
+              },
+            ],
+            tasks: [
+              {
+                id: "repair",
+                goal: "FRESH_REPAIR: recheck one.txt contains checked",
+                kind: "implementation",
+                agent_id: "writer",
+                scope: ["one.txt"],
+                acceptance: ["one.txt contains checked"],
+                max_steps: 4,
+              },
+              {
+                id: "next",
+                goal: "SECOND_STAGE: create two.txt containing checked",
+                kind: "implementation",
+                agent_id: "writer",
+                scope: ["two.txt"],
+                acceptance: ["two.txt contains checked"],
+                depends_on: ["repair"],
+                max_steps: 4,
+              },
+            ],
+          });
+        return f.model.complete(messages, options);
       },
     },
-  );
+  });
   expect(JSON.parse(result.text).acceptance).toBe("verified");
   expect(repairInputs.length).toBe(1);
   expect(repairCalls).toBe(2);
@@ -407,9 +367,7 @@ test("process death between verified stages resumes the outstanding mission with
   } finally {
     clearTimeout(timer);
   }
-  const line = (await stdout)
-    .split(/\r?\n/)
-    .find((line) => line.startsWith("FIXTURE "));
+  const line = (await stdout).split(/\r?\n/).find((line) => line.startsWith("FIXTURE "));
   if (!line) throw new Error(await stderr);
   const workspace: string = JSON.parse(line.slice(8));
   if (
@@ -422,42 +380,32 @@ test("process death between verified stages resumes the outstanding mission with
   const originalMtime = fs.statSync(path.join(workspace, "one.txt")).mtimeMs;
   expect(fs.existsSync(path.join(workspace, "two.txt"))).toBe(false);
   const now = () => Date.now() + 100_000;
-  const result = await runDesktopNext(
-    "Create one.txt and two.txt containing checked",
-    {
-      ...resume.options,
-      workspaceRoot: workspace,
-      intent: "recover",
-      leaseScheduler: {
-        now,
-        scheduleAt(deadline, task) {
-          const timer = setTimeout(task, Math.max(0, deadline - now()));
-          return { cancel: () => clearTimeout(timer) };
-        },
-      },
-      model: {
-        ...resume.model,
-        async complete(messages, options) {
-          const text = JSON.stringify(messages);
-          if (
-            text.includes("Paw environment auditor") ||
-            text.includes("Paw stage executor")
-          )
-            return resume.model.complete(messages, options);
-          return final("Recovered stages complete");
-        },
+  const result = await runDesktopNext("Create one.txt and two.txt containing checked", {
+    ...resume.options,
+    workspaceRoot: workspace,
+    intent: "recover",
+    leaseScheduler: {
+      now,
+      scheduleAt(deadline, task) {
+        const timer = setTimeout(task, Math.max(0, deadline - now()));
+        return { cancel: () => clearTimeout(timer) };
       },
     },
-  );
+    model: {
+      ...resume.model,
+      async complete(messages, options) {
+        const text = JSON.stringify(messages);
+        if (text.includes("Paw environment auditor") || text.includes("Paw stage executor"))
+          return resume.model.complete(messages, options);
+        return final("Recovered stages complete");
+      },
+    },
+  });
   expect(JSON.parse(result.text)).toMatchObject({
     status: "completed",
     acceptance: "verified",
   });
-  expect(fs.statSync(path.join(workspace, "one.txt")).mtimeMs).toBe(
-    originalMtime,
-  );
-  expect(fs.readFileSync(path.join(workspace, "two.txt"), "utf8")).toBe(
-    "checked",
-  );
+  expect(fs.statSync(path.join(workspace, "one.txt")).mtimeMs).toBe(originalMtime);
+  expect(fs.readFileSync(path.join(workspace, "two.txt"), "utf8")).toBe("checked");
   expect(resume.executorInputs.length).toBe(2);
 });

@@ -36,9 +36,7 @@ function object(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 function text(value: unknown, max = 500): value is string {
-  return (
-    typeof value === "string" && value.trim().length > 0 && value.length <= max
-  );
+  return typeof value === "string" && value.trim().length > 0 && value.length <= max;
 }
 function validate(input: unknown): asserts input is Update {
   const value = object(input);
@@ -51,16 +49,12 @@ function validate(input: unknown): asserts input is Update {
     value.add.length + value.updates.length > 32 ||
     !text(value.reason)
   )
-    throw new Error(
-      "Provide add, updates and a bounded reason; at most 32 changes",
-    );
+    throw new Error("Provide add, updates and a bounded reason; at most 32 changes");
   for (const raw of value.add) {
     const item = object(raw);
     if (
       !item ||
-      Object.keys(item).some(
-        (key) => !["text", "source", "ref"].includes(key),
-      ) ||
+      Object.keys(item).some((key) => !["text", "source", "ref"].includes(key)) ||
       !text(item.text, 300) ||
       typeof item.source !== "string" ||
       !["user", "repository", "verification"].includes(item.source) ||
@@ -73,15 +67,11 @@ function validate(input: unknown): asserts input is Update {
     const item = object(raw);
     if (
       !item ||
-      Object.keys(item).some(
-        (key) => !["id", "status", "evidence"].includes(key),
-      ) ||
+      Object.keys(item).some((key) => !["id", "status", "evidence"].includes(key)) ||
       !text(item.id, 100) ||
       ids.has(item.id) ||
       typeof item.status !== "string" ||
-      !["pending", "satisfied", "blocked", "superseded"].includes(
-        item.status,
-      ) ||
+      !["pending", "satisfied", "blocked", "superseded"].includes(item.status) ||
       (item.evidence !== undefined && !text(item.evidence)) ||
       (item.status === "satisfied" && !text(item.evidence))
     )
@@ -93,9 +83,7 @@ function validate(input: unknown): asserts input is Update {
 /** Reuses the legacy acceptance tool contract and harness adapter. Journal tool
  * settlement is the commit; no mutable second ledger or additional model call. */
 export function createDeliveryLedgerPluginV1(): RuntimeToolPluginV1 {
-  const original = toolDefinitions().find(
-    (item) => item.function.name === TOOL,
-  )!;
+  const original = toolDefinitions().find((item) => item.function.name === TOOL)!;
   const description =
     "Record observable deliverables and checks when a task needs them, including required entry points, configuration and documentation. Separate this from implementation todos. Add before implementing; update after observing evidence, not after every tool. For satisfied, evidence must be the exact callId of a current successful direct command or file read shown in Delivery State. Conditions and their coverage remain model claims, not independent acceptance.";
   return {
@@ -156,10 +144,7 @@ export function inspectDeliveryLedgerV1(
   payloadEvidence?: VerifiedCanonicalPayloadEvidenceV1,
 ) {
   const boundary = projectLatestWorkSegmentBoundaryV1(snapshot)?.markerSeq ?? 0;
-  const observed = new Map<
-    string,
-    { seq: number; fact: ToolCallObservedFactV1 }
-  >();
+  const observed = new Map<string, { seq: number; fact: ToolCallObservedFactV1 }>();
   let criteria: Criterion[] = [];
   let sourceThroughSeq = boundary;
   let latestMutationSeq = 0;
@@ -192,8 +177,7 @@ export function inspectDeliveryLedgerV1(
               callId: fact.callId,
             },
           });
-    const succeeded =
-      fact.status === "completed" && fact.observation?.isError === false;
+    const succeeded = fact.status === "completed" && fact.observation?.isError === false;
     if (call.fact.tool === TOOL) {
       pendingWrites--;
       if (succeeded) {
@@ -211,14 +195,9 @@ export function inspectDeliveryLedgerV1(
     const effect = projectWorkspaceEffect(call.fact.tool, payload, !succeeded);
     const uncertainFailure =
       !succeeded &&
-      /(?:write_file|edit_file|apply_patch|notebook_edit)$/.test(
-        call.fact.tool,
-      ) &&
+      /(?:write_file|edit_file|apply_patch|notebook_edit)$/.test(call.fact.tool) &&
       object(object(payload)?.workspaceEffect)?.changed === undefined;
-    if (
-      fact.status !== "rejected" &&
-      (effect.changed !== false || uncertainFailure)
-    )
+    if (fact.status !== "rejected" && (effect.changed !== false || uncertainFailure))
       latestMutationSeq = seq;
     const jobId = object(payload)?.jobId;
     if (/(?:job_start)$/.test(call.fact.tool) && typeof jobId === "string")
@@ -235,9 +214,7 @@ export function inspectDeliveryLedgerV1(
       args: call.fact.args,
       status: fact.status,
       summary: fact.observation?.summary ?? fact.status,
-      ...(fact.observation?.isError === undefined
-        ? {}
-        : { isError: fact.observation.isError }),
+      ...(fact.observation?.isError === undefined ? {} : { isError: fact.observation.isError }),
       ...(payload === undefined ? {} : { payload }),
     });
   }
@@ -247,16 +224,12 @@ export function inspectDeliveryLedgerV1(
   });
   const candidates = evidence
     .filter(
-      (item) =>
-        item.verificationKind !== "none" ||
-        /(?:read_file|run_shell)$/.test(item.tool),
+      (item) => item.verificationKind !== "none" || /(?:read_file|run_shell)$/.test(item.tool),
     )
     .map((item) => {
-      if (!/(?:run_shell)$/.test(item.tool) || item.verificationKind !== "none")
-        return item;
+      if (!/(?:run_shell)$/.test(item.tool) || item.verificationKind !== "none") return item;
       const command = object(item.args)?.command;
-      const chain =
-        typeof command === "string" ? parseCommandChain(command) : null;
+      const chain = typeof command === "string" ? parseCommandChain(command) : null;
       return chain?.length && exitStatusProvesVerification(chain, 0)
         ? item
         : { ...item, outcome: "indeterminate" as const };
@@ -264,9 +237,7 @@ export function inspectDeliveryLedgerV1(
   const targetKey = (item: (typeof candidates)[number]) => {
     const args = object(item.args);
     const command =
-      typeof args?.command === "string"
-        ? args.command.replace(/\s+/gu, " ").trim()
-        : "";
+      typeof args?.command === "string" ? args.command.replace(/\s+/gu, " ").trim() : "";
     const target =
       item.verificationTarget ??
       (/(?:run_shell)$/.test(item.tool) ? `command:${command}` : "readback");
@@ -280,13 +251,9 @@ export function inspectDeliveryLedgerV1(
       item.verificationKind === "none" ? args?.path : undefined,
     ]);
   };
-  const newest = new Map(
-    candidates.map((item) => [targetKey(item), item.callId]),
-  );
+  const newest = new Map(candidates.map((item) => [targetKey(item), item.callId]));
   const references = candidates.map((item) =>
-    newest.get(targetKey(item)) === item.callId
-      ? item
-      : { ...item, afterLatestMutation: false },
+    newest.get(targetKey(item)) === item.callId ? item : { ...item, afterLatestMutation: false },
   );
   function readiness(criterion: Criterion): string {
     if (criterion.status !== "satisfied") return criterion.status;
@@ -316,16 +283,13 @@ export function createDeliveryLedgerServiceV1(
         validate(input);
         const { snapshot, evidence } = await read();
         const current = inspectDeliveryLedgerV1(snapshot, evidence);
-        if (current.pendingWrites > 1)
-          throw new Error("Only one acceptance_update per tool batch");
+        if (current.pendingWrites > 1) throw new Error("Only one acceptance_update per tool batch");
         const criteria = structuredClone(current.criteria);
         for (const update of input.updates) {
           const item = criteria.find((item) => item.id === update.id);
           if (!item) throw new Error(`Unknown criterion ${update.id}`);
           if (update.status === "satisfied") {
-            const proof = current.references.find(
-              (item) => item.callId === update.evidence,
-            );
+            const proof = current.references.find((item) => item.callId === update.evidence);
             if (
               !proof ||
               proof.outcome !== "passed" ||
@@ -333,8 +297,7 @@ export function createDeliveryLedgerServiceV1(
               (proof.verificationKind === "none" &&
                 proof.observedOutput?.kind !== "file_read" &&
                 !/(?:run_shell)$/.test(proof.tool)) ||
-              ((proof.verificationKind !== "none" ||
-                /(?:run_shell)$/.test(proof.tool)) &&
+              ((proof.verificationKind !== "none" || /(?:run_shell)$/.test(proof.tool)) &&
                 proof.exitCode !== 0)
             )
               throw new Error(
@@ -343,13 +306,13 @@ export function createDeliveryLedgerServiceV1(
           }
           item.status = update.status;
           if (update.evidence) item.evidence = update.evidence;
+          // biome-ignore lint/performance/noDelete: delete removes the key; assigning undefined would add it to Object.keys and emit "evidence":undefined in the canonical ledger encoding
           else delete item.evidence;
         }
         for (const item of input.add) {
           if (
             criteria.some(
-              (existing) =>
-                existing.text.toLowerCase() === item.text.trim().toLowerCase(),
+              (existing) => existing.text.toLowerCase() === item.text.trim().toLowerCase(),
             )
           )
             continue;
@@ -391,15 +354,13 @@ export function projectDeliveryLedgerV1(
     ...item,
     readiness: state.readiness(item),
   }));
-  const references = state.references
-    .slice(-5)
-    .map((item) => ({
-      callId: item.callId,
-      target: item.verificationTarget ?? item.args,
-      outcome: item.outcome,
-      fresh: item.afterLatestMutation,
-      exitCode: item.exitCode,
-    }));
+  const references = state.references.slice(-5).map((item) => ({
+    callId: item.callId,
+    target: item.verificationTarget ?? item.args,
+    outcome: item.outcome,
+    fresh: item.afterLatestMutation,
+    exitCode: item.exitCode,
+  }));
   const payload = {
     items,
     omittedItems: 0,
@@ -411,9 +372,7 @@ export function projectDeliveryLedgerV1(
   // Prioritize unresolved conditions; deterministic bounded JSON, with counts.
   payload.items.sort(
     (a, b) =>
-      Number(
-        a.readiness === "evidence_linked" || a.readiness === "superseded",
-      ) -
+      Number(a.readiness === "evidence_linked" || a.readiness === "superseded") -
       Number(b.readiness === "evidence_linked" || b.readiness === "superseded"),
   );
   while ((header + JSON.stringify(payload)).length > 6000) {

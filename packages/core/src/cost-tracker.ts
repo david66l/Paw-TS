@@ -297,11 +297,7 @@ export class CostTracker {
 
   /** 记录单次模型调用产生的用量 */
   record(modelLabel: string, usage: UsageRecord): void {
-    const { cost, currency } = estimateUsageCost(
-      modelLabel,
-      usage,
-      this.pricing,
-    );
+    const { cost, currency } = estimateUsageCost(modelLabel, usage, this.pricing);
     this.totalCost += cost;
     this.costCurrency = currency; // 以最后一次调用的货币类型为准（假设同一次运行用同一货币）
     if (usage.promptTokens) {
@@ -324,8 +320,7 @@ export class CostTracker {
   snapshot(): CostSnapshot {
     const totalTokens = this.promptTokens + this.completionTokens;
     const estimatedCost = Math.round(this.totalCost * 1_000_000) / 1_000_000;
-    const cacheHitRate =
-      this.promptTokens === 0 ? 0 : this.cachedPromptTokens / this.promptTokens;
+    const cacheHitRate = this.promptTokens === 0 ? 0 : this.cachedPromptTokens / this.promptTokens;
     return {
       promptTokens: this.promptTokens,
       completionTokens: this.completionTokens,

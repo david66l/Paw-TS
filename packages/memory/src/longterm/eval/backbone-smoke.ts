@@ -102,8 +102,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-05",
     description: "服务配置管理",
     goal: "建立服务配置管理方式",
-    trajectory:
-      "创建环境变量模板文件，配置模块负责加载环境变量，真实值不提交到仓库",
+    trajectory: "创建环境变量模板文件，配置模块负责加载环境变量，真实值不提交到仓库",
     query: "项目的配置模块放在哪里管理？",
     keywords: ["配置", "环境变量", "模板"],
   },
@@ -111,8 +110,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-06",
     description: "缓存穿透修复",
     goal: "修复接口缓存穿透导致数据库压力过大的问题",
-    trajectory:
-      "接口反复穿透缓存导致数据库报错，添加负缓存并设置短过期时间后数据库压力恢复稳定",
+    trajectory: "接口反复穿透缓存导致数据库报错，添加负缓存并设置短过期时间后数据库压力恢复稳定",
     query: "缓存穿透导致数据库报错怎么办？",
     keywords: ["缓存", "穿透", "数据库"],
   },
@@ -120,8 +118,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-07",
     description: "连接池耗尽排查",
     goal: "排查服务连接池耗尽问题",
-    trajectory:
-      "连接池报错耗尽，检查发现存在泄漏的事务未释放，修复后连接池恢复正常",
+    trajectory: "连接池报错耗尽，检查发现存在泄漏的事务未释放，修复后连接池恢复正常",
     query: "连接池耗尽怎么排查？",
     keywords: ["连接池", "事务", "泄漏"],
   },
@@ -129,8 +126,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-08",
     description: "构建产物陈旧",
     goal: "解决增量构建产物陈旧问题",
-    trajectory:
-      "增量构建产物内容陈旧导致输出不一致，清空构建缓存后重新构建，产物输出一致",
+    trajectory: "增量构建产物内容陈旧导致输出不一致，清空构建缓存后重新构建，产物输出一致",
     query: "构建产物不一致怎么排查？",
     keywords: ["构建", "缓存", "产物"],
   },
@@ -138,8 +134,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-09",
     description: "日志占满磁盘",
     goal: "处理日志轮转占满磁盘的问题",
-    trajectory:
-      "日志轮转保留过期日志导致磁盘被打满，调整保留窗口后磁盘占用恢复稳定",
+    trajectory: "日志轮转保留过期日志导致磁盘被打满，调整保留窗口后磁盘占用恢复稳定",
     query: "日志轮转保留过期日志打满磁盘怎么处理？",
     keywords: ["日志轮转", "磁盘"],
   },
@@ -147,8 +142,7 @@ export const SMOKE_FIXTURES: SmokeFixture[] = [
     id: "smoke-10",
     description: "队列积压缓解",
     goal: "缓解消息队列积压问题",
-    trajectory:
-      "消费者处理速度跟不上导致队列积压报错，扩容消费者后积压逐渐消化恢复正常",
+    trajectory: "消费者处理速度跟不上导致队列积压报错，扩容消费者后积压逐渐消化恢复正常",
     query: "消息队列积压怎么缓解？",
     keywords: ["队列", "积压", "消费者"],
   },
@@ -203,9 +197,7 @@ export interface SmokeSummary {
 }
 
 /** 纯函数：汇总冒烟指标与达标判定 */
-export function summarizeSmoke(
-  items: readonly SmokeItemResult[],
-): SmokeSummary {
+export function summarizeSmoke(items: readonly SmokeItemResult[]): SmokeSummary {
   const total = items.length;
   const written = items.filter((i) => i.status === "written");
   const degraded = items.filter((i) => i.status === "degraded");
@@ -216,8 +208,7 @@ export function summarizeSmoke(
     written.length + degraded.length > 0
       ? degraded.length / (written.length + degraded.length)
       : null;
-  const degradedPathOk =
-    degraded.length > 0 ? degraded.every((i) => i.memoryIds.length > 0) : true;
+  const degradedPathOk = degraded.length > 0 ? degraded.every((i) => i.memoryIds.length > 0) : true;
 
   const passed =
     total === 0 || unverifiedRatio === null
@@ -467,9 +458,7 @@ export async function runBackboneSmoke(
           verdict: { kind: "test", passed: true }, // 走验证门控 → consolidate
         });
       } catch (e) {
-        warnings.push(
-          `${f.id}: 写入抛错 ${e instanceof Error ? e.message : String(e)}`,
-        );
+        warnings.push(`${f.id}: 写入抛错 ${e instanceof Error ? e.message : String(e)}`);
         items.push({
           fixtureId: f.id,
           status: "noop",

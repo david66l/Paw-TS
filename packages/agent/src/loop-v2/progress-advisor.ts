@@ -6,8 +6,7 @@ import type {
   WorkingDecisionStateV2,
 } from "./schema.js";
 
-export const PROGRESS_ADVISOR_POLICY_VERSION =
-  "paw-progress-advisor-v2" as const;
+export const PROGRESS_ADVISOR_POLICY_VERSION = "paw-progress-advisor-v2" as const;
 
 export interface ProgressAdvisorConfigV2 {
   readonly policyVersion: typeof PROGRESS_ADVISOR_POLICY_VERSION;
@@ -34,11 +33,8 @@ export interface ProgressAdvisorResultV2 {
   readonly advice: readonly PolicyAdviceV2[];
 }
 
-export function createProgressAdvisorStateV2(
-  runId: string,
-): ProgressAdvisorStateV2 {
-  if (!runId.trim())
-    throw new Error("Progress advisor runId must not be empty");
+export function createProgressAdvisorStateV2(runId: string): ProgressAdvisorStateV2 {
+  if (!runId.trim()) throw new Error("Progress advisor runId must not be empty");
   return {
     policyVersion: PROGRESS_ADVISOR_POLICY_VERSION,
     runId,
@@ -70,23 +66,13 @@ export function advanceProgressAdvisorV2(
       count: repeat?.key === key ? repeat.count + 1 : 1,
     };
     if (config.repeatThresholds.includes(repeat.count)) {
-      advice.push(
-        repeatAdvice(
-          repeat.tool,
-          repeat.count,
-          recentEvidenceRefs(decisionState),
-        ),
-      );
+      advice.push(repeatAdvice(repeat.tool, repeat.count, recentEvidenceRefs(decisionState)));
     }
   }
 
   const meaningful = cycle.deltas.some((delta) => delta.meaningful);
-  const consecutiveNoDeltaCycles = meaningful
-    ? 0
-    : prior.consecutiveNoDeltaCycles + 1;
-  const evidenceRefs = unique(
-    cycle.deltas.flatMap((delta) => delta.evidenceAdded),
-  );
+  const consecutiveNoDeltaCycles = meaningful ? 0 : prior.consecutiveNoDeltaCycles + 1;
+  const evidenceRefs = unique(cycle.deltas.flatMap((delta) => delta.evidenceAdded));
   const noDeltaAdvice = stallAdvice(
     consecutiveNoDeltaCycles,
     decisionState,
@@ -139,15 +125,12 @@ function stallAdvice(
   }
   if (count === thresholds.changeHypothesis) {
     const active = Object.values(state.hypotheses).find(
-      (hypothesis) =>
-        hypothesis.status === "candidate" || hypothesis.status === "supported",
+      (hypothesis) => hypothesis.status === "candidate" || hypothesis.status === "supported",
     );
     return {
       kind: "hypothesis_stale",
       priority: "urgent",
-      evidenceRefs: active
-        ? unique([...active.supports, ...active.contradicts])
-        : evidenceRefs,
+      evidenceRefs: active ? unique([...active.supports, ...active.contradicts]) : evidenceRefs,
       message: active
         ? `The active hypothesis (${active.id}) has not produced progress. Change or reject it and perform a different falsifying action.`
         : "No active hypothesis has produced progress. Record a falsifiable hypothesis and take a materially different action.",
@@ -175,19 +158,13 @@ function validateInputs(
   config: ProgressAdvisorConfigV2,
 ): void {
   if (prior.policyVersion !== PROGRESS_ADVISOR_POLICY_VERSION) {
-    throw new Error(
-      `Unsupported progress advisor policy: ${prior.policyVersion}`,
-    );
+    throw new Error(`Unsupported progress advisor policy: ${prior.policyVersion}`);
   }
   if (prior.runId !== state.runId) {
-    throw new Error(
-      `Progress advisor run mismatch: ${prior.runId} != ${state.runId}`,
-    );
+    throw new Error(`Progress advisor run mismatch: ${prior.runId} != ${state.runId}`);
   }
   if (config.policyVersion !== PROGRESS_ADVISOR_POLICY_VERSION) {
-    throw new Error(
-      `Unsupported progress advisor config: ${config.policyVersion}`,
-    );
+    throw new Error(`Unsupported progress advisor config: ${config.policyVersion}`);
   }
   const expectedCycle = prior.lastCycle + 1;
   if (!Number.isSafeInteger(cycle.cycle) || cycle.cycle !== expectedCycle) {
@@ -210,12 +187,9 @@ function validateInputs(
         (index > 0 && value <= (repeat[index - 1] ?? 0)),
     )
   ) {
-    throw new Error(
-      "Progress advisor repeat thresholds must strictly increase",
-    );
+    throw new Error("Progress advisor repeat thresholds must strictly increase");
   }
-  const { inspectGap, changeHypothesis, safetyWarning } =
-    config.noDeltaThresholds;
+  const { inspectGap, changeHypothesis, safetyWarning } = config.noDeltaThresholds;
   if (
     !Number.isSafeInteger(inspectGap) ||
     !Number.isSafeInteger(changeHypothesis) ||
@@ -224,9 +198,7 @@ function validateInputs(
     changeHypothesis <= inspectGap ||
     safetyWarning <= changeHypothesis
   ) {
-    throw new Error(
-      "Progress advisor no-delta thresholds must strictly increase",
-    );
+    throw new Error("Progress advisor no-delta thresholds must strictly increase");
   }
 }
 
@@ -238,8 +210,7 @@ function recentEvidenceRefs(state: WorkingDecisionStateV2): readonly string[] {
   return Object.values(state.evidence)
     .sort(
       (left, right) =>
-        right.lastObservedSeq - left.lastObservedSeq ||
-        left.id.localeCompare(right.id),
+        right.lastObservedSeq - left.lastObservedSeq || left.id.localeCompare(right.id),
     )
     .slice(0, 3)
     .map((record) => record.id);

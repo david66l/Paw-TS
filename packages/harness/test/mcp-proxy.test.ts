@@ -19,9 +19,7 @@ function fakeMcp(
     listTools: () => tools,
     parseToolId: (id: string) => {
       const match = /^mcp:([^/]+)\/([^/]+)$/.exec(id);
-      return match?.[1] && match[2]
-        ? { serverName: match[1], toolName: match[2] }
-        : null;
+      return match?.[1] && match[2] ? { serverName: match[1], toolName: match[2] } : null;
     },
     isMcpTool: (id: string) => id.startsWith("mcp:"),
     callTool: async (
@@ -72,14 +70,10 @@ describe("stable MCP proxy", () => {
     expect(toolCatalogText(one)).toBe(toolCatalogText(two));
     expect(listToolNames(one)).toEqual(listToolNames(two));
     expect(
-      toolDefinitions(one).filter(
-        (definition) => definition.function.name === "workspace_use_mcp",
-      ),
+      toolDefinitions(one).filter((definition) => definition.function.name === "workspace_use_mcp"),
     ).toHaveLength(1);
     expect(
-      toolDefinitions(one).some((definition) =>
-        definition.function.name.startsWith("mcp:"),
-      ),
+      toolDefinitions(one).some((definition) => definition.function.name.startsWith("mcp:")),
     ).toBe(false);
     expect(toolCatalogText(one)).not.toContain("search_code");
   });
@@ -163,12 +157,8 @@ describe("stable MCP proxy", () => {
   });
 
   test("search is approval-free while invocation remains approval-gated", () => {
-    expect(
-      toolRequiresApproval(MCP_PROXY, undefined, { action: "search" }),
-    ).toBe(false);
-    expect(toolRequiresApproval(MCP_PROXY, undefined, { action: "call" })).toBe(
-      true,
-    );
+    expect(toolRequiresApproval(MCP_PROXY, undefined, { action: "search" })).toBe(false);
+    expect(toolRequiresApproval(MCP_PROXY, undefined, { action: "call" })).toBe(true);
   });
 
   test("an omitted allowlist fails closed even when a manager is connected", async () => {

@@ -2,15 +2,8 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createCompletionReviewEvidencePacketV1 } from "@paw/completion-review";
 import { projectCanonicalSessionInputSnapshotV1 } from "@paw/runtime";
-import {
-  admittedMemorySourceSeqs,
-  memoryUserStatement,
-} from "./audited-memory.js";
-import {
-  BROWSER_CHECK,
-  createBrowserCheckPlugin,
-  runBrowserCheck,
-} from "./browser-check.js";
+import { admittedMemorySourceSeqs, memoryUserStatement } from "./audited-memory.js";
+import { BROWSER_CHECK, createBrowserCheckPlugin, runBrowserCheck } from "./browser-check.js";
 import { mergeChildPermissionRules } from "./child-permissions.js";
 import {
   DELIVERY_LEDGER_PLUGIN_V1,
@@ -25,10 +18,7 @@ import {
   fingerprintAuditFile,
   projectEnvironmentAcceptance,
 } from "./environment-audit.js";
-import {
-  type ExecutionDeadlineV1,
-  withExecutionBudgetInputV1,
-} from "./execution-budget.js";
+import { type ExecutionDeadlineV1, withExecutionBudgetInputV1 } from "./execution-budget.js";
 import {
   createLongHorizonCollaborationPlugin,
   createManagerStageLauncher,
@@ -43,10 +33,7 @@ import {
   stageResultEvidence,
   withStageLedger,
 } from "./stage-graph.js";
-import {
-  createVisualBrowserCheck,
-  verifyVisualEvidence,
-} from "./visual-check.js";
+import { createVisualBrowserCheck, verifyVisualEvidence } from "./visual-check.js";
 import { projectPawWorkingStateV1 } from "./working-state.js";
 
 import {
@@ -367,9 +354,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are Paw, a coding agent working in the user's
 Inspect relevant files before editing. Use the provided tools for repository actions. Keep changes scoped to the request, run proportionate checks, and finish with a concise factual handoff.`;
 
 export interface PawNextLiveInputV1 {
-  accept(
-    request: import("@paw/runtime").AcceptInputRequestV1,
-  ): Promise<AcceptInputResultV1>;
+  accept(request: import("@paw/runtime").AcceptInputRequestV1): Promise<AcceptInputResultV1>;
 }
 export interface PawNextChildControlV1 {
   readonly id: string;
@@ -462,9 +447,7 @@ export interface RunFreshPawNextTaskOptionsV1 {
    */
   readonly thinkingRecovery?: PawNextThinkingRecoveryPolicyV1 | false;
   /** Process-local thinking-recovery telemetry; excluded from durable identity. */
-  readonly onThinkingRecoveryEvent?: (
-    event: PawNextThinkingRecoveryTelemetryV1,
-  ) => void;
+  readonly onThinkingRecoveryEvent?: (event: PawNextThinkingRecoveryTelemetryV1) => void;
   /**
    * Opt-in phase-aware reasoning effort (default off): planning calls run at
    * the policy's planning effort, execution calls at the execution effort.
@@ -515,21 +498,13 @@ export interface RunFreshPawNextTaskOptionsV1 {
   /** Process-local, content-free memory writer telemetry. */
   readonly onMemoryWriterEvent?: (event: MemoryWriterEventV1) => void;
   /** Process-local, content-free memory topic organizer telemetry. */
-  readonly onMemoryTopicOrganizerEvent?: (
-    event: MemoryTopicOrganizerEventV1,
-  ) => void;
+  readonly onMemoryTopicOrganizerEvent?: (event: MemoryTopicOrganizerEventV1) => void;
   /** Process-local, content-free L2 dossier projection telemetry. */
-  readonly onMemoryTopicDossierProjectorEvent?: (
-    event: MemoryTopicDossierProjectorEventV1,
-  ) => void;
-  readonly onMemoryTopicEvidenceEvent?: (
-    event: MemoryTopicEvidenceEventV1,
-  ) => void;
+  readonly onMemoryTopicDossierProjectorEvent?: (event: MemoryTopicDossierProjectorEventV1) => void;
+  readonly onMemoryTopicEvidenceEvent?: (event: MemoryTopicEvidenceEventV1) => void;
   readonly onMemoryPersonaEvent?: (event: MemoryPersonaEventV1) => void;
   readonly onMemoryRawEvidenceEvent?: (event: MemoryRawEvidenceEventV1) => void;
-  readonly onMemoryEvidenceCoverageEvent?: (
-    event: MemoryEvidenceCoverageEventV1,
-  ) => void;
+  readonly onMemoryEvidenceCoverageEvent?: (event: MemoryEvidenceCoverageEventV1) => void;
   /** Process-local, content-free progressive memory tool telemetry. */
   readonly onMemoryToolEvent?: (event: MemoryToolEventV1) => void;
   /** Process-local implementation; its public identity is frozen in memory.reranker. */
@@ -688,9 +663,7 @@ export function preparePawNextProductRuntimeV1(
 export function preparePawNextProductRuntimeIdentityV3(
   options: RunFreshPawNextTaskOptionsV1,
 ): PreparedPawNextProductRuntimeV1 {
-  const collaborationRoster = loadPawNextCollaborationRosterV1(
-    options.workspaceRoot,
-  );
+  const collaborationRoster = loadPawNextCollaborationRosterV1(options.workspaceRoot);
   return preparePawNextProductRuntimeCoreV1(
     options,
     undefined,
@@ -727,9 +700,7 @@ interface PawNextRuntimeExtensionsV1 {
    * stayed reasoning-only past 360 s.
    */
   readonly thinkingRecovery?: PawNextThinkingRecoveryPolicyV1;
-  readonly builtinTools?: NonNullable<
-    Parameters<typeof createFrozenToolRegistryV1>[0]
-  >["tools"];
+  readonly builtinTools?: NonNullable<Parameters<typeof createFrozenToolRegistryV1>[0]>["tools"];
   readonly foundationPlugins?: readonly RuntimeToolPluginV1[];
   readonly childBoundary?: CollaborationChildBoundaryV1;
   readonly toolWorkspaceRoot?: string;
@@ -766,13 +737,12 @@ export interface PawNextPhaseEffortPolicyV1 {
   readonly planningCalls: number;
 }
 
-export const PAW_NEXT_PHASE_EFFORT_POLICY_V1: PawNextPhaseEffortPolicyV1 =
-  Object.freeze({
-    policyVersion: "paw.next.phase-effort.v1:max1:high",
-    planningEffort: "max",
-    executionEffort: "high",
-    planningCalls: 1,
-  });
+export const PAW_NEXT_PHASE_EFFORT_POLICY_V1: PawNextPhaseEffortPolicyV1 = Object.freeze({
+  policyVersion: "paw.next.phase-effort.v1:max1:high",
+  planningEffort: "max",
+  executionEffort: "high",
+  planningCalls: 1,
+});
 
 /** Process-local phase-effort telemetry; excluded from durable identity. */
 export interface PawNextPhaseEffortTelemetryV1 {
@@ -780,12 +750,11 @@ export interface PawNextPhaseEffortTelemetryV1 {
   readonly event: PhaseEffortEvent;
 }
 
-export const PAW_NEXT_THINKING_RECOVERY_POLICY_V1: PawNextThinkingRecoveryPolicyV1 =
-  Object.freeze({
-    policyVersion: "paw.next.thinking-recovery.v1:noaction540000:recoveries2",
-    noActionMs: 540_000,
-    maxRecoveries: 2,
-  });
+export const PAW_NEXT_THINKING_RECOVERY_POLICY_V1: PawNextThinkingRecoveryPolicyV1 = Object.freeze({
+  policyVersion: "paw.next.thinking-recovery.v1:noaction540000:recoveries2",
+  noActionMs: 540_000,
+  maxRecoveries: 2,
+});
 
 /** Process-local thinking-recovery telemetry; excluded from durable identity. */
 export interface PawNextThinkingRecoveryTelemetryV1 {
@@ -803,15 +772,12 @@ function preparePawNextProductRuntimeCoreV1(
   const heartbeatPolicy = freezeSessionLeaseHeartbeatPolicyV1(
     options.heartbeatPolicy ?? DEFAULT_SESSION_LEASE_HEARTBEAT_POLICY_V1,
   );
-  const leaseScheduler =
-    options.leaseScheduler ?? WALL_CLOCK_SESSION_LEASE_SCHEDULER_V1;
+  const leaseScheduler = options.leaseScheduler ?? WALL_CLOCK_SESSION_LEASE_SCHEDULER_V1;
   assertLeaseScheduler(leaseScheduler);
   const protocol = resolveProviderProtocol(options);
   const costTracker = options.costTracker ?? new CostTracker();
   const registry = createFrozenToolRegistryV1({
-    ...(extensions?.builtinTools === undefined
-      ? {}
-      : { tools: extensions.builtinTools }),
+    ...(extensions?.builtinTools === undefined ? {} : { tools: extensions.builtinTools }),
     plugins: [
       ...(extensions?.foundationPlugins ?? [
         createWorkspaceInspectionToolPluginV2(),
@@ -840,21 +806,16 @@ function preparePawNextProductRuntimeCoreV1(
   };
   const systemPrompt = options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
   const contextWindowTokens =
-    options.contextWindowTokens ??
-    options.model.capabilities?.contextWindow ??
-    128_000;
+    options.contextWindowTokens ?? options.model.capabilities?.contextWindow ?? 128_000;
   const reservedOutputTokens =
     options.reservedOutputTokens ??
     resolveModelOutputLimit(options.model.capabilities?.maxOutputTokens);
   const estimationMarginTokens = options.estimationMarginTokens ?? 1_024;
-  const estimatorSource =
-    options.estimator ?? resolveEstimatorForModel(options.model.label);
+  const estimatorSource = options.estimator ?? resolveEstimatorForModel(options.model.label);
   const estimator = toContextEstimator(estimatorSource);
   const estimatorId =
-    options.estimatorId ??
-    (options.estimator ? undefined : `core:${options.model.label}`);
-  const estimatorVersion =
-    options.estimatorVersion ?? (options.estimator ? undefined : "v1");
+    options.estimatorId ?? (options.estimator ? undefined : `core:${options.model.label}`);
+  const estimatorVersion = options.estimatorVersion ?? (options.estimator ? undefined : "v1");
   if (!estimatorId?.trim() || !estimatorVersion?.trim()) {
     throw new Error(
       "An injected context estimator requires stable estimatorId and estimatorVersion",
@@ -886,14 +847,9 @@ function preparePawNextProductRuntimeCoreV1(
           thinkingEnabled: options.model.runtimeProfile.thinkingEnabled,
         }),
   });
-  const reducer = withRuntimeActivityControlV1(
-    createInteractiveControlReducerV1(),
-  );
+  const reducer = withRuntimeActivityControlV1(createInteractiveControlReducerV1());
   reducer.reduce([], runConfig);
-  const facts = createProductFactMapper<
-    InteractiveControlConfigV1,
-    InteractiveControlStateV1
-  >({
+  const facts = createProductFactMapper<InteractiveControlConfigV1, InteractiveControlStateV1>({
     protocol,
     encode: inlineStore.encode,
   });
@@ -925,25 +881,20 @@ function preparePawNextProductRuntimeCoreV1(
           planningEffort: options.phaseEffort.planningEffort,
           executionEffort: options.phaseEffort.executionEffort,
           planningCalls: options.phaseEffort.planningCalls,
-          onEvent: (event) =>
-            options.onPhaseEffortEvent?.({ runId: options.runId, event }),
+          onEvent: (event) => options.onPhaseEffortEvent?.({ runId: options.runId, event }),
         });
   const untrackedBaseModel = createAgentLoopModelAdapter(
     phaseModel,
     options.transport ?? "complete",
-    extensions?.recoverTruncatedModelOutput
-      ? MODEL_REQUEST_SUPERVISION_V1
-      : undefined,
+    extensions?.recoverTruncatedModelOutput ? MODEL_REQUEST_SUPERVISION_V1 : undefined,
   );
   const baseModel: typeof untrackedBaseModel = Object.freeze({
     async execute(
       request: Parameters<typeof untrackedBaseModel.execute>[0],
       callOptions: Parameters<typeof untrackedBaseModel.execute>[1],
     ) {
-      const settlement = await withModelObservationScope(
-        options.runId,
-        "agent_loop",
-        () => untrackedBaseModel.execute(request, callOptions),
+      const settlement = await withModelObservationScope(options.runId, "agent_loop", () =>
+        untrackedBaseModel.execute(request, callOptions),
       );
       if ("message" in settlement && settlement.message?.usage !== undefined) {
         costTracker.record(options.model.label, settlement.message.usage);
@@ -973,8 +924,7 @@ function preparePawNextProductRuntimeCoreV1(
       })
     : baseModel;
   const manifest = createPawNextProductManifestV1({
-    toolEffectCheckpointPolicyVersion:
-      PAW_TOOL_EFFECT_CHECKPOINT_POLICY_VERSION_V1,
+    toolEffectCheckpointPolicyVersion: PAW_TOOL_EFFECT_CHECKPOINT_POLICY_VERSION_V1,
     reducerVersion: INTERACTIVE_CONTROL_REDUCER_VERSION_V1,
     runConfig,
     model: options.model.label,
@@ -995,9 +945,7 @@ function preparePawNextProductRuntimeCoreV1(
     modelRuntimeProfile: options.model.runtimeProfile ?? null,
     modelCapabilities: options.model.capabilities ?? null,
     sessionLeaseHeartbeat: heartbeatPolicy,
-    ...(options.profileIdentity === undefined
-      ? {}
-      : { profileIdentity: options.profileIdentity }),
+    ...(options.profileIdentity === undefined ? {} : { profileIdentity: options.profileIdentity }),
     ...(options.credentialBindingHash === undefined
       ? {}
       : { credentialBindingHash: options.credentialBindingHash }),
@@ -1033,8 +981,7 @@ export function classifyPawNextExistingPrefixV1(
   input: ClassifyPawNextExistingPrefixInputV1,
 ): PawNextExistingPrefixClassificationV1 {
   const prepared = preparePawNextProductRuntimeV1(input.options);
-  return inspectExistingProductPrefix(input.prefix, input.options, prepared)
-    .classification;
+  return inspectExistingProductPrefix(input.prefix, input.options, prepared).classification;
 }
 
 /** Strict read-only V2 classification; it never acquires a lease or writer. */
@@ -1047,9 +994,7 @@ export async function classifyPawNextExistingPrefixV2(
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     },
     async () => {
-      throw new Error(
-        "Paw Next V2 classification Context must not load payload evidence",
-      );
+      throw new Error("Paw Next V2 classification Context must not load payload evidence");
     },
   );
   const payloads = createPawNextPayloadReadBundleV2({
@@ -1079,9 +1024,7 @@ export async function classifyPawNextExistingPrefixV3(
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     },
     async () => {
-      throw new Error(
-        "Paw Next V3 classification Context must not load payload evidence",
-      );
+      throw new Error("Paw Next V3 classification Context must not load payload evidence");
     },
   );
   const payloads = createPawNextPayloadReadBundleV2({
@@ -1117,9 +1060,7 @@ export async function runFreshPawNextTaskV1(
     runId: options.runId,
   });
   if (commitIndex.head.tailSeq !== 0) {
-    throw new Error(
-      "runFreshPawNextTaskV1 only accepts a new empty run journal",
-    );
+    throw new Error("runFreshPawNextTaskV1 only accepts a new empty run journal");
   }
   return withFencedPawNextSessionV1(
     options,
@@ -1129,9 +1070,7 @@ export async function runFreshPawNextTaskV1(
     async (session, executionSignal, registerCoordinator, registerCleanup) => {
       const initial = await session.readInputSnapshot();
       if (initial.tailSeq !== 0) {
-        throw new Error(
-          "runFreshPawNextTaskV1 only accepts a new empty run journal",
-        );
+        throw new Error("runFreshPawNextTaskV1 only accepts a new empty run journal");
       }
       const inbox = new DurableInputInboxV1(session);
       const managedJobs = createRuntimeManagedJobs(options, session, [], () =>
@@ -1151,14 +1090,10 @@ export async function runFreshPawNextTaskV1(
         context: {
           workspaceRoot: options.workspaceRoot,
           managedJobs,
-          ...(options.shellSandbox
-            ? { shellSandbox: options.shellSandbox }
-            : {}),
+          ...(options.shellSandbox ? { shellSandbox: options.shellSandbox } : {}),
         },
         checkpointSequence: new MonotonicCheckpointSequenceV1(),
-        ...(options.requestApproval
-          ? { requestApproval: options.requestApproval }
-          : {}),
+        ...(options.requestApproval ? { requestApproval: options.requestApproval } : {}),
       });
       let finalState: InteractiveControlStateV1 | undefined;
       const dependencies = createProductLoopDependencies({
@@ -1168,21 +1103,19 @@ export async function runFreshPawNextTaskV1(
         inbox,
         tools,
       });
-      const activeCoordinator =
-        new SessionCoordinatorV1<InteractiveControlStateV1>({
-          sessionKey: `${options.sessionId}:${options.runId}`,
-          inbox,
-          async execute() {
-            const state = await runAgentLoop(dependencies, {
-              signal: executionSignal,
-            });
-            finalState = state;
-            return state;
-          },
-          shouldAwaitExternal: (state) =>
-            state.decision.kind === "await_external",
-          signal: executionSignal,
-        });
+      const activeCoordinator = new SessionCoordinatorV1<InteractiveControlStateV1>({
+        sessionKey: `${options.sessionId}:${options.runId}`,
+        inbox,
+        async execute() {
+          const state = await runAgentLoop(dependencies, {
+            signal: executionSignal,
+          });
+          finalState = state;
+          return state;
+        },
+        shouldAwaitExternal: (state) => state.decision.kind === "await_external",
+        signal: executionSignal,
+      });
       registerCoordinator(activeCoordinator);
       await session.appendInputFacts([
         {
@@ -1199,14 +1132,11 @@ export async function runFreshPawNextTaskV1(
         },
       ]);
       await activeCoordinator.wake();
-      if (!finalState)
-        throw new Error("Paw Next run produced no control state");
+      if (!finalState) throw new Error("Paw Next run produced no control state");
       const settled = await session.readInputSnapshot();
       return {
         state: finalState,
-        assistantText: latestAssistantText(
-          settled.entries.map((item) => item.fact),
-        ),
+        assistantText: latestAssistantText(settled.entries.map((item) => item.fact)),
         inputFacts: settled.entries.map((item) => item.fact),
         tailSeq: settled.tailSeq,
       };
@@ -1271,20 +1201,12 @@ export interface RunFreshPawNextTaskInputV3 {
   readonly onMemoryCacheEvent?: (event: MemoryRetrievalCacheEventV1) => void;
   readonly onStageGraph?: (graph: StageGraphSnapshot) => void;
   readonly onMemoryWriterEvent?: (event: MemoryWriterEventV1) => void;
-  readonly onMemoryTopicOrganizerEvent?: (
-    event: MemoryTopicOrganizerEventV1,
-  ) => void;
-  readonly onMemoryTopicDossierProjectorEvent?: (
-    event: MemoryTopicDossierProjectorEventV1,
-  ) => void;
-  readonly onMemoryTopicEvidenceEvent?: (
-    event: MemoryTopicEvidenceEventV1,
-  ) => void;
+  readonly onMemoryTopicOrganizerEvent?: (event: MemoryTopicOrganizerEventV1) => void;
+  readonly onMemoryTopicDossierProjectorEvent?: (event: MemoryTopicDossierProjectorEventV1) => void;
+  readonly onMemoryTopicEvidenceEvent?: (event: MemoryTopicEvidenceEventV1) => void;
   readonly onMemoryPersonaEvent?: (event: MemoryPersonaEventV1) => void;
   readonly onMemoryRawEvidenceEvent?: (event: MemoryRawEvidenceEventV1) => void;
-  readonly onMemoryEvidenceCoverageEvent?: (
-    event: MemoryEvidenceCoverageEventV1,
-  ) => void;
+  readonly onMemoryEvidenceCoverageEvent?: (event: MemoryEvidenceCoverageEventV1) => void;
   readonly onMemoryToolEvent?: (event: MemoryToolEventV1) => void;
   readonly memoryReranker?: MemoryRerankerV1;
   readonly memoryProvider?: MemoryProviderV1;
@@ -1300,8 +1222,7 @@ export interface RunFreshPawNextTaskInputV3 {
 
 export type RunExistingPawNextTaskInputV3 = RunFreshPawNextTaskInputV3;
 
-export interface RunExistingPawNextWorkSegmentInputV3
-  extends RunExistingPawNextTaskInputV3 {
+export interface RunExistingPawNextWorkSegmentInputV3 extends RunExistingPawNextTaskInputV3 {
   readonly work: Readonly<{
     inputId: string;
     callerId: string;
@@ -1368,9 +1289,7 @@ export async function runFreshPawNextTaskV2(
     publishPayloadBundle(bundle) {
       payloadBundle = bundle;
     },
-    ...(input.onInboxReady === undefined
-      ? {}
-      : { onInboxReady: input.onInboxReady }),
+    ...(input.onInboxReady === undefined ? {} : { onInboxReady: input.onInboxReady }),
   });
 }
 
@@ -1394,9 +1313,7 @@ export async function runFreshPawNextTaskV3(
     publishPayloadBundle(bundle) {
       payloadBundle = bundle;
     },
-    ...(input.onInboxReady === undefined
-      ? {}
-      : { onInboxReady: input.onInboxReady }),
+    ...(input.onInboxReady === undefined ? {} : { onInboxReady: input.onInboxReady }),
     openNextQueuedWorkSegment: (context) =>
       openNextPawNextV3WorkSegmentV1({
         ...context,
@@ -1409,9 +1326,7 @@ export async function runFreshPawNextTaskV3(
 
 function preparePawNextProductRuntimeV2(
   input: RunFreshPawNextTaskInputV2,
-  loadPayloadEvidence: NonNullable<
-    JournalContextOptionsV1["loadPayloadEvidence"]
-  >,
+  loadPayloadEvidence: NonNullable<JournalContextOptionsV1["loadPayloadEvidence"]>,
 ): {
   readonly options: RunFreshPawNextTaskOptionsV1;
   readonly taskOptions: PawNextTaskProfileOptionsV2;
@@ -1426,9 +1341,7 @@ function preparePawNextProductRuntimeV2(
     throw new Error("Paw Next V2 product resolution is invalid");
   }
   const task = input.resolution.taskOptions;
-  const payloadRuntime = freezeFileDurableJsonPayloadRuntimePolicyV1(
-    task.payloadRuntime,
-  );
+  const payloadRuntime = freezeFileDurableJsonPayloadRuntimePolicyV1(task.payloadRuntime);
   const options: RunFreshPawNextTaskOptionsV1 = Object.freeze({
     workspaceRoot: task.workspaceRoot,
     sessionId: task.sessionId,
@@ -1450,16 +1363,10 @@ function preparePawNextProductRuntimeV2(
     estimatorId: task.estimatorId,
     estimatorVersion: task.estimatorVersion,
     heartbeatPolicy: task.heartbeatPolicy,
-    ...(task.shellSandbox === undefined
-      ? {}
-      : { shellSandbox: task.shellSandbox }),
+    ...(task.shellSandbox === undefined ? {} : { shellSandbox: task.shellSandbox }),
     ...(input.signal === undefined ? {} : { signal: input.signal }),
-    ...(input.costTracker === undefined
-      ? {}
-      : { costTracker: input.costTracker }),
-    ...(input.leaseScheduler === undefined
-      ? {}
-      : { leaseScheduler: input.leaseScheduler }),
+    ...(input.costTracker === undefined ? {} : { costTracker: input.costTracker }),
+    ...(input.leaseScheduler === undefined ? {} : { leaseScheduler: input.leaseScheduler }),
     ...(input.onModelStreamEvent === undefined
       ? {}
       : { onModelStreamEvent: input.onModelStreamEvent }),
@@ -1469,8 +1376,7 @@ function preparePawNextProductRuntimeV2(
   });
   const core = preparePawNextProductRuntimeCoreV1(options, loadPayloadEvidence);
   const manifest = createPawNextProductManifestV2({
-    toolEffectCheckpointPolicyVersion:
-      core.manifest.toolEffectCheckpointPolicyVersion,
+    toolEffectCheckpointPolicyVersion: core.manifest.toolEffectCheckpointPolicyVersion,
     reducerVersion: core.manifest.reducerVersion,
     runConfig: core.manifest.runConfig,
     model: core.manifest.model,
@@ -1493,8 +1399,7 @@ function preparePawNextProductRuntimeV2(
   if (
     configHash !== input.resolution.configHash ||
     input.resolution.profile.configHash !== configHash ||
-    hashCanonicalJsonV1(manifest) !==
-      hashCanonicalJsonV1(input.resolution.manifest) ||
+    hashCanonicalJsonV1(manifest) !== hashCanonicalJsonV1(input.resolution.manifest) ||
     hashCanonicalJsonV1(task.payloadRuntime) !==
       hashCanonicalJsonV1(input.resolution.profile.payloadRuntime) ||
     task.profileIdentity.profileId !== input.resolution.profile.profileId ||
@@ -1536,9 +1441,7 @@ interface PreparedPawNextProductRuntimeV3 {
     rawEvidenceArchive?: MemoryRawEvidenceArchiveV1;
     contextResolver?: MemoryContextResolverV1;
     onTopicEvidenceEvent?: (event: MemoryTopicEvidenceEventV1) => void;
-    onTopicDossierProjectorEvent?: (
-      event: MemoryTopicDossierProjectorEventV1,
-    ) => void;
+    onTopicDossierProjectorEvent?: (event: MemoryTopicDossierProjectorEventV1) => void;
     onPersonaEvent?: (event: MemoryPersonaEventV1) => void;
     onRawEvidenceEvent?: (event: MemoryRawEvidenceEventV1) => void;
     onEvidenceCoverageEvent?: (event: MemoryEvidenceCoverageEventV1) => void;
@@ -1548,9 +1451,7 @@ interface PreparedPawNextProductRuntimeV3 {
 
 function preparePawNextProductRuntimeV3(
   input: RunFreshPawNextTaskInputV3,
-  loadPayloadEvidence: NonNullable<
-    JournalContextOptionsV1["loadPayloadEvidence"]
-  >,
+  loadPayloadEvidence: NonNullable<JournalContextOptionsV1["loadPayloadEvidence"]>,
 ): PreparedPawNextProductRuntimeV3 {
   if (
     !input.resolution ||
@@ -1560,34 +1461,22 @@ function preparePawNextProductRuntimeV3(
     throw new Error("Paw Next V3 product resolution is invalid");
   }
   const task = input.resolution.taskOptions;
-  const collaborationRoster = loadPawNextCollaborationRosterV1(
-    task.workspaceRoot,
-  );
-  const payloadRuntime = freezeFileDurableJsonPayloadRuntimePolicyV1(
-    task.payloadRuntime,
-  );
+  const collaborationRoster = loadPawNextCollaborationRosterV1(task.workspaceRoot);
+  const payloadRuntime = freezeFileDurableJsonPayloadRuntimePolicyV1(task.payloadRuntime);
   const runConfig: InteractiveControlConfigV2 = Object.freeze({
-    ...(task.recoverReasoningTimeout
-      ? { recoverReasoningTimeout: true as const }
-      : {}),
+    ...(task.recoverReasoningTimeout ? { recoverReasoningTimeout: true as const } : {}),
     mode: "interactive",
     maxModelTurns: task.maxModelTurns,
     naturalStop: task.naturalStop,
     ...(task.liveSteering ? { liveSteering: true as const } : {}),
-    ...(task.settleFinalToolBatch
-      ? { settleFinalToolBatch: true as const }
-      : {}),
+    ...(task.settleFinalToolBatch ? { settleFinalToolBatch: true as const } : {}),
     maxSegments: task.maxSegments,
     maxTotalModelTurns: task.maxTotalModelTurns,
   });
-  const reducer = withRuntimeActivityControlV1(
-    createInteractiveControlReducerV2(),
-  );
+  const reducer = withRuntimeActivityControlV1(createInteractiveControlReducerV2());
   reducer.reduce([], runConfig);
   const options: RunFreshPawNextTaskOptionsV1 = Object.freeze({
-    ...(input.executionDeadline
-      ? { executionDeadline: input.executionDeadline }
-      : {}),
+    ...(input.executionDeadline ? { executionDeadline: input.executionDeadline } : {}),
     onChildResult: input.onChildResult,
     onManagedJobsReady: input.onManagedJobsReady,
     onManagedJobUpdate: input.onManagedJobUpdate,
@@ -1595,28 +1484,16 @@ function preparePawNextProductRuntimeV3(
     ...(input.deferMemory ? { deferMemory: input.deferMemory } : {}),
     onLiveInputReady: input.onLiveInputReady,
     onChildControl: input.onChildControl,
-    ...(input.requestApproval
-      ? { requestApproval: input.requestApproval }
-      : {}),
-    ...(input.onContextBudget
-      ? { onContextBudget: input.onContextBudget }
-      : {}),
-    ...(input.onJournalCommit
-      ? { onJournalCommit: input.onJournalCommit }
-      : {}),
+    ...(input.requestApproval ? { requestApproval: input.requestApproval } : {}),
+    ...(input.onContextBudget ? { onContextBudget: input.onContextBudget } : {}),
+    ...(input.onJournalCommit ? { onJournalCommit: input.onJournalCommit } : {}),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(task.environmentAuditRetry
-      ? { environmentAuditRetry: true as const }
-      : {}),
-    ...(task.environmentAuditSinglePass
-      ? { environmentAuditSinglePass: true as const }
-      : {}),
+    ...(task.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
+    ...(task.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
     ...(task.environmentAuditEvidenceRepair
       ? { environmentAuditEvidenceRepair: true as const }
       : {}),
-    ...(task.compactMutationReceipts
-      ? { compactMutationReceipts: true as const }
-      : {}),
+    ...(task.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
     ...(task.deliveryLedger ? { deliveryLedger: true as const } : {}),
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.legacyOutputRecall ? { legacyOutputRecall: true as const } : {}),
@@ -1630,9 +1507,7 @@ function preparePawNextProductRuntimeV3(
     inputId: task.inputId,
     goal: task.goal,
     model: task.model,
-    ...(task.collaborationModels
-      ? { collaborationModels: task.collaborationModels }
-      : {}),
+    ...(task.collaborationModels ? { collaborationModels: task.collaborationModels } : {}),
     profileIdentity: task.profileIdentity,
     credentialBindingHash: task.credentialBindingHash,
     providerProtocol: task.providerProtocol,
@@ -1647,18 +1522,12 @@ function preparePawNextProductRuntimeV3(
     estimatorId: task.estimatorId,
     estimatorVersion: task.estimatorVersion,
     heartbeatPolicy: task.heartbeatPolicy,
-    ...(task.shellSandbox === undefined
-      ? {}
-      : { shellSandbox: task.shellSandbox }),
+    ...(task.shellSandbox === undefined ? {} : { shellSandbox: task.shellSandbox }),
     ...(task.mcp === undefined ? {} : { mcp: task.mcp }),
     ...(task.memory === undefined ? {} : { memory: task.memory }),
     ...(input.signal === undefined ? {} : { signal: input.signal }),
-    ...(input.costTracker === undefined
-      ? {}
-      : { costTracker: input.costTracker }),
-    ...(input.leaseScheduler === undefined
-      ? {}
-      : { leaseScheduler: input.leaseScheduler }),
+    ...(input.costTracker === undefined ? {} : { costTracker: input.costTracker }),
+    ...(input.leaseScheduler === undefined ? {} : { leaseScheduler: input.leaseScheduler }),
     ...(input.onModelStreamEvent === undefined
       ? {}
       : { onModelStreamEvent: input.onModelStreamEvent }),
@@ -1667,15 +1536,11 @@ function preparePawNextProductRuntimeV3(
       : { onModelSettlement: input.onModelSettlement }),
     // Mechanism-matrix experiment seams must survive this allowlist, or the
     // benchmark arms silently degrade to defaults on the V3 product path.
-    ...(input.thinkingRecovery === undefined
-      ? {}
-      : { thinkingRecovery: input.thinkingRecovery }),
+    ...(input.thinkingRecovery === undefined ? {} : { thinkingRecovery: input.thinkingRecovery }),
     ...(input.onThinkingRecoveryEvent === undefined
       ? {}
       : { onThinkingRecoveryEvent: input.onThinkingRecoveryEvent }),
-    ...(input.phaseEffort === undefined
-      ? {}
-      : { phaseEffort: input.phaseEffort }),
+    ...(input.phaseEffort === undefined ? {} : { phaseEffort: input.phaseEffort }),
     ...(input.onPhaseEffortEvent === undefined
       ? {}
       : { onPhaseEffortEvent: input.onPhaseEffortEvent }),
@@ -1685,12 +1550,9 @@ function preparePawNextProductRuntimeV3(
     ...(input.contextCompactionTriggerRatioBasisPoints === undefined
       ? {}
       : {
-          contextCompactionTriggerRatioBasisPoints:
-            input.contextCompactionTriggerRatioBasisPoints,
+          contextCompactionTriggerRatioBasisPoints: input.contextCompactionTriggerRatioBasisPoints,
         }),
-    ...(input.outputMasking === undefined
-      ? {}
-      : { outputMasking: input.outputMasking }),
+    ...(input.outputMasking === undefined ? {} : { outputMasking: input.outputMasking }),
     ...(input.outputMaskingThresholdChars === undefined
       ? {}
       : { outputMaskingThresholdChars: input.outputMaskingThresholdChars }),
@@ -1710,8 +1572,7 @@ function preparePawNextProductRuntimeV3(
     ...(input.onMemoryTopicDossierProjectorEvent === undefined
       ? {}
       : {
-          onMemoryTopicDossierProjectorEvent:
-            input.onMemoryTopicDossierProjectorEvent,
+          onMemoryTopicDossierProjectorEvent: input.onMemoryTopicDossierProjectorEvent,
         }),
     ...(input.onMemoryTopicEvidenceEvent === undefined
       ? {}
@@ -1730,15 +1591,9 @@ function preparePawNextProductRuntimeV3(
     ...(input.onMemoryToolEvent === undefined
       ? {}
       : { onMemoryToolEvent: input.onMemoryToolEvent }),
-    ...(input.memoryReranker === undefined
-      ? {}
-      : { memoryReranker: input.memoryReranker }),
-    ...(input.memoryProvider === undefined
-      ? {}
-      : { memoryProvider: input.memoryProvider }),
-    ...(input.memoryEmbedding === undefined
-      ? {}
-      : { memoryEmbedding: input.memoryEmbedding }),
+    ...(input.memoryReranker === undefined ? {} : { memoryReranker: input.memoryReranker }),
+    ...(input.memoryProvider === undefined ? {} : { memoryProvider: input.memoryProvider }),
+    ...(input.memoryEmbedding === undefined ? {} : { memoryEmbedding: input.memoryEmbedding }),
     ...(input.memoryWriterStore === undefined
       ? {}
       : { memoryWriterStore: input.memoryWriterStore }),
@@ -1779,8 +1634,7 @@ function preparePawNextProductRuntimeV3(
     ),
   );
   const manifest = createPawNextProductManifestV3({
-    toolEffectCheckpointPolicyVersion:
-      core.manifest.toolEffectCheckpointPolicyVersion,
+    toolEffectCheckpointPolicyVersion: core.manifest.toolEffectCheckpointPolicyVersion,
     runConfig,
     workSegmentPolicyVersion: task.workSegmentPolicyVersion,
     model: core.manifest.model,
@@ -1800,18 +1654,12 @@ function preparePawNextProductRuntimeV3(
     payloadRuntime,
     ...(task.memory === undefined ? {} : { memory: task.memory }),
     ...(task.environmentAudit ? { environmentAudit: true as const } : {}),
-    ...(task.environmentAuditRetry
-      ? { environmentAuditRetry: true as const }
-      : {}),
-    ...(task.environmentAuditSinglePass
-      ? { environmentAuditSinglePass: true as const }
-      : {}),
+    ...(task.environmentAuditRetry ? { environmentAuditRetry: true as const } : {}),
+    ...(task.environmentAuditSinglePass ? { environmentAuditSinglePass: true as const } : {}),
     ...(task.environmentAuditEvidenceRepair
       ? { environmentAuditEvidenceRepair: true as const }
       : {}),
-    ...(task.compactMutationReceipts
-      ? { compactMutationReceipts: true as const }
-      : {}),
+    ...(task.compactMutationReceipts ? { compactMutationReceipts: true as const } : {}),
     ...(task.auditedMemory ? { auditedMemory: true as const } : {}),
     ...(task.stageGraph ? { stageGraph: true as const } : {}),
     ...(task.browserAudit ? { browserAudit: true as const } : {}),
@@ -1822,8 +1670,7 @@ function preparePawNextProductRuntimeV3(
   if (
     configHash !== input.resolution.configHash ||
     input.resolution.profile.configHash !== configHash ||
-    hashCanonicalJsonV1(manifest) !==
-      hashCanonicalJsonV1(input.resolution.manifest) ||
+    hashCanonicalJsonV1(manifest) !== hashCanonicalJsonV1(input.resolution.manifest) ||
     hashCanonicalJsonV1(task.payloadRuntime) !==
       hashCanonicalJsonV1(input.resolution.profile.payloadRuntime) ||
     task.profileIdentity.profileId !== input.resolution.profile.profileId ||
@@ -1837,10 +1684,7 @@ function preparePawNextProductRuntimeV3(
     maxSegments: runConfig.maxSegments,
     maxTotalModelTurns: runConfig.maxTotalModelTurns,
   });
-  const facts = createProductFactMapper<
-    InteractiveControlConfigV2,
-    InteractiveControlStateV2
-  >({
+  const facts = createProductFactMapper<InteractiveControlConfigV2, InteractiveControlStateV2>({
     protocol: core.protocol,
     encode: createInlineDurableJsonStore().encode,
   });
@@ -1853,18 +1697,14 @@ function preparePawNextProductRuntimeV3(
             ? {
                 provider:
                   options.memoryProvider ??
-                  (task.memory.providerVersion ===
-                    PAW_NEXT_MEMORY_RRF_PROVIDER_VERSION_V1 ||
-                  task.memory.providerVersion ===
-                    PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1
+                  (task.memory.providerVersion === PAW_NEXT_MEMORY_RRF_PROVIDER_VERSION_V1 ||
+                  task.memory.providerVersion === PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1
                     ? createPawNextMemoryRrfPostgresProviderV1(
                         task.memory,
                         options.onMemoryCacheEvent === undefined
                           ? undefined
                           : { onEvent: options.onMemoryCacheEvent },
-                        task.memory.embedding
-                          ? { embedding: options.memoryEmbedding! }
-                          : undefined,
+                        task.memory.embedding ? { embedding: options.memoryEmbedding! } : undefined,
                         task.memory.providerVersion ===
                           PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1
                           ? options.memoryReranker
@@ -1902,8 +1742,7 @@ function preparePawNextProductRuntimeV3(
                 ...(options.onMemoryTopicDossierProjectorEvent === undefined
                   ? {}
                   : {
-                      onTopicDossierProjectorEvent:
-                        options.onMemoryTopicDossierProjectorEvent,
+                      onTopicDossierProjectorEvent: options.onMemoryTopicDossierProjectorEvent,
                     }),
               }
             : {}),
@@ -1945,8 +1784,7 @@ function preparePawNextProductRuntimeV3(
                 ...(options.onMemoryEvidenceCoverageEvent === undefined
                   ? {}
                   : {
-                      onEvidenceCoverageEvent:
-                        options.onMemoryEvidenceCoverageEvent,
+                      onEvidenceCoverageEvent: options.onMemoryEvidenceCoverageEvent,
                     }),
               }
             : {}),
@@ -1964,10 +1802,8 @@ function preparePawNextProductRuntimeV3(
   });
 }
 
-interface PawNextProductLoopRuntimeV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
-> extends Pick<
+interface PawNextProductLoopRuntimeV1<TRunConfig, TControlState extends LoopControlState>
+  extends Pick<
     PreparedPawNextProductRuntimeV1,
     | "signal"
     | "heartbeatPolicy"
@@ -2016,9 +1852,7 @@ interface PawNextProductLoopRuntimeV1<
     rawEvidenceArchive?: MemoryRawEvidenceArchiveV1;
     contextResolver?: MemoryContextResolverV1;
     onTopicEvidenceEvent?: (event: MemoryTopicEvidenceEventV1) => void;
-    onTopicDossierProjectorEvent?: (
-      event: MemoryTopicDossierProjectorEventV1,
-    ) => void;
+    onTopicDossierProjectorEvent?: (event: MemoryTopicDossierProjectorEventV1) => void;
     onPersonaEvent?: (event: MemoryPersonaEventV1) => void;
     onRawEvidenceEvent?: (event: MemoryRawEvidenceEventV1) => void;
     onEvidenceCoverageEvent?: (event: MemoryEvidenceCoverageEventV1) => void;
@@ -2028,10 +1862,7 @@ interface PawNextProductLoopRuntimeV1<
 
 function productLoopRuntimeV1(
   prepared: PreparedPawNextProductRuntimeV1,
-): PawNextProductLoopRuntimeV1<
-  InteractiveControlConfigV1,
-  InteractiveControlStateV1
-> {
+): PawNextProductLoopRuntimeV1<InteractiveControlConfigV1, InteractiveControlStateV1> {
   return Object.freeze({
     signal: prepared.signal,
     heartbeatPolicy: prepared.heartbeatPolicy,
@@ -2056,10 +1887,7 @@ function productLoopRuntimeV1(
 
 function productLoopRuntimeV3(
   prepared: PreparedPawNextProductRuntimeV3,
-): PawNextProductLoopRuntimeV1<
-  InteractiveControlConfigV2,
-  InteractiveControlStateV2
-> {
+): PawNextProductLoopRuntimeV1<InteractiveControlConfigV2, InteractiveControlStateV2> {
   const cacheStableContext = createPawNextV3CacheStableContextV1(
     prepared.core.context,
     prepared.runConfig,
@@ -2174,10 +2002,7 @@ function createPawNextV3RuntimeActivityEvidenceV1(
   section: ModelContextSectionV1,
   snapshot: SessionInputSnapshot<InputFactV1>,
 ) {
-  const content = compactBoundCollaborationActivityContentV1(
-    section.content,
-    snapshot,
-  );
+  const content = compactBoundCollaborationActivityContentV1(section.content, snapshot);
   return Object.freeze({
     role: "user" as const,
     content: [
@@ -2209,24 +2034,18 @@ function compactBoundCollaborationActivityContentV1(
   }
   const observedTools = new Map(
     snapshot.entries.flatMap(({ fact }) =>
-      fact.type === "tool.call_observed"
-        ? [[fact.callId, fact.tool] as const]
-        : [],
+      fact.type === "tool.call_observed" ? [[fact.callId, fact.tool] as const] : [],
     ),
   );
   const settledCalls = new Set(
-    snapshot.entries.flatMap(({ fact }) =>
-      fact.type === "tool.settled" ? [fact.callId] : [],
-    ),
+    snapshot.entries.flatMap(({ fact }) => (fact.type === "tool.settled" ? [fact.callId] : [])),
   );
   let compacted = false;
   const activities = parsed.activities.map((activity) => {
     if (!isJsonRecordV1(activity)) return activity;
     const metadata = activity.metadata;
     const callId =
-      metadata !== undefined &&
-      isJsonRecordV1(metadata) &&
-      typeof metadata.callId === "string"
+      metadata !== undefined && isJsonRecordV1(metadata) && typeof metadata.callId === "string"
         ? metadata.callId
         : undefined;
     const tool = callId === undefined ? undefined : observedTools.get(callId);
@@ -2241,14 +2060,10 @@ function compactBoundCollaborationActivityContentV1(
     }
     compacted = true;
     return {
-      ...(activity.activityId === undefined
-        ? {}
-        : { activityId: activity.activityId }),
+      ...(activity.activityId === undefined ? {} : { activityId: activity.activityId }),
       activityKind: activity.activityKind,
       ...(activity.status === undefined ? {} : { status: activity.status }),
-      ...(typeof activity.settledAt === "number"
-        ? { settledAt: activity.settledAt }
-        : {}),
+      ...(typeof activity.settledAt === "number" ? { settledAt: activity.settledAt } : {}),
       detailSource: "bound_tool_result",
       toolCallId: callId,
     } satisfies JsonValue;
@@ -2288,11 +2103,8 @@ function pawNextV3ExtensionsV1(
       outputMaskingThresholdChars,
     );
   }
-  if (!roster)
-    throw new Error("Root extensions require a collaboration roster");
-  const recallPolicy = outputRecallPolicyForThresholdV1(
-    outputMaskingThresholdChars,
-  );
+  if (!roster) throw new Error("Root extensions require a collaboration roster");
+  const recallPolicy = outputRecallPolicyForThresholdV1(outputMaskingThresholdChars);
   if (longHorizon === "manager")
     return Object.freeze({
       recoverTruncatedModelOutput: true,
@@ -2343,9 +2155,7 @@ function pawNextV3ExtensionsV1(
       ? {}
       : {
           toolObservationProjector: createOutputRecallProjectorV1({
-            ...(compactMutationReceipts
-              ? { compactMutationReceipts: true }
-              : {}),
+            ...(compactMutationReceipts ? { compactMutationReceipts: true } : {}),
             ...(recallPolicy === undefined ? {} : { policy: recallPolicy }),
           }),
         }),
@@ -2382,28 +2192,16 @@ function pawNextV3ChildExtensionsV1(
       (mayMutate ||
         (tool !== EDIT &&
           tool !== WRITE &&
-          (mayExecute ||
-            (tool !== SHELL && tool !== JOB_START && tool !== JOB_KILL)))),
+          (mayExecute || (tool !== SHELL && tool !== JOB_START && tool !== JOB_KILL)))),
   );
   const foundationPlugins = [
-    restrictRuntimeToolPluginV1(
-      createWorkspaceInspectionToolPluginV2(),
-      permits,
-    ),
+    restrictRuntimeToolPluginV1(createWorkspaceInspectionToolPluginV2(), permits),
     ...(mayMutate
-      ? [
-          restrictRuntimeToolPluginV1(
-            createWorkspaceMutationToolPluginV1(),
-            permits,
-          ),
-        ]
+      ? [restrictRuntimeToolPluginV1(createWorkspaceMutationToolPluginV1(), permits)]
       : []),
     restrictRuntimeToolPluginV1(createCodeIntelligenceToolPluginV1(), permits),
   ].filter((plugin): plugin is RuntimeToolPluginV1 => plugin !== undefined);
-  const web = restrictRuntimeToolPluginV1(
-    createWebAccessToolPluginV1(),
-    permits,
-  );
+  const web = restrictRuntimeToolPluginV1(createWebAccessToolPluginV1(), permits);
   const childBoundary = createCollaborationChildBoundaryV1({
     agent,
     sandboxedShell: shellSandbox !== undefined && shellSandbox.mode !== "off",
@@ -2425,9 +2223,7 @@ function pawNextV3ChildExtensionsV1(
         legacyOutputRecall ? { legacyWorkspaceResource: true } : undefined,
       ),
       ...(web ? [web] : []),
-      ...(auditBrowser && permits(BROWSER_CHECK)
-        ? [createBrowserCheckPlugin()]
-        : []),
+      ...(auditBrowser && permits(BROWSER_CHECK) ? [createBrowserCheckPlugin()] : []),
     ]),
     ...(outputMasking === false
       ? {}
@@ -2436,9 +2232,7 @@ function pawNextV3ChildExtensionsV1(
             outputMaskingThresholdChars === undefined
               ? undefined
               : {
-                  policy: outputRecallPolicyForThresholdV1(
-                    outputMaskingThresholdChars,
-                  ),
+                  policy: outputRecallPolicyForThresholdV1(outputMaskingThresholdChars),
                 },
           ),
         }),
@@ -2462,21 +2256,13 @@ function childShellSandboxV1(
   parent: ShellSandboxConfig | undefined,
   isolatedWorktree: boolean,
 ): ShellSandboxConfig | undefined {
-  if (
-    agent.effect !== "execute" ||
-    isolatedWorktree ||
-    !parent ||
-    parent.mode === "off"
-  ) {
+  if (agent.effect !== "execute" || isolatedWorktree || !parent || parent.mode === "off") {
     return parent;
   }
   return Object.freeze({ ...parent, workspaceReadOnly: true });
 }
 
-function childSoftModelTurnsV1(
-  value: unknown,
-  hardMaxModelTurns: number,
-): number | undefined {
+function childSoftModelTurnsV1(value: unknown, hardMaxModelTurns: number): number | undefined {
   return Number.isSafeInteger(value) &&
     (value as number) > 0 &&
     (value as number) < hardMaxModelTurns
@@ -2490,9 +2276,7 @@ function childSoftModelTurnsV1(
  * cap remains `maxModelTurns`, so replay and mission cost accounting stay
  * stable; a stalled child stops at the next checkpoint.
  */
-function createSoftRenewingChildReducerV1(): ReturnType<
-  typeof createInteractiveControlReducerV2
-> {
+function createSoftRenewingChildReducerV1(): ReturnType<typeof createInteractiveControlReducerV2> {
   const delegate = createInteractiveControlReducerV2();
   return Object.freeze({
     reduce(
@@ -2538,9 +2322,7 @@ function latestChildToolBatchSettledV1(facts: readonly InputFactV1[]): boolean {
   }
   if (modelIndex < 0) return false;
   const tail = facts.slice(modelIndex + 1);
-  const calls = tail.flatMap((fact) =>
-    fact.type === "tool.call_observed" ? [fact.callId] : [],
-  );
+  const calls = tail.flatMap((fact) => (fact.type === "tool.call_observed" ? [fact.callId] : []));
   if (calls.length === 0) return false;
   const settled = new Set(
     tail.flatMap((fact) => (fact.type === "tool.settled" ? [fact.callId] : [])),
@@ -2548,14 +2330,10 @@ function latestChildToolBatchSettledV1(facts: readonly InputFactV1[]): boolean {
   return calls.every((callId) => settled.has(callId));
 }
 
-function latestSuccessfulChildToolTurnV1(
-  facts: readonly InputFactV1[],
-): number {
+function latestSuccessfulChildToolTurnV1(facts: readonly InputFactV1[]): number {
   const turns = new Map(
     facts.flatMap((fact) =>
-      fact.type === "tool.call_observed"
-        ? [[fact.callId, fact.turn] as const]
-        : [],
+      fact.type === "tool.call_observed" ? [[fact.callId, fact.turn] as const] : [],
     ),
   );
   let latest = 0;
@@ -2589,26 +2367,16 @@ function outputRecallPolicyForThresholdV1(
   thresholdChars: number | undefined,
 ): OutputRecallPolicyV1 | undefined {
   if (thresholdChars === undefined) return undefined;
-  if (
-    !Number.isSafeInteger(thresholdChars) ||
-    thresholdChars < 2 ||
-    thresholdChars > 1_000_000
-  ) {
+  if (!Number.isSafeInteger(thresholdChars) || thresholdChars < 2 || thresholdChars > 1_000_000) {
     throw new Error("outputMaskingThresholdChars must be 2..1000000");
   }
   const head = Math.max(
     1,
-    Math.min(
-      DEFAULT_OUTPUT_RECALL_POLICY_V1.previewHeadChars,
-      Math.floor(thresholdChars / 2),
-    ),
+    Math.min(DEFAULT_OUTPUT_RECALL_POLICY_V1.previewHeadChars, Math.floor(thresholdChars / 2)),
   );
   const tail = Math.max(
     1,
-    Math.min(
-      DEFAULT_OUTPUT_RECALL_POLICY_V1.previewTailChars,
-      thresholdChars - head,
-    ),
+    Math.min(DEFAULT_OUTPUT_RECALL_POLICY_V1.previewTailChars, thresholdChars - head),
   );
   return Object.freeze({
     ...DEFAULT_OUTPUT_RECALL_POLICY_V1,
@@ -2618,10 +2386,7 @@ function outputRecallPolicyForThresholdV1(
   });
 }
 
-function contextCompactionInputV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(input: {
+function contextCompactionInputV1<TRunConfig, TControlState extends LoopControlState>(input: {
   readonly runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>;
   readonly options: RunFreshPawNextTaskOptionsV1;
   readonly bundle: PawNextPayloadExecutionBundleV2;
@@ -2634,9 +2399,7 @@ function contextCompactionInputV1<
     triggerBp !== undefined &&
     (!Number.isSafeInteger(triggerBp) || triggerBp <= 0 || triggerBp > 10_000)
   ) {
-    throw new Error(
-      "contextCompactionTriggerRatioBasisPoints must be 1..10000",
-    );
+    throw new Error("contextCompactionTriggerRatioBasisPoints must be 1..10000");
   }
   const controller = contextCompactionControllerV1(input);
   return createContextCompactionInputPortV1({
@@ -2649,8 +2412,7 @@ function contextCompactionInputV1<
       : {
           policy: Object.freeze({
             triggerRatioBasisPoints: triggerBp,
-            minimumNewTimelineUnits:
-              DEFAULT_CONTEXT_COMPACTION_POLICY_V1.minimumNewTimelineUnits,
+            minimumNewTimelineUnits: DEFAULT_CONTEXT_COMPACTION_POLICY_V1.minimumNewTimelineUnits,
             retainNewestUnprotectedUnits:
               DEFAULT_CONTEXT_COMPACTION_POLICY_V1.retainNewestUnprotectedUnits,
           }),
@@ -2694,10 +2456,7 @@ async function honorContextCompactRequestV1(
   });
 }
 
-function contextCompactionControllerV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(input: {
+function contextCompactionControllerV1<TRunConfig, TControlState extends LoopControlState>(input: {
   readonly runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>;
   readonly options: RunFreshPawNextTaskOptionsV1;
   readonly bundle: PawNextPayloadExecutionBundleV2;
@@ -2717,9 +2476,7 @@ function contextCompactionControllerV1<
   const evidence = createCanonicalPayloadCheckpointEvidenceSourceV1({
     snapshots: input.bundle.session,
     loadPayloadEvidence: (
-      snapshot: Awaited<
-        ReturnType<typeof input.bundle.session.readInputSnapshot>
-      >,
+      snapshot: Awaited<ReturnType<typeof input.bundle.session.readInputSnapshot>>,
       signal: AbortSignal,
     ) => input.bundle.loadForSnapshot(snapshot, signal),
   });
@@ -2741,19 +2498,14 @@ function contextCompactionControllerV1<
     codec: inline,
     signal: input.signal,
     loadPayloadEvidence: (
-      snapshot: Awaited<
-        ReturnType<typeof input.bundle.session.readInputSnapshot>
-      >,
+      snapshot: Awaited<ReturnType<typeof input.bundle.session.readInputSnapshot>>,
       signal: AbortSignal,
     ) => input.bundle.loadForSnapshot(snapshot, signal),
   });
   return controller;
 }
 
-function memoryRetrievalInputV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(input: {
+function memoryRetrievalInputV1<TRunConfig, TControlState extends LoopControlState>(input: {
   readonly runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>;
   readonly options: RunFreshPawNextTaskOptionsV1;
   readonly bundle: PawNextPayloadExecutionBundleV2;
@@ -2799,9 +2551,7 @@ function memoryRetrievalInputV1<
           maxClaims: writerProfile.personaProjector.maxClaims,
           maxChars: writerProfile.personaProjector.maxChars,
           minimumConfidence: writerProfile.personaProjector.minimumConfidence,
-          ...(plugin.onPersonaEvent === undefined
-            ? {}
-            : { onEvent: plugin.onPersonaEvent }),
+          ...(plugin.onPersonaEvent === undefined ? {} : { onEvent: plugin.onPersonaEvent }),
         })
       : topicEvidenceInput;
   return createMemoryRetrievalInputPortV1({
@@ -2815,10 +2565,7 @@ function memoryRetrievalInputV1<
   });
 }
 
-function memoryWriterControllerV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(input: {
+function memoryWriterControllerV1<TRunConfig, TControlState extends LoopControlState>(input: {
   readonly runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>;
   readonly options: RunFreshPawNextTaskOptionsV1;
   readonly bundle: PawNextPayloadExecutionBundleV2;
@@ -2897,9 +2644,7 @@ function memoryWriterControllerV1<
     model: writerModel,
   });
   const writer: MemoryMaintenanceOptionsV1["writer"] = {
-    ...(input.retryFailedUnstaged
-      ? { retryFailedUnstaged: true as const }
-      : {}),
+    ...(input.retryFailedUnstaged ? { retryFailedUnstaged: true as const } : {}),
     session: input.bundle.session,
     runId: input.options.runId,
     scope: plugin.profile.scope,
@@ -2985,8 +2730,7 @@ function memoryWriterControllerV1<
     }),
   });
   const dossier: MemoryMaintenanceOptionsV1["dossier"] =
-    plugin.topicDossierStore === undefined ||
-    plugin.topicEvidenceStore === undefined
+    plugin.topicDossierStore === undefined || plugin.topicEvidenceStore === undefined
       ? undefined
       : {
           scope: plugin.profile.scope,
@@ -3007,8 +2751,7 @@ function memoryWriterControllerV1<
                 if (result.status === "cancelled") {
                   return {
                     status: "cancelled",
-                    errorCode:
-                      result.errorCode ?? "MemoryDossierModelCancelled",
+                    errorCode: result.errorCode ?? "MemoryDossierModelCancelled",
                   };
                 }
                 if (result.status === "truncated") {
@@ -3034,9 +2777,7 @@ function memoryWriterControllerV1<
     organizer,
     signal: input.signal,
     ...(dossier === undefined ? {} : { dossier }),
-    ...(plugin.topicEvidenceStore === undefined
-      ? {}
-      : { catalog: plugin.topicEvidenceStore }),
+    ...(plugin.topicEvidenceStore === undefined ? {} : { catalog: plugin.topicEvidenceStore }),
   });
 }
 
@@ -3044,11 +2785,7 @@ async function settleMemoryWriterTerminalBestEffortV1(
   writer: MemoryWriterControllerV1 | undefined,
   state: LoopControlState,
 ): Promise<void> {
-  if (
-    !writer ||
-    state.decision.kind === "continue" ||
-    state.decision.kind === "await_external"
-  ) {
+  if (!writer || state.decision.kind === "continue" || state.decision.kind === "await_external") {
     return;
   }
   const outcome =
@@ -3078,9 +2815,7 @@ function checkpointModelAdapterV1(
   const complete: LanguageModel["complete"] = (messages, options) => {
     const scope = requestOptions.observationScope;
     return scope
-      ? withModelObservationScope(scope.runId, scope.phase, () =>
-          model.complete(messages, options),
-        )
+      ? withModelObservationScope(scope.runId, scope.phase, () => model.complete(messages, options))
       : model.complete(messages, options);
   };
   return Object.freeze({
@@ -3116,10 +2851,7 @@ function checkpointModelAdapterV1(
             errorCode: "CheckpointAuxiliaryModelCancelled",
           };
         }
-        if (
-          completion.finishReason === "length" ||
-          completion.finishReason === "max_tokens"
-        ) {
+        if (completion.finishReason === "length" || completion.finishReason === "max_tokens") {
           return { status: "truncated", text: completion.text };
         }
         if ((completion.toolCalls?.length ?? 0) > 0) {
@@ -3198,8 +2930,7 @@ function createAuxiliaryModelCompletionObserverV1(input: {
       input.costTracker.record(input.options.model.label, completion.usage);
     }
     const truncated =
-      completion.finishReason === "length" ||
-      completion.finishReason === "max_tokens";
+      completion.finishReason === "length" || completion.finishReason === "max_tokens";
     input.options.onModelSettlement?.({
       modelLabel: input.options.model.label,
       sessionId: input.options.sessionId,
@@ -3215,19 +2946,14 @@ function webAccessContextV1<TRunConfig, TControlState extends LoopControlState>(
   runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>,
 ): { readonly webAccess?: ReturnType<typeof createWebAccessServiceV1> } {
   if (
-    !runtime.registry.plugins.some(
-      (plugin) => plugin.pluginId === WEB_ACCESS_TOOL_PLUGIN_ID_V1,
-    )
+    !runtime.registry.plugins.some((plugin) => plugin.pluginId === WEB_ACCESS_TOOL_PLUGIN_ID_V1)
   ) {
     return Object.freeze({});
   }
   return Object.freeze({ webAccess: createWebAccessServiceV1() });
 }
 
-async function mcpRuntimeContextV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(
+async function mcpRuntimeContextV1<TRunConfig, TControlState extends LoopControlState>(
   runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>,
   registerCleanup: (cleanup: () => void | Promise<void>) => void,
 ): Promise<{
@@ -3236,23 +2962,15 @@ async function mcpRuntimeContextV1<
 }> {
   const config = runtime.v3TaskOptions?.mcp;
   if (!config) return Object.freeze({});
-  if (
-    !runtime.registry.plugins.some(
-      (plugin) => plugin.pluginId === MCP_PROXY_TOOL_PLUGIN_ID_V1,
-    )
-  ) {
-    throw new Error(
-      "Paw Next MCP profile requires the frozen MCP proxy plugin",
-    );
+  if (!runtime.registry.plugins.some((plugin) => plugin.pluginId === MCP_PROXY_TOOL_PLUGIN_ID_V1)) {
+    throw new Error("Paw Next MCP profile requires the frozen MCP proxy plugin");
   }
   if (config.allowedTools.length === 0) {
     return Object.freeze({ mcpAllowedTools: Object.freeze([]) });
   }
 
   const requiredServers = new Set(
-    config.allowedTools.map((tool) =>
-      tool.slice("mcp:".length, tool.indexOf("/")),
-    ),
+    config.allowedTools.map((tool) => tool.slice("mcp:".length, tool.indexOf("/"))),
   );
   const manager = new McpClientManager();
   try {
@@ -3260,15 +2978,11 @@ async function mcpRuntimeContextV1<
       if (requiredServers.has(server.name)) await manager.connect(server);
     }
     const available = new Set(
-      manager
-        .listTools()
-        .map((tool) => `mcp:${tool.serverName}/${tool.toolName}`),
+      manager.listTools().map((tool) => `mcp:${tool.serverName}/${tool.toolName}`),
     );
     const missing = config.allowedTools.filter((tool) => !available.has(tool));
     if (missing.length > 0) {
-      throw new Error(
-        `Paw Next MCP profile targets are unavailable: ${missing.join(", ")}`,
-      );
+      throw new Error(`Paw Next MCP profile targets are unavailable: ${missing.join(", ")}`);
     }
   } catch (error) {
     await manager.disconnectAll();
@@ -3281,10 +2995,7 @@ async function mcpRuntimeContextV1<
   });
 }
 
-function taskProgressContextV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(
+function taskProgressContextV1<TRunConfig, TControlState extends LoopControlState>(
   runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>,
   bundle: PawNextPayloadExecutionBundleV2,
   managedJobs: RuntimeManagedJobControllerV1,
@@ -3293,22 +3004,17 @@ function taskProgressContextV1<
   readonly acceptanceLedger?: ReturnType<typeof createDeliveryLedgerServiceV1>;
 } {
   if (
-    !runtime.registry.plugins.some(
-      (plugin) => plugin.pluginId === TASK_PROGRESS_TOOL_PLUGIN_ID_V1,
-    )
+    !runtime.registry.plugins.some((plugin) => plugin.pluginId === TASK_PROGRESS_TOOL_PLUGIN_ID_V1)
   ) {
     return Object.freeze({});
   }
   return Object.freeze({
     taskProgress: createTaskProgressServiceV1({
       readCanonicalPrefix: () => bundle.session.readCanonicalPrefix(),
-      loadPayloadEvidence: (prefix, signal) =>
-        bundle.loadForPrefix(prefix, signal),
+      loadPayloadEvidence: (prefix, signal) => bundle.loadForPrefix(prefix, signal),
       listActivities: () => managedJobs.list(),
     }),
-    ...(runtime.registry.plugins.some(
-      (plugin) => plugin.pluginId === DELIVERY_LEDGER_PLUGIN_V1,
-    )
+    ...(runtime.registry.plugins.some((plugin) => plugin.pluginId === DELIVERY_LEDGER_PLUGIN_V1)
       ? {
           acceptanceLedger: createDeliveryLedgerServiceV1(async () => {
             const prefix = await bundle.session.readCanonicalPrefix();
@@ -3322,29 +3028,21 @@ function taskProgressContextV1<
   });
 }
 
-function outputRecallContextV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(
+function outputRecallContextV1<TRunConfig, TControlState extends LoopControlState>(
   runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>,
   bundle: PawNextPayloadExecutionBundleV2,
 ): {
-  readonly payloadRecall?: ReturnType<
-    typeof createDurableOutputRecallServiceV1
-  >;
+  readonly payloadRecall?: ReturnType<typeof createDurableOutputRecallServiceV1>;
 } {
   if (
-    !runtime.registry.plugins.some(
-      (plugin) => plugin.pluginId === OUTPUT_RECALL_TOOL_PLUGIN_ID_V1,
-    )
+    !runtime.registry.plugins.some((plugin) => plugin.pluginId === OUTPUT_RECALL_TOOL_PLUGIN_ID_V1)
   ) {
     return Object.freeze({});
   }
   return Object.freeze({
     payloadRecall: createDurableOutputRecallServiceV1({
       readCanonicalPrefix: () => bundle.session.readCanonicalPrefix(),
-      loadPayloadEvidence: (prefix, signal) =>
-        bundle.loadForPrefix(prefix, signal),
+      loadPayloadEvidence: (prefix, signal) => bundle.loadForPrefix(prefix, signal),
     }),
   });
 }
@@ -3357,15 +3055,10 @@ function collaborationContextV1(
     costTracker: CostTracker;
   }>,
   options: RunFreshPawNextTaskOptionsV1,
-  session: Pick<
-    Session<InputFactV1, DerivedDecisionV1>,
-    "readInputSnapshot" | "appendInputFacts"
-  >,
+  session: Pick<Session<InputFactV1, DerivedDecisionV1>, "readInputSnapshot" | "appendInputFacts">,
 ): { readonly subAgentLauncher?: SubAgentLauncher } {
   if (
-    !runtime.registry.plugins.some(
-      (plugin) => plugin.pluginId === COLLABORATION_TOOL_PLUGIN_ID_V1,
-    )
+    !runtime.registry.plugins.some((plugin) => plugin.pluginId === COLLABORATION_TOOL_PLUGIN_ID_V1)
   ) {
     return Object.freeze({});
   }
@@ -3382,8 +3075,7 @@ function collaborationContextV1(
     sessionId: options.sessionId,
     runId: options.runId,
     roster,
-    readFacts: async () =>
-      (await session.readInputSnapshot()).entries.map((entry) => entry.fact),
+    readFacts: async () => (await session.readInputSnapshot()).entries.map((entry) => entry.fact),
     onSnapshot: options.onStageGraph,
   };
   const delegate = createPawNextV3ChildLauncherV1({
@@ -3394,9 +3086,7 @@ function collaborationContextV1(
     parentTaskOptions: taskOptions,
   });
   const coordinated = createDurableCollaborationCoordinatorV1({
-    delegate: options.stageGraph
-      ? guardStageDependencies(delegate, graphContext)
-      : delegate,
+    delegate: options.stageGraph ? guardStageDependencies(delegate, graphContext) : delegate,
     ...(options.stageGraph ? { projectResult: stageResultEvidence } : {}),
     roster,
     journal: {
@@ -3409,11 +3099,7 @@ function collaborationContextV1(
       },
     },
   });
-  const controlledLaunch: SubAgentLauncher["launch"] = async (
-    goal,
-    maxSteps,
-    launchOptions,
-  ) => {
+  const controlledLaunch: SubAgentLauncher["launch"] = async (goal, maxSteps, launchOptions) => {
     const parentSignal = launchOptions?.signal;
     const controller = new AbortController();
     const abort = () => controller.abort(parentSignal?.reason);
@@ -3471,37 +3157,26 @@ function collaborationContextV1(
     ...(options.longHorizon === "manager"
       ? {
           validateDependencyResult: (result: SubAgentResult) => {
-            const current = stageEvidenceIsCurrent(
-              options.workspaceRoot,
-              result,
-            );
+            const current = stageEvidenceIsCurrent(options.workspaceRoot, result);
             if (!current && result.childRun)
-              options.onChildResult?.(
-                `${options.runId}:${result.childRun.parentCallId}`,
-                {
-                  ...result,
-                  status: "failed",
-                  summary: "阶段证据已变化，需要重新验收。",
-                  ...(result.environmentAudit
-                    ? {
-                        environmentAudit: {
-                          ...result.environmentAudit,
-                          status: "unverified",
-                        },
-                      }
-                    : {}),
-                },
-              );
+              options.onChildResult?.(`${options.runId}:${result.childRun.parentCallId}`, {
+                ...result,
+                status: "failed",
+                summary: "阶段证据已变化，需要重新验收。",
+                ...(result.environmentAudit
+                  ? {
+                      environmentAudit: {
+                        ...result.environmentAudit,
+                        status: "unverified",
+                      },
+                    }
+                  : {}),
+              });
             return current;
           },
           shouldPause: async () => {
-            const inbox = projectDurableInputInboxStateV1(
-              await session.readInputSnapshot(),
-            );
-            return (
-              inbox.pendingSteerIds.length > 0 ||
-              inbox.pendingQueueIds.length > 0
-            );
+            const inbox = projectDurableInputInboxStateV1(await session.readInputSnapshot());
+            return inbox.pendingSteerIds.length > 0 || inbox.pendingQueueIds.length > 0;
           },
         }
       : {}),
@@ -3511,9 +3186,7 @@ function collaborationContextV1(
       ? createManagerStageLauncher(adaptive, graphContext.readFacts)
       : adaptive;
   return Object.freeze({
-    subAgentLauncher: options.stageGraph
-      ? withStageLedger(manager, graphContext)
-      : manager,
+    subAgentLauncher: options.stageGraph ? withStageLedger(manager, graphContext) : manager,
   });
 }
 
@@ -3530,31 +3203,22 @@ function createPawNextV3ChildLauncherV1(input: {
     if (!callId) {
       throw new Error("Paw Next child dispatch requires a stable tool call id");
     }
-    const agent = parseCollaborationAgentSpecV1(
-      launchOptions?.args?.agent_spec,
-    );
+    const agent = parseCollaborationAgentSpecV1(launchOptions?.args?.agent_spec);
     return runPawNextChildV3({
       parentOptions: input.parentOptions,
       parentTaskOptions: input.parentTaskOptions,
       callId,
       goal,
       agent,
-      ...(input.parentOptions.longHorizon === "manager"
-        ? { auditedStage: true }
-        : {}),
+      ...(input.parentOptions.longHorizon === "manager" ? { auditedStage: true } : {}),
       maxModelTurns: maxSteps ?? 8,
-      softModelTurns: childSoftModelTurnsV1(
-        launchOptions?.args?.initial_steps,
-        maxSteps ?? 8,
-      ),
+      softModelTurns: childSoftModelTurnsV1(launchOptions?.args?.initial_steps, maxSteps ?? 8),
       signal: launchOptions?.signal,
     });
   };
   return Object.freeze({
     launch,
-    async launchStreaming(
-      options: Parameters<SubAgentLauncher["launchStreaming"]>[0],
-    ) {
+    async launchStreaming(options: Parameters<SubAgentLauncher["launchStreaming"]>[0]) {
       return launch(options.goal, options.maxSteps, {
         args: options.args,
         sharedContext: options.sharedContext,
@@ -3600,18 +3264,10 @@ export async function runPawNextChildV3(input: {
           ].includes(tool),
       ))
   )
-    throw new Error(
-      "Browser auditor requires the closed inspection tool boundary",
-    );
-  const currentSourceRevision = workspaceRevisionV1(
-    input.parentOptions.workspaceRoot,
-  );
+    throw new Error("Browser auditor requires the closed inspection tool boundary");
+  const currentSourceRevision = workspaceRevisionV1(input.parentOptions.workspaceRoot);
   const childKey = hashText(
-    JSON.stringify([
-      input.parentOptions.sessionId,
-      input.parentOptions.runId,
-      input.callId,
-    ]),
+    JSON.stringify([input.parentOptions.sessionId, input.parentOptions.runId, input.callId]),
   ).slice(0, 32);
   const sessionId = `child-session-${childKey}`;
   const runId = `child-run-${childKey}`;
@@ -3624,9 +3280,7 @@ export async function runPawNextChildV3(input: {
     ? createRecoverableWorktreeV1(
         input.parentOptions.workspaceRoot,
         childKey,
-        currentSourceRevision === undefined
-          ? {}
-          : { snapshotIdentity: currentSourceRevision },
+        currentSourceRevision === undefined ? {} : { snapshotIdentity: currentSourceRevision },
       )
     : undefined;
   const sourceRevision = worktree?.snapshotIdentity ?? currentSourceRevision;
@@ -3644,12 +3298,8 @@ export async function runPawNextChildV3(input: {
       auditBrowser: input.auditBrowser,
       auditEvidenceReview: input.auditEvidenceReview,
       maxModelTurns: input.maxModelTurns,
-      ...(input.softModelTurns === undefined
-        ? {}
-        : { softModelTurns: input.softModelTurns }),
-      ...(worktree === undefined
-        ? {}
-        : { toolWorkspaceRoot: worktree.worktreeRoot }),
+      ...(input.softModelTurns === undefined ? {} : { softModelTurns: input.softModelTurns }),
+      ...(worktree === undefined ? {} : { toolWorkspaceRoot: worktree.worktreeRoot }),
       signal: input.signal,
     },
     (snapshot, signal) => {
@@ -3696,11 +3346,8 @@ export async function runPawNextChildV3(input: {
           payloadBundle = bundle;
         });
   input.onResult?.(result);
-  const observedRevision = workspaceRevisionV1(
-    input.parentOptions.workspaceRoot,
-  );
-  const revisionStable =
-    sourceRevision === undefined || observedRevision === sourceRevision;
+  const observedRevision = workspaceRevisionV1(input.parentOptions.workspaceRoot);
+  const revisionStable = sourceRevision === undefined || observedRevision === sourceRevision;
   const acceptance = input.auditedStage
     ? projectEnvironmentAcceptance(result.inputFacts)
     : "not_required";
@@ -3712,8 +3359,7 @@ export async function runPawNextChildV3(input: {
     (!input.auditedStage || acceptance === "verified") &&
     (input.agent.effect === "mutate" || revisionStable);
   const summary =
-    result.assistantText?.trim() ||
-    `Child run ended with ${result.state.decision.kind}`;
+    result.assistantText?.trim() || `Child run ended with ${result.state.decision.kind}`;
   const changedFiles = projectChildChangedFilesV1(result.inputFacts);
   const commands = projectChildCommandEvidenceV1(result.inputFacts);
   const testsRun = commands
@@ -3745,10 +3391,7 @@ export async function runPawNextChildV3(input: {
             stageAudit.environmentAudit?.browserChecks
               ? { browserChecks: stageAudit.environmentAudit.browserChecks }
               : {}),
-            status:
-              acceptance === "verified"
-                ? ("verified" as const)
-                : ("unverified" as const),
+            status: acceptance === "verified" ? ("verified" as const) : ("unverified" as const),
             ...(stageAudit?.type === "completion.review_settled"
               ? { reviewId: stageAudit.reviewId }
               : {}),
@@ -3772,9 +3415,7 @@ export async function runPawNextChildV3(input: {
       tailSeq: result.tailSeq,
     }),
     outcome,
-    ...(changedFiles.length > 0
-      ? { changedFiles: Object.freeze(changedFiles) }
-      : {}),
+    ...(changedFiles.length > 0 ? { changedFiles: Object.freeze(changedFiles) } : {}),
     ...(testsRun.length > 0 ? { testsRun: Object.freeze(testsRun) } : {}),
     ...(completed
       ? {}
@@ -3801,12 +3442,8 @@ export function runPawNextReadOnlyChildV3(input: {
   readonly signal?: AbortSignal;
 }): Promise<SubAgentResult> {
   const agentId = input.role ?? "investigator";
-  const agent = resolveCollaborationAgentV1(
-    DEFAULT_COLLABORATION_ROSTER_V1,
-    agentId,
-  );
-  if (!agent)
-    throw new Error(`Missing default collaboration agent: ${agentId}`);
+  const agent = resolveCollaborationAgentV1(DEFAULT_COLLABORATION_ROSTER_V1, agentId);
+  if (!agent) throw new Error(`Missing default collaboration agent: ${agentId}`);
   return runPawNextChildV3({
     parentOptions: input.parentOptions,
     parentTaskOptions: input.parentTaskOptions,
@@ -3835,9 +3472,7 @@ function preparePawNextReadOnlyChildV3(
     readonly auditedStage?: boolean;
     readonly signal?: AbortSignal;
   },
-  loadPayloadEvidence: NonNullable<
-    JournalContextOptionsV1["loadPayloadEvidence"]
-  >,
+  loadPayloadEvidence: NonNullable<JournalContextOptionsV1["loadPayloadEvidence"]>,
 ): PreparedPawNextProductRuntimeV3 {
   const {
     environmentAudit: _rootAudit,
@@ -3896,24 +3531,17 @@ function preparePawNextReadOnlyChildV3(
   const mayExecute = input.agent.effect !== "inspect";
   const mayMutate = input.agent.effect === "mutate";
   const childModel =
-    input.parentOptions.collaborationModels?.[input.agent.id] ??
-    input.parentOptions.model;
+    input.parentOptions.collaborationModels?.[input.agent.id] ?? input.parentOptions.model;
   const childModelOptions =
     childModel === input.parentOptions.model
       ? {}
       : {
           model: childModel,
           providerProtocol:
-            childModel.runtimeProfile?.protocol ??
-            input.parentTaskOptions.providerProtocol,
-          transport: childModel.completeStream
-            ? ("stream" as const)
-            : ("complete" as const),
-          contextWindowTokens:
-            childModel.capabilities?.contextWindow ?? 128_000,
-          reservedOutputTokens: resolveModelOutputLimit(
-            childModel.capabilities?.maxOutputTokens,
-          ),
+            childModel.runtimeProfile?.protocol ?? input.parentTaskOptions.providerProtocol,
+          transport: childModel.completeStream ? ("stream" as const) : ("complete" as const),
+          contextWindowTokens: childModel.capabilities?.contextWindow ?? 128_000,
+          reservedOutputTokens: resolveModelOutputLimit(childModel.capabilities?.maxOutputTokens),
           estimatorId: `core:${childModel.label}`,
           estimatorVersion: "v1",
         };
@@ -3963,9 +3591,7 @@ function preparePawNextReadOnlyChildV3(
       ? {
           environmentAudit: true as const,
           longHorizon: "executor" as const,
-          ...(input.parentOptions.browserAudit
-            ? { browserAudit: true as const }
-            : {}),
+          ...(input.parentOptions.browserAudit ? { browserAudit: true as const } : {}),
         }
       : {}),
     ...childModelOptions,
@@ -3988,8 +3614,7 @@ function preparePawNextReadOnlyChildV3(
     naturalStop: "complete",
     maxSegments: input.auditEvidenceReview ? 2 : 1,
     maxTotalModelTurns: input.maxModelTurns,
-    ...(input.softModelTurns === undefined ||
-    input.softModelTurns >= input.maxModelTurns
+    ...(input.softModelTurns === undefined || input.softModelTurns >= input.maxModelTurns
       ? {}
       : {
           softModelTurns: input.softModelTurns,
@@ -4000,9 +3625,7 @@ function preparePawNextReadOnlyChildV3(
           ),
         }),
   });
-  const reducer = withRuntimeActivityControlV1(
-    createSoftRenewingChildReducerV1(),
-  );
+  const reducer = withRuntimeActivityControlV1(createSoftRenewingChildReducerV1());
   reducer.reduce([], runConfig);
   const core = preparePawNextProductRuntimeCoreV1(
     options,
@@ -4021,8 +3644,7 @@ function preparePawNextReadOnlyChildV3(
     input.parentTaskOptions.payloadRuntime,
   );
   const manifest = createPawNextProductManifestV3({
-    toolEffectCheckpointPolicyVersion:
-      core.manifest.toolEffectCheckpointPolicyVersion,
+    toolEffectCheckpointPolicyVersion: core.manifest.toolEffectCheckpointPolicyVersion,
     runConfig,
     workSegmentPolicyVersion: WORK_SEGMENT_POLICY_VERSION_V1,
     model: core.manifest.model,
@@ -4044,9 +3666,7 @@ function preparePawNextReadOnlyChildV3(
       ? {
           environmentAudit: true as const,
           longHorizon: "executor" as const,
-          ...(input.parentOptions.browserAudit
-            ? { browserAudit: true as const }
-            : {}),
+          ...(input.parentOptions.browserAudit ? { browserAudit: true as const } : {}),
         }
       : {}),
   });
@@ -4056,9 +3676,7 @@ function preparePawNextReadOnlyChildV3(
       ? {
           environmentAudit: true as const,
           longHorizon: "executor" as const,
-          ...(input.parentOptions.browserAudit
-            ? { browserAudit: true as const }
-            : {}),
+          ...(input.parentOptions.browserAudit ? { browserAudit: true as const } : {}),
         }
       : {}),
     ...childModelOptions,
@@ -4074,8 +3692,7 @@ function preparePawNextReadOnlyChildV3(
     naturalStop: "complete",
     maxSegments: input.auditEvidenceReview ? 2 : 1,
     maxTotalModelTurns: input.maxModelTurns,
-    ...(input.softModelTurns === undefined ||
-    input.softModelTurns >= input.maxModelTurns
+    ...(input.softModelTurns === undefined || input.softModelTurns >= input.maxModelTurns
       ? {}
       : {
           softModelTurns: input.softModelTurns,
@@ -4088,10 +3705,7 @@ function preparePawNextReadOnlyChildV3(
     payloadRuntime,
     ...(shellSandbox === undefined ? {} : { shellSandbox }),
   });
-  const facts = createProductFactMapper<
-    InteractiveControlConfigV2,
-    InteractiveControlStateV2
-  >({
+  const facts = createProductFactMapper<InteractiveControlConfigV2, InteractiveControlStateV2>({
     protocol: core.protocol,
     encode: createInlineDurableJsonStore().encode,
   });
@@ -4119,9 +3733,7 @@ async function runFreshFilePayloadPawNextTask<
   >;
   readonly runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>;
   readonly configHash: string;
-  readonly publishPayloadBundle: (
-    bundle: PawNextPayloadExecutionBundleV2,
-  ) => void;
+  readonly publishPayloadBundle: (bundle: PawNextPayloadExecutionBundleV2) => void;
   readonly onInboxReady?: (inbox: DurableInputInboxV1) => void | Promise<void>;
   /**
    * Auto-drain seam for queued work. After the loop reaches a terminal
@@ -4185,9 +3797,7 @@ async function runFreshFilePayloadPawNextTask<
           `runFreshPawNextTask${input.productLabel} only accepts a new empty run journal`,
         );
       }
-      const permissions = new FrozenPermissionEngineV1(
-        runtime.permissionConfig,
-      );
+      const permissions = new FrozenPermissionEngineV1(runtime.permissionConfig);
       const inbox = new DurableInputInboxV1(session);
       const compactionInput = contextCompactionInputV1({
         runtime,
@@ -4223,9 +3833,7 @@ async function runFreshFilePayloadPawNextTask<
         runId: options.runId,
         registry: runtime.registry,
         permissions,
-        ...(options.requestApproval
-          ? { requestApproval: options.requestApproval }
-          : {}),
+        ...(options.requestApproval ? { requestApproval: options.requestApproval } : {}),
         permissionRecorder: {
           async record(facts) {
             await session.appendInputFacts(facts);
@@ -4238,30 +3846,21 @@ async function runFreshFilePayloadPawNextTask<
           ...outputRecallContextV1(runtime, bundle),
           ...taskProgressContextV1(runtime, bundle, managedJobs),
           ...webAccessContextV1(runtime),
-          ...(runtime.registry.plugins.some(
-            (p) => p.pluginId === "paw.browser-audit",
-          )
+          ...(runtime.registry.plugins.some((p) => p.pluginId === "paw.browser-audit")
             ? { browserCheck: options.auditedBrowserCheck ?? runBrowserCheck }
             : {}),
           ...collaborationContextV1(runtime, options, bundle.session),
-          ...(options.shellSandbox
-            ? { shellSandbox: options.shellSandbox }
-            : {}),
+          ...(options.shellSandbox ? { shellSandbox: options.shellSandbox } : {}),
         },
         checkpointSequence: new MonotonicCheckpointSequenceV1(),
       });
-      const memoryTools = createProductMemoryToolExecutorV1(
-        runtime,
-        baseTools,
-        options,
-      );
+      const memoryTools = createProductMemoryToolExecutorV1(runtime, baseTools, options);
       const tools = createBoundedReplanToolGateV1({
         delegate: memoryTools,
         session,
         enabled:
           runtime.progressAdvisor === true &&
-          runtime.registry.resolveProviderName("workspace_delegate") !==
-            undefined,
+          runtime.registry.resolveProviderName("workspace_delegate") !== undefined,
       });
       let finalState: TControlState | undefined;
       const dependencies = createProductLoopDependenciesGeneric({
@@ -4287,26 +3886,19 @@ async function runFreshFilePayloadPawNextTask<
               const opened = await input.openNextQueuedWorkSegment({
                 session: bundle.session,
                 inbox,
-                loadForPrefix: (prefix, signal) =>
-                  bundle.loadForPrefix(prefix, signal),
+                loadForPrefix: (prefix, signal) => bundle.loadForPrefix(prefix, signal),
                 signal: executionSignal,
                 state,
                 ...(options.auditedMemory
                   ? {
                       settleMemory: () =>
-                        settleMemoryWriterTerminalBestEffortV1(
-                          memoryWriter,
-                          state,
-                        ),
+                        settleMemoryWriterTerminalBestEffortV1(memoryWriter, state),
                     }
                   : {}),
               });
               if (!opened) {
                 if (options.auditedMemory)
-                  await settleMemoryWriterTerminalBestEffortV1(
-                    memoryWriter,
-                    state,
-                  );
+                  await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
                 break;
               }
               state = await runAgentLoop(dependencies, {
@@ -4315,17 +3907,13 @@ async function runFreshFilePayloadPawNextTask<
                   bundle.loadForSnapshot(snapshot, signal),
               });
               if (!options.auditedMemory || state.decision.kind !== "completed")
-                await settleMemoryWriterTerminalBestEffortV1(
-                  memoryWriter,
-                  state,
-                );
+                await settleMemoryWriterTerminalBestEffortV1(memoryWriter, state);
             }
           }
           finalState = state;
           return state;
         },
-        shouldAwaitExternal: (state) =>
-          state.decision.kind === "await_external",
+        shouldAwaitExternal: (state) => state.decision.kind === "await_external",
         signal: executionSignal,
       });
       registerCoordinator(coordinator);
@@ -4362,14 +3950,9 @@ async function runFreshFilePayloadPawNextTask<
       await coordinator.wake();
       await closeInput();
       if (!finalState) {
-        throw new Error(
-          `Paw Next ${input.productLabel} run produced no control state`,
-        );
+        throw new Error(`Paw Next ${input.productLabel} run produced no control state`);
       }
-      const final = await bundle.readFinalProjection(
-        runtime.protocol,
-        executionSignal,
-      );
+      const final = await bundle.readFinalProjection(runtime.protocol, executionSignal);
       return {
         state: finalState,
         assistantText: final.assistantText,
@@ -4419,13 +4002,9 @@ export async function runExistingPawNextTaskV2(
   if (commitIndex.head.tailSeq === 0) {
     throw new Error("runExistingPawNextTaskV2 requires an existing run");
   }
-  return runPreparedExistingPawNextTaskV2(
-    prepared,
-    commitIndex.head,
-    (bundle) => {
-      payloadBundle = bundle;
-    },
-  );
+  return runPreparedExistingPawNextTaskV2(prepared, commitIndex.head, (bundle) => {
+    payloadBundle = bundle;
+  });
 }
 
 /**
@@ -4433,13 +4012,10 @@ export async function runExistingPawNextTaskV2(
  * work remains blocked; a durable active segment resumes before later backlog.
  */
 /** Explicit maintenance of an idle run. Owns its lease and never executes tools. */
-export async function compactExistingPawNextTaskV3(
-  input: RunExistingPawNextTaskInputV3,
-) {
+export async function compactExistingPawNextTaskV3(input: RunExistingPawNextTaskInputV3) {
   let payloadBundle: PawNextPayloadExecutionBundleV2 | undefined;
   const prepared = preparePawNextProductRuntimeV3(input, (snapshot, signal) => {
-    if (!payloadBundle)
-      throw new Error("Context maintenance Session is not active");
+    if (!payloadBundle) throw new Error("Context maintenance Session is not active");
     return payloadBundle.loadForSnapshot(snapshot, signal);
   });
   const options = prepared.options;
@@ -4484,9 +4060,7 @@ export async function compactExistingPawNextTaskV3(
       );
       if (
         restored.classification.status !== "terminal" ||
-        !["completed", "await_user"].includes(
-          restored.classification.state.decision.kind,
-        )
+        !["completed", "await_user"].includes(restored.classification.state.decision.kind)
       )
         throw new Error("请等待任务结束，或先恢复未完成的任务。");
       const snapshot = await bundle.session.readInputSnapshot();
@@ -4502,8 +4076,7 @@ export async function compactExistingPawNextTaskV3(
       const lastModel = [...snapshot.entries]
         .reverse()
         .find((entry) => entry.fact.type === "model.settled");
-      if (lastModel?.fact.type !== "model.settled")
-        throw new Error("上下文尚未到达可压缩的边界。");
+      if (lastModel?.fact.type !== "model.settled") throw new Error("上下文尚未到达可压缩的边界。");
       const controller = contextCompactionControllerV1({
         runtime,
         options,
@@ -4519,9 +4092,7 @@ export async function compactExistingPawNextTaskV3(
           action: "distill",
           reason: "user_requested",
           usageRatioBasisPoints: Math.round(
-            (before.tokens.selectedInputTokens /
-              before.tokens.contextWindowTokens) *
-              10000,
+            (before.tokens.selectedInputTokens / before.tokens.contextWindowTokens) * 10000,
           ),
           range,
         },
@@ -4531,13 +4102,11 @@ export async function compactExistingPawNextTaskV3(
         session: bundle.session,
         allowAwaitUser: true,
       });
-      const after = await runtime.context.plan(
-        await bundle.session.readInputSnapshot(),
-        { signal },
-      );
+      const after = await runtime.context.plan(await bundle.session.readInputSnapshot(), {
+        signal,
+      });
       const committed =
-        result.status === "ran" &&
-        ["committed", "reused"].includes(result.result.status);
+        result.status === "ran" && ["committed", "reused"].includes(result.result.status);
       return {
         ok: committed,
         message: committed
@@ -4553,15 +4122,12 @@ export async function compactExistingPawNextTaskV3(
 }
 
 /** Reopens an idle run under its existing fenced lease; never enters Agent Loop. */
-export async function maintainExistingPawNextMemoryV3(
-  input: RunExistingPawNextTaskInputV3,
-) {
+export async function maintainExistingPawNextMemoryV3(input: RunExistingPawNextTaskInputV3) {
   let payloadBundle: PawNextPayloadExecutionBundleV2 | undefined;
   const prepared = preparePawNextProductRuntimeV3(
     { ...input, deferMemory: undefined },
     (snapshot, signal) => {
-      if (!payloadBundle)
-        throw new Error("Memory maintenance Session is not active");
+      if (!payloadBundle) throw new Error("Memory maintenance Session is not active");
       return payloadBundle.loadForSnapshot(snapshot, signal);
     },
   );
@@ -4572,8 +4138,7 @@ export async function maintainExistingPawNextMemoryV3(
     sessionId: options.sessionId,
     runId: options.runId,
   }).head;
-  if (!head.tailSeq)
-    throw new Error("Memory maintenance requires an existing run");
+  if (!head.tailSeq) throw new Error("Memory maintenance requires an existing run");
   return withFencedPawNextSessionV1<
     { status: "completed" | "retry" | "blocked"; reasonCode?: string },
     PawNextPayloadExecutionBundleV2,
@@ -4614,12 +4179,9 @@ export async function maintainExistingPawNextMemoryV3(
         signal,
         retryFailedUnstaged: true,
       });
-      if (!writer)
-        return { status: "blocked", reasonCode: "MemoryWriterDisabled" };
+      if (!writer) return { status: "blocked", reasonCode: "MemoryWriterDisabled" };
       const outcome =
-        restored.classification.state.decision.kind === "completed"
-          ? "completed"
-          : "incomplete";
+        restored.classification.state.decision.kind === "completed" ? "completed" : "incomplete";
       try {
         const result = await writer.settleTerminal(outcome);
         const snapshot = await bundle.session.readInputSnapshot();
@@ -4628,9 +4190,7 @@ export async function maintainExistingPawNextMemoryV3(
           (fact) =>
             (fact.type === "memory.write_claimed" &&
               !facts.some(
-                (other) =>
-                  other.type === "memory.write_settled" &&
-                  other.writeId === fact.writeId,
+                (other) => other.type === "memory.write_settled" && other.writeId === fact.writeId,
               )) ||
             (fact.type === "memory.topic_organization_claimed" &&
               !facts.some(
@@ -4639,17 +4199,13 @@ export async function maintainExistingPawNextMemoryV3(
                   other.organizationId === fact.organizationId,
               )),
         );
-        if (unsettled)
-          return { status: "retry", reasonCode: "MemoryRecoveryPending" };
+        if (unsettled) return { status: "retry", reasonCode: "MemoryRecoveryPending" };
         const last =
           result ??
           [...snapshot.entries]
             .reverse()
             .find((entry) => entry.fact.type === "memory.write_settled")?.fact;
-        if (
-          last?.type === "memory.write_settled" &&
-          last.status === "completed"
-        ) {
+        if (last?.type === "memory.write_settled" && last.status === "completed") {
           const claim = [...facts]
             .reverse()
             .find(
@@ -4714,13 +4270,9 @@ export async function runExistingPawNextTaskV3(
   if (commitIndex.head.tailSeq === 0) {
     throw new Error("runExistingPawNextTaskV3 requires an existing run");
   }
-  return runPreparedExistingPawNextTaskV3(
-    prepared,
-    commitIndex.head,
-    (bundle) => {
-      payloadBundle = bundle;
-    },
-  );
+  return runPreparedExistingPawNextTaskV3(prepared, commitIndex.head, (bundle) => {
+    payloadBundle = bundle;
+  });
 }
 
 /**
@@ -4793,8 +4345,7 @@ export async function runExistingPawNextWorkSegmentV3(
         .reverse()
         .find(
           (entry) =>
-            entry.record.kind !== "input_fact" ||
-            entry.record.fact.type !== "input.accepted",
+            entry.record.kind !== "input_fact" || entry.record.fact.type !== "input.accepted",
         )?.record;
       if (
         restored.classification.status === "terminal" &&
@@ -4826,12 +4377,7 @@ export async function runExistingPawNextWorkSegmentV3(
           executionSignal,
         );
       }
-      assertWorkSegmentRequestCanProceed(
-        prefix,
-        restored,
-        request.inputId,
-        true,
-      );
+      assertWorkSegmentRequestCanProceed(prefix, restored, request.inputId, true);
       inspectQueuedWorkSegmentInputV1({
         fullPrefix: prefix,
         request,
@@ -4841,8 +4387,7 @@ export async function runExistingPawNextWorkSegmentV3(
         await repairRunRecoveryV1({
           session: bundle.session,
           signal: executionSignal,
-          loadModelResponseEvidence: (current, signal) =>
-            bundle.loadForPrefix(current, signal),
+          loadModelResponseEvidence: (current, signal) => bundle.loadForPrefix(current, signal),
         });
       }
       prefix = await bundle.session.readCanonicalPrefix();
@@ -4856,12 +4401,7 @@ export async function runExistingPawNextWorkSegmentV3(
       if (restored.classification.status === "actionable_repair") {
         throw new Error("V3 work segment recovery remained incomplete");
       }
-      assertWorkSegmentRequestCanProceed(
-        prefix,
-        restored,
-        request.inputId,
-        false,
-      );
+      assertWorkSegmentRequestCanProceed(prefix, restored, request.inputId, false);
       inspectQueuedWorkSegmentInputV1({
         fullPrefix: prefix,
         request,
@@ -4871,9 +4411,8 @@ export async function runExistingPawNextWorkSegmentV3(
       const verification = Object.freeze({
         runConfig: prepared.runConfig,
         stateHasher: Object.freeze({ hash: hashCanonicalJsonV1 }),
-        derivedDecision: (
-          value: Parameters<typeof prepared.facts.derivedDecision>[0],
-        ) => prepared.facts.derivedDecision(value),
+        derivedDecision: (value: Parameters<typeof prepared.facts.derivedDecision>[0]) =>
+          prepared.facts.derivedDecision(value),
       });
 
       const inputAcceptance = await acceptQueuedWorkSegmentInputV1({
@@ -4888,12 +4427,7 @@ export async function runExistingPawNextWorkSegmentV3(
             bundle,
             signal,
           );
-          assertWorkSegmentRequestCanProceed(
-            current,
-            checked,
-            request.inputId,
-            false,
-          );
+          assertWorkSegmentRequestCanProceed(current, checked, request.inputId, false);
           return checked.evidence;
         },
         validateProspective: (prospective) => {
@@ -4988,22 +4522,17 @@ export async function runDiscoveredPawNextTaskV2(input: {
   const executionInput: RunExistingPawNextTaskInputV2 = Object.freeze({
     resolution: input.resolution,
     ...(input.signal === undefined ? {} : { signal: input.signal }),
-    ...(input.leaseScheduler === undefined
-      ? {}
-      : { leaseScheduler: input.leaseScheduler }),
+    ...(input.leaseScheduler === undefined ? {} : { leaseScheduler: input.leaseScheduler }),
     ...(input.onModelStreamEvent === undefined
       ? {}
       : { onModelStreamEvent: input.onModelStreamEvent }),
   });
-  const prepared = preparePawNextProductRuntimeV2(
-    executionInput,
-    (snapshot, signal) => {
-      if (!payloadBundle) {
-        throw new Error("Paw Next V2 payload Session is not active");
-      }
-      return payloadBundle.loadForSnapshot(snapshot, signal);
-    },
-  );
+  const prepared = preparePawNextProductRuntimeV2(executionInput, (snapshot, signal) => {
+    if (!payloadBundle) {
+      throw new Error("Paw Next V2 payload Session is not active");
+    }
+    return payloadBundle.loadForSnapshot(snapshot, signal);
+  });
   if (input.expectedHead.tailSeq <= 0) {
     throw new Error("Discovered Paw Next V2 run must have a non-empty journal");
   }
@@ -5036,22 +4565,17 @@ export async function runDiscoveredPawNextTaskV3(input: {
   const executionInput: RunExistingPawNextTaskInputV3 = Object.freeze({
     resolution: input.resolution,
     ...(input.signal === undefined ? {} : { signal: input.signal }),
-    ...(input.leaseScheduler === undefined
-      ? {}
-      : { leaseScheduler: input.leaseScheduler }),
+    ...(input.leaseScheduler === undefined ? {} : { leaseScheduler: input.leaseScheduler }),
     ...(input.onModelStreamEvent === undefined
       ? {}
       : { onModelStreamEvent: input.onModelStreamEvent }),
   });
-  const prepared = preparePawNextProductRuntimeV3(
-    executionInput,
-    (snapshot, signal) => {
-      if (!payloadBundle) {
-        throw new Error("Paw Next V3 payload Session is not active");
-      }
-      return payloadBundle.loadForSnapshot(snapshot, signal);
-    },
-  );
+  const prepared = preparePawNextProductRuntimeV3(executionInput, (snapshot, signal) => {
+    if (!payloadBundle) {
+      throw new Error("Paw Next V3 payload Session is not active");
+    }
+    return payloadBundle.loadForSnapshot(snapshot, signal);
+  });
   if (input.expectedHead.tailSeq <= 0) {
     throw new Error("Discovered Paw Next V3 run must have a non-empty journal");
   }
@@ -5079,13 +4603,7 @@ function runPreparedExistingPawNextTaskV2(
     head,
     publishPayloadBundle,
     inspect: (prefix, bundle, signal) =>
-      inspectExistingProductPrefixV2(
-        prefix,
-        prepared.options,
-        prepared,
-        bundle,
-        signal,
-      ),
+      inspectExistingProductPrefixV2(prefix, prepared.options, prepared, bundle, signal),
     expectedInventoryHash,
   });
 }
@@ -5104,13 +4622,7 @@ function runPreparedExistingPawNextTaskV3(
     head,
     publishPayloadBundle,
     inspect: (prefix, bundle, signal) =>
-      inspectExistingProductPrefixV3(
-        prefix,
-        prepared.options,
-        prepared,
-        bundle,
-        signal,
-      ),
+      inspectExistingProductPrefixV3(prefix, prepared.options, prepared, bundle, signal),
     allowBlockedPending: (prefix) =>
       (prepared.options.systemPrompt?.endsWith(AUDIT_EVIDENCE_INSTRUCTION) &&
         prefixInputFacts(prefix).some(
@@ -5120,12 +4632,9 @@ function runPreparedExistingPawNextTaskV3(
             f.callerId === AUDIT_CORRECTION_CALLER,
         ) &&
         !prefixInputFacts(prefix).some(
-          (f) =>
-            f.type === "input.promoted" &&
-            f.inputId === "audit-report-correction",
+          (f) => f.type === "input.promoted" && f.inputId === "audit-report-correction",
         )) ||
-      projectPendingCompletionReviewFeedbackV1(prefixInputFacts(prefix)) !==
-        undefined,
+      projectPendingCompletionReviewFeedbackV1(prefixInputFacts(prefix)) !== undefined,
     openNextQueuedWorkSegment: (context) =>
       openNextPawNextV3WorkSegmentV1({
         ...context,
@@ -5165,8 +4674,7 @@ function environmentReviewer(
     .reverse()
     .find(
       (evidence) =>
-        evidence.tool === "workspace_delegate" ||
-        evidence.tool === "workspace.run_agent",
+        evidence.tool === "workspace_delegate" || evidence.tool === "workspace.run_agent",
     );
   if (
     input.options.longHorizon === "manager" &&
@@ -5180,8 +4688,7 @@ function environmentReviewer(
           status: "completed" as const,
           verdict: "block" as const,
           reasonCode: "manager_stage_unverified",
-          summary:
-            "最近的阶段计划尚未通过。请根据失败或变更的要求重新委派，不能直接宣布完成。",
+          summary: "最近的阶段计划尚未通过。请根据失败或变更的要求重新委派，不能直接宣布完成。",
         };
       },
     };
@@ -5192,10 +4699,7 @@ function environmentReviewer(
     visualAudit: input.options.visualAudit,
     async run(goal, signal, observe, attempt) {
       let facts: readonly InputFactV1[] = [];
-      const base = resolveCollaborationAgentV1(
-        DEFAULT_COLLABORATION_ROSTER_V1,
-        "reviewer",
-      );
+      const base = resolveCollaborationAgentV1(DEFAULT_COLLABORATION_ROSTER_V1, "reviewer");
       if (!base) throw new Error("Default audit agent template missing");
       const agent = parseCollaborationAgentSpecV1({
         ...base,
@@ -5224,9 +4728,7 @@ function environmentReviewer(
                 auditedBrowserCheck: createVisualBrowserCheck({
                   workspaceRoot: input.options.workspaceRoot,
                   model: input.options.model,
-                  requirements: JSON.stringify(
-                    createCompletionReviewEvidencePacketV1(candidate),
-                  ),
+                  requirements: JSON.stringify(createCompletionReviewEvidencePacketV1(candidate)),
                   onCompletion: createAuxiliaryModelCompletionObserverV1({
                     options: input.options,
                     costTracker: input.prepared.core.costTracker,
@@ -5287,8 +4789,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     const snapshot = prefixInputSnapshot(prefix);
     const facts = snapshot.entries.map((e) => e.fact);
     const inputId = "audit-report-correction";
-    if (facts.some((f) => f.type === "input.promoted" && f.inputId === inputId))
-      return false;
+    if (facts.some((f) => f.type === "input.promoted" && f.inputId === inputId)) return false;
     const accepted = facts.find(
       (f) =>
         f.type === "input.accepted" &&
@@ -5328,10 +4829,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     // after its terminal decision.
     await refreshPawNextV3TerminalDecisionV1(input);
   };
-  const canContinue = canOpenPawNextV3WorkSegmentV1(
-    input.state,
-    input.prepared.runConfig,
-  );
+  const canContinue = canOpenPawNextV3WorkSegmentV1(input.state, input.prepared.runConfig);
   if (!canContinue && !input.options.environmentAudit) {
     return false;
   }
@@ -5364,8 +4862,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     });
     return true;
   }
-  const pendingBeforeReview =
-    projectDurableInputInboxStateV1(snapshot).pendingQueueIds[0];
+  const pendingBeforeReview = projectDurableInputInboxStateV1(snapshot).pendingQueueIds[0];
   if (pendingBeforeReview) {
     if (!canContinue || !input.drainQueuedUserWork) return false;
     await settleMemoryBeforeContinuation();
@@ -5386,40 +4883,28 @@ async function openNextPawNextV3WorkSegmentV1(input: {
     const latest = [...snapshot.entries]
       .reverse()
       .find((entry) => entry.fact.type === "completion.review_settled");
-    if (
-      latest?.fact.type === "completion.review_settled" &&
-      latest.fact.environmentAudit
-    ) {
+    if (latest?.fact.type === "completion.review_settled" && latest.fact.environmentAudit) {
       const report = latest.fact.environmentAudit;
       const reviewId = latest.fact.reviewId;
       const claim = snapshot.entries.find(
         (entry) =>
-          entry.fact.type === "completion.review_claimed" &&
-          entry.fact.reviewId === reviewId,
+          entry.fact.type === "completion.review_claimed" && entry.fact.reviewId === reviewId,
       )?.fact;
       try {
         if (
           claim?.type === "completion.review_claimed" &&
           claim.sourceThroughSeq === candidate.sourceThroughSeq &&
           report.sourceRevision ===
-            environmentRevision(
-              input.options.workspaceRoot,
-              candidate.changedPaths,
-            ) &&
+            environmentRevision(input.options.workspaceRoot, candidate.changedPaths) &&
           (!input.options.visualAudit ||
             (report.browserChecks?.length &&
               report.browserChecks.every(
                 (check) =>
-                  check.visual &&
-                  verifyVisualEvidence(
-                    input.options.workspaceRoot,
-                    check.visual,
-                  ),
+                  check.visual && verifyVisualEvidence(input.options.workspaceRoot, check.visual),
               ))) &&
           report.inspected.every(
             (item) =>
-              fingerprintAuditFile(input.options.workspaceRoot, item.path)
-                .hash === item.hash,
+              fingerprintAuditFile(input.options.workspaceRoot, item.path).hash === item.hash,
           )
         )
           return false;
@@ -5439,8 +4924,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   if (
     candidate !== undefined &&
     (input.options.environmentAudit ||
-      priorInterventions <
-        PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1.maxBlocksPerRun)
+      priorInterventions < PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1.maxBlocksPerRun)
   ) {
     const gate = evaluateCompletionReviewGateV1(
       candidate,
@@ -5458,22 +4942,15 @@ async function openNextPawNextV3WorkSegmentV1(input: {
                 const currentPrefix = await input.session.readCanonicalPrefix();
                 const currentSnapshot = prefixInputSnapshot(currentPrefix);
                 const inbox = projectDurableInputInboxStateV1(currentSnapshot);
-                if (
-                  inbox.pendingQueueIds.length ||
-                  inbox.pendingSteerIds.length
-                )
-                  return false;
-                const currentCandidate =
-                  await projectCompletionReviewCandidateV1({
-                    prefix: currentPrefix,
-                    snapshot: currentSnapshot,
-                    options: input.options,
-                    loadForPrefix: input.loadForPrefix,
-                    signal: input.signal,
-                  });
-                return (
-                  currentCandidate?.candidateHash === candidate.candidateHash
-                );
+                if (inbox.pendingQueueIds.length || inbox.pendingSteerIds.length) return false;
+                const currentCandidate = await projectCompletionReviewCandidateV1({
+                  prefix: currentPrefix,
+                  snapshot: currentSnapshot,
+                  options: input.options,
+                  loadForPrefix: input.loadForPrefix,
+                  signal: input.signal,
+                });
+                return currentCandidate?.candidateHash === candidate.candidateHash;
               },
             }
           : {}),
@@ -5508,17 +4985,14 @@ async function openNextPawNextV3WorkSegmentV1(input: {
             ]
           : gate.triggers,
       );
-      const reviewerBlocked =
-        settlement.status === "completed" && settlement.verdict === "block";
+      const reviewerBlocked = settlement.status === "completed" && settlement.verdict === "block";
       const reviewerUnavailable =
         (settlement.status === "failed" || settlement.status === "unknown") &&
-        (input.options.environmentAudit ||
-          hasCompletionReviewSourceMutationV1(candidate));
+        (input.options.environmentAudit || hasCompletionReviewSourceMutationV1(candidate));
       if (reviewerBlocked || reviewerUnavailable) {
         if (
           !canContinue ||
-          priorInterventions >=
-            PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1.maxBlocksPerRun
+          priorInterventions >= PAW_NEXT_COMPLETION_REVIEW_IDENTITY_V1.maxBlocksPerRun
         )
           return false;
         const pendingAfterReview = projectDurableInputInboxStateV1(
@@ -5538,13 +5012,10 @@ async function openNextPawNextV3WorkSegmentV1(input: {
         // a repair segment. Legacy sessions retain their timeout-retry policy.
         if (
           (input.options.environmentAuditSinglePass && reviewerUnavailable) ||
-          (input.options.environmentAuditRetry &&
-            settlement.reasonCode === "AuditTimeout")
+          (input.options.environmentAuditRetry && settlement.reasonCode === "AuditTimeout")
         )
           return false;
-        const feedbackId = completionReviewFeedbackInputIdV1(
-          candidate.candidateHash,
-        );
+        const feedbackId = completionReviewFeedbackInputIdV1(candidate.candidateHash);
         await input.inbox.accept({
           inputId: feedbackId,
           delivery: "queue",
@@ -5553,8 +5024,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
             ? createCompletionReviewFeedbackV1(settlement)
             : createCompletionReviewFallbackFeedbackV1(settlement),
         });
-        if (!input.settleMemory)
-          await refreshPawNextV3TerminalDecisionV1(input);
+        if (!input.settleMemory) await refreshPawNextV3TerminalDecisionV1(input);
         await settleMemoryBeforeContinuation();
         await startPawNextV3WorkSegmentV1({ ...input, inputId: feedbackId });
         return true;
@@ -5563,8 +5033,7 @@ async function openNextPawNextV3WorkSegmentV1(input: {
   }
 
   const current = await input.session.readInputSnapshot();
-  const nextInputId =
-    projectDurableInputInboxStateV1(current).pendingQueueIds[0];
+  const nextInputId = projectDurableInputInboxStateV1(current).pendingQueueIds[0];
   if (!canContinue || !nextInputId || !input.drainQueuedUserWork) return false;
   await settleMemoryBeforeContinuation();
   await startPawNextV3WorkSegmentV1({ ...input, inputId: nextInputId });
@@ -5594,10 +5063,7 @@ async function refreshPawNextV3TerminalDecisionV1(input: {
       stateHash: hashCanonicalJsonV1(state),
       reducerVersion: INTERACTIVE_CONTROL_REDUCER_VERSION_V2,
     });
-    const committed = await input.session.commitDerivedDecision(
-      snapshot.tailSeq,
-      decision,
-    );
+    const committed = await input.session.commitDerivedDecision(snapshot.tailSeq, decision);
     if (committed === "committed") return;
   }
 }
@@ -5607,8 +5073,7 @@ function canOpenPawNextV3WorkSegmentV1(
   config: InteractiveControlConfigV2,
 ): boolean {
   return (
-    state.segmentIndex + 1 < config.maxSegments &&
-    state.totalModelTurns < config.maxTotalModelTurns
+    state.segmentIndex + 1 < config.maxSegments && state.totalModelTurns < config.maxTotalModelTurns
   );
 }
 
@@ -5626,9 +5091,8 @@ async function startPawNextV3WorkSegmentV1(input: {
     verification: Object.freeze({
       runConfig: input.prepared.runConfig,
       stateHasher: Object.freeze({ hash: hashCanonicalJsonV1 }),
-      derivedDecision: (
-        value: Parameters<typeof input.prepared.facts.derivedDecision>[0],
-      ) => input.prepared.facts.derivedDecision(value),
+      derivedDecision: (value: Parameters<typeof input.prepared.facts.derivedDecision>[0]) =>
+        input.prepared.facts.derivedDecision(value),
     }),
     signal: input.signal,
     preflight: async (prospective, signal) => {
@@ -5654,15 +5118,10 @@ async function projectCompletionReviewCandidateV1(input: {
   readonly loadForPrefix: PawNextPayloadExecutionBundleV2["loadForPrefix"];
   readonly signal: AbortSignal;
 }): Promise<CompletionReviewCandidateV1 | undefined> {
-  const markerSeq =
-    projectLatestWorkSegmentBoundaryV1(input.snapshot)?.markerSeq ?? 0;
-  const segmentEntries = input.snapshot.entries.filter(
-    (entry) => entry.seq > markerSeq,
-  );
+  const markerSeq = projectLatestWorkSegmentBoundaryV1(input.snapshot)?.markerSeq ?? 0;
+  const segmentEntries = input.snapshot.entries.filter((entry) => entry.seq > markerSeq);
   const observed = input.snapshot.entries.flatMap((entry) =>
-    entry.fact.type === "tool.call_observed"
-      ? [{ seq: entry.seq, fact: entry.fact }]
-      : [],
+    entry.fact.type === "tool.call_observed" ? [{ seq: entry.seq, fact: entry.fact }] : [],
   );
   const settlements = new Map(
     input.snapshot.entries.flatMap((entry) =>
@@ -5691,11 +5150,7 @@ async function projectCompletionReviewCandidateV1(input: {
           : undefined;
       return [
         fact.callId,
-        projectWorkspaceEffect(
-          fact.tool,
-          payload,
-          observation?.isError === true,
-        ),
+        projectWorkspaceEffect(fact.tool, payload, observation?.isError === true),
       ] as const;
     }),
   );
@@ -5709,10 +5164,7 @@ async function projectCompletionReviewCandidateV1(input: {
     );
   });
   const delegatedMutations = observed.flatMap(({ seq, fact }) => {
-    if (
-      fact.tool !== "workspace.run_agent" &&
-      fact.tool !== "workspace_delegate"
-    ) {
+    if (fact.tool !== "workspace.run_agent" && fact.tool !== "workspace_delegate") {
       return [];
     }
     const settled = settlements.get(fact.callId);
@@ -5739,10 +5191,7 @@ async function projectCompletionReviewCandidateV1(input: {
     return paths.length > 0 ? [{ seq, paths }] : [];
   });
   const delegatedVerificationCalls = observed.flatMap(({ fact }) => {
-    if (
-      fact.tool !== "workspace.run_agent" &&
-      fact.tool !== "workspace_delegate"
-    ) {
+    if (fact.tool !== "workspace.run_agent" && fact.tool !== "workspace_delegate") {
       return [];
     }
     const settled = settlements.get(fact.callId);
@@ -5819,9 +5268,7 @@ async function projectCompletionReviewCandidateV1(input: {
               observation?.summary ??
               settled.fact.errorCode ??
               `${fact.tool} ${settled.fact.status}`,
-            ...(observation === undefined
-              ? {}
-              : { isError: observation.isError }),
+            ...(observation === undefined ? {} : { isError: observation.isError }),
             ...(payload === undefined ? {} : { payload }),
           },
         ];
@@ -5830,18 +5277,12 @@ async function projectCompletionReviewCandidateV1(input: {
     ],
   });
   const initialGoal = input.snapshot.entries.find(
-    (entry) =>
-      entry.fact.type === "input.promoted" && entry.fact.delivery === "initial",
+    (entry) => entry.fact.type === "input.promoted" && entry.fact.delivery === "initial",
   )?.fact;
-  const segmentGoal = segmentEntries.find(
-    (entry) => entry.fact.type === "input.promoted",
-  )?.fact;
+  const segmentGoal = segmentEntries.find((entry) => entry.fact.type === "input.promoted")?.fact;
   const rootGoal =
-    initialGoal?.type === "input.promoted"
-      ? initialGoal.content
-      : input.options.goal;
-  const currentGoal =
-    segmentGoal?.type === "input.promoted" ? segmentGoal.content : rootGoal;
+    initialGoal?.type === "input.promoted" ? initialGoal.content : input.options.goal;
+  const currentGoal = segmentGoal?.type === "input.promoted" ? segmentGoal.content : rootGoal;
   const reviewFeedbackIds = new Set(
     input.snapshot.entries.flatMap((entry) =>
       entry.fact.type === "input.accepted" &&
@@ -5859,9 +5300,7 @@ async function projectCompletionReviewCandidateV1(input: {
         !reviewFeedbackIds.has(entry.fact.inputId),
     );
   const workGoal =
-    originalWork?.fact.type === "input.promoted"
-      ? originalWork.fact.content
-      : currentGoal;
+    originalWork?.fact.type === "input.promoted" ? originalWork.fact.content : currentGoal;
   const steering = input.snapshot.entries.flatMap((entry) =>
     entry.seq > (originalWork?.seq ?? 0) &&
     entry.fact.type === "input.promoted" &&
@@ -5873,9 +5312,7 @@ async function projectCompletionReviewCandidateV1(input: {
     rootGoal,
     workGoal !== rootGoal ? `Current user task:\n${workGoal}` : "",
     ...steering.map((text) => `Additional user requirement:\n${text}`),
-    currentGoal !== workGoal && currentGoal !== rootGoal
-      ? `Repair request:\n${currentGoal}`
-      : "",
+    currentGoal !== workGoal && currentGoal !== rootGoal ? `Repair request:\n${currentGoal}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -5885,28 +5322,20 @@ async function projectCompletionReviewCandidateV1(input: {
           .filter(
             (entry) =>
               !entry.fact.type.startsWith("completion.review_") &&
-              !(
-                input.options.auditedMemory &&
-                entry.fact.type.startsWith("memory.")
-              ),
+              !(input.options.auditedMemory && entry.fact.type.startsWith("memory.")),
           )
           .at(-1)?.seq ?? input.snapshot.latestInputSeq)
       : input.snapshot.latestInputSeq,
     ...(input.options.environmentAudit
       ? {
-          environmentRevision: environmentRevision(
-            input.options.workspaceRoot,
-            [
-              ...changedPaths,
-              ...segmentEntries.flatMap((entry) =>
-                entry.fact.type === "completion.review_settled"
-                  ? (entry.fact.environmentAudit?.inspected.map(
-                      (item) => item.path,
-                    ) ?? [])
-                  : [],
-              ),
-            ],
-          ),
+          environmentRevision: environmentRevision(input.options.workspaceRoot, [
+            ...changedPaths,
+            ...segmentEntries.flatMap((entry) =>
+              entry.fact.type === "completion.review_settled"
+                ? (entry.fact.environmentAudit?.inspected.map((item) => item.path) ?? [])
+                : [],
+            ),
+          ]),
         }
       : {}),
     goal: input.options.environmentAudit
@@ -5924,10 +5353,8 @@ async function projectCompletionReviewCandidateV1(input: {
     assistantText: "completion review trigger probe",
   });
   if (
-    evaluateCompletionReviewGateV1(
-      triggerProbe,
-      completionReviewGatePolicyV1(input.options),
-    ).action === "allow" &&
+    evaluateCompletionReviewGateV1(triggerProbe, completionReviewGatePolicyV1(input.options))
+      .action === "allow" &&
     !input.options.longHorizon &&
     !(
       input.options.environmentAudit &&
@@ -5949,10 +5376,7 @@ async function projectCompletionReviewCandidateV1(input: {
   });
 }
 
-function completionReviewMutationPathsV1(
-  tool: string,
-  args: JsonValue,
-): readonly string[] {
+function completionReviewMutationPathsV1(tool: string, args: JsonValue): readonly string[] {
   if (!isJsonRecordV1(args)) return Object.freeze([]);
   if (tool.endsWith("apply_patch")) {
     const patch = typeof args.patch === "string" ? args.patch : "";
@@ -5963,14 +5387,10 @@ function completionReviewMutationPathsV1(
     );
   }
   const path = typeof args.path === "string" ? args.path : "";
-  return path
-    ? Object.freeze([normalizeCompletionReviewPathV1(path)])
-    : Object.freeze([]);
+  return path ? Object.freeze([normalizeCompletionReviewPathV1(path)]) : Object.freeze([]);
 }
 
-function projectChildChangedFilesV1(
-  facts: readonly InputFactV1[],
-): readonly string[] {
+function projectChildChangedFilesV1(facts: readonly InputFactV1[]): readonly string[] {
   const calls = new Map(
     facts.flatMap((fact) =>
       fact.type === "tool.call_observed" ? [[fact.callId, fact] as const] : [],
@@ -6006,8 +5426,7 @@ function projectChildCommandEvidenceV1(
       const call = calls.get(fact.callId);
       if (
         !call ||
-        (call.tool !== "workspace.run_shell" &&
-          call.tool !== "workspace_run_shell") ||
+        (call.tool !== "workspace.run_shell" && call.tool !== "workspace_run_shell") ||
         !isJsonRecordV1(call.args) ||
         typeof call.args.command !== "string"
       ) {
@@ -6020,12 +5439,9 @@ function projectChildCommandEvidenceV1(
           : payload && typeof payload.exitCode === "number"
             ? payload.exitCode
             : undefined;
-      const summaryExitCode = /\bexit\s+(-?\d+)\b/iu.exec(
-        fact.observation?.summary ?? "",
-      )?.[1];
+      const summaryExitCode = /\bexit\s+(-?\d+)\b/iu.exec(fact.observation?.summary ?? "")?.[1];
       const exitCode =
-        payloadExitCode ??
-        (summaryExitCode === undefined ? undefined : Number(summaryExitCode));
+        payloadExitCode ?? (summaryExitCode === undefined ? undefined : Number(summaryExitCode));
       const timedOut =
         payload?.timed_out === true ||
         payload?.timedOut === true ||
@@ -6033,9 +5449,7 @@ function projectChildCommandEvidenceV1(
       return [
         Object.freeze({
           command: call.args.command,
-          ...(payload && typeof payload.cwd === "string"
-            ? { cwd: payload.cwd }
-            : {}),
+          ...(payload && typeof payload.cwd === "string" ? { cwd: payload.cwd } : {}),
           ...(exitCode === undefined ? {} : { exitCode }),
           timedOut,
           passed:
@@ -6044,9 +5458,7 @@ function projectChildCommandEvidenceV1(
             exitCode === 0 &&
             !timedOut,
           summary:
-            fact.observation?.summary ??
-            fact.errorCode ??
-            `workspace.run_shell ${fact.status}`,
+            fact.observation?.summary ?? fact.errorCode ?? `workspace.run_shell ${fact.status}`,
         }),
       ];
     }),
@@ -6073,8 +5485,7 @@ function projectChildOutcomeV1(
         ? ("partial" as const)
         : ("not_applicable" as const);
   const artifactRefs = facts.flatMap((fact) =>
-    fact.type === "tool.settled" &&
-    fact.observation?.payload?.kind === "artifact_ref"
+    fact.type === "tool.settled" && fact.observation?.payload?.kind === "artifact_ref"
       ? [fact.observation.payload.artifactRef]
       : [],
   );
@@ -6101,13 +5512,10 @@ function workspaceRevisionV1(workspaceRoot: string): string | undefined {
   };
   const head = run(["rev-parse", "HEAD"]);
   if (!head) return undefined;
-  const status =
-    run(["status", "--porcelain=v1", "--untracked-files=all"]) ?? "";
+  const status = run(["status", "--porcelain=v1", "--untracked-files=all"]) ?? "";
   const diff = run(["diff", "--no-ext-diff", "--binary"]) ?? "";
-  const stagedDiff =
-    run(["diff", "--cached", "--no-ext-diff", "--binary"]) ?? "";
-  const untracked =
-    run(["ls-files", "--others", "--exclude-standard", "-z"]) ?? "";
+  const stagedDiff = run(["diff", "--cached", "--no-ext-diff", "--binary"]) ?? "";
+  const untracked = run(["ls-files", "--others", "--exclude-standard", "-z"]) ?? "";
   const untrackedPaths = untracked.split("\0").filter(Boolean);
   const untrackedHashes =
     untrackedPaths.length === 0
@@ -6164,26 +5572,20 @@ function collaborationTestsRunV1(
   }
   return Object.freeze(
     payload.testsRun.flatMap((item) =>
-      isJsonRecordV1(item) &&
-      typeof item.name === "string" &&
-      typeof item.passed === "boolean"
+      isJsonRecordV1(item) && typeof item.name === "string" && typeof item.passed === "boolean"
         ? [{ name: item.name, passed: item.passed }]
         : [],
     ),
   );
 }
 
-function compactCompletionReviewArgsV1(
-  tool: string,
-  args: JsonValue,
-): JsonValue {
+function compactCompletionReviewArgsV1(tool: string, args: JsonValue): JsonValue {
   if (!isJsonRecordV1(args)) return args;
   const compact: Record<string, JsonValue> = {};
   if (typeof args.path === "string") compact.path = args.path;
   if (typeof args.offset === "number") compact.offset = args.offset;
   if (typeof args.limit === "number") compact.limit = args.limit;
-  if (typeof args.command === "string")
-    compact.command = args.command.slice(0, 2_000);
+  if (typeof args.command === "string") compact.command = args.command.slice(0, 2_000);
   if (tool.endsWith("apply_patch")) {
     compact.paths = [...completionReviewMutationPathsV1(tool, args)];
   }
@@ -6229,9 +5631,7 @@ async function runPreparedExistingFilePayloadPawNextTask<
   >;
   readonly runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>;
   readonly head: PawNextJournalHeadV1;
-  readonly publishPayloadBundle: (
-    bundle: PawNextPayloadExecutionBundleV2,
-  ) => void;
+  readonly publishPayloadBundle: (bundle: PawNextPayloadExecutionBundleV2) => void;
   readonly inspect: (
     prefix: readonly RunJournalEnvelopeV1[],
     bundle: PawNextPayloadExecutionBundleV2,
@@ -6243,9 +5643,7 @@ async function runPreparedExistingFilePayloadPawNextTask<
     readonly classification: PawNextFilePayloadClassificationV1<TControlState>;
   }>;
   readonly expectedInventoryHash?: string;
-  readonly allowBlockedPending?: (
-    prefix: readonly RunJournalEnvelopeV1[],
-  ) => boolean;
+  readonly allowBlockedPending?: (prefix: readonly RunJournalEnvelopeV1[]) => boolean;
   readonly openNextQueuedWorkSegment?: (context: {
     readonly session: PawNextPayloadExecutionBundleV2["session"];
     readonly inbox: DurableInputInboxV1;
@@ -6295,12 +5693,7 @@ async function runPreparedExistingFilePayloadPawNextTask<
         restored.classification.status === "actionable_repair" &&
         options.longHorizon === "manager"
       ) {
-        await recoverManagerDelegationsV1(
-          runtime,
-          options,
-          bundle,
-          executionSignal,
-        );
+        await recoverManagerDelegationsV1(runtime, options, bundle, executionSignal);
         prefix = await bundle.session.readCanonicalPrefix();
         restored = await input.inspect(prefix, bundle, executionSignal);
       }
@@ -6308,8 +5701,7 @@ async function runPreparedExistingFilePayloadPawNextTask<
         await repairRunRecoveryV1({
           session: bundle.session,
           signal: executionSignal,
-          loadModelResponseEvidence: (current, signal) =>
-            bundle.loadForPrefix(current, signal),
+          loadModelResponseEvidence: (current, signal) => bundle.loadForPrefix(current, signal),
         });
       }
       prefix = await bundle.session.readCanonicalPrefix();
@@ -6317,14 +5709,9 @@ async function runPreparedExistingFilePayloadPawNextTask<
       const recoverableBlockedPending =
         restored.classification.status === "blocked_pending" &&
         (input.allowBlockedPending?.(prefix) ?? false);
-      assertExistingClassificationCanResume(
-        restored.classification,
-        recoverableBlockedPending,
-      );
+      assertExistingClassificationCanResume(restored.classification, recoverableBlockedPending);
       if (restored.classification.status === "actionable_repair") {
-        throw new Error(
-          `Existing Paw Next ${input.productLabel} recovery remained incomplete`,
-        );
+        throw new Error(`Existing Paw Next ${input.productLabel} recovery remained incomplete`);
       }
       if (recoverableBlockedPending) {
         if (!input.openNextQueuedWorkSegment) {
@@ -6333,8 +5720,7 @@ async function runPreparedExistingFilePayloadPawNextTask<
         const opened = await input.openNextQueuedWorkSegment({
           session: bundle.session,
           inbox: new DurableInputInboxV1(bundle.session),
-          loadForPrefix: (current, signal) =>
-            bundle.loadForPrefix(current, signal),
+          loadForPrefix: (current, signal) => bundle.loadForPrefix(current, signal),
           signal: executionSignal,
           state: restored.classification.state,
         });
@@ -6364,10 +5750,7 @@ async function runPreparedExistingFilePayloadPawNextTask<
 
 /** Resume only the managed delegation transport, whose effects live in identity-bound child journals.
  * Ordinary tools, unapproved dispatches, and unknown child effects keep generic fail-closed recovery. */
-async function recoverManagerDelegationsV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(
+async function recoverManagerDelegationsV1<TRunConfig, TControlState extends LoopControlState>(
   runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>,
   options: RunFreshPawNextTaskOptionsV1,
   bundle: PawNextPayloadExecutionBundleV2,
@@ -6375,20 +5758,14 @@ async function recoverManagerDelegationsV1<
 ): Promise<void> {
   const snapshot = await bundle.session.readInputSnapshot();
   const facts = snapshot.entries.map((entry) => entry.fact);
-  const settled = new Set(
-    facts.flatMap((f) => (f.type === "tool.settled" ? [f.callId] : [])),
-  );
+  const settled = new Set(facts.flatMap((f) => (f.type === "tool.settled" ? [f.callId] : [])));
   const permitted = new Set(
     facts.flatMap((f) =>
-      f.type === "tool.permission_resolved" && f.resolution !== "deny"
-        ? [f.callId]
-        : [],
+      f.type === "tool.permission_resolved" && f.resolution !== "deny" ? [f.callId] : [],
     ),
   );
   const dispatched = new Set(
-    facts.flatMap((f) =>
-      f.type === "tool.dispatch_recorded" ? [f.callId] : [],
-    ),
+    facts.flatMap((f) => (f.type === "tool.dispatch_recorded" ? [f.callId] : [])),
   );
   const pending = facts.filter(
     (f) =>
@@ -6399,11 +5776,7 @@ async function recoverManagerDelegationsV1<
       dispatched.has(f.callId),
   );
   if (!pending.length) return;
-  const launcher = collaborationContextV1(
-    runtime,
-    options,
-    bundle.session,
-  ).subAgentLauncher;
+  const launcher = collaborationContextV1(runtime, options, bundle.session).subAgentLauncher;
   const entry = runtime.registry.resolveProviderName("workspace_delegate");
   if (!launcher || !entry)
     throw new Error("Managed recovery requires its frozen delegation runtime");
@@ -6468,19 +5841,14 @@ function publishLiveInputV1<TRunConfig, TControlState extends LoopControlState>(
   options.onLiveInputReady?.({
     accept(request) {
       if (closed || signal.aborted)
-        return Promise.reject(
-          new Error("任务已结束或正在停止，请在结束后发送新消息。"),
-        );
+        return Promise.reject(new Error("任务已结束或正在停止，请在结束后发送新消息。"));
       const operation = inbox.accept(request, (snapshot) => {
         signal.throwIfAborted();
         const state = runtime.reducer.reduce(
           snapshot.entries.map((entry) => entry.fact),
           runtime.runConfig,
         );
-        if (
-          closed ||
-          !["continue", "await_external"].includes(state.decision.kind)
-        )
+        if (closed || !["continue", "await_external"].includes(state.decision.kind))
           throw new Error("任务正在结束，本条指令未接收，请在结束后重新发送。");
       });
       pending.add(operation);
@@ -6506,9 +5874,7 @@ async function executePreparedFilePayloadPawNextLoop<
     readonly checkpointHighWater: number;
   };
   readonly executionSignal: AbortSignal;
-  readonly registerCoordinator: (
-    coordinator: SessionCoordinatorV1<TControlState>,
-  ) => void;
+  readonly registerCoordinator: (coordinator: SessionCoordinatorV1<TControlState>) => void;
   readonly registerCleanup: (cleanup: () => void | Promise<void>) => void;
   readonly openNextQueuedWorkSegment?: (context: {
     readonly session: PawNextPayloadExecutionBundleV2["session"];
@@ -6569,9 +5935,7 @@ async function executePreparedFilePayloadPawNextLoop<
     runId: options.runId,
     registry: runtime.registry,
     permissions,
-    ...(options.requestApproval
-      ? { requestApproval: options.requestApproval }
-      : {}),
+    ...(options.requestApproval ? { requestApproval: options.requestApproval } : {}),
     permissionRecorder: {
       async record(facts) {
         await bundle.session.appendInputFacts(facts);
@@ -6584,23 +5948,15 @@ async function executePreparedFilePayloadPawNextLoop<
       ...outputRecallContextV1(runtime, bundle),
       ...taskProgressContextV1(runtime, bundle, managedJobs),
       ...webAccessContextV1(runtime),
-      ...(runtime.registry.plugins.some(
-        (p) => p.pluginId === "paw.browser-audit",
-      )
+      ...(runtime.registry.plugins.some((p) => p.pluginId === "paw.browser-audit")
         ? { browserCheck: options.auditedBrowserCheck ?? runBrowserCheck }
         : {}),
       ...collaborationContextV1(runtime, options, bundle.session),
       ...(options.shellSandbox ? { shellSandbox: options.shellSandbox } : {}),
     },
-    checkpointSequence: new MonotonicCheckpointSequenceV1(
-      restored.checkpointHighWater,
-    ),
+    checkpointSequence: new MonotonicCheckpointSequenceV1(restored.checkpointHighWater),
   });
-  const memoryTools = createProductMemoryToolExecutorV1(
-    runtime,
-    baseTools,
-    options,
-  );
+  const memoryTools = createProductMemoryToolExecutorV1(runtime, baseTools, options);
   const tools = createBoundedReplanToolGateV1({
     delegate: memoryTools,
     session: bundle.session,
@@ -6633,14 +5989,12 @@ async function executePreparedFilePayloadPawNextLoop<
           const opened = await input.openNextQueuedWorkSegment({
             session: bundle.session,
             inbox,
-            loadForPrefix: (prefix, signal) =>
-              bundle.loadForPrefix(prefix, signal),
+            loadForPrefix: (prefix, signal) => bundle.loadForPrefix(prefix, signal),
             signal: executionSignal,
             state,
             ...(options.auditedMemory
               ? {
-                  settleMemory: () =>
-                    settleMemoryWriterTerminalBestEffortV1(memoryWriter, state),
+                  settleMemory: () => settleMemoryWriterTerminalBestEffortV1(memoryWriter, state),
                 }
               : {}),
           });
@@ -6675,10 +6029,7 @@ async function executePreparedFilePayloadPawNextLoop<
   await coordinator.wake();
   await closeInput();
   if (!finalState) throw new Error("Paw Next run produced no control state");
-  const final = await bundle.readFinalProjection(
-    runtime.protocol,
-    executionSignal,
-  );
+  const final = await bundle.readFinalProjection(runtime.protocol, executionSignal);
   return {
     state: finalState,
     assistantText: final.assistantText,
@@ -6734,9 +6085,7 @@ function runPreparedExistingPawNextTaskV1(
       if (restored.classification.status === "actionable_repair") {
         throw new Error("Existing Paw Next recovery remained incomplete");
       }
-      const permissions = new FrozenPermissionEngineV1(
-        prepared.permissionConfig,
-      );
+      const permissions = new FrozenPermissionEngineV1(prepared.permissionConfig);
       hydratePermissionRunRulesV1({
         facts: restored.facts,
         registry: prepared.registry,
@@ -6746,11 +6095,8 @@ function runPreparedExistingPawNextTaskV1(
         approvalMode: prepared.manifest.approvalMode,
       });
       const inbox = new DurableInputInboxV1(session);
-      const managedJobs = createRuntimeManagedJobs(
-        options,
-        session,
-        restored.facts,
-        () => wakeCoordinatorBestEffort(coordinator),
+      const managedJobs = createRuntimeManagedJobs(options, session, restored.facts, () =>
+        wakeCoordinatorBestEffort(coordinator),
       );
       registerCleanup(() => managedJobs.close());
       const tools = createHarnessToolExecutorV1({
@@ -6766,16 +6112,10 @@ function runPreparedExistingPawNextTaskV1(
         context: {
           workspaceRoot: options.workspaceRoot,
           managedJobs,
-          ...(options.shellSandbox
-            ? { shellSandbox: options.shellSandbox }
-            : {}),
+          ...(options.shellSandbox ? { shellSandbox: options.shellSandbox } : {}),
         },
-        checkpointSequence: new MonotonicCheckpointSequenceV1(
-          restored.checkpointHighWater,
-        ),
-        ...(options.requestApproval
-          ? { requestApproval: options.requestApproval }
-          : {}),
+        checkpointSequence: new MonotonicCheckpointSequenceV1(restored.checkpointHighWater),
+        ...(options.requestApproval ? { requestApproval: options.requestApproval } : {}),
       });
       const dependencies = createProductLoopDependencies({
         options,
@@ -6796,14 +6136,12 @@ function runPreparedExistingPawNextTaskV1(
           finalState = state;
           return state;
         },
-        shouldAwaitExternal: (state) =>
-          state.decision.kind === "await_external",
+        shouldAwaitExternal: (state) => state.decision.kind === "await_external",
         signal: executionSignal,
       });
       registerCoordinator(coordinator);
       await coordinator.wake();
-      if (!finalState)
-        throw new Error("Paw Next run produced no control state");
+      if (!finalState) throw new Error("Paw Next run produced no control state");
       const settled = await session.readInputSnapshot();
       const facts = settled.entries.map((item) => item.fact);
       return {
@@ -6832,10 +6170,7 @@ function inspectExistingProductPrefix(
     configHash: prepared.configHash,
     providerProtocol: prepared.protocol,
   });
-  assertReplayEquivalentV1<
-    InteractiveControlConfigV1,
-    InteractiveControlStateV1
-  >(canonical, {
+  assertReplayEquivalentV1<InteractiveControlConfigV1, InteractiveControlStateV1>(canonical, {
     runConfig: prepared.runConfig,
     reducerVersion: INTERACTIVE_CONTROL_REDUCER_VERSION_V1,
     reducer: prepared.reducer,
@@ -6861,13 +6196,8 @@ function inspectExistingProductPrefix(
   });
   const snapshot = prefixInputSnapshot(canonical);
   const inbox = projectDurableInputInboxStateV1(snapshot);
-  const state = frozenInteractiveState(
-    prepared.reducer.reduce(inputFacts, prepared.runConfig),
-  );
-  const pendingInputIds = Object.freeze([
-    ...inbox.pendingSteerIds,
-    ...inbox.pendingQueueIds,
-  ]);
+  const state = frozenInteractiveState(prepared.reducer.reduce(inputFacts, prepared.runConfig));
+  const pendingInputIds = Object.freeze([...inbox.pendingSteerIds, ...inbox.pendingQueueIds]);
   const recovery = classifyRunRecoveryV1(canonical);
   let classification: PawNextExistingPrefixClassificationV1;
   if (recovery.status === "repair") {
@@ -6993,17 +6323,9 @@ async function inspectExistingFilePayloadProduct<
   });
   const snapshot = prefixInputSnapshot(canonical);
   const evidence = await input.payloads.loadForPrefix(canonical, input.signal);
-  assertPawNextPayloadEvidenceV2(
-    canonical,
-    snapshot,
-    evidence,
-    input.runtime.protocol,
-  );
+  assertPawNextPayloadEvidenceV2(canonical, snapshot, evidence, input.runtime.protocol);
   const inputFacts = prefixInputFacts(canonical);
-  const toolWorkspaceRoot = runtimeToolWorkspaceRootV1(
-    input.options,
-    input.runtime,
-  );
+  const toolWorkspaceRoot = runtimeToolWorkspaceRootV1(input.options, input.runtime);
   hydratePermissionRunRulesV1({
     facts: inputFacts,
     registry: input.runtime.registry,
@@ -7021,16 +6343,11 @@ async function inspectExistingFilePayloadProduct<
   const state = frozenControlState(
     input.runtime.reducer.reduce(inputFacts, input.runtime.runConfig),
   );
-  const pendingInputIds = Object.freeze([
-    ...inbox.pendingSteerIds,
-    ...inbox.pendingQueueIds,
-  ]);
+  const pendingInputIds = Object.freeze([...inbox.pendingSteerIds, ...inbox.pendingQueueIds]);
   const recovery = classifyRunRecoveryV1(canonical, {
     modelResponses: evidence,
   });
-  const hasActiveWorkSegment = inputFacts.some(
-    (fact) => fact.type === "work.segment_started",
-  );
+  const hasActiveWorkSegment = inputFacts.some((fact) => fact.type === "work.segment_started");
   let classification: PawNextFilePayloadClassificationV1<TControlState>;
   if (recovery.status === "repair") {
     classification = Object.freeze({
@@ -7039,21 +6356,13 @@ async function inspectExistingFilePayloadProduct<
       state,
     });
   } else if (isAwaitingRuntimeActivity(state, inputFacts)) {
-    classification = actionableContinueClassification(
-      snapshot,
-      evidence,
-      state,
-    );
+    classification = actionableContinueClassification(snapshot, evidence, state);
   } else if (
     input.activeSegmentContinueBeforePending === true &&
     hasActiveWorkSegment &&
     state.decision.kind === "continue"
   ) {
-    classification = actionableContinueClassification(
-      snapshot,
-      evidence,
-      state,
-    );
+    classification = actionableContinueClassification(snapshot, evidence, state);
   } else if (pendingInputIds.length > 0) {
     classification = Object.freeze({
       status: "blocked_pending",
@@ -7069,11 +6378,7 @@ async function inspectExistingFilePayloadProduct<
         state,
       });
     } else if (state.decision.kind === "continue") {
-      classification = actionableContinueClassification(
-        snapshot,
-        evidence,
-        state,
-      );
+      classification = actionableContinueClassification(snapshot, evidence, state);
     } else {
       classification = Object.freeze({ status: "terminal", state });
     }
@@ -7091,8 +6396,7 @@ function isAwaitingRuntimeActivity(
   facts: readonly InputFactV1[],
 ): boolean {
   return (
-    state.decision.kind === "await_external" &&
-    projectRuntimeActivitiesV1(facts).active.length > 0
+    state.decision.kind === "await_external" && projectRuntimeActivitiesV1(facts).active.length > 0
   );
 }
 
@@ -7100,10 +6404,7 @@ function actionableContinueClassification<TControlState>(
   snapshot: SessionInputSnapshot<InputFactV1>,
   evidence: VerifiedCanonicalPayloadEvidenceV1,
   state: TControlState,
-): Extract<
-  PawNextFilePayloadClassificationV1<TControlState>,
-  { status: "actionable_continue" }
-> {
+): Extract<PawNextFilePayloadClassificationV1<TControlState>, { status: "actionable_continue" }> {
   return Object.freeze({
     status: "actionable_continue",
     cursor: Object.freeze(
@@ -7122,9 +6423,7 @@ function assertPawNextPayloadEvidenceV2(
   providerProtocol: PawProviderProtocol,
 ): void {
   evidence.assertSnapshot(snapshot);
-  for (const occurrence of projectCanonicalDurableJsonPayloadBindingsV1(
-    prefix,
-  )) {
+  for (const occurrence of projectCanonicalDurableJsonPayloadBindingsV1(prefix)) {
     if (occurrence.payload.kind !== "artifact_ref") {
       throw new Error(
         `Existing V2 durable payload must use the file codec at journal seq ${occurrence.location.carrierSeq}`,
@@ -7159,21 +6458,15 @@ function assertPawNextPayloadEvidenceV2(
   }
 }
 
-function prefixInputFacts(
-  prefix: readonly RunJournalEnvelopeV1[],
-): readonly InputFactV1[] {
-  return prefix.flatMap((item) =>
-    item.record.kind === "input_fact" ? [item.record.fact] : [],
-  );
+function prefixInputFacts(prefix: readonly RunJournalEnvelopeV1[]): readonly InputFactV1[] {
+  return prefix.flatMap((item) => (item.record.kind === "input_fact" ? [item.record.fact] : []));
 }
 
 function prefixInputSnapshot(
   prefix: readonly RunJournalEnvelopeV1[],
 ): SessionInputSnapshot<InputFactV1> {
   const entries = prefix.flatMap((item) =>
-    item.record.kind === "input_fact"
-      ? [{ seq: item.seq, fact: item.record.fact }]
-      : [],
+    item.record.kind === "input_fact" ? [{ seq: item.seq, fact: item.record.fact }] : [],
   );
   return Object.freeze({
     entries: Object.freeze(entries),
@@ -7182,15 +6475,11 @@ function prefixInputSnapshot(
   });
 }
 
-function frozenInteractiveState(
-  state: InteractiveControlStateV1,
-): InteractiveControlStateV1 {
+function frozenInteractiveState(state: InteractiveControlStateV1): InteractiveControlStateV1 {
   return frozenControlState(state);
 }
 
-function frozenControlState<TState extends LoopControlState>(
-  state: TState,
-): TState {
+function frozenControlState<TState extends LoopControlState>(state: TState): TState {
   return toFrozenJsonValueV1(state) as unknown as TState;
 }
 
@@ -7209,9 +6498,7 @@ function unconsumedTerminalPromotions<TState extends LoopControlState>(
     facts
       .slice(latestModelDispatchIndex + 1)
       .flatMap((fact) =>
-        fact.type === "input.promoted" && fact.delivery !== "initial"
-          ? [fact.inputId]
-          : [],
+        fact.type === "input.promoted" && fact.delivery !== "initial" ? [fact.inputId] : [],
       ),
   );
 }
@@ -7221,16 +6508,10 @@ function assertExistingClassificationCanResume<TState>(
   allowBlockedPending = false,
 ): void {
   if (classification.status === "blocked_pending" && !allowBlockedPending) {
-    throw new PawNextPendingInputBlockedError(
-      "pending",
-      classification.inputIds,
-    );
+    throw new PawNextPendingInputBlockedError("pending", classification.inputIds);
   }
   if (classification.status === "blocked_unconsumed") {
-    throw new PawNextPendingInputBlockedError(
-      "unconsumed",
-      classification.inputIds,
-    );
+    throw new PawNextPendingInputBlockedError("unconsumed", classification.inputIds);
   }
 }
 
@@ -7243,14 +6524,11 @@ function assertWorkSegmentRequestCanProceed(
   allowRecovery: boolean,
 ): void {
   const markers = prefix.flatMap((envelope) =>
-    envelope.record.kind === "input_fact" &&
-    envelope.record.fact.type === "work.segment_started"
+    envelope.record.kind === "input_fact" && envelope.record.fact.type === "work.segment_started"
       ? [envelope.record.fact]
       : [],
   );
-  const matchingMarkers = markers.filter(
-    (marker) => marker.inputId === inputId,
-  );
+  const matchingMarkers = markers.filter((marker) => marker.inputId === inputId);
   if (matchingMarkers.length > 1) {
     throw new Error(`Duplicate work segment input: ${inputId}`);
   }
@@ -7376,9 +6654,7 @@ function createProductLoopDependenciesGeneric<
           input.inbox,
           input.session,
           input.options.executionDeadline,
-          input.options.leaseScheduler
-            ? () => input.options.leaseScheduler!.now()
-            : undefined,
+          input.options.leaseScheduler ? () => input.options.leaseScheduler!.now() : undefined,
         )
       : input.inbox,
     context: input.prepared.context,
@@ -7401,10 +6677,7 @@ function createProductLoopDependenciesGeneric<
   };
 }
 
-function createProductMemoryToolExecutorV1<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(
+function createProductMemoryToolExecutorV1<TRunConfig, TControlState extends LoopControlState>(
   runtime: PawNextProductLoopRuntimeV1<TRunConfig, TControlState>,
   delegate: ReturnType<typeof createHarnessToolExecutorV1>,
   options: RunFreshPawNextTaskOptionsV1,
@@ -7418,19 +6691,13 @@ function createProductMemoryToolExecutorV1<
     delegate,
     profile: memory.profile,
     ...(memory.provider === undefined ? {} : { provider: memory.provider }),
-    ...(memory.topicEvidenceStore === undefined
-      ? {}
-      : { topicStore: memory.topicEvidenceStore }),
-    ...(memory.topicDossierStore === undefined
-      ? {}
-      : { dossierStore: memory.topicDossierStore }),
+    ...(memory.topicEvidenceStore === undefined ? {} : { topicStore: memory.topicEvidenceStore }),
+    ...(memory.topicDossierStore === undefined ? {} : { dossierStore: memory.topicDossierStore }),
     ...(memory.rawEvidenceArchive === undefined
       ? {}
       : { rawEvidenceArchive: memory.rawEvidenceArchive }),
     ...(contextResolver === undefined ? {} : { contextResolver }),
-    ...(memory.onToolEvent === undefined
-      ? {}
-      : { onEvent: memory.onToolEvent }),
+    ...(memory.onToolEvent === undefined ? {} : { onEvent: memory.onToolEvent }),
   });
 }
 
@@ -7497,23 +6764,17 @@ function createProductMemoryContextResolverV1(
   };
   if (memory.rawEvidenceArchive?.search) {
     const sourceLocalLocator =
-      memory.rawEvidenceArchive.locatorVersion &&
-      memory.rawEvidenceArchive.locate
+      memory.rawEvidenceArchive.locatorVersion && memory.rawEvidenceArchive.locate
         ? Object.freeze({
             locatorVersion: memory.rawEvidenceArchive.locatorVersion,
-            locate: memory.rawEvidenceArchive.locate.bind(
-              memory.rawEvidenceArchive,
-            ),
+            locate: memory.rawEvidenceArchive.locate.bind(memory.rawEvidenceArchive),
           })
         : undefined;
     const sourceLocalHydrator =
-      memory.rawEvidenceArchive.hydratorVersion &&
-      memory.rawEvidenceArchive.hydrate
+      memory.rawEvidenceArchive.hydratorVersion && memory.rawEvidenceArchive.hydrate
         ? Object.freeze({
             hydratorVersion: memory.rawEvidenceArchive.hydratorVersion,
-            hydrate: memory.rawEvidenceArchive.hydrate.bind(
-              memory.rawEvidenceArchive,
-            ),
+            hydrate: memory.rawEvidenceArchive.hydrate.bind(memory.rawEvidenceArchive),
           })
         : undefined;
     const evidenceResolver = createMemoryEvidenceResolverV1({
@@ -7523,16 +6784,10 @@ function createProductMemoryContextResolverV1(
         archive: memory.rawEvidenceArchive,
       }),
       planner: createJsonMemoryEvidenceQueryPlannerV3({
-        model: auxiliaryModel(
-          "memory_query_plan",
-          "MemoryQueryPlannerModelFailed",
-        ),
+        model: auxiliaryModel("memory_query_plan", "MemoryQueryPlannerModelFailed"),
       }),
       supportSelector: createJsonMemoryEvidenceSupportSelectorV1({
-        model: auxiliaryModel(
-          "memory_support",
-          "MemoryEvidenceSupportSelectorModelFailed",
-        ),
+        model: auxiliaryModel("memory_support", "MemoryEvidenceSupportSelectorModelFailed"),
       }),
       ...(sourceLocalLocator === undefined || sourceLocalHydrator === undefined
         ? {}
@@ -7558,12 +6813,8 @@ function createProductMemoryContextResolverV1(
     profile: memory.profile,
     provider: memory.provider,
     topicStore: memory.topicEvidenceStore,
-    ...(memory.topicDossierStore === undefined
-      ? {}
-      : { dossierStore: memory.topicDossierStore }),
-    ...(memory.rawEvidenceArchive === undefined
-      ? {}
-      : { archive: memory.rawEvidenceArchive }),
+    ...(memory.topicDossierStore === undefined ? {} : { dossierStore: memory.topicDossierStore }),
+    ...(memory.rawEvidenceArchive === undefined ? {} : { archive: memory.rawEvidenceArchive }),
     ...(coveragePlanner === undefined ? {} : { planner: coveragePlanner }),
     ...(supportVerifier === undefined ? {} : { verifier: supportVerifier }),
   });
@@ -7571,28 +6822,21 @@ function createProductMemoryContextResolverV1(
 
 function createBoundedReplanToolGateV1(input: {
   readonly delegate: ReturnType<typeof createHarnessToolExecutorV1>;
-  readonly session: Pick<
-    Session<InputFactV1, DerivedDecisionV1>,
-    "readInputSnapshot"
-  >;
+  readonly session: Pick<Session<InputFactV1, DerivedDecisionV1>, "readInputSnapshot">;
   readonly enabled: boolean;
 }): ReturnType<typeof createHarnessToolExecutorV1> {
   if (!input.enabled) return input.delegate;
-  const executeSettled: ReturnType<
-    typeof createHarnessToolExecutorV1
-  >["executeSettled"] = async (callsInModelOrder, options) => {
-    const advice = projectProgressAdviceV1(
-      await input.session.readInputSnapshot(),
-    );
+  const executeSettled: ReturnType<typeof createHarnessToolExecutorV1>["executeSettled"] = async (
+    callsInModelOrder,
+    options,
+  ) => {
+    const advice = projectProgressAdviceV1(await input.session.readInputSnapshot());
     const gateActive =
       advice?.kind === "no_progress_checkpoint" &&
       advice.modelTurnsWithoutProgress >= 16 &&
       advice.modelTurnsWithoutProgress <= 18 &&
       advice.delegationAttemptsSinceProgress === 0;
-    if (
-      !gateActive ||
-      callsInModelOrder.some((call) => isReplanAction(call.name))
-    ) {
+    if (!gateActive || callsInModelOrder.some((call) => isReplanAction(call.name))) {
       return input.delegate.executeSettled(callsInModelOrder, options);
     }
     const message =
@@ -7641,9 +6885,7 @@ function isReplanAction(tool: string): boolean {
   return BOUNDED_REPLAN_ACTION_TOOLS_V1.has(tool);
 }
 
-type PawNextJournalHeadV1 = ReturnType<
-  typeof readFileSessionJournalCommitIndexV1
->["head"];
+type PawNextJournalHeadV1 = ReturnType<typeof readFileSessionJournalCommitIndexV1>["head"];
 
 async function withFencedPawNextSessionV1<
   TResult,
@@ -7651,10 +6893,7 @@ async function withFencedPawNextSessionV1<
   TControlState = InteractiveControlStateV1,
 >(
   options: RunFreshPawNextTaskOptionsV1,
-  prepared: Pick<
-    PreparedPawNextProductRuntimeV1,
-    "signal" | "heartbeatPolicy" | "leaseScheduler"
-  >,
+  prepared: Pick<PreparedPawNextProductRuntimeV1, "signal" | "heartbeatPolicy" | "leaseScheduler">,
   head: PawNextJournalHeadV1,
   createSessionView: (input: {
     readonly rawSession: FileRunSessionV1;
@@ -7664,9 +6903,7 @@ async function withFencedPawNextSessionV1<
   work: (
     session: TSessionView,
     executionSignal: AbortSignal,
-    registerCoordinator: (
-      coordinator: SessionCoordinatorV1<TControlState>,
-    ) => void,
+    registerCoordinator: (coordinator: SessionCoordinatorV1<TControlState>) => void,
     registerCleanup: (cleanup: () => void | Promise<void>) => void,
   ) => Promise<TResult>,
   expectedInventoryHash?: string,
@@ -7724,9 +6961,7 @@ async function withFencedPawNextSessionV1<
       sessionId: options.sessionId,
       runId: options.runId,
       executionLease,
-      ...(options.onJournalCommit
-        ? { onCommitted: options.onJournalCommit }
-        : {}),
+      ...(options.onJournalCommit ? { onCommitted: options.onJournalCommit } : {}),
     });
   } catch (error) {
     try {
@@ -7809,10 +7044,7 @@ async function withFencedPawNextSessionV1<
     cleanupErrors.push(error);
   }
   if (runError !== undefined && cleanupErrors.length > 0) {
-    throw new AggregateError(
-      [runError, ...cleanupErrors],
-      "Paw Next task and cleanup both failed",
-    );
+    throw new AggregateError([runError, ...cleanupErrors], "Paw Next task and cleanup both failed");
   }
   if (runError !== undefined) throw runError;
   if (cleanupErrors.length > 0) {
@@ -7828,12 +7060,7 @@ async function releaseExecutionLeaseOrThrow(
   sessionId: string,
   runId: string,
 ): Promise<void> {
-  const status = await releaseFileSessionExecutionLeaseV1(
-    lease,
-    workspaceRoot,
-    sessionId,
-    runId,
-  );
+  const status = await releaseFileSessionExecutionLeaseV1(lease, workspaceRoot, sessionId, runId);
   if (status === "lost") {
     throw new Error("Paw Next execution lease was lost before cleanup");
   }
@@ -7849,9 +7076,7 @@ function assertLeaseScheduler(scheduler: SessionLeaseSchedulerV1): void {
   }
   const now = scheduler.now();
   if (!Number.isSafeInteger(now) || now < 0) {
-    throw new Error(
-      "Paw Next Session lease heartbeat scheduler returned an invalid time",
-    );
+    throw new Error("Paw Next Session lease heartbeat scheduler returned an invalid time");
   }
 }
 
@@ -7860,10 +7085,7 @@ interface ProductFactMapperInput {
   readonly encode: (value: JsonValue) => DurableJsonPayloadV1;
 }
 
-function createProductFactMapper<
-  TRunConfig,
-  TControlState extends LoopControlState,
->(
+function createProductFactMapper<TRunConfig, TControlState extends LoopControlState>(
   input: ProductFactMapperInput,
 ): AgentLoopFactMapper<
   TRunConfig,
@@ -7883,14 +7105,8 @@ function createProductFactMapper<
       };
     },
     modelSettled({ turn, settlement }) {
-      if (
-        settlement.status === "success" ||
-        settlement.status === "truncated"
-      ) {
-        const response = toDurableModelResponseV1(
-          settlement.message,
-          input.protocol,
-        );
+      if (settlement.status === "success" || settlement.status === "truncated") {
+        const response = toDurableModelResponseV1(settlement.message, input.protocol);
         return {
           type: "model.settled",
           modelCallId: `model-${turn}`,
@@ -7899,9 +7115,7 @@ function createProductFactMapper<
           hasToolCalls: settlement.toolCalls.length > 0,
           hasVisibleOutput: response.assistantContent.trim().length > 0,
           response: input.encode(toFrozenJsonValueV1(response)),
-          ...(response.finishReason
-            ? { finishReason: response.finishReason }
-            : {}),
+          ...(response.finishReason ? { finishReason: response.finishReason } : {}),
         };
       }
       if (settlement.status === "failed") {
@@ -7923,9 +7137,7 @@ function createProductFactMapper<
         hasToolCalls: false,
         hasVisibleOutput: false,
         ...("reason" in settlement &&
-        /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/.test(
-          settlement.reason,
-        )
+        /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/.test(settlement.reason)
           ? {
               errorCode: settlement.reason.match(
                 /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/,
@@ -8012,11 +7224,7 @@ function runtimeToolWorkspaceRootV1(
 function createRuntimeManagedJobs(
   options: Pick<
     RunFreshPawNextTaskOptionsV1,
-    | "runId"
-    | "workspaceRoot"
-    | "shellSandbox"
-    | "onManagedJobsReady"
-    | "onManagedJobUpdate"
+    "runId" | "workspaceRoot" | "shellSandbox" | "onManagedJobsReady" | "onManagedJobUpdate"
   >,
   session: Pick<Session<InputFactV1, DerivedDecisionV1>, "appendInputFacts">,
   resumeFacts: readonly InputFactV1[],
@@ -8050,15 +7258,11 @@ function wakeCoordinatorBestEffort<TResult>(
   }
 }
 
-function freezePermissionConfig(
-  config: FrozenPermissionConfigV1,
-): FrozenPermissionConfigV1 {
+function freezePermissionConfig(config: FrozenPermissionConfigV1): FrozenPermissionConfigV1 {
   return Object.freeze({
     policyVersion: config.policyVersion,
     defaultAction: config.defaultAction,
-    rules: Object.freeze(
-      config.rules.map((rule) => Object.freeze({ ...rule })),
-    ),
+    rules: Object.freeze(config.rules.map((rule) => Object.freeze({ ...rule }))),
   });
 }
 
@@ -8075,9 +7279,7 @@ function createInlineDurableJsonStore() {
     encode,
     async resolve(payload: DurableJsonPayloadV1): Promise<JsonValue> {
       if (payload.kind !== "inline") {
-        throw new Error(
-          "Fresh product entry does not support artifact payloads",
-        );
+        throw new Error("Fresh product entry does not support artifact payloads");
       }
       if (hashCanonicalJsonV1(payload.value) !== payload.hash) {
         throw new Error("Inline durable payload hash mismatch");
@@ -8088,9 +7290,7 @@ function createInlineDurableJsonStore() {
   };
 }
 
-function latestAssistantText(
-  facts: readonly InputFactV1[],
-): string | undefined {
+function latestAssistantText(facts: readonly InputFactV1[]): string | undefined {
   for (let index = facts.length - 1; index >= 0; index -= 1) {
     const fact = facts[index];
     if (fact?.type !== "model.settled" || fact.response?.kind !== "inline") {
@@ -8102,9 +7302,7 @@ function latestAssistantText(
   return undefined;
 }
 
-function resolveProviderProtocol(
-  options: RunFreshPawNextTaskOptionsV1,
-): PawProviderProtocol {
+function resolveProviderProtocol(options: RunFreshPawNextTaskOptionsV1): PawProviderProtocol {
   const runtimeProtocol = options.model.runtimeProfile?.protocol;
   if (
     options.providerProtocol !== undefined &&
@@ -8120,9 +7318,7 @@ function resolveProviderProtocol(
   return protocol;
 }
 
-function toContextEstimator(
-  estimator: TokenEstimator,
-): ContextTokenEstimatorV1 {
+function toContextEstimator(estimator: TokenEstimator): ContextTokenEstimatorV1 {
   const count = estimator.count.bind(estimator);
   const countMessages = estimator.countMessages.bind(estimator);
   return {
@@ -8160,9 +7356,7 @@ function hashText(value: string): string {
 
 function normalizeCode(value: string): string {
   const normalized = value.trim().replace(/[^A-Za-z0-9._:@/-]/g, "_");
-  return normalized && /^[A-Za-z0-9]/.test(normalized)
-    ? normalized.slice(0, 512)
-    : "E_RUNTIME";
+  return normalized && /^[A-Za-z0-9]/.test(normalized) ? normalized.slice(0, 512) : "E_RUNTIME";
 }
 
 function assertRunInput(options: RunFreshPawNextTaskOptionsV1): void {

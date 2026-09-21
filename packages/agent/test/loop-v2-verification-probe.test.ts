@@ -72,9 +72,7 @@ function fakeModel(responses: readonly string[]): LanguageModel & {
 }
 
 function onlyProbeRunFolder(workspaceRoot: string): string {
-  const folders = fs.readdirSync(
-    path.join(workspaceRoot, ".paw", "loop-v2", "runs"),
-  );
+  const folders = fs.readdirSync(path.join(workspaceRoot, ".paw", "loop-v2", "runs"));
   expect(folders).toHaveLength(1);
   const folder = folders[0];
   if (!folder) throw new Error("missing verification probe run folder");
@@ -185,9 +183,7 @@ describe("Loop v2 adversarial verification probe", () => {
     );
     expect(prompt).toContain("middle of task goal omitted");
     expect(prompt).toContain("compare every visible token/separator class");
-    expect(prompt).toContain(
-      "must be exercised by the command's assertion itself",
-    );
+    expect(prompt).toContain("must be exercised by the command's assertion itself");
     expect(prompt).toContain("assert the exact output representation");
     expect(prompt.length).toBeLessThan(42_000);
   });
@@ -274,12 +270,8 @@ describe("Loop v2 adversarial verification probe", () => {
       changedFiles: ["pkg/base.py"],
       extensionPointHints: ["pkg/handlers"],
     });
-    expect(prompt).toContain(
-      "Highest-priority risk: protocol fallback ownership",
-    );
-    expect(prompt).not.toContain(
-      "Highest-priority risk: existing extension point",
-    );
+    expect(prompt).toContain("Highest-priority risk: protocol fallback ownership");
+    expect(prompt).not.toContain("Highest-priority risk: existing extension point");
     expect(prompt.match(/Highest-priority risk:/g)).toHaveLength(1);
   });
 
@@ -321,9 +313,7 @@ describe("Loop v2 adversarial verification probe", () => {
       broadCatch: "except Exception:",
       fallback: "return NotImplemented",
     });
-    expect(prompt).toContain(
-      "Highest-priority risk: protocol fallback ownership",
-    );
+    expect(prompt).toContain("Highest-priority risk: protocol fallback ownership");
     expect(prompt).toContain("real competing protocol participant");
     expect(prompt).toContain("look-alike lacking that handler");
     expect(prompt).toContain("out/in-place/reflected");
@@ -352,9 +342,7 @@ describe("Loop v2 adversarial verification probe", () => {
       diff: "+except Exception:\n+    return NotImplemented",
       changedFiles: ["pkg/equality.py"],
     });
-    expect(equalityPrompt).toContain(
-      "Highest-priority risk: protocol fallback ownership",
-    );
+    expect(equalityPrompt).toContain("Highest-priority risk: protocol fallback ownership");
     expect(equalityPrompt).not.toContain("out/in-place/reflected");
   });
 
@@ -364,13 +352,8 @@ describe("Loop v2 adversarial verification probe", () => {
       fs.mkdirSync(path.join(dir, "sympy", "sets", "handlers"), {
         recursive: true,
       });
-      fs.writeFileSync(
-        path.join(dir, "sympy", "sets", "sets.py"),
-        "class Set: pass\n",
-      );
-      const hints = discoverRepositoryExtensionPointsV1(dir, [
-        "sympy/sets/sets.py",
-      ]);
+      fs.writeFileSync(path.join(dir, "sympy", "sets", "sets.py"), "class Set: pass\n");
+      const hints = discoverRepositoryExtensionPointsV1(dir, ["sympy/sets/sets.py"]);
       const prompt = buildVerificationProbePromptV1({
         goal: "Make ProductSet equality evaluate correctly",
         diff: [
@@ -385,9 +368,7 @@ describe("Loop v2 adversarial verification probe", () => {
       });
 
       expect(hints).toContain("sympy/sets/handlers");
-      expect(prompt).toContain(
-        "Highest-priority risk: existing extension point",
-      );
+      expect(prompt).toContain("Highest-priority risk: existing extension point");
       expect(prompt).toContain("sympy/sets/handlers");
       expect(prompt).toContain("direct construction/evaluation");
       expect(prompt).toContain("simplify-only");
@@ -398,9 +379,7 @@ describe("Loop v2 adversarial verification probe", () => {
         changedFiles: ["sympy/sets/sets.py"],
         extensionPointHints: hints,
       });
-      expect(topLevelPrompt).toContain(
-        "Highest-priority risk: existing extension point",
-      );
+      expect(topLevelPrompt).toContain("Highest-priority risk: existing extension point");
 
       const insideHandlerPrompt = buildVerificationProbePromptV1({
         goal: "Add the registered comparison handler",
@@ -413,9 +392,7 @@ describe("Loop v2 adversarial verification probe", () => {
         changedFiles: ["sympy/sets/handlers/comparison.py"],
         extensionPointHints: hints,
       });
-      expect(insideHandlerPrompt).not.toContain(
-        "Highest-priority risk: existing extension point",
-      );
+      expect(insideHandlerPrompt).not.toContain("Highest-priority risk: existing extension point");
 
       let captured = "";
       const model = {
@@ -435,9 +412,7 @@ describe("Loop v2 adversarial verification probe", () => {
         candidateInputHash: "extension-candidate",
         mutationRevision: 1,
       });
-      expect(captured).toContain(
-        "Highest-priority risk: existing extension point",
-      );
+      expect(captured).toContain("Highest-priority risk: existing extension point");
       expect(captured).toContain("sympy/sets/handlers");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -504,9 +479,7 @@ describe("Loop v2 adversarial verification probe", () => {
       expect(results[0]?.execution.status).toBe("environment_error");
       expect(results[0]?.execution.output).toContain("read-only workspace");
       expect(results[1]?.execution.status).toBe("environment_error");
-      expect(
-        results.every((result) => result.disposition === "environment_error"),
-      ).toBeTrue();
+      expect(results.every((result) => result.disposition === "environment_error")).toBeTrue();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -550,10 +523,7 @@ describe("Loop v2 adversarial verification probe", () => {
 
   test("gate: fail blocks certification with actionable feedback; pass accepts", () => {
     const fail = evaluateVerificationProbeGateV1({
-      result: probeResult(
-        "candidate_defect",
-        "python -c 'sel.transform(empty)'",
-      ),
+      result: probeResult("candidate_defect", "python -c 'sel.transform(empty)'"),
       noRoomForAnotherTurn: false,
     });
     expect(fail.type).toBe("feedback");
@@ -734,18 +704,10 @@ describe("Loop v2 adversarial verification probe", () => {
 
   test("legacy v1 pass/fail/error records migrate without model or shell replay", async () => {
     for (const legacyStatus of ["pass", "fail", "error"] as const) {
-      const dir = fs.mkdtempSync(
-        path.join(os.tmpdir(), `paw-probe-legacy-${legacyStatus}-`),
-      );
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), `paw-probe-legacy-${legacyStatus}-`));
       try {
         const runId = `legacy-${legacyStatus}`;
-        const runFolder = path.join(
-          dir,
-          ".paw",
-          "loop-v2",
-          "runs",
-          sha256Canonical({ runId }),
-        );
+        const runFolder = path.join(dir, ".paw", "loop-v2", "runs", sha256Canonical({ runId }));
         fs.mkdirSync(runFolder, { recursive: true });
         fs.writeFileSync(
           path.join(runFolder, "verification-probe-v1.json"),
@@ -784,9 +746,7 @@ describe("Loop v2 adversarial verification probe", () => {
         });
         expect(neverModel.calls()).toBe(0);
         expect(migrated.modelCalls).toBe(0);
-        expect(migrated.verdict).toBe(
-          legacyStatus === "pass" ? "clear" : "inconclusive",
-        );
+        expect(migrated.verdict).toBe(legacyStatus === "pass" ? "clear" : "inconclusive");
         expect(migrated.probes[0]?.adjudication.source).toBe("legacy");
         if (legacyStatus === "fail") {
           expect(migrated.probes[0]?.disposition).toBe("inconclusive");
@@ -798,9 +758,7 @@ describe("Loop v2 adversarial verification probe", () => {
   });
 
   test("corrupt claim or settled record fails closed without another model call", async () => {
-    const claimDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-probe-corrupt-claim-"),
-    );
+    const claimDir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-corrupt-claim-"));
     try {
       const crashModel = {
         label: "probe-corrupt-claim",
@@ -849,9 +807,7 @@ describe("Loop v2 adversarial verification probe", () => {
       fs.rmSync(claimDir, { recursive: true, force: true });
     }
 
-    const recordDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-probe-corrupt-record-"),
-    );
+    const recordDir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-corrupt-record-"));
     try {
       const model = fakeModel(['{"probes":[]}']);
       await runVerificationProbeOnceV2({
@@ -866,14 +822,7 @@ describe("Loop v2 adversarial verification probe", () => {
       });
       const runFolder = onlyProbeRunFolder(recordDir);
       fs.writeFileSync(
-        path.join(
-          recordDir,
-          ".paw",
-          "loop-v2",
-          "runs",
-          runFolder,
-          "verification-probe-v2.json",
-        ),
+        path.join(recordDir, ".paw", "loop-v2", "runs", runFolder, "verification-probe-v2.json"),
         JSON.stringify({
           schemaVersion: 2,
           kind: "paw.loop-v2-verification-probe",
@@ -961,11 +910,7 @@ describe("Loop v2 adversarial verification probe", () => {
       );
     };
 
-    const seedCorruptV3Claim = (
-      workspaceRoot: string,
-      runId: string,
-      mutationRevision: number,
-    ) => {
+    const seedCorruptV3Claim = (workspaceRoot: string, runId: string, mutationRevision: number) => {
       const folder = path.join(
         workspaceRoot,
         ".paw",
@@ -988,18 +933,10 @@ describe("Loop v2 adversarial verification probe", () => {
       );
     };
 
-    const sameDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-probe-v3-same-"),
-    );
-    const newerDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-probe-v3-newer-"),
-    );
-    const corruptRecordDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-probe-v3-corrupt-record-"),
-    );
-    const corruptClaimDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "paw-probe-v3-corrupt-claim-"),
-    );
+    const sameDir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-v3-same-"));
+    const newerDir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-v3-newer-"));
+    const corruptRecordDir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-v3-corrupt-record-"));
+    const corruptClaimDir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-v3-corrupt-claim-"));
     try {
       seedV3Record(sameDir, "v3-same", 1);
       const sameModel = fakeModel(['{"probes":[]}']);
@@ -1185,10 +1122,7 @@ describe("Loop v2 adversarial verification probe", () => {
       let calls = 0;
       const model = {
         label: "truncated-planner",
-        async complete(
-          _messages: unknown,
-          options?: { thinkingEnabled?: boolean },
-        ) {
+        async complete(_messages: unknown, options?: { thinkingEnabled?: boolean }) {
           calls += 1;
           expect(options?.thinkingEnabled).toBeFalse();
           return {
@@ -1302,10 +1236,7 @@ describe("Loop v2 adversarial verification probe", () => {
         path.join(dir, "tests", "test_contract.js"),
         "throw new Error('visible regression');\n",
       );
-      fs.writeFileSync(
-        path.join(dir, "tests", "test_discovery.js"),
-        "process.exit(5);\n",
-      );
+      fs.writeFileSync(path.join(dir, "tests", "test_discovery.js"), "process.exit(5);\n");
       Bun.spawnSync(["git", "init", "-q"], { cwd: dir });
       Bun.spawnSync(["git", "add", "tests"], { cwd: dir });
       Bun.spawnSync(
@@ -1401,11 +1332,7 @@ describe("Loop v2 adversarial verification probe", () => {
       expect(exactSelectorResult[0]?.execution.status).toBe("completed");
       expect(exactSelectorResult[0]?.disposition).toBe("pass");
 
-      const repositoryProbe = (
-        probeId: string,
-        command: string,
-        repositoryPath: string,
-      ) => ({
+      const repositoryProbe = (probeId: string, command: string, repositoryPath: string) => ({
         probeId,
         command,
         rationale: "run a tracked repository contract",
@@ -1487,10 +1414,7 @@ describe("Loop v2 adversarial verification probe", () => {
       expect(discovery[0]?.disposition).toBe("environment_error");
       expect(discovery[0]?.adjudication.summary).toContain("test_discovery");
 
-      fs.writeFileSync(
-        path.join(localDir, "tests", "test_contract.js"),
-        "process.exit(0);\n",
-      );
+      fs.writeFileSync(path.join(localDir, "tests", "test_contract.js"), "process.exit(0);\n");
       const modified = executeVerificationProbesV1({
         workspaceRoot: localDir,
         impactedTests: ["tests/test_contract.js"],
@@ -1531,10 +1455,7 @@ describe("Loop v2 adversarial verification probe", () => {
 
     const externalDir = makeRepository();
     try {
-      const externalModel = fakeModel([
-        repositoryPlan,
-        adjudicationJson("inconclusive"),
-      ]);
+      const externalModel = fakeModel([repositoryPlan, adjudicationJson("inconclusive")]);
       const external = await runVerificationProbeOnceV2({
         model: externalModel,
         runId: "external-tracked",
@@ -1559,9 +1480,7 @@ describe("Loop v2 adversarial verification probe", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paw-probe-bad-judge-"));
     try {
       const model = fakeModel([
-        inlinePlanJson(
-          `python -c ${JSON.stringify("raise AssertionError('ambiguous')")}`,
-        ),
+        inlinePlanJson(`python -c ${JSON.stringify("raise AssertionError('ambiguous')")}`),
         '{"dispositions":[{"probeId":"probe_1","disposition":"candidate_defect","summary":"trust me","evidenceRefs":["invented:hidden-test"]}]}',
       ]);
       const result = await runVerificationProbeOnceV2({
@@ -1607,8 +1526,7 @@ describe("Loop v2 adversarial verification probe", () => {
             probeId: "probe_1",
             command:
               'python -c "import selector; selector.transform([[1.0, 2.0]], [False, False])"',
-            rationale:
-              "k=0 with a container lacking .dtype hits the untouched downstream line",
+            rationale: "k=0 with a container lacking .dtype hits the untouched downstream line",
             oracle: "zero selected features must not access a missing dtype",
             kind: "inline_contract",
             groundingRefs: ["task_goal", "terminal_diff"],

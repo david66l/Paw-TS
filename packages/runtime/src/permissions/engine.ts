@@ -1,9 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type {
-  ToolPermissionCategoryV1,
-  ValidatedRuntimeToolCallV1,
-} from "../tools/registry.js";
+import type { ToolPermissionCategoryV1, ValidatedRuntimeToolCallV1 } from "../tools/registry.js";
 
 export type PermissionLayerV1 = "hard" | "admin" | "user" | "default";
 export type PermissionRuleActionV1 = "allow" | "ask" | "deny";
@@ -86,20 +83,13 @@ export class FrozenPermissionEngineV1 {
       if (typeof rule.id !== "string" || !rule.id.trim() || ids.has(rule.id)) {
         throw new Error(`Duplicate or empty permission rule id: ${rule.id}`);
       }
-      if (
-        !(["hard", "admin", "user", "default"] as const).includes(rule.layer)
-      ) {
+      if (!(["hard", "admin", "user", "default"] as const).includes(rule.layer)) {
         throw new Error(`Invalid permission rule layer: ${String(rule.layer)}`);
       }
       if (!(["allow", "ask", "deny"] as const).includes(rule.action)) {
-        throw new Error(
-          `Invalid permission rule action: ${String(rule.action)}`,
-        );
+        throw new Error(`Invalid permission rule action: ${String(rule.action)}`);
       }
-      if (
-        rule.tool !== undefined &&
-        (typeof rule.tool !== "string" || !rule.tool.trim())
-      ) {
+      if (rule.tool !== undefined && (typeof rule.tool !== "string" || !rule.tool.trim())) {
         throw new Error(`Invalid permission rule tool: ${rule.id}`);
       }
       if (
@@ -111,26 +101,19 @@ export class FrozenPermissionEngineV1 {
       if (!rule.tool && !rule.category) {
         throw new Error(`Permission rule ${rule.id} has no match target`);
       }
-      if (
-        (rule.layer === "hard" || rule.layer === "admin") &&
-        rule.action !== "deny"
-      ) {
+      if ((rule.layer === "hard" || rule.layer === "admin") && rule.action !== "deny") {
         throw new Error(`${rule.layer} permission rules may only deny`);
       }
       const matchKey = `${rule.layer}\0${rule.tool ?? "*"}\0${rule.category ?? "*"}`;
       if (matchKeys.has(matchKey)) {
-        throw new Error(
-          `Ambiguous permission rules share one layer and match target: ${rule.id}`,
-        );
+        throw new Error(`Ambiguous permission rules share one layer and match target: ${rule.id}`);
       }
       ids.add(rule.id);
       matchKeys.add(matchKey);
     }
     this.policyVersion = config.policyVersion;
     this.defaultAction = config.defaultAction;
-    this.rules = Object.freeze(
-      config.rules.map((rule) => Object.freeze({ ...rule })),
-    );
+    this.rules = Object.freeze(config.rules.map((rule) => Object.freeze({ ...rule })));
   }
 
   /** Prevent one run's in-memory allow_rule from leaking into another run. */
@@ -208,9 +191,7 @@ export class FrozenPermissionEngineV1 {
     }
 
     if (resolution.source !== "user_prompt") {
-      throw new Error(
-        "Recorded permission did not use the required user prompt",
-      );
+      throw new Error("Recorded permission did not use the required user prompt");
     }
     if (
       resolution.resolution !== "allow_once" &&
@@ -236,10 +217,7 @@ export class FrozenPermissionEngineV1 {
   async resolve(
     value: ValidatedRuntimeToolCallV1,
     requestApproval:
-      | ((
-          prompt: ApprovalPromptV1,
-          signal: AbortSignal,
-        ) => Promise<ApprovalResponseV1>)
+      | ((prompt: ApprovalPromptV1, signal: AbortSignal) => Promise<ApprovalResponseV1>)
       | undefined,
     signal: AbortSignal,
   ): Promise<PermissionResolutionV1> {
@@ -374,14 +352,10 @@ export function createPermissionRunRuleIdV1(input: {
     .digest("hex");
 }
 
-function matches(
-  rule: PermissionRuleV1,
-  value: ValidatedRuntimeToolCallV1,
-): boolean {
+function matches(rule: PermissionRuleV1, value: ValidatedRuntimeToolCallV1): boolean {
   return (
     (rule.tool === undefined || rule.tool === value.internalName) &&
-    (rule.category === undefined ||
-      rule.category === value.classification.permissionCategory)
+    (rule.category === undefined || rule.category === value.classification.permissionCategory)
   );
 }
 
@@ -390,9 +364,7 @@ function firstBaseRule(
   value: ValidatedRuntimeToolCallV1,
 ): PermissionRuleV1 | undefined {
   for (const layer of ["user", "default"] as const) {
-    const matching = rules.filter(
-      (rule) => rule.layer === layer && matches(rule, value),
-    );
+    const matching = rules.filter((rule) => rule.layer === layer && matches(rule, value));
     const exact = matching.find(
       (rule) =>
         rule.tool === value.internalName &&
@@ -415,9 +387,7 @@ function runRuleKey(value: ValidatedRuntimeToolCallV1): string {
   return `${value.internalName}\0${value.classification.permissionCategory}`;
 }
 
-function assertApprovalResponseV1(
-  value: unknown,
-): asserts value is ApprovalResponseV1 {
+function assertApprovalResponseV1(value: unknown): asserts value is ApprovalResponseV1 {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("Approval response must be an object");
   }
@@ -437,9 +407,7 @@ function assertApprovalResponseV1(
     throw new TypeError("Approval denial reason must be a string");
   }
   const allowedKeys =
-    record.decision === "deny"
-      ? new Set(["decision", "reason"])
-      : new Set(["decision"]);
+    record.decision === "deny" ? new Set(["decision", "reason"]) : new Set(["decision"]);
   if (Object.keys(record).some((key) => !allowedKeys.has(key))) {
     throw new TypeError("Approval response contains unknown fields");
   }

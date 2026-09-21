@@ -1,7 +1,4 @@
-import {
-  OBSERVATION_PROVENANCE_SCHEMA_V1,
-  type ObservationProvenanceV1,
-} from "@paw/core";
+import { OBSERVATION_PROVENANCE_SCHEMA_V1, type ObservationProvenanceV1 } from "@paw/core";
 
 const HOST_FACT_TOOLS = new Set([
   "workspace.write_file",
@@ -35,9 +32,7 @@ function provenance(
   });
 }
 
-export function observationProvenanceForToolV1(
-  tool: string,
-): ObservationProvenanceV1 {
+export function observationProvenanceForToolV1(tool: string): ObservationProvenanceV1 {
   if (tool.startsWith("mcp:") || tool === "workspace.use_mcp") {
     return provenance({
       source: "mcp",
@@ -145,10 +140,7 @@ export function wrapCapabilityContentV1(tool: string, content: string): string {
   ].join("\n");
 }
 
-export function wrapObservationContentV1(
-  tool: string,
-  content: string,
-): string {
+export function wrapObservationContentV1(tool: string, content: string): string {
   const meta = observationProvenanceForToolV1(tool);
   return [
     `[Observation Content v1] source=${meta.source} trust=${meta.trust} taint=${meta.taint} instruction_authority=${meta.instructionAuthority} permission_authority=${meta.permissionAuthority}`,

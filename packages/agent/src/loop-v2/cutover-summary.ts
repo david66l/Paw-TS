@@ -28,9 +28,7 @@ export interface LoopV2CutoverSummaryV1 {
   readonly cutoverReadyRuns: number;
   readonly eligibleNotReadyRuns: number;
   readonly v2MorePermissiveRuns: number;
-  readonly terminalComparisons: Readonly<
-    Record<LoopV2TerminalComparisonV1, number>
-  >;
+  readonly terminalComparisons: Readonly<Record<LoopV2TerminalComparisonV1, number>>;
   readonly ineligibilityReasons: Readonly<
     Partial<Record<LoopV2AuthorityIneligibilityReasonV1, number>>
   >;
@@ -46,9 +44,7 @@ export function summarizeLoopV2CutoverV1(
   observations: readonly LoopV2CutoverObservationV1[],
   failures: readonly LoopV2CutoverScanFailureV1[] = [],
 ): LoopV2CutoverSummaryV1 {
-  const ordered = [...observations].sort((left, right) =>
-    left.runId.localeCompare(right.runId),
-  );
+  const ordered = [...observations].sort((left, right) => left.runId.localeCompare(right.runId));
   const seen = new Set<string>();
   for (const observation of ordered) {
     const runId = observation.runId.trim();
@@ -57,9 +53,7 @@ export function summarizeLoopV2CutoverV1(
     }
     seen.add(runId);
     if (!observation.eligibility.eligible && observation.cutoverReady) {
-      throw new Error(
-        `Ineligible loop v2 run cannot be cutover-ready: ${runId}`,
-      );
+      throw new Error(`Ineligible loop v2 run cannot be cutover-ready: ${runId}`);
     }
   }
 
@@ -82,15 +76,10 @@ export function summarizeLoopV2CutoverV1(
     .filter((observation) => observation.eligibility.eligible)
     .map((observation) => observation.runId);
   const eligibleNotReadyRunIds = ordered
-    .filter(
-      (observation) =>
-        observation.eligibility.eligible && !observation.cutoverReady,
-    )
+    .filter((observation) => observation.eligibility.eligible && !observation.cutoverReady)
     .map((observation) => observation.runId);
   const v2MorePermissiveRunIds = ordered
-    .filter(
-      (observation) => observation.terminalComparison === "v2_more_permissive",
-    )
+    .filter((observation) => observation.terminalComparison === "v2_more_permissive")
     .map((observation) => observation.runId);
   const orderedFailures = [...failures]
     .map((failure) => ({
@@ -99,13 +88,9 @@ export function summarizeLoopV2CutoverV1(
     }))
     .sort((left, right) => left.runDirectory.localeCompare(right.runDirectory));
   const ineligibilityReasons = Object.fromEntries(
-    [...reasonCounts.entries()].sort(([left], [right]) =>
-      left.localeCompare(right),
-    ),
+    [...reasonCounts.entries()].sort(([left], [right]) => left.localeCompare(right)),
   ) as Partial<Record<LoopV2AuthorityIneligibilityReasonV1, number>>;
-  const cutoverReadyRuns = ordered.filter(
-    (observation) => observation.cutoverReady,
-  ).length;
+  const cutoverReadyRuns = ordered.filter((observation) => observation.cutoverReady).length;
 
   return {
     schemaVersion: LOOP_V2_CUTOVER_SUMMARY_SCHEMA_VERSION,

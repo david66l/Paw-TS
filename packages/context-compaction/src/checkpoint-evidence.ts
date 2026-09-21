@@ -1,9 +1,4 @@
-import type {
-  InputFactV1,
-  JsonValue,
-  TaskCheckpointItemV1,
-  TaskCheckpointV1,
-} from "@paw/protocol";
+import type { InputFactV1, JsonValue, TaskCheckpointItemV1, TaskCheckpointV1 } from "@paw/protocol";
 import { parseModelResponseV1, parseTaskCheckpointV1 } from "@paw/protocol";
 
 export const CHECKPOINT_EVIDENCE_POLICY_VERSION_V1 =
@@ -23,8 +18,7 @@ const EXECUTION_TOOLS = new Set([
   "workspace.job_start",
   "workspace.job_wait",
 ]);
-const VERIFICATION_COMMAND =
-  /(?:^|\s)(?:test|pytest|vitest|jest|tsc|lint|check|build)(?:\s|$)/i;
+const VERIFICATION_COMMAND = /(?:^|\s)(?:test|pytest|vitest|jest|tsc|lint|check|build)(?:\s|$)/i;
 const PATH_PATTERN =
   /[A-Za-z0-9_@./\\:-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|json|ya?ml|toml|md|css|scss|html|sh|sql|ipynb)\b/g;
 
@@ -103,11 +97,7 @@ export function projectCheckpointEvidenceV1(
       throw new Error("Checkpoint evidence source order is invalid");
     }
     previousSeq = entry.seq;
-    return projectEvidenceItem(
-      entry.seq,
-      entry.fact,
-      payloadBySeq.get(entry.seq),
-    );
+    return projectEvidenceItem(entry.seq, entry.fact, payloadBySeq.get(entry.seq));
   });
   const first = items[0];
   const last = items.at(-1);
@@ -155,29 +145,16 @@ export function verifyTaskCheckpointEvidenceV1(
       const source = bySeq.get(seq);
       if (!source) {
         issues.push(
-          issue(
-            "unknown_source_seq",
-            field,
-            `checkpoint cites unavailable source seq ${seq}`,
-          ),
+          issue("unknown_source_seq", field, `checkpoint cites unavailable source seq ${seq}`),
         );
         return [];
       }
       return [source];
     });
     if (field === "goal" && !cited.some(isUserInputEvidence)) {
-      issues.push(
-        issue(
-          "goal_requires_user_input",
-          field,
-          "goal must cite a promoted user input",
-        ),
-      );
+      issues.push(issue("goal_requires_user_input", field, "goal must cite a promoted user input"));
     }
-    if (
-      field.startsWith("confirmedFacts[") &&
-      !cited.some(isObjectiveEvidence)
-    ) {
+    if (field.startsWith("confirmedFacts[") && !cited.some(isObjectiveEvidence)) {
       issues.push(
         issue(
           "confirmed_fact_requires_objective_evidence",
@@ -245,8 +222,7 @@ function evidenceDetail(
               ? { response: fact.response }
               : {}
             : {
-                assistantContent:
-                  parseModelResponseV1(resolvedPayload).assistantContent,
+                assistantContent: parseModelResponseV1(resolvedPayload).assistantContent,
               }),
         }),
         status: fact.status,
@@ -267,12 +243,8 @@ function evidenceDetail(
           status: fact.status,
           ...(fact.errorCode ? { errorCode: fact.errorCode } : {}),
           ...(fact.result === undefined ? {} : { result: fact.result }),
-          ...(fact.observation === undefined
-            ? {}
-            : { observation: fact.observation }),
-          ...(resolvedPayload === undefined
-            ? {}
-            : { observationPayload: resolvedPayload }),
+          ...(fact.observation === undefined ? {} : { observation: fact.observation }),
+          ...(resolvedPayload === undefined ? {} : { observationPayload: resolvedPayload }),
         } as unknown as JsonValue),
         callId: fact.callId,
         status: fact.status,
@@ -333,10 +305,7 @@ function verifyChangedFile(
     return;
   }
   const paths = new Set([...proof.call.paths, ...proof.settlement.paths]);
-  if (
-    paths.size === 0 ||
-    ![...paths].some((path) => includesPath(item.statement, path))
-  ) {
+  if (paths.size === 0 || ![...paths].some((path) => includesPath(item.statement, path))) {
     issues.push(
       issue(
         "changed_file_path_mismatch",
@@ -356,9 +325,7 @@ function verifyVerification(
 ): void {
   const proof = successfulToolProof(cited, all, EXECUTION_TOOLS);
   const activity = cited.find(
-    (source) =>
-      source.factType === "runtime.activity_settled" &&
-      source.status === "completed",
+    (source) => source.factType === "runtime.activity_settled" && source.status === "completed",
   );
   if (!proof && !activity) {
     issues.push(
@@ -370,10 +337,7 @@ function verifyVerification(
     );
     return;
   }
-  if (
-    proof?.call.command &&
-    !normalize(item.statement).includes(normalize(proof.call.command))
-  ) {
+  if (proof?.call.command && !normalize(item.statement).includes(normalize(proof.call.command))) {
     issues.push(
       issue(
         "verification_command_mismatch",
@@ -389,12 +353,8 @@ function verifyEvidenceCoverage(
   evidence: readonly CheckpointEvidenceItemV1[],
   issues: CheckpointEvidenceIssueV1[],
 ): void {
-  const changedCitations = new Set(
-    checkpoint.changedFiles.flatMap((item) => item.sourceSeqs),
-  );
-  const verificationCitations = new Set(
-    checkpoint.verification.flatMap((item) => item.sourceSeqs),
-  );
+  const changedCitations = new Set(checkpoint.changedFiles.flatMap((item) => item.sourceSeqs));
+  const verificationCitations = new Set(checkpoint.verification.flatMap((item) => item.sourceSeqs));
   for (const call of evidence.filter(
     (item) =>
       item.factType === "tool.call_observed" &&
@@ -407,10 +367,7 @@ function verifyEvidenceCoverage(
         item.callId === call.callId &&
         item.status === "completed",
     );
-    if (
-      settlement &&
-      (!changedCitations.has(call.seq) || !changedCitations.has(settlement.seq))
-    ) {
+    if (settlement && (!changedCitations.has(call.seq) || !changedCitations.has(settlement.seq))) {
       issues.push(
         issue(
           "mutation_evidence_omitted",
@@ -436,8 +393,7 @@ function verifyEvidenceCoverage(
     );
     if (
       settlement &&
-      (!verificationCitations.has(call.seq) ||
-        !verificationCitations.has(settlement.seq))
+      (!verificationCitations.has(call.seq) || !verificationCitations.has(settlement.seq))
     ) {
       issues.push(
         issue(
@@ -499,33 +455,19 @@ function checkpointItems(
 ): readonly (readonly [string, TaskCheckpointItemV1])[] {
   return [
     ...(checkpoint.goal ? [["goal", checkpoint.goal] as const] : []),
-    ...checkpoint.confirmedFacts.map(
-      (item, index) => [`confirmedFacts[${index}]`, item] as const,
-    ),
+    ...checkpoint.confirmedFacts.map((item, index) => [`confirmedFacts[${index}]`, item] as const),
     ...checkpoint.currentHypotheses.map(
       (item, index) => [`currentHypotheses[${index}]`, item] as const,
     ),
-    ...checkpoint.ruledOut.map(
-      (item, index) => [`ruledOut[${index}]`, item] as const,
-    ),
-    ...checkpoint.changedFiles.map(
-      (item, index) => [`changedFiles[${index}]`, item] as const,
-    ),
-    ...checkpoint.verification.map(
-      (item, index) => [`verification[${index}]`, item] as const,
-    ),
-    ...checkpoint.unresolved.map(
-      (item, index) => [`unresolved[${index}]`, item] as const,
-    ),
-    ...(checkpoint.nextAction
-      ? [["nextAction", checkpoint.nextAction] as const]
-      : []),
+    ...checkpoint.ruledOut.map((item, index) => [`ruledOut[${index}]`, item] as const),
+    ...checkpoint.changedFiles.map((item, index) => [`changedFiles[${index}]`, item] as const),
+    ...checkpoint.verification.map((item, index) => [`verification[${index}]`, item] as const),
+    ...checkpoint.unresolved.map((item, index) => [`unresolved[${index}]`, item] as const),
+    ...(checkpoint.nextAction ? [["nextAction", checkpoint.nextAction] as const] : []),
   ];
 }
 
-function rejected(
-  issues: readonly CheckpointEvidenceIssueV1[],
-): CheckpointEvidenceVerificationV1 {
+function rejected(issues: readonly CheckpointEvidenceIssueV1[]): CheckpointEvidenceVerificationV1 {
   return Object.freeze({ ok: false, issues: Object.freeze([...issues]) });
 }
 
@@ -550,9 +492,7 @@ function normalizePath(value: string): string {
 }
 
 function normalizeToolName(value: string): string {
-  return value.startsWith("workspace_")
-    ? `workspace.${value.slice("workspace_".length)}`
-    : value;
+  return value.startsWith("workspace_") ? `workspace.${value.slice("workspace_".length)}` : value;
 }
 
 function objectString(value: JsonValue, key: string): string | undefined {
@@ -560,15 +500,11 @@ function objectString(value: JsonValue, key: string): string | undefined {
     return undefined;
   }
   const candidate = (value as Readonly<Record<string, JsonValue>>)[key];
-  return typeof candidate === "string" && candidate.trim()
-    ? candidate.trim()
-    : undefined;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : undefined;
 }
 
 function truncate(value: string, maxChars: number): string {
-  return value.length <= maxChars
-    ? value
-    : `${value.slice(0, maxChars)}\n[truncated]`;
+  return value.length <= maxChars ? value : `${value.slice(0, maxChars)}\n[truncated]`;
 }
 
 function normalize(value: string): string {
@@ -583,9 +519,6 @@ function canonicalStringify(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalStringify(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${canonicalStringify(record[key] as JsonValue)}`)
     .join(",")}}`;
 }

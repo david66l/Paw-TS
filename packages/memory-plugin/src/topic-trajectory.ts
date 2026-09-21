@@ -16,18 +16,11 @@ export type {
 } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 import type { MemoryTemporalRelationV1 } from "./temporal-graph.js";
-import {
-  type MemoryTrajectoryV1,
-  projectMemoryTrajectoriesV1,
-} from "./trajectory-projector.js";
+import { type MemoryTrajectoryV1, projectMemoryTrajectoriesV1 } from "./trajectory-projector.js";
 
-export const PAW_MEMORY_TOPIC_PROPOSAL_VERSION_V1 =
-  MEMORY_TOPIC_PROPOSAL_SCHEMA_VERSION_V1;
+export const PAW_MEMORY_TOPIC_PROPOSAL_VERSION_V1 = MEMORY_TOPIC_PROPOSAL_SCHEMA_VERSION_V1;
 export const PAW_MEMORY_TOPIC_VERSION_V1 = "paw.memory-topic.v1" as const;
 export const PAW_MEMORY_TOPIC_TRAJECTORY_SNAPSHOT_VERSION_V1 =
   "paw.memory-topic-trajectory-snapshot.v1" as const;
@@ -91,10 +84,7 @@ export function createMemoryTopicProposalV1(
   const normalizedName = normalizeMemoryTopicNameV1(canonicalName);
   const members = normalizeMemberProposals(input.members);
   if (members.length === 0) throw namedError("MemoryTopicMembersEmpty");
-  const confidence = unitInterval(
-    input.confidence,
-    "MemoryTopicConfidenceInvalid",
-  );
+  const confidence = unitInterval(input.confidence, "MemoryTopicConfidenceInvalid");
   const scopeFingerprint = memoryScopeFingerprintV1(input.scope);
   const targetTopicId = input.targetTopicId
     ? stableIdentity(input.targetTopicId, "MemoryTopicTargetInvalid")
@@ -167,10 +157,7 @@ export function materializeMemoryTopicProjectionV1(
     throw namedError("MemoryTopicProposalScopeMismatch");
   }
   const createdAt = isoTime(input.createdAt, "MemoryTopicCreatedAtInvalid");
-  const graphRevision = stableIdentity(
-    input.graphRevision,
-    "MemoryTopicGraphRevisionInvalid",
-  );
+  const graphRevision = stableIdentity(input.graphRevision, "MemoryTopicGraphRevisionInvalid");
   const entries = new Map<string, MemoryEntry>();
   for (const entry of input.entries) {
     if (!entry.id.trim() || entries.has(entry.id)) {
@@ -178,13 +165,8 @@ export function materializeMemoryTopicProjectionV1(
     }
     entries.set(entry.id, entry);
   }
-  const memberIds = new Set(
-    input.proposal.members.map((item) => item.memoryId),
-  );
-  if (
-    entries.size !== memberIds.size ||
-    [...memberIds].some((id) => !entries.has(id))
-  ) {
+  const memberIds = new Set(input.proposal.members.map((item) => item.memoryId));
+  if (entries.size !== memberIds.size || [...memberIds].some((id) => !entries.has(id))) {
     throw namedError("MemoryTopicEntrySetMismatch");
   }
   const topicId = deriveMemoryTopicIdV1({
@@ -192,10 +174,7 @@ export function materializeMemoryTopicProjectionV1(
     family: input.proposal.family,
     normalizedName: input.proposal.normalizedName,
   });
-  if (
-    input.proposal.targetTopicId !== undefined &&
-    input.proposal.targetTopicId !== topicId
-  ) {
+  if (input.proposal.targetTopicId !== undefined && input.proposal.targetTopicId !== topicId) {
     throw namedError("MemoryTopicTargetIdentityMismatch");
   }
   const memberships = Object.freeze(
@@ -223,9 +202,7 @@ export function materializeMemoryTopicProjectionV1(
           relationType: relation.relationType,
           fromMemoryId: relation.fromMemoryId,
           toMemoryId: relation.toMemoryId,
-          evidenceRefs: Object.freeze(
-            stableStrings(relation.evidenceRefs, 128),
-          ),
+          evidenceRefs: Object.freeze(stableStrings(relation.evidenceRefs, 128)),
         }),
       )
       .sort((left, right) => left.relationId.localeCompare(right.relationId)),
@@ -277,14 +254,11 @@ export function materializeMemoryTopicProjectionV1(
 }
 
 /** Recomputes every durable identity before a projection crosses a store boundary. */
-export function assertMemoryTopicProjectionIntegrityV1(
-  projection: MemoryTopicProjectionV1,
-): void {
+export function assertMemoryTopicProjectionIntegrityV1(projection: MemoryTopicProjectionV1): void {
   const { topic, snapshot } = projection;
   if (
     topic.schemaVersion !== PAW_MEMORY_TOPIC_VERSION_V1 ||
-    snapshot.schemaVersion !==
-      PAW_MEMORY_TOPIC_TRAJECTORY_SNAPSHOT_VERSION_V1 ||
+    snapshot.schemaVersion !== PAW_MEMORY_TOPIC_TRAJECTORY_SNAPSHOT_VERSION_V1 ||
     topic.id !== snapshot.topicId ||
     topic.projectionHash !== snapshot.projectionHash ||
     memoryScopeFingerprintV1(topic.scope) !== snapshot.scopeFingerprint ||
@@ -314,9 +288,7 @@ export function assertMemoryTopicProjectionIntegrityV1(
     stableTrajectoryStateIds.some((id) => !memberMemoryIds.includes(id)) ||
     (snapshot.trajectories.every((trajectory) => !trajectory.truncated) &&
       memberMemoryIds.join("\n") !== stableTrajectoryStateIds.join("\n")) ||
-    snapshot.memberships.some(
-      (membership) => membership.topicId !== topic.id,
-    ) ||
+    snapshot.memberships.some((membership) => membership.topicId !== topic.id) ||
     snapshot.relationRefs.some(
       (relation) =>
         !memberMemoryIds.includes(relation.fromMemoryId) ||
@@ -399,10 +371,7 @@ function normalizeMemberProposals(
   }
   const seen = new Set<string>();
   const result = values.map((value) => {
-    const memoryId = stableIdentity(
-      value.memoryId,
-      "MemoryTopicMemberIdInvalid",
-    );
+    const memoryId = stableIdentity(value.memoryId, "MemoryTopicMemberIdInvalid");
     if (seen.has(memoryId)) throw namedError("MemoryTopicMemberDuplicate");
     seen.add(memoryId);
     if (value.role !== "primary" && value.role !== "supporting") {
@@ -418,10 +387,7 @@ function normalizeMemberProposals(
     return Object.freeze({
       memoryId,
       role: value.role,
-      confidence: unitInterval(
-        value.confidence,
-        "MemoryTopicMemberConfidenceInvalid",
-      ),
+      confidence: unitInterval(value.confidence, "MemoryTopicMemberConfidenceInvalid"),
       basis: value.basis,
     });
   });
@@ -464,11 +430,7 @@ function stableIdentity(value: unknown, errorName: string): string {
 
 function stableStrings(values: readonly string[], max: number): string[] {
   const result = [
-    ...new Set(
-      values.map((value) =>
-        stableIdentity(value, "MemoryTopicEvidenceInvalid"),
-      ),
-    ),
+    ...new Set(values.map((value) => stableIdentity(value, "MemoryTopicEvidenceInvalid"))),
   ].sort();
   if (result.length > max) throw namedError("MemoryTopicEvidenceInvalid");
   return result;

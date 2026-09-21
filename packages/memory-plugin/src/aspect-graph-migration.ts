@@ -11,10 +11,7 @@ import {
 } from "./aspect-graph.js";
 import type { MemoryFacetShadowSnapshotV2 } from "./facet-shadow.js";
 import type { MemoryFacetLinkKindV2 } from "./facet-state.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
 export const PAW_MEMORY_FACET_ASPECT_MIGRATION_VERSION_V1 =
   "paw.memory-facet-aspect-migration.v1" as const;
@@ -130,9 +127,7 @@ export function migrateMemoryFacetShadowToAspectGraphV1(
           fromClaimId: membership.memoryId,
           toClaimId: targetMemoryId,
           edgeType,
-          ...(edgeType === "supports"
-            ? {}
-            : { stateScope: { aspectId: aspect.id } }),
+          ...(edgeType === "supports" ? {} : { stateScope: { aspectId: aspect.id } }),
           confidence: membership.confidence,
           evidenceRefs: source.evidence,
           createdAt: source.created,
@@ -149,18 +144,14 @@ export function migrateMemoryFacetShadowToAspectGraphV1(
       },
       { now },
     );
-    const unassignedClaimIds = Object.freeze(
-      [...new Set(input.source.unassignedMemoryIds)].sort(),
-    );
+    const unassignedClaimIds = Object.freeze([...new Set(input.source.unassignedMemoryIds)].sort());
     for (const id of unassignedClaimIds) requiredEntry(entries, id);
     const result = Object.freeze({
       schemaVersion: PAW_MEMORY_FACET_ASPECT_MIGRATION_VERSION_V1,
       sourceRevision: input.source.revision,
       snapshot,
       identities: Object.freeze(
-        identities.map(({ facetId, aspect }) =>
-          Object.freeze({ facetId, aspectId: aspect.id }),
-        ),
+        identities.map(({ facetId, aspect }) => Object.freeze({ facetId, aspectId: aspect.id })),
       ),
       unassignedClaimIds,
     }) satisfies MemoryFacetAspectMigrationResultV1;
@@ -204,9 +195,7 @@ function migratedEdgeType(
   return undefined;
 }
 
-function uniqueEntries(
-  entries: readonly MemoryEntry[],
-): ReadonlyMap<string, MemoryEntry> {
+function uniqueEntries(entries: readonly MemoryEntry[]): ReadonlyMap<string, MemoryEntry> {
   const result = new Map<string, MemoryEntry>();
   for (const entry of entries) {
     if (entry.kind === "vault_ref") {
@@ -220,10 +209,7 @@ function uniqueEntries(
   return result;
 }
 
-function requiredEntry(
-  entries: ReadonlyMap<string, MemoryEntry>,
-  id: string,
-): MemoryEntry {
+function requiredEntry(entries: ReadonlyMap<string, MemoryEntry>, id: string): MemoryEntry {
   const entry = entries.get(id);
   if (!entry) throw namedError("MemoryFacetAspectMigrationEntryMissing");
   return entry;

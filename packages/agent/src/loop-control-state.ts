@@ -14,11 +14,7 @@ import type { TurnFlags } from "./orchestrator/types.js";
 type CrashSafePendingControlV1 = Extract<
   EphemeralControlV1,
   {
-    readonly kind:
-      | "readiness"
-      | "protocol_recovery"
-      | "completion_gate"
-      | "tool_guidance";
+    readonly kind: "readiness" | "protocol_recovery" | "completion_gate" | "tool_guidance";
   }
 >;
 
@@ -71,11 +67,7 @@ export interface LoopControlCheckpointV1 {
   };
 }
 
-const PROTOCOL_ISSUES = new Set([
-  "empty_response",
-  "truncated_response",
-  "missing_tool_calls",
-]);
+const PROTOCOL_ISSUES = new Set(["empty_response", "truncated_response", "missing_tool_calls"]);
 const CONTROL_KINDS = new Set<CrashSafePendingControlV1["kind"]>([
   "readiness",
   "protocol_recovery",
@@ -150,19 +142,13 @@ export function checkpointLoopControlV1(
       ? flags.pendingControl
       : undefined;
   const protocolRecovery =
-    (flags.formatErrorNudges ?? 0) > 0 ||
-    (flags.noActionNudges ?? 0) > 0 ||
-    flags.hasEverUsedTools
+    (flags.formatErrorNudges ?? 0) > 0 || (flags.noActionNudges ?? 0) > 0 || flags.hasEverUsedTools
       ? {
           ...((flags.formatErrorNudges ?? 0) > 0
             ? { formatErrorNudges: flags.formatErrorNudges }
             : {}),
-          ...((flags.noActionNudges ?? 0) > 0
-            ? { noActionNudges: flags.noActionNudges }
-            : {}),
-          ...(flags.hasEverUsedTools
-            ? { hasEverUsedTools: true as const }
-            : {}),
+          ...((flags.noActionNudges ?? 0) > 0 ? { noActionNudges: flags.noActionNudges } : {}),
+          ...(flags.hasEverUsedTools ? { hasEverUsedTools: true as const } : {}),
         }
       : undefined;
   const candidateReview =
@@ -188,9 +174,7 @@ export function checkpointLoopControlV1(
           ...((flags.autoContinueNudges ?? 0) > 0
             ? { autoContinueNudges: flags.autoContinueNudges }
             : {}),
-          ...((flags.verifyNudges ?? 0) > 0
-            ? { verifyNudges: flags.verifyNudges }
-            : {}),
+          ...((flags.verifyNudges ?? 0) > 0 ? { verifyNudges: flags.verifyNudges } : {}),
           ...((flags.acceptanceNudges ?? 0) > 0
             ? { acceptanceNudges: flags.acceptanceNudges }
             : {}),
@@ -203,18 +187,12 @@ export function checkpointLoopControlV1(
     flags._convergenceEvidenceKey ||
     flags._maxStepsWarned
       ? {
-          ...(flags._budgetGuardWarned
-            ? { contextGuardDelivered: true as const }
-            : {}),
-          ...(flags._implementationWarned
-            ? { implementationDelivered: true as const }
-            : {}),
+          ...(flags._budgetGuardWarned ? { contextGuardDelivered: true as const } : {}),
+          ...(flags._implementationWarned ? { implementationDelivered: true as const } : {}),
           ...(flags._convergenceEvidenceKey
             ? { convergenceEvidenceKey: flags._convergenceEvidenceKey }
             : {}),
-          ...(flags._maxStepsWarned
-            ? { maxStepsDelivered: true as const }
-            : {}),
+          ...(flags._maxStepsWarned ? { maxStepsDelivered: true as const } : {}),
         }
       : undefined;
   const toolLoop =
@@ -227,9 +205,7 @@ export function checkpointLoopControlV1(
           ...(flags.failureSignatures?.length
             ? { failureSignatures: [...flags.failureSignatures] }
             : {}),
-          ...((flags.idleFuseTrips ?? 0) > 0
-            ? { idleFuseTrips: flags.idleFuseTrips }
-            : {}),
+          ...((flags.idleFuseTrips ?? 0) > 0 ? { idleFuseTrips: flags.idleFuseTrips } : {}),
           ...(flags.repeatTool ? { repeatTool: flags.repeatTool } : {}),
           ...(flags.codingPhase ? { codingPhase: flags.codingPhase } : {}),
           ...((flags.codingPhaseViolationTurns ?? 0) > 0
@@ -252,9 +228,7 @@ export function checkpointLoopControlV1(
   }
   return {
     schemaVersion: "paw.loop-control.v1",
-    ...(flags.providerTerminal
-      ? { providerTerminal: flags.providerTerminal }
-      : {}),
+    ...(flags.providerTerminal ? { providerTerminal: flags.providerTerminal } : {}),
     ...(readiness ? { readiness } : {}),
     ...(pendingControl ? { pendingControl } : {}),
     ...(protocolRecovery ? { protocolRecovery } : {}),
@@ -265,22 +239,18 @@ export function checkpointLoopControlV1(
 }
 
 /** Runtime-safe ingress for untyped JSON persisted by core. */
-export function parseLoopControlCheckpointV1(
-  value: unknown,
-): LoopControlCheckpointV1 | undefined {
+export function parseLoopControlCheckpointV1(value: unknown): LoopControlCheckpointV1 | undefined {
   if (!isRecord(value) || value.schemaVersion !== "paw.loop-control.v1") {
     return undefined;
   }
   const providerTerminal = parseProviderTerminal(value.providerTerminal);
-  if (value.providerTerminal !== undefined && !providerTerminal)
-    return undefined;
+  if (value.providerTerminal !== undefined && !providerTerminal) return undefined;
   const readiness = parseReadiness(value.readiness);
   if (value.readiness !== undefined && !readiness) return undefined;
   const pendingControl = parsePendingControl(value.pendingControl);
   if (value.pendingControl !== undefined && !pendingControl) return undefined;
   const protocolRecovery = parseProtocolRecovery(value.protocolRecovery);
-  if (value.protocolRecovery !== undefined && !protocolRecovery)
-    return undefined;
+  if (value.protocolRecovery !== undefined && !protocolRecovery) return undefined;
   const completionGates = parseCompletionGates(value.completionGates);
   if (value.completionGates !== undefined && !completionGates) return undefined;
   const lateGuidance = parseLateGuidance(value.lateGuidance);
@@ -360,18 +330,14 @@ export function restoreLoopControlFlagsV1(input: {
       throw new Error("Loop-control provider cursor does not match AppState");
     }
     const restored: Partial<TurnFlags> = {
-      ...(checkpoint.providerTerminal
-        ? { providerTerminal: checkpoint.providerTerminal }
-        : {}),
+      ...(checkpoint.providerTerminal ? { providerTerminal: checkpoint.providerTerminal } : {}),
       ...(checkpoint.readiness
         ? {
             loopV2ReadinessFeedbackKey: checkpoint.readiness.key,
             loopV2ReadinessNudges: checkpoint.readiness.nudges,
           }
         : {}),
-      ...(checkpoint.pendingControl
-        ? { pendingControl: checkpoint.pendingControl }
-        : {}),
+      ...(checkpoint.pendingControl ? { pendingControl: checkpoint.pendingControl } : {}),
       ...(checkpoint.protocolRecovery?.formatErrorNudges
         ? {
             formatErrorNudges: checkpoint.protocolRecovery.formatErrorNudges,
@@ -380,9 +346,7 @@ export function restoreLoopControlFlagsV1(input: {
       ...(checkpoint.protocolRecovery?.noActionNudges
         ? { noActionNudges: checkpoint.protocolRecovery.noActionNudges }
         : {}),
-      ...(checkpoint.protocolRecovery?.hasEverUsedTools
-        ? { hasEverUsedTools: true }
-        : {}),
+      ...(checkpoint.protocolRecovery?.hasEverUsedTools ? { hasEverUsedTools: true } : {}),
       ...(checkpoint.completionGates?.autoContinueNudges
         ? {
             autoContinueNudges: checkpoint.completionGates.autoContinueNudges,
@@ -396,50 +360,35 @@ export function restoreLoopControlFlagsV1(input: {
         : {}),
       ...(checkpoint.completionGates?.candidateReview
         ? {
-            candidateReviewNudges:
-              checkpoint.completionGates.candidateReview.nudges,
-            candidateReviewRevision:
-              checkpoint.completionGates.candidateReview.revision,
+            candidateReviewNudges: checkpoint.completionGates.candidateReview.nudges,
+            candidateReviewRevision: checkpoint.completionGates.candidateReview.revision,
             ...(checkpoint.completionGates.candidateReview.summaryFingerprint
               ? {
                   candidateReviewSummaryFingerprint:
-                    checkpoint.completionGates.candidateReview
-                      .summaryFingerprint,
+                    checkpoint.completionGates.candidateReview.summaryFingerprint,
                 }
               : {}),
           }
         : {}),
-      ...(checkpoint.lateGuidance?.contextGuardDelivered
-        ? { _budgetGuardWarned: true }
-        : {}),
-      ...(checkpoint.lateGuidance?.implementationDelivered
-        ? { _implementationWarned: true }
-        : {}),
+      ...(checkpoint.lateGuidance?.contextGuardDelivered ? { _budgetGuardWarned: true } : {}),
+      ...(checkpoint.lateGuidance?.implementationDelivered ? { _implementationWarned: true } : {}),
       ...(checkpoint.lateGuidance?.convergenceEvidenceKey
         ? {
-            _convergenceEvidenceKey:
-              checkpoint.lateGuidance.convergenceEvidenceKey,
+            _convergenceEvidenceKey: checkpoint.lateGuidance.convergenceEvidenceKey,
           }
         : {}),
-      ...(checkpoint.lateGuidance?.maxStepsDelivered
-        ? { _maxStepsWarned: true }
-        : {}),
+      ...(checkpoint.lateGuidance?.maxStepsDelivered ? { _maxStepsWarned: true } : {}),
       ...(checkpoint.toolLoop?.failureSignatures
         ? { failureSignatures: checkpoint.toolLoop.failureSignatures }
         : {}),
       ...(checkpoint.toolLoop?.idleFuseTrips
         ? { idleFuseTrips: checkpoint.toolLoop.idleFuseTrips }
         : {}),
-      ...(checkpoint.toolLoop?.repeatTool
-        ? { repeatTool: checkpoint.toolLoop.repeatTool }
-        : {}),
-      ...(checkpoint.toolLoop?.codingPhase
-        ? { codingPhase: checkpoint.toolLoop.codingPhase }
-        : {}),
+      ...(checkpoint.toolLoop?.repeatTool ? { repeatTool: checkpoint.toolLoop.repeatTool } : {}),
+      ...(checkpoint.toolLoop?.codingPhase ? { codingPhase: checkpoint.toolLoop.codingPhase } : {}),
       ...(checkpoint.toolLoop?.codingPhaseViolationTurns
         ? {
-            codingPhaseViolationTurns:
-              checkpoint.toolLoop.codingPhaseViolationTurns,
+            codingPhaseViolationTurns: checkpoint.toolLoop.codingPhaseViolationTurns,
           }
         : {}),
     };
@@ -457,27 +406,21 @@ export function restoreLoopControlFlagsV1(input: {
       }
     }
     if (!checkpoint.pendingControl && !checkpoint.toolLoop) {
-      const legacyToolGuidance = parseLegacyToolGuidanceProjectionV1(
-        input.legacyMessages,
-      );
+      const legacyToolGuidance = parseLegacyToolGuidanceProjectionV1(input.legacyMessages);
       if (legacyToolGuidance) {
         return { ...restored, pendingControl: legacyToolGuidance };
       }
     }
     return restored;
   }
-  const legacyProtocolRecovery = parseLegacyProtocolRecoveryProjectionV1(
-    input.legacyMessages,
-  );
+  const legacyProtocolRecovery = parseLegacyProtocolRecoveryProjectionV1(input.legacyMessages);
   if (legacyProtocolRecovery) return legacyProtocolRecovery;
   const legacyCompletionGate = parseLegacyCompletionGateProjectionV1(
     input.legacyMessages,
     input.legacyCandidateReview,
   );
   if (legacyCompletionGate) return legacyCompletionGate;
-  const legacyToolGuidance = parseLegacyToolGuidanceProjectionV1(
-    input.legacyMessages,
-  );
+  const legacyToolGuidance = parseLegacyToolGuidanceProjectionV1(input.legacyMessages);
   if (legacyToolGuidance) return { pendingControl: legacyToolGuidance };
   if (input.allowLegacyReadiness === false) return {};
   const legacyReadiness = [...input.legacyMessages]
@@ -492,12 +435,9 @@ export function restoreLoopControlFlagsV1(input: {
     : {};
 }
 
-function parseProviderTerminal(
-  value: unknown,
-): ProviderTerminalStateV2 | undefined {
+function parseProviderTerminal(value: unknown): ProviderTerminalStateV2 | undefined {
   if (!isRecord(value) || typeof value.runId !== "string") return undefined;
-  if (!value.runId.trim() || !Number.isSafeInteger(value.lastTurn))
-    return undefined;
+  if (!value.runId.trim() || !Number.isSafeInteger(value.lastTurn)) return undefined;
   if ((value.lastTurn as number) < 0) return undefined;
   if (
     value.pendingProtocolIssue !== undefined &&
@@ -518,9 +458,7 @@ function parseProviderTerminal(
   };
 }
 
-function parseReadiness(
-  value: unknown,
-): LoopControlCheckpointV1["readiness"] | undefined {
+function parseReadiness(value: unknown): LoopControlCheckpointV1["readiness"] | undefined {
   if (!isRecord(value)) return undefined;
   if (typeof value.key !== "string" || !/^[a-f0-9]{64}$/.test(value.key)) {
     return undefined;
@@ -531,9 +469,7 @@ function parseReadiness(
   return { key: value.key, nudges: value.nudges as number };
 }
 
-function parsePendingControl(
-  value: unknown,
-): CrashSafePendingControlV1 | undefined {
+function parsePendingControl(value: unknown): CrashSafePendingControlV1 | undefined {
   if (!isRecord(value)) return undefined;
   if (
     typeof value.kind !== "string" ||
@@ -585,10 +521,7 @@ function parseProtocolRecovery(
   const formatErrorNudges = parseBoundedCounter(value.formatErrorNudges, 2);
   const noActionNudges = parseBoundedCounter(value.noActionNudges, 10_000);
   const hasEverUsedTools = value.hasEverUsedTools === true ? true : undefined;
-  if (
-    value.formatErrorNudges !== undefined &&
-    formatErrorNudges === undefined
-  ) {
+  if (value.formatErrorNudges !== undefined && formatErrorNudges === undefined) {
     return undefined;
   }
   if (value.noActionNudges !== undefined && noActionNudges === undefined) {
@@ -620,8 +553,7 @@ function parseCompletionGates(
   const acceptanceNudges = parseBoundedCounter(value.acceptanceNudges, 2);
   const candidateReview = parseCandidateReviewGate(value.candidateReview);
   if (
-    (value.autoContinueNudges !== undefined &&
-      autoContinueNudges === undefined) ||
+    (value.autoContinueNudges !== undefined && autoContinueNudges === undefined) ||
     (value.verifyNudges !== undefined && verifyNudges === undefined) ||
     (value.acceptanceNudges !== undefined && acceptanceNudges === undefined) ||
     (value.candidateReview !== undefined && candidateReview === undefined)
@@ -647,9 +579,7 @@ function parseCompletionGates(
 function parseCandidateReviewGate(
   value: unknown,
 ):
-  | NonNullable<
-      NonNullable<LoopControlCheckpointV1["completionGates"]>["candidateReview"]
-    >
+  | NonNullable<NonNullable<LoopControlCheckpointV1["completionGates"]>["candidateReview"]>
   | undefined {
   if (!isRecord(value)) return undefined;
   if (!Number.isSafeInteger(value.revision) || (value.revision as number) < 0) {
@@ -658,14 +588,10 @@ function parseCandidateReviewGate(
   const nudges = parseBoundedCounter(value.nudges, 2);
   if (!nudges) return undefined;
   const summaryFingerprint =
-    typeof value.summaryFingerprint === "string" &&
-    /^[a-f0-9]{64}$/.test(value.summaryFingerprint)
+    typeof value.summaryFingerprint === "string" && /^[a-f0-9]{64}$/.test(value.summaryFingerprint)
       ? value.summaryFingerprint
       : undefined;
-  if (
-    value.summaryFingerprint !== undefined &&
-    summaryFingerprint === undefined
-  ) {
+  if (value.summaryFingerprint !== undefined && summaryFingerprint === undefined) {
     return undefined;
   }
   return {
@@ -675,14 +601,10 @@ function parseCandidateReviewGate(
   };
 }
 
-function parseLateGuidance(
-  value: unknown,
-): LoopControlCheckpointV1["lateGuidance"] | undefined {
+function parseLateGuidance(value: unknown): LoopControlCheckpointV1["lateGuidance"] | undefined {
   if (!isRecord(value)) return undefined;
-  const contextGuardDelivered =
-    value.contextGuardDelivered === true ? true : undefined;
-  const implementationDelivered =
-    value.implementationDelivered === true ? true : undefined;
+  const contextGuardDelivered = value.contextGuardDelivered === true ? true : undefined;
+  const implementationDelivered = value.implementationDelivered === true ? true : undefined;
   const maxStepsDelivered = value.maxStepsDelivered === true ? true : undefined;
   const convergenceEvidenceKey =
     typeof value.convergenceEvidenceKey === "string" &&
@@ -715,9 +637,7 @@ function parseLateGuidance(
   };
 }
 
-function parseToolLoop(
-  value: unknown,
-): LoopControlCheckpointV1["toolLoop"] | undefined {
+function parseToolLoop(value: unknown): LoopControlCheckpointV1["toolLoop"] | undefined {
   if (!isRecord(value)) return undefined;
   const rawFailureSignatures = value.failureSignatures;
   const failureSignatures = Array.isArray(rawFailureSignatures)
@@ -749,14 +669,8 @@ function parseToolLoop(
   if (value.repeatTool !== undefined && !repeatTool) return undefined;
   const codingPhase = parseCodingPhase(value.codingPhase);
   if (value.codingPhase !== undefined && !codingPhase) return undefined;
-  const codingPhaseViolationTurns = parseBoundedCounter(
-    value.codingPhaseViolationTurns,
-    2,
-  );
-  if (
-    value.codingPhaseViolationTurns !== undefined &&
-    codingPhaseViolationTurns === undefined
-  ) {
+  const codingPhaseViolationTurns = parseBoundedCounter(value.codingPhaseViolationTurns, 2);
+  if (value.codingPhaseViolationTurns !== undefined && codingPhaseViolationTurns === undefined) {
     return undefined;
   }
   if (
@@ -773,9 +687,7 @@ function parseToolLoop(
     ...(idleFuseTrips !== undefined ? { idleFuseTrips } : {}),
     ...(repeatTool ? { repeatTool } : {}),
     ...(codingPhase ? { codingPhase } : {}),
-    ...(codingPhaseViolationTurns !== undefined
-      ? { codingPhaseViolationTurns }
-      : {}),
+    ...(codingPhaseViolationTurns !== undefined ? { codingPhaseViolationTurns } : {}),
   };
 }
 
@@ -818,10 +730,7 @@ function parseCodingPhase(
       return undefined;
     }
   }
-  if (
-    typeof value.locateNudged !== "boolean" ||
-    typeof value.verifyNudged !== "boolean"
-  ) {
+  if (typeof value.locateNudged !== "boolean" || typeof value.verifyNudged !== "boolean") {
     return undefined;
   }
   return {
@@ -835,9 +744,7 @@ function parseCodingPhase(
 }
 
 function parseBoundedCounter(value: unknown, max: number): number | undefined {
-  return Number.isSafeInteger(value) &&
-    (value as number) >= 1 &&
-    (value as number) <= max
+  return Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= max
     ? (value as number)
     : undefined;
 }

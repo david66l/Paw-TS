@@ -3,11 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
-import {
-  type McpClientManager,
-  OFF_SHELL_SANDBOX,
-  type ToolRunResult,
-} from "@paw/harness";
+import { type McpClientManager, OFF_SHELL_SANDBOX, type ToolRunResult } from "@paw/harness";
 import {
   RUN_JOURNAL_SCHEMA_VERSION_V1,
   type ToolPermissionResolvedFactV1,
@@ -70,9 +66,7 @@ describe("Paw Next real Harness ToolExecutor", () => {
         { turn: 1, signal: new AbortController().signal },
       );
       expect(started?.status).toBe("success");
-      const jobId = String(
-        (resultOf(started).payload as { jobId?: unknown }).jobId,
-      );
+      const jobId = String((resultOf(started).payload as { jobId?: unknown }).jobId);
       expect(jobId).toBe("shell-1");
 
       const [waited] = await executor.executeSettled(
@@ -192,17 +186,11 @@ describe("Paw Next real Harness ToolExecutor", () => {
       stdout: "shell-ok",
     });
     expect(fs.readFileSync(path.join(root, "a.txt"), "utf8")).toBe("after\n");
-    expect(fs.readFileSync(path.join(root, "created.txt"), "utf8")).toBe(
-      "created\n",
-    );
+    expect(fs.readFileSync(path.join(root, "created.txt"), "utf8")).toBe("created\n");
     expect(recorded).toHaveLength(1);
     expect(permissionFacts(recorded[0])).toHaveLength(5);
     expect(
-      permissionFacts(recorded[0]).map((fact) => [
-        fact.turn,
-        fact.sourceIndex,
-        fact.callId,
-      ]),
+      permissionFacts(recorded[0]).map((fact) => [fact.turn, fact.sourceIndex, fact.callId]),
     ).toEqual(calls.map((item, sourceIndex) => [3, sourceIndex, item.id]));
 
     const checkpointRoot = path.join(
@@ -215,15 +203,9 @@ describe("Paw Next real Harness ToolExecutor", () => {
         runId: "run-t4",
       }),
     );
-    expect(fs.existsSync(path.join(checkpointRoot, "1", "_meta.json"))).toBe(
-      true,
-    );
-    expect(fs.existsSync(path.join(checkpointRoot, "2", "_meta.json"))).toBe(
-      true,
-    );
-    expect(fs.existsSync(path.join(checkpointRoot, "3", "_meta.json"))).toBe(
-      true,
-    );
+    expect(fs.existsSync(path.join(checkpointRoot, "1", "_meta.json"))).toBe(true);
+    expect(fs.existsSync(path.join(checkpointRoot, "2", "_meta.json"))).toBe(true);
+    expect(fs.existsSync(path.join(checkpointRoot, "3", "_meta.json"))).toBe(true);
   });
 
   test("runtime permission facts bind the provider tool name in a canonical journal", async () => {
@@ -236,10 +218,7 @@ describe("Paw Next real Harness ToolExecutor", () => {
       { turn: 1, signal: new AbortController().signal },
     );
     const permission = recorded[0]?.[0];
-    if (
-      permission?.type !== "tool.permission_resolved" ||
-      settlement?.status !== "success"
-    ) {
+    if (permission?.type !== "tool.permission_resolved" || settlement?.status !== "success") {
       throw new Error("canonical seam fixture did not execute");
     }
     const prefix = [
@@ -446,9 +425,7 @@ describe("Paw Next real Harness ToolExecutor", () => {
       },
       requestApproval: async () => {
         prompts += 1;
-        return prompts === 1
-          ? { decision: "allow_rule" }
-          : { decision: "deny" };
+        return prompts === 1 ? { decision: "allow_rule" } : { decision: "deny" };
       },
       context: { workspaceRoot: root, shellSandbox: OFF_SHELL_SANDBOX },
       checkpointSequence: new MonotonicCheckpointSequenceV1(),
@@ -550,13 +527,11 @@ describe("Paw Next real Harness ToolExecutor", () => {
       { turn: 1, signal: new AbortController().signal },
     );
 
-    expect(settlements.map((item) => item.status)).toEqual([
-      "denied",
-      "success",
+    expect(settlements.map((item) => item.status)).toEqual(["denied", "success"]);
+    expect(permissionFacts(recorded[0]).map((fact) => fact.resolution)).toEqual([
+      "deny",
+      "allow_once",
     ]);
-    expect(permissionFacts(recorded[0]).map((fact) => fact.resolution)).toEqual(
-      ["deny", "allow_once"],
-    );
   });
 
   test("a malformed approval response fails closed as a durable denial", async () => {
@@ -630,9 +605,7 @@ describe("Paw Next real Harness ToolExecutor", () => {
 
     expect(settlement?.status).toBe("success");
     expect(resultOf(settlement)).toMatchObject({ ok: false });
-    expect(JSON.stringify(resultOf(settlement).payload)).toContain(
-      "E_POLICY_DENIED",
-    );
+    expect(JSON.stringify(resultOf(settlement).payload)).toContain("E_POLICY_DENIED");
     expect(recorded[0]?.[0]).toMatchObject({ resolution: "allow_once" });
   });
 
@@ -663,10 +636,7 @@ describe("Paw Next real Harness ToolExecutor", () => {
     controller.abort("user cancelled");
     const settlements = await pending;
 
-    expect(settlements.map((item) => item.status)).toEqual([
-      "unknown",
-      "cancelled",
-    ]);
+    expect(settlements.map((item) => item.status)).toEqual(["unknown", "cancelled"]);
     expect(fs.existsSync(later)).toBe(false);
     await new Promise((resolve) => setTimeout(resolve, 4200));
     expect(fs.existsSync(sentinel)).toBe(false);
@@ -709,10 +679,7 @@ describe("Paw Next real Harness ToolExecutor", () => {
       { turn: 2, signal: new AbortController().signal },
     );
 
-    expect(settlements.map((item) => item.status)).toEqual([
-      "success",
-      "success",
-    ]);
+    expect(settlements.map((item) => item.status)).toEqual(["success", "success"]);
     expect(prompts).toBe(1);
     const permissions = permissionFacts(recorded[0]);
     expect(permissions.map((fact) => [fact.source, fact.ruleId])).toEqual([
@@ -850,9 +817,7 @@ function executorFor(
   });
 }
 
-type HarnessToolExecutorOptions = Parameters<
-  typeof createHarnessToolExecutorV1
->[0];
+type HarnessToolExecutorOptions = Parameters<typeof createHarnessToolExecutorV1>[0];
 
 function allowAll(): FrozenPermissionEngineV1 {
   return new FrozenPermissionEngineV1({
@@ -870,18 +835,12 @@ function registryForSandbox() {
   return createFrozenToolRegistryV1({ shellSandbox: OFF_SHELL_SANDBOX });
 }
 
-function call(
-  id: string,
-  name: string,
-  args: Record<string, unknown>,
-): RuntimeToolCallV1 {
+function call(id: string, name: string, args: Record<string, unknown>): RuntimeToolCallV1 {
   return { id, name, arguments: args, argumentsValid: true };
 }
 
 function resultOf(
-  settlement:
-    | { readonly status: string; readonly result?: ToolRunResult }
-    | undefined,
+  settlement: { readonly status: string; readonly result?: ToolRunResult } | undefined,
 ): ToolRunResult {
   if (!settlement?.result) throw new Error("expected success settlement");
   return settlement.result;
@@ -891,8 +850,7 @@ function permissionFacts(
   facts: readonly ToolAuthorizationRecordedFactV1[] | undefined,
 ): ToolPermissionResolvedFactV1[] {
   return (facts ?? []).filter(
-    (fact): fact is ToolPermissionResolvedFactV1 =>
-      fact.type === "tool.permission_resolved",
+    (fact): fact is ToolPermissionResolvedFactV1 => fact.type === "tool.permission_resolved",
   );
 }
 
@@ -913,10 +871,7 @@ function journalFact(seq: number, fact: unknown) {
   };
 }
 
-async function waitUntil(
-  check: () => boolean,
-  timeoutMs: number,
-): Promise<void> {
+async function waitUntil(check: () => boolean, timeoutMs: number): Promise<void> {
   const startedAt = Date.now();
   while (!check()) {
     if (Date.now() - startedAt >= timeoutMs) {

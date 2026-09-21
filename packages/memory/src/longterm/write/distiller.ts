@@ -61,8 +61,7 @@ export function hasFailureToSuccessTurn(
   input: Pick<DistillInput, "outcome" | "trajectory">,
 ): boolean {
   return (
-    input.outcome === "success" &&
-    /(?:error|failed|failure|报错|失败)/i.test(input.trajectory)
+    input.outcome === "success" && /(?:error|failed|failure|报错|失败)/i.test(input.trajectory)
   );
 }
 
@@ -114,8 +113,7 @@ export function validateCandidate(
   opts: { requireFailureFixPair?: boolean } = {},
 ): { ok: true; value: DistillCandidate } | { ok: false; errors: string[] } {
   const errors: string[] = [];
-  if (typeof raw !== "object" || raw === null)
-    return { ok: false, errors: ["候选不是对象"] };
+  if (typeof raw !== "object" || raw === null) return { ok: false, errors: ["候选不是对象"] };
   const c = raw as Record<string, unknown>;
 
   if (c.kind !== "semantic" && c.kind !== "episodic") {
@@ -139,35 +137,26 @@ export function validateCandidate(
     if (typeof c.fact !== "string" || c.fact.trim().length === 0) {
       errors.push("semantic 候选缺 fact");
     } else {
-      if (c.fact.length > MAX_FIELD_CHARS)
-        errors.push("fact 超体量上限（300 tokens）");
+      if (c.fact.length > MAX_FIELD_CHARS) errors.push("fact 超体量上限（300 tokens）");
       textFields.push(c.fact);
     }
     if (
       c.keywords !== undefined &&
-      (!Array.isArray(c.keywords) ||
-        !c.keywords.every((k) => typeof k === "string"))
+      (!Array.isArray(c.keywords) || !c.keywords.every((k) => typeof k === "string"))
     ) {
       errors.push("keywords 必须是字符串数组");
     }
   } else {
     // episodic
-    if (
-      typeof c.whenToUse !== "string" ||
-      !WHEN_TO_USE_RE.test(c.whenToUse.trim())
-    ) {
+    if (typeof c.whenToUse !== "string" || !WHEN_TO_USE_RE.test(c.whenToUse.trim())) {
       errors.push('whenToUse 必填且须以 "当/When" 开头（纪律 2）');
     } else {
       textFields.push(c.whenToUse);
     }
-    if (
-      typeof c.perspective !== "string" ||
-      c.perspective.trim().length === 0
-    ) {
+    if (typeof c.perspective !== "string" || c.perspective.trim().length === 0) {
       errors.push("episodic 候选缺 perspective");
     } else {
-      if (countSentences(c.perspective) > 2)
-        errors.push("perspective 超 2 句（纪律 5）");
+      if (countSentences(c.perspective) > 2) errors.push("perspective 超 2 句（纪律 5）");
       textFields.push(c.perspective);
     }
     if (
@@ -177,8 +166,7 @@ export function validateCandidate(
     ) {
       errors.push("modification 必须为 1–3 条（纪律 5）");
     } else {
-      for (const m of c.modification)
-        if (typeof m === "string") textFields.push(m);
+      for (const m of c.modification) if (typeof m === "string") textFields.push(m);
     }
     if (c.failureFixPair !== undefined) {
       const p = c.failureFixPair as Record<string, unknown>;
@@ -189,15 +177,11 @@ export function validateCandidate(
         typeof p.feedback !== "string" ||
         typeof p.fixed !== "string"
       ) {
-        errors.push(
-          "failureFixPair 必须含 failed/feedback/fixed 三个字符串字段（纪律 3）",
-        );
+        errors.push("failureFixPair 必须含 failed/feedback/fixed 三个字符串字段（纪律 3）");
       }
     } else if (opts.requireFailureFixPair) {
       // 轨迹含失败→成功转折时 failureFixPair 必填（纪律 3，修复批次 C #17）
-      errors.push(
-        "轨迹含失败→成功转折，episodic 候选必须产出 failureFixPair（纪律 3）",
-      );
+      errors.push("轨迹含失败→成功转折，episodic 候选必须产出 failureFixPair（纪律 3）");
     }
   }
 
@@ -211,10 +195,8 @@ export function validateCandidate(
 
   // 纪律 1：去具体化
   for (const t of textFields) {
-    if (FILE_PATH_RE.test(t))
-      errors.push(`疑似文件路径/文件名（纪律 1）: ${t.slice(0, 50)}…`);
-    if (CODE_IDENTIFIER_RE.test(t))
-      errors.push(`疑似代码标识符（纪律 1）: ${t.slice(0, 50)}…`);
+    if (FILE_PATH_RE.test(t)) errors.push(`疑似文件路径/文件名（纪律 1）: ${t.slice(0, 50)}…`);
+    if (CODE_IDENTIFIER_RE.test(t)) errors.push(`疑似代码标识符（纪律 1）: ${t.slice(0, 50)}…`);
   }
 
   if (errors.length > 0) return { ok: false, errors };
@@ -274,9 +256,7 @@ export class MemoryDistiller {
       }
       // 候选为空且原始数组也为空 = 合法的"无值得固化内容"
       if (attemptErrors.length === 0) return { status: "ok", candidates };
-      allErrors.push(
-        ...attemptErrors.map((e) => `attempt ${attempt + 1}: ${e}`),
-      );
+      allErrors.push(...attemptErrors.map((e) => `attempt ${attempt + 1}: ${e}`));
     }
 
     return {

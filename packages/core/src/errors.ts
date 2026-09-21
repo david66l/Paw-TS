@@ -37,13 +37,7 @@
  * - MODEL：模型调用失败（API 错误、超时、限流等）
  * - INTERNAL：框架内部错误（不可预期的 bug 或断言失败）
  */
-export type PawErrorCode =
-  | "CONFIG"
-  | "VALIDATION"
-  | "WORKSPACE"
-  | "POLICY"
-  | "MODEL"
-  | "INTERNAL";
+export type PawErrorCode = "CONFIG" | "VALIDATION" | "WORKSPACE" | "POLICY" | "MODEL" | "INTERNAL";
 
 /**
  * 工具级错误码：按错误的可恢复性分类

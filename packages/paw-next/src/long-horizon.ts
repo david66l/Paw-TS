@@ -7,11 +7,7 @@ import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
 import type { InputFactV1 } from "@paw/protocol";
 import type { RuntimeToolPluginV1 } from "@paw/runtime";
 import { fingerprintAuditFile } from "./environment-audit.js";
-import {
-  STAGE_GRAPH_POLICY_V1,
-  STAGE_GRAPH_PROMPT,
-  parseStageLinks,
-} from "./stage-graph.js";
+import { STAGE_GRAPH_POLICY_V1, STAGE_GRAPH_PROMPT, parseStageLinks } from "./stage-graph.js";
 
 export const LONG_HORIZON_POLICY_V1 = "paw.long-horizon.v1" as const;
 export const LONG_HORIZON_MAX_STAGES = 12;
@@ -41,8 +37,7 @@ export function createLongHorizonCollaborationPlugin(
                 parameters: {
                   ...entry.definition.function.parameters,
                   properties: {
-                    ...(entry.definition.function.parameters
-                      .properties as Record<string, unknown>),
+                    ...(entry.definition.function.parameters.properties as Record<string, unknown>),
                     stage_links: {
                       type: "array",
                       maxItems: 12,
@@ -80,20 +75,13 @@ export function createLongHorizonCollaborationPlugin(
         const { stage_links, ...baseArgs } = input ?? {};
         const checked = entry.validate(stageGraph ? baseArgs : args);
         if (!checked.ok) return checked;
-        const plan = parseCollaborationDelegationPlanV1(
-          checked.args.delegation_plan,
-        );
-        if (
-          plan.tasks.some(
-            (task) => !task.scope.length || !task.acceptance.length,
-          )
-        )
+        const plan = parseCollaborationDelegationPlanV1(checked.args.delegation_plan);
+        if (plan.tasks.some((task) => !task.scope.length || !task.acceptance.length))
           return {
             ok: false,
             result: {
               ok: false,
-              summary:
-                "Long-task stages require explicit scope and nonempty acceptance criteria.",
+              summary: "Long-task stages require explicit scope and nonempty acceptance criteria.",
               payload: { code: "E_SCHEMA_INVALID", executed: false },
             },
           };
@@ -133,16 +121,9 @@ export function createLongHorizonCollaborationPlugin(
   };
 }
 
-export function stageEvidenceIsCurrent(
-  root: string,
-  result: SubAgentResult,
-): boolean {
+export function stageEvidenceIsCurrent(root: string, result: SubAgentResult): boolean {
   const audit = result.environmentAudit;
-  if (
-    result.status !== "completed" ||
-    audit?.status !== "verified" ||
-    !audit.inspected.length
-  )
+  if (result.status !== "completed" || audit?.status !== "verified" || !audit.inspected.length)
     return false;
   try {
     return audit.inspected.every(
@@ -161,23 +142,15 @@ export function managerStageAdmissionAllowed(
 ): boolean {
   const feedback = new Set(
     facts.flatMap((f) =>
-      f.type === "input.accepted" && f.callerId === "completion-review"
-        ? [f.inputId]
-        : [],
+      f.type === "input.accepted" && f.callerId === "completion-review" ? [f.inputId] : [],
     ),
   );
   let boundary = -1;
   facts.forEach((f, index) => {
-    if (
-      f.type === "input.promoted" &&
-      f.delivery !== "steer" &&
-      !feedback.has(f.inputId)
-    )
+    if (f.type === "input.promoted" && f.delivery !== "steer" && !feedback.has(f.inputId))
       boundary = index;
   });
-  const callIndex = facts.findIndex(
-    (f) => f.type === "tool.call_observed" && f.callId === callId,
-  );
+  const callIndex = facts.findIndex((f) => f.type === "tool.call_observed" && f.callId === callId);
   const starts = facts
     .map((fact, index) => ({ fact, index }))
     .filter(
@@ -188,14 +161,8 @@ export function managerStageAdmissionAllowed(
     );
   const other = starts.filter(({ fact: f, index }) => {
     if (f.type !== "runtime.activity_started") return false;
-    const id = String(
-      (f.metadata as Record<string, unknown> | undefined)?.callId ?? "",
-    );
-    return (
-      callIndex < 0 ||
-      index < callIndex ||
-      (id !== callId && !id.startsWith(`${callId}:`))
-    );
+    const id = String((f.metadata as Record<string, unknown> | undefined)?.callId ?? "");
+    return callIndex < 0 || index < callIndex || (id !== callId && !id.startsWith(`${callId}:`));
   });
   return other.length + planned <= LONG_HORIZON_MAX_STAGES;
 }
@@ -204,21 +171,9 @@ export function createManagerStageLauncher(
   delegate: SubAgentLauncher,
   readFacts: () => Promise<readonly InputFactV1[]>,
 ): SubAgentLauncher {
-  const launch: SubAgentLauncher["launch"] = async (
-    goal,
-    maxSteps,
-    options,
-  ) => {
-    const plan = parseCollaborationDelegationPlanV1(
-      options?.args?.delegation_plan,
-    );
-    if (
-      !managerStageAdmissionAllowed(
-        await readFacts(),
-        options?.agentId ?? "",
-        plan.tasks.length,
-      )
-    )
+  const launch: SubAgentLauncher["launch"] = async (goal, maxSteps, options) => {
+    const plan = parseCollaborationDelegationPlanV1(options?.args?.delegation_plan);
+    if (!managerStageAdmissionAllowed(await readFacts(), options?.agentId ?? "", plan.tasks.length))
       return {
         status: "failed",
         summary: `Long-task stage budget exhausted (${LONG_HORIZON_MAX_STAGES}); remaining work is unverified.`,
@@ -227,7 +182,6 @@ export function createManagerStageLauncher(
   };
   return {
     launch,
-    launchStreaming: (options) =>
-      launch(options.goal, options.maxSteps, options),
+    launchStreaming: (options) => launch(options.goal, options.maxSteps, options),
   };
 }

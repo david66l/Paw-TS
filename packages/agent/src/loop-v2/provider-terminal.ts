@@ -70,11 +70,8 @@ export interface ProviderTerminalResultV2 {
   readonly decision: ProviderTerminalDecisionV2;
 }
 
-export function createProviderTerminalStateV2(
-  runId: string,
-): ProviderTerminalStateV2 {
-  if (!runId.trim())
-    throw new Error("Provider terminal runId must not be empty");
+export function createProviderTerminalStateV2(runId: string): ProviderTerminalStateV2 {
+  if (!runId.trim()) throw new Error("Provider terminal runId must not be empty");
   return { runId, lastTurn: 0 };
 }
 
@@ -146,8 +143,7 @@ export function normalizeProviderResponseV2(
       decision: {
         kind: "incomplete",
         reasonCode: "content_filter",
-        detail:
-          "Provider stopped because content filtering prevented a usable response.",
+        detail: "Provider stopped because content filtering prevented a usable response.",
       },
     };
   }
@@ -188,14 +184,9 @@ function protocolIssue(
   };
 }
 
-function validateResponse(
-  prior: ProviderTerminalStateV2,
-  response: ProviderResponseV2,
-): void {
+function validateResponse(prior: ProviderTerminalStateV2, response: ProviderResponseV2): void {
   if (response.runId !== prior.runId) {
-    throw new Error(
-      `Provider terminal run mismatch: ${prior.runId} != ${response.runId}`,
-    );
+    throw new Error(`Provider terminal run mismatch: ${prior.runId} != ${response.runId}`);
   }
   const expectedTurn = prior.lastTurn + 1;
   if (!Number.isSafeInteger(response.turn) || response.turn !== expectedTurn) {
@@ -203,10 +194,7 @@ function validateResponse(
       `Provider terminal turn must be contiguous; expected ${expectedTurn}, received ${response.turn}`,
     );
   }
-  if (
-    response.legacyFinalAnswer !== undefined &&
-    !response.legacyFinalAnswer.summary.trim()
-  ) {
+  if (response.legacyFinalAnswer !== undefined && !response.legacyFinalAnswer.summary.trim()) {
     throw new Error("Legacy final_answer summary must not be empty");
   }
 }

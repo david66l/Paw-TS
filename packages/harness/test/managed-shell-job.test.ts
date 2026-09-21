@@ -3,10 +3,7 @@ import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  ManagedJobRegistryV1,
-  startManagedShellInWorkspaceV1,
-} from "../src/index.js";
+import { ManagedJobRegistryV1, startManagedShellInWorkspaceV1 } from "../src/index.js";
 import { resolveShellCwd } from "../src/shell/execute.js";
 
 function runtimeCommand(script: string): string {
@@ -83,9 +80,9 @@ describe("managed shell producer v1", () => {
           terminationGraceMs: 100,
         }).hooks,
     });
-    expect(
-      await waitForJobOutput(registry, "run-tree", id, "child-started"),
-    ).toContain("child-started");
+    expect(await waitForJobOutput(registry, "run-tree", id, "child-started")).toContain(
+      "child-started",
+    );
     expect(registry.kill("run-tree", id, "test complete")).toBe("requested");
     const settled = await registry.wait("run-tree", id, 5_000);
     expect(settled.snapshot.status).toBe("killed");
@@ -123,8 +120,6 @@ describe("managed shell producer v1", () => {
     expect(resolveShellCwd(root, "/testbed/pkg", sandbox)).toEqual({
       cwdPath: path.resolve(root, "pkg"),
     });
-    expect(resolveShellCwd(root, "/tmp", sandbox).error).toContain(
-      "escapes container workspace",
-    );
+    expect(resolveShellCwd(root, "/tmp", sandbox).error).toContain("escapes container workspace");
   });
 });

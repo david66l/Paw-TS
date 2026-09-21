@@ -110,9 +110,7 @@ describe("facet shadow to aspect graph migration", () => {
     });
     const migrated = migrateMemoryFacetShadowToAspectGraphV1({ scope, source });
 
-    expect(migrated.snapshot.claims.map((claim) => claim.id)).toEqual([
-      deferred.id,
-    ]);
+    expect(migrated.snapshot.claims.map((claim) => claim.id)).toEqual([deferred.id]);
     expect(migrated.snapshot.memberships).toHaveLength(0);
     expect(migrated.unassignedClaimIds).toEqual([deferred.id]);
   });

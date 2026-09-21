@@ -14,19 +14,12 @@ test("runtime Git inspection uses native processes, preserves results and honors
       timeout: 10_000,
       stdio: "pipe",
     });
+  let cleanupFailure: Error | undefined;
   try {
     git("init", "-q");
     fs.writeFileSync(path.join(root, "tracked.txt"), "before\n");
     git("add", "tracked.txt");
-    git(
-      "-c",
-      "user.name=Paw Test",
-      "-c",
-      "user.email=paw@localhost",
-      "commit",
-      "-qm",
-      "initial",
-    );
+    git("-c", "user.name=Paw Test", "-c", "user.email=paw@localhost", "commit", "-qm", "initial");
     fs.writeFileSync(path.join(root, "tracked.txt"), "after\n");
     fs.writeFileSync(path.join(root, "untracked.txt"), "new\n");
     const results = await Promise.all([
@@ -67,8 +60,11 @@ test("runtime Git inspection uses native processes, preserves results and honors
     if (
       path.dirname(resolved) !== path.resolve(os.tmpdir()) ||
       !path.basename(resolved).startsWith("paw-git-async-")
-    )
-      throw new Error("Unexpected fixture path");
-    fs.rmSync(resolved, { recursive: true, force: true });
+    ) {
+      cleanupFailure = new Error("Unexpected fixture path");
+    } else {
+      fs.rmSync(resolved, { recursive: true, force: true });
+    }
   }
+  if (cleanupFailure) throw cleanupFailure;
 });

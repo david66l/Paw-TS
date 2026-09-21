@@ -56,9 +56,7 @@ describe("facet v2 shadow reducer", () => {
     });
     const catalog = createMemoryFacetReconcileCatalogFromSnapshotV2(first);
     expect(catalog).toHaveLength(1);
-    expect(
-      catalog[0]?.members.map((item) => [item.memoryId, item.status]),
-    ).toEqual([
+    expect(catalog[0]?.members.map((item) => [item.memoryId, item.status])).toEqual([
       ["old-avoidance", "current"],
       ["rejected-forum", "event"],
     ]);
@@ -85,12 +83,8 @@ describe("facet v2 shadow reducer", () => {
       JSON.stringify({
         decisions: [
           existingDecision(joined.id, facetId, "event", "initial"),
-          existingDecision(current.id, facetId, "state", "state_change", [
-            oldState.id,
-          ]),
-          existingDecision(condition.id, facetId, "condition", "supports", [
-            current.id,
-          ]),
+          existingDecision(current.id, facetId, "state", "state_change", [oldState.id]),
+          existingDecision(condition.id, facetId, "condition", "supports", [current.id]),
         ],
         deferredMemoryIds: [],
       }),
@@ -107,16 +101,9 @@ describe("facet v2 shadow reducer", () => {
       { onEvent: (event) => events.push(event), now: () => 10 },
     );
     const projection = required(second.projections[0]);
-    expect(projection.currentStates.map((item) => item.memoryId)).toEqual([
-      current.id,
-    ]);
-    expect(projection.historicalStates.map((item) => item.memoryId)).toEqual([
-      oldState.id,
-    ]);
-    expect(projection.events.map((item) => item.memoryId)).toEqual([
-      joined.id,
-      rejected.id,
-    ]);
+    expect(projection.currentStates.map((item) => item.memoryId)).toEqual([current.id]);
+    expect(projection.historicalStates.map((item) => item.memoryId)).toEqual([oldState.id]);
+    expect(projection.events.map((item) => item.memoryId)).toEqual([joined.id, rejected.id]);
     expect(second.unassignedMemoryIds).toEqual([]);
     expect(events[0]).toMatchObject({
       type: "applied",
@@ -168,9 +155,7 @@ describe("facet v2 shadow reducer", () => {
     expect(assigned.entries).toHaveLength(1);
     expect(assigned.memberships).toHaveLength(1);
     expect(assigned.unassignedMemoryIds).toEqual([]);
-    expect(
-      assigned.projections[0]?.unresolved.map((item) => item.memoryId),
-    ).toEqual([entry.id]);
+    expect(assigned.projections[0]?.unresolved.map((item) => item.memoryId)).toEqual([entry.id]);
   });
 
   test("keeps every facet identity but hydrates members only near the batch", () => {
@@ -224,25 +209,13 @@ describe("facet v2 shadow reducer", () => {
     });
 
     expect(compact).toHaveLength(2);
-    expect(
-      compact.find((item) => item.facet.id === investmentFacet.id)?.members,
-    ).toHaveLength(1);
-    expect(
-      compact.find((item) => item.facet.id === musicFacet.id)?.members,
-    ).toHaveLength(0);
+    expect(compact.find((item) => item.facet.id === investmentFacet.id)?.members).toHaveLength(1);
+    expect(compact.find((item) => item.facet.id === musicFacet.id)?.members).toHaveLength(0);
   });
 
   test("batches atoms by evidence family instead of row identity", () => {
-    const firstEvent = episode(
-      "first-event",
-      "2025-01-01T00:00:00.000Z",
-      "Skipped a tense forum",
-    );
-    const firstState = profile(
-      "first-state",
-      "2025-01-01T00:00:00.000Z",
-      "Avoids tense forums",
-    );
+    const firstEvent = episode("first-event", "2025-01-01T00:00:00.000Z", "Skipped a tense forum");
+    const firstState = profile("first-state", "2025-01-01T00:00:00.000Z", "Avoids tense forums");
     const secondState = profile(
       "second-state",
       "2025-02-01T00:00:00.000Z",
@@ -254,10 +227,7 @@ describe("facet v2 shadow reducer", () => {
       [
         withEvidence(firstState, ["conversation:one#atom-2"]),
         withEvidence(secondState, ["conversation:two#atom-1"]),
-        withEvidence(firstEvent, [
-          "conversation:one#atom-1",
-          "conversation:one#atom-2",
-        ]),
+        withEvidence(firstEvent, ["conversation:one#atom-1", "conversation:one#atom-2"]),
       ],
       16,
     );
@@ -361,11 +331,7 @@ function catalogMember(entry: MemoryEntry, status: "current" | "historical") {
     role: "state" as const,
     status,
     statement:
-      entry.kind === "semantic"
-        ? entry.fact
-        : entry.kind === "profile"
-          ? entry.insight
-          : "fixture",
+      entry.kind === "semantic" ? entry.fact : entry.kind === "profile" ? entry.insight : "fixture",
     validFrom: entry.tValid,
     ...(entry.tInvalid ? { validTo: entry.tInvalid } : {}),
   };

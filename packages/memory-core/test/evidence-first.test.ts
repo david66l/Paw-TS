@@ -22,14 +22,8 @@ describe("evidence-first source fusion v1", () => {
       maxSources: 8,
     });
 
-    expect(result.policyVersion).toBe(
-      PAW_MEMORY_EVIDENCE_FIRST_POLICY_VERSION_V1,
-    );
-    expect(result.sources.map((item) => item.sourceId)).toEqual([
-      "raw-a",
-      "raw-b",
-      "raw-c",
-    ]);
+    expect(result.policyVersion).toBe(PAW_MEMORY_EVIDENCE_FIRST_POLICY_VERSION_V1);
+    expect(result.sources.map((item) => item.sourceId)).toEqual(["raw-a", "raw-b", "raw-c"]);
     expect(result.sources[0]).toEqual(
       expect.objectContaining({
         sourceId: "raw-a",
@@ -73,15 +67,16 @@ describe("evidence-first source fusion v1", () => {
       maxSources: 2,
     };
 
-    expect(
-      rankMemoryEvidenceSourcesV1(input).sources.map((item) => item.sourceId),
-    ).toEqual(["source-a", "source-b"]);
+    expect(rankMemoryEvidenceSourcesV1(input).sources.map((item) => item.sourceId)).toEqual([
+      "source-a",
+      "source-b",
+    ]);
   });
 
   test("fails closed on invalid budgets and weights", () => {
-    expect(() =>
-      rankMemoryEvidenceSourcesV1({ lists: [], maxSources: 0 }),
-    ).toThrow("MemoryEvidenceFirstSourceBudgetInvalid");
+    expect(() => rankMemoryEvidenceSourcesV1({ lists: [], maxSources: 0 })).toThrow(
+      "MemoryEvidenceFirstSourceBudgetInvalid",
+    );
     expect(() =>
       rankMemoryEvidenceSourcesV1({
         lists: [{ channel: "l0", weight: 0, sourceIds: ["source-a"] }],
@@ -102,11 +97,7 @@ describe("evidence excerpt projection", () => {
       ),
     ].join("\n");
 
-    const excerpt = projectMemoryEvidenceExcerptV1(
-      content,
-      "What was the 27th parameter?",
-      384,
-    );
+    const excerpt = projectMemoryEvidenceExcerptV1(content, "What was the 27th parameter?", 384);
 
     expect(excerpt).toContain("27. Sound effects");
     expect(excerpt.length).toBeLessThanOrEqual(384);
@@ -143,27 +134,19 @@ describe("evidence-address fusion v2", () => {
           channel: "l0",
           retrieverId: "role-aware-conversation",
           weight: 1,
-          candidates: [
-            candidate("turn-7", "doc-b"),
-            candidate("turn-8", "doc-c", "context_only"),
-          ],
+          candidates: [candidate("turn-7", "doc-b"), candidate("turn-8", "doc-c", "context_only")],
         },
       ],
       maxSources: 3,
       maxEvidencePerSource: 4,
     });
 
-    expect(result.policyVersion).toBe(
-      PAW_MEMORY_EVIDENCE_CANDIDATE_FUSION_VERSION_V2,
-    );
-    expect(result.sources.map((source) => source.sourceId)).toEqual([
-      "doc-b",
-      "doc-c",
-      "doc-a",
+    expect(result.policyVersion).toBe(PAW_MEMORY_EVIDENCE_CANDIDATE_FUSION_VERSION_V2);
+    expect(result.sources.map((source) => source.sourceId)).toEqual(["doc-b", "doc-c", "doc-a"]);
+    expect(result.sources[0]?.evidence.map((item) => item.candidateId)).toEqual([
+      "turn-7",
+      "chunk-3",
     ]);
-    expect(result.sources[0]?.evidence.map((item) => item.candidateId)).toEqual(
-      ["turn-7", "chunk-3"],
-    );
     expect(result.telemetry).toEqual({
       inputListCount: 2,
       l0CandidateCount: 5,
@@ -224,9 +207,7 @@ describe("evidence-address fusion v2", () => {
         maxEvidencePerSource: 1,
       });
 
-      expect(result.sources[0]?.evidence[0]?.authority).toBe(
-        "user_confirmed_dialogue",
-      );
+      expect(result.sources[0]?.evidence[0]?.authority).toBe("user_confirmed_dialogue");
       expect(result.sources[0]?.evidence[0]?.listHits).toBe(2);
     }
   });
@@ -256,9 +237,7 @@ describe("evidence-address fusion v2", () => {
         maxEvidencePerSource: 1,
       });
 
-      expect(result.sources[0]?.evidence[0]?.authority).toBe(
-        "user_confirmed_dialogue",
-      );
+      expect(result.sources[0]?.evidence[0]?.authority).toBe("user_confirmed_dialogue");
       expect(result.sources[0]?.evidence[0]?.listHits).toBe(2);
     }
   });
@@ -282,12 +261,8 @@ describe("evidence-address fusion v2", () => {
       failure = error;
     }
     expect(failure).toBeInstanceOf(Error);
-    expect((failure as Error).name).toBe(
-      "MemoryEvidenceCandidateIdentityConflict",
-    );
-    expect(
-      (failure as Error & { candidateConflict?: unknown }).candidateConflict,
-    ).toEqual({
+    expect((failure as Error).name).toBe("MemoryEvidenceCandidateIdentityConflict");
+    expect((failure as Error & { candidateConflict?: unknown }).candidateConflict).toEqual({
       sourceId: "same",
       evidenceRef: "same",
       sourceKind: ["source_span", "source_span"],
@@ -304,24 +279,16 @@ describe("evidence-first conversational bundles", () => {
         "In the book you wrote in our previous conversation, what color was the Plesiosaur?",
       ),
     ).toBe(true);
-    expect(isAssistantMemoryQueryV1("What did you recommend last time?")).toBe(
-      true,
-    );
+    expect(isAssistantMemoryQueryV1("What did you recommend last time?")).toBe(true);
     expect(
       isAssistantMemoryQueryV1(
         "Can you remind me what was the 27th parameter on the list you provided?",
       ),
     ).toBe(true);
+    expect(isAssistantMemoryQueryV1("What phone accessory did I tell you I bought?")).toBe(false);
+    expect(isAssistantMemoryQueryV1("How have my travel preferences changed?")).toBe(false);
     expect(
-      isAssistantMemoryQueryV1("What phone accessory did I tell you I bought?"),
-    ).toBe(false);
-    expect(
-      isAssistantMemoryQueryV1("How have my travel preferences changed?"),
-    ).toBe(false);
-    expect(
-      isAssistantMemoryQueryV1(
-        "What amount was in the plan from our previous conversation?",
-      ),
+      isAssistantMemoryQueryV1("What amount was in the plan from our previous conversation?"),
     ).toBe(false);
   });
 
@@ -333,8 +300,7 @@ describe("evidence-first conversational bundles", () => {
         {
           sourceSeq: 5,
           sourceKind: "user_input",
-          content:
-            "Yes, I asked about their writing process and admired their previous works.",
+          content: "Yes, I asked about their writing process and admired their previous works.",
           hit: true,
         },
         {
@@ -449,11 +415,7 @@ describe("evidence-first conversational bundles", () => {
 
   test("keeps multiple ranked hits from one document within one budget", () => {
     const selected = selectRankedMemoryConversationBundlesV1({
-      bundles: [
-        "first ".repeat(100),
-        "second ".repeat(100),
-        "third ".repeat(100),
-      ],
+      bundles: ["first ".repeat(100), "second ".repeat(100), "third ".repeat(100)],
       query: "first second",
       maxBundles: 2,
       maxChars: 700,
@@ -544,10 +506,7 @@ describe("evidence notebook v1", () => {
       maxChars: 2_048,
     });
 
-    expect(notebook.coverage.map((item) => item.status)).toEqual([
-      "covered",
-      "covered",
-    ]);
+    expect(notebook.coverage.map((item) => item.status)).toEqual(["covered", "covered"]);
     expect(notebook.budgetOmittedHitCount).toBe(0);
     expect(notebook.sources[0]?.text).toContain("Kyoto trip lasted five days");
   });
@@ -722,10 +681,7 @@ describe("evidence notebook v1", () => {
     });
 
     expect(twoEpisodes.coverage[0]?.status).toBe("covered");
-    expect(twoEpisodes.coverage[0]?.selectedEvidenceRefs).toEqual([
-      "a-1",
-      "b-1",
-    ]);
+    expect(twoEpisodes.coverage[0]?.selectedEvidenceRefs).toEqual(["a-1", "b-1"]);
     expect(twoEpisodes.coverage[0]?.independentEvidenceCount).toBe(2);
     expect(twoEpisodes.coverage[0]?.closureEvidenceCount).toBe(2);
   });
@@ -818,21 +774,19 @@ describe("evidence notebook v1", () => {
   });
 
   test("reserves notebook space so an early requirement cannot starve later ones", () => {
-    const requirements = ["alpha", "beta", "gamma", "delta"].map(
-      (name, index) => ({
-        requirementId: name,
-        label: `${name} fact`,
-        searchText: `${name} answer`,
-        minimumEvidence: 1,
-        hits: Array.from({ length: index === 0 ? 2 : 1 }, (_, hitIndex) => ({
-          sourceId: `${name}-session-${hitIndex}`,
-          evidenceRef: `${name}-${hitIndex}`,
-          content: `${name} answer ${"supporting detail ".repeat(80)}`,
-          authority: "user_asserted" as const,
-          episodeOrder: index * 10 + hitIndex,
-        })),
-      }),
-    );
+    const requirements = ["alpha", "beta", "gamma", "delta"].map((name, index) => ({
+      requirementId: name,
+      label: `${name} fact`,
+      searchText: `${name} answer`,
+      minimumEvidence: 1,
+      hits: Array.from({ length: index === 0 ? 2 : 1 }, (_, hitIndex) => ({
+        sourceId: `${name}-session-${hitIndex}`,
+        evidenceRef: `${name}-${hitIndex}`,
+        content: `${name} answer ${"supporting detail ".repeat(80)}`,
+        authority: "user_asserted" as const,
+        episodeOrder: index * 10 + hitIndex,
+      })),
+    }));
     const notebook = buildMemoryEvidenceNotebookV1({
       requirements,
       allowedSourceIds: requirements.flatMap((requirement) =>
@@ -892,23 +846,17 @@ describe("evidence notebook v1", () => {
       maxChars: 1_024,
     });
 
-    const newer = notebook.sources.find(
-      (source) => source.sourceId === "newer",
-    );
+    const newer = notebook.sources.find((source) => source.sourceId === "newer");
     expect(newer?.text).toContain("timeline=latest");
     expect(newer?.text).toContain("state=current");
     expect(newer?.text).toContain("relation=controls_current_answer");
     expect(newer?.text).toContain("precision=approximate");
-    expect(notebook.sources.some((source) => source.sourceId === "older")).toBe(
-      false,
-    );
+    expect(notebook.sources.some((source) => source.sourceId === "older")).toBe(false);
     expect(notebook.coverage[0]?.selectedEvidenceRefs).toEqual(["new-ref"]);
     expect(notebook.coverage[0]?.historicalEvidenceRefs).toEqual(["old-ref"]);
-    expect(
-      notebook.sources.some(
-        (source) => source.sourceId === "irrelevant-later-turn",
-      ),
-    ).toBe(false);
+    expect(notebook.sources.some((source) => source.sourceId === "irrelevant-later-turn")).toBe(
+      false,
+    );
   });
 
   test("keeps equal-time conflicting latest states unresolved", () => {
@@ -946,9 +894,7 @@ describe("evidence notebook v1", () => {
 
     expect(notebook.coverage[0]?.status).toBe("partial");
     expect(notebook.coverage[0]?.unresolvedEvidenceRefs).toHaveLength(1);
-    expect(
-      notebook.sources.some((source) => source.answerRole === "ambiguous"),
-    ).toBe(true);
+    expect(notebook.sources.some((source) => source.answerRole === "ambiguous")).toBe(true);
   });
 
   test("renders shared evidence once without truncating the answer-bearing tail", () => {
@@ -985,9 +931,7 @@ describe("evidence notebook v1", () => {
     });
 
     expect(notebook.selectedHitCount).toBe(1);
-    expect(notebook.coverage.map((item) => item.selectedHitCount)).toEqual([
-      1, 1,
-    ]);
+    expect(notebook.coverage.map((item) => item.selectedHitCount)).toEqual([1, 1]);
     expect(notebook.sources[0]?.text).toContain("28. Kg3");
     expect(notebook.sources[0]?.evidenceRefs).toEqual(["game#assistant-4"]);
   });

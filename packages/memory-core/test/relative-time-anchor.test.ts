@@ -24,10 +24,7 @@ describe("relative time anchor v1", () => {
   });
 
   test("N days ago resolves to that single day window", () => {
-    const w = extractRelativeTimeWindowV1(
-      "What kitchen appliance did I buy 10 days ago?",
-      CUTOFF,
-    );
+    const w = extractRelativeTimeWindowV1("What kitchen appliance did I buy 10 days ago?", CUTOFF);
     expect(w).not.toBeNull();
     expect(w!.endMs - w!.startMs).toBe(DAY);
     expect(Math.round((CUTOFF - w!.startMs) / DAY)).toBe(10);
@@ -43,10 +40,7 @@ describe("relative time anchor v1", () => {
   });
 
   test("past N days resolves to a range ending at cutoff day", () => {
-    const w = extractRelativeTimeWindowV1(
-      "How many items did I buy in the past 14 days?",
-      CUTOFF,
-    );
+    const w = extractRelativeTimeWindowV1("How many items did I buy in the past 14 days?", CUTOFF);
     expect(w).not.toBeNull();
     expect(w!.endMs - w!.startMs).toBe(14 * DAY);
   });
@@ -64,19 +58,14 @@ describe("relative time anchor v1", () => {
   });
 
   test("chinese 过去两个月 resolves to ~60 day range", () => {
-    const w = extractRelativeTimeWindowV1(
-      "过去两个月我买了多少件首饰?",
-      CUTOFF,
-    );
+    const w = extractRelativeTimeWindowV1("过去两个月我买了多少件首饰?", CUTOFF);
     expect(w).not.toBeNull();
     expect(w!.endMs - w!.startMs).toBeGreaterThanOrEqual(59 * DAY);
     expect(w!.endMs - w!.startMs).toBeLessThanOrEqual(61 * DAY);
   });
 
   test("non-temporal questions return null (zero behavior change)", () => {
-    expect(
-      extractRelativeTimeWindowV1("What degree did I graduate with?", CUTOFF),
-    ).toBeNull();
+    expect(extractRelativeTimeWindowV1("What degree did I graduate with?", CUTOFF)).toBeNull();
     expect(
       extractRelativeTimeWindowV1(
         "How many weeks had passed since I recovered from the flu when I went on my 10th jog outdoors?",
@@ -84,8 +73,6 @@ describe("relative time anchor v1", () => {
       ),
     ).toBeNull();
     expect(extractRelativeTimeWindowV1("", CUTOFF)).toBeNull();
-    expect(
-      extractRelativeTimeWindowV1("remind me of the deli name", Number.NaN),
-    ).toBeNull();
+    expect(extractRelativeTimeWindowV1("remind me of the deli name", Number.NaN)).toBeNull();
   });
 });

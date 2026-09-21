@@ -9,8 +9,7 @@ import {
   validateMemorySourceLocalEvidenceResultV1,
 } from "../src/index.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -124,9 +123,7 @@ describe("postgres source-local dialogue locator", () => {
       request,
       result: first,
     });
-    expect(hits.map((hit) => hit.evidenceRef)).toEqual([
-      "journal:session-1#turn-2",
-    ]);
+    expect(hits.map((hit) => hit.evidenceRef)).toEqual(["journal:session-1#turn-2"]);
     expect(hits[0]?.includedTurns.map((turn) => turn.evidenceRef)).toEqual([
       "journal:session-1#turn-1",
       "journal:session-1#turn-2",
@@ -142,9 +139,7 @@ describe("postgres source-local dialogue locator", () => {
       result: first,
       signal: controller.signal,
     });
-    expect(hydrated.hits[0]?.content).toContain(
-      "The memorable color answer was cobalt.",
-    );
+    expect(hydrated.hits[0]?.content).toContain("The memorable color answer was cobalt.");
     expect(events.some((event) => event.type === "hydrate")).toBe(true);
 
     const replay = await locator.locate(request, controller.signal);

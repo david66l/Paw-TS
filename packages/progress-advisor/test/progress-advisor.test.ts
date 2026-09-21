@@ -21,12 +21,8 @@ describe("progress advisor projection", () => {
       maxModelTurns: 10,
       maxTotalModelTurns: 10,
     });
-    expect(advice.filter((a) => a.kind === "verification_repair")).toHaveLength(
-      1,
-    );
-    expect(
-      advice.filter((a) => a.kind === "convergence_checkpoint"),
-    ).toHaveLength(2);
+    expect(advice.filter((a) => a.kind === "verification_repair")).toHaveLength(1);
+    expect(advice.filter((a) => a.kind === "convergence_checkpoint")).toHaveLength(2);
   });
   test("a shell write, including a failed shell, invalidates an earlier passing check", () => {
     for (const changed of [true, "unknown"] as const) {
@@ -70,14 +66,7 @@ describe("progress advisor projection", () => {
       command: "npm test | grep failed",
     });
     expect(projectProgressAdviceTimelineV1(snapshot(facts))).toEqual(first);
-    addToolTurn(
-      facts,
-      4,
-      "direct",
-      "workspace_run_shell",
-      { command: "npm test" },
-      true,
-    );
+    addToolTurn(facts, 4, "direct", "workspace_run_shell", { command: "npm test" }, true);
     addToolTurn(facts, 5, "masked-new", "workspace_run_shell", {
       command: "npm test | tail -5",
     });
@@ -110,25 +99,15 @@ describe("progress advisor projection", () => {
     const later = projectProgressAdviceTimelineV1(snapshot(facts), budget);
     expect(later.slice(0, atWindow.length)).toEqual([...atWindow]);
     expect(later.at(-1)?.message).toContain("2 model calls remain");
-    expect(later.at(-1)?.message).toContain(
-      "passing subset is not full completion",
-    );
-    expect(projectProgressAdviceTimelineV1(snapshot(facts))).not.toContainEqual(
-      later.at(-1),
-    );
+    expect(later.at(-1)?.message).toContain("passing subset is not full completion");
+    expect(projectProgressAdviceTimelineV1(snapshot(facts))).not.toContainEqual(later.at(-1));
   });
 
   test("late background checks do not supply fresh closeout evidence", () => {
     const facts: InputFactV1[] = [];
-    addToolTurn(
-      facts,
-      1,
-      "start",
-      "workspace_job_start",
-      { command: "npm test" },
-      false,
-      { jobId: "job" },
-    );
+    addToolTurn(facts, 1, "start", "workspace_job_start", { command: "npm test" }, false, {
+      jobId: "job",
+    });
     for (let turn = 2; turn <= 3; turn++)
       addToolTurn(facts, turn, `write-${turn}`, "workspace_write_file", {
         path: "a.js",
@@ -178,14 +157,7 @@ describe("progress advisor projection", () => {
         path: `src/${turn}.ts`,
       });
     }
-    addToolTurn(
-      facts,
-      5,
-      "test",
-      "workspace_run_shell",
-      { command: "npm test" },
-      true,
-    );
+    addToolTurn(facts, 5, "test", "workspace_run_shell", { command: "npm test" }, true);
     for (let turn = 6; turn <= 8; turn += 1) {
       addToolTurn(facts, turn, `fix-${turn}`, "workspace_edit_file", {
         path: `src/${turn}.ts`,
@@ -206,14 +178,7 @@ describe("progress advisor projection", () => {
         path: `src/${turn}.ts`,
       });
     }
-    addToolTurn(
-      facts,
-      4,
-      "failed-write",
-      "workspace.write_file",
-      { path: "missing/a.ts" },
-      true,
-    );
+    addToolTurn(facts, 4, "failed-write", "workspace.write_file", { path: "missing/a.ts" }, true);
     expect(projectProgressAdviceV1(snapshot(facts))).toBeUndefined();
     addToolTurn(facts, 5, "masked", "workspace.run_shell", {
       command: "npm test; echo done",
@@ -229,29 +194,17 @@ describe("progress advisor projection", () => {
 
   test("late background verification cannot cover edits made after the job started", () => {
     const facts: InputFactV1[] = [];
-    addToolTurn(
-      facts,
-      1,
-      "job",
-      "workspace_job_start",
-      { command: "npm test" },
-      false,
-      { jobId: "test-job" },
-    );
+    addToolTurn(facts, 1, "job", "workspace_job_start", { command: "npm test" }, false, {
+      jobId: "test-job",
+    });
     for (let turn = 2; turn <= 4; turn += 1) {
       addToolTurn(facts, turn, `write-${turn}`, "workspace_write_file", {
         path: `src/${turn}.ts`,
       });
     }
-    addToolTurn(
-      facts,
-      5,
-      "wait",
-      "workspace_job_wait",
-      { id: "test-job" },
-      false,
-      { snapshot: { status: "completed" } },
-    );
+    addToolTurn(facts, 5, "wait", "workspace_job_wait", { id: "test-job" }, false, {
+      snapshot: { status: "completed" },
+    });
     addToolTurn(facts, 6, "write-6", "workspace_write_file", {
       path: "src/6.ts",
     });
@@ -444,9 +397,9 @@ describe("progress advisor projection", () => {
       modelTurnsWithoutProgress: 4,
       sourceThroughSeq: 39,
     });
-    expect(
-      projectProgressAdviceTimelineV1(structuredClone(snapshot(facts))),
-    ).toEqual(afterProgress);
+    expect(projectProgressAdviceTimelineV1(structuredClone(snapshot(facts)))).toEqual(
+      afterProgress,
+    );
   });
 
   test("retains exact-repeat events between thresholds and appends the next one", () => {
@@ -492,13 +445,9 @@ describe("progress advisor projection", () => {
     let turn = 1;
     for (let cycle = 1; cycle <= 10; cycle += 1) {
       for (let read = 1; read <= 4; read += 1) {
-        addToolTurn(
-          facts,
-          turn,
-          `cycle-${cycle}-read-${read}`,
-          "workspace_read_file",
-          { path: `src/cycle-${cycle}-${read}.ts` },
-        );
+        addToolTurn(facts, turn, `cycle-${cycle}-read-${read}`, "workspace_read_file", {
+          path: `src/cycle-${cycle}-${read}.ts`,
+        });
         turn += 1;
       }
       addToolTurn(facts, turn, `cycle-${cycle}-edit`, "workspace_edit_file", {
@@ -533,10 +482,7 @@ describe("progress advisor context plugin", () => {
       estimator: {
         count: (text) => text.length,
         countMessages: (messages) =>
-          messages.reduce(
-            (total, message) => total + message.content.length,
-            0,
-          ),
+          messages.reduce((total, message) => total + message.content.length, 0),
       },
       hardInputLimitTokens: 10_000,
     });
@@ -595,10 +541,7 @@ describe("progress advisor context plugin", () => {
       estimator: {
         count: (text) => text.length,
         countMessages: (messages) =>
-          messages.reduce(
-            (total, message) => total + message.content.length,
-            0,
-          ),
+          messages.reduce((total, message) => total + message.content.length, 0),
       },
       hardInputLimitTokens: 20_000,
     });
@@ -607,15 +550,9 @@ describe("progress advisor context plugin", () => {
       signal: new AbortController().signal,
     });
     const rendered = materializeModelRequestMessagesV1(request);
-    expect(rendered[1]?.content).toContain(
-      "recommendedAction=main_owned_replan",
-    );
-    expect(rendered[1]?.content).toContain(
-      "make the best-supported source change",
-    );
-    expect(rendered[1]?.content).toContain(
-      "explicitly select an appropriate agent_id",
-    );
+    expect(rendered[1]?.content).toContain("recommendedAction=main_owned_replan");
+    expect(rendered[1]?.content).toContain("make the best-supported source change");
+    expect(rendered[1]?.content).toContain("explicitly select an appropriate agent_id");
     expect(request.options?.tools?.map((tool) => tool.function.name)).toEqual([
       "workspace_read_file",
       "workspace_delegate",
@@ -645,9 +582,9 @@ describe("progress advisor context plugin", () => {
       "workspace_read_file",
       "workspace_delegate",
     ]);
-    expect(
-      materializeModelRequestMessagesV1(released)[1]?.content,
-    ).not.toContain("recommendedAction=main_owned_replan");
+    expect(materializeModelRequestMessagesV1(released)[1]?.content).not.toContain(
+      "recommendedAction=main_owned_replan",
+    );
   });
 
   test("keeps canonical history append-only when tail advice changes", async () => {
@@ -660,9 +597,7 @@ describe("progress advisor context plugin", () => {
     const context = createProgressAdvisorContextPluginV1({
       context: {
         async build(current) {
-          const turns = current.entries.filter(
-            ({ fact }) => fact.type === "model.settled",
-          ).length;
+          const turns = current.entries.filter(({ fact }) => fact.type === "model.settled").length;
           return {
             messages: [
               { role: "system" as const, content: "base" },
@@ -678,10 +613,7 @@ describe("progress advisor context plugin", () => {
       estimator: {
         count: (text) => text.length,
         countMessages: (messages) =>
-          messages.reduce(
-            (total, message) => total + message.content.length,
-            0,
-          ),
+          messages.reduce((total, message) => total + message.content.length, 0),
       },
       hardInputLimitTokens: 10_000,
     });
@@ -695,9 +627,7 @@ describe("progress advisor context plugin", () => {
 
     expect(first.messages.at(-1)?.content).toContain("[Paw Progress Advice]");
     expect(second.messages.at(-1)?.content).toContain("[Paw Progress Advice]");
-    expect(first.messages.at(-1)?.content).not.toBe(
-      second.messages.at(-1)?.content,
-    );
+    expect(first.messages.at(-1)?.content).not.toBe(second.messages.at(-1)?.content);
     expect(second.messages.slice(0, first.messages.length - 1)).toEqual(
       first.messages.slice(0, -1),
     );
@@ -714,12 +644,11 @@ function addToolTurn(
   payload?: JsonValue,
 ): void {
   // Existing scenarios use read-only shell checks unless effects are explicit.
+  let effectivePayload = payload;
   if (/(?:run_shell|job_start|job_wait)$/.test(tool))
-    payload = {
+    effectivePayload = {
       workspaceEffect: { changed: false, paths: [] },
-      ...(payload && typeof payload === "object" && !Array.isArray(payload)
-        ? payload
-        : {}),
+      ...(payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {}),
     };
   const modelCallId = `model-${turn}`;
   facts.push(
@@ -748,12 +677,12 @@ function addToolTurn(
         schemaVersion: "paw.tool-observation.v1",
         isError,
         summary: `${tool} completed`,
-        ...(payload === undefined
+        ...(effectivePayload === undefined
           ? {}
           : {
               payload: {
                 kind: "inline" as const,
-                value: payload,
+                value: effectivePayload,
                 hash: "fixture-inline",
               },
             }),
@@ -762,9 +691,7 @@ function addToolTurn(
   );
 }
 
-function snapshot(
-  facts: readonly InputFactV1[],
-): SessionInputSnapshot<InputFactV1> {
+function snapshot(facts: readonly InputFactV1[]): SessionInputSnapshot<InputFactV1> {
   return {
     entries: facts.map((fact, index) => ({ seq: index + 1, fact })),
     latestInputSeq: facts.length,

@@ -23,10 +23,7 @@ import {
   deriveMemoryAspectLinkStatementHashV1,
 } from "./aspect-linker.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
 export const PAW_MEMORY_ASPECT_CANDIDATE_BUILDER_VERSION_V1 =
   "paw.memory-aspect-candidate-builder.v1:lexical" as const;
@@ -123,96 +120,70 @@ export function buildMemoryAspectLinkCandidatesV1(
   const ranked = input.snapshot.aspects
     .filter((aspect) => aspect.status === "active")
     .filter(
-      (aspect) =>
-        input.excludeExistingMemberships !== true ||
-        !existingAspectIds.has(aspect.id),
+      (aspect) => input.excludeExistingMemberships !== true || !existingAspectIds.has(aspect.id),
     )
     .map((aspect) =>
-      rankAspect(
-        aspect,
-        membersByAspect.get(aspect.id) ?? [],
-        catalog,
-        queryTerms,
-        termWeights,
-      ),
+      rankAspect(aspect, membersByAspect.get(aspect.id) ?? [], catalog, queryTerms, termWeights),
     )
     .filter((item) => item.eligible && item.representatives.length > 0)
     .sort(compareRankedAspects);
-  const selected = ranked.slice(
-    0,
-    PAW_MEMORY_ASPECT_LINKER_MAX_CANDIDATE_ASPECTS_V1,
+  const selected = ranked.slice(0, PAW_MEMORY_ASPECT_LINKER_MAX_CANDIDATE_ASPECTS_V1);
+  const aspectCandidates: readonly MemoryAspectLinkCandidateV1[] = Object.freeze(
+    selected.map((item) =>
+      Object.freeze({
+        aspectId: item.aspect.id,
+        representatives: Object.freeze(
+          item.representatives
+            .slice(0, PAW_MEMORY_ASPECT_LINKER_MAX_REPRESENTATIVES_V1)
+            .map(({ evidence }) => Object.freeze({ ...evidence })),
+        ),
+      }),
+    ),
   );
-  const aspectCandidates: readonly MemoryAspectLinkCandidateV1[] =
-    Object.freeze(
-      selected.map((item) =>
-        Object.freeze({
-          aspectId: item.aspect.id,
-          representatives: Object.freeze(
-            item.representatives
-              .slice(0, PAW_MEMORY_ASPECT_LINKER_MAX_REPRESENTATIVES_V1)
-              .map(({ evidence }) => Object.freeze({ ...evidence })),
-          ),
-        }),
-      ),
-    );
   const relationEvidence = new Map<string, MemoryAspectLinkRepresentativeV1>();
   let truncatedRelationTargetCount = 0;
-  const relationCandidates: readonly MemoryAspectLinkRelationCandidatesV1[] =
-    Object.freeze(
-      input.claims.map((claim) => {
-        if (input.includeRelations === false) {
-          return Object.freeze({ claimId: claim.claimId, targetClaimIds: [] });
-        }
-        const claimTerms = terms(claim.statement);
-        const rankedTargets = selected.flatMap((aspect, aspectIndex) => {
-          const quota = RELATION_TARGET_QUOTAS[aspectIndex] ?? 0;
-          truncatedRelationTargetCount += Math.max(
-            0,
-            aspect.representatives.length - quota,
-          );
-          if (quota === 0) return [];
-          return aspect.representatives
-            .map(({ evidence }) => ({
-              evidence,
-              score: lexicalScore(
-                claimTerms,
-                terms(evidence.statement),
-                termWeights,
-              ),
-            }))
-            .sort(
-              (left, right) =>
-                right.score - left.score ||
-                left.evidence.claimId.localeCompare(right.evidence.claimId),
-            )
-            .slice(0, quota);
-        });
-        const uniqueTargets = [
-          ...new Map(
-            rankedTargets.map((target) => [target.evidence.claimId, target]),
-          ).values(),
-        ];
-        for (const target of uniqueTargets) {
-          relationEvidence.set(target.evidence.claimId, target.evidence);
-        }
-        if (
-          uniqueTargets.length >
-          PAW_MEMORY_ASPECT_LINKER_MAX_RELATION_TARGETS_V1
-        ) {
-          truncatedRelationTargetCount +=
-            uniqueTargets.length -
-            PAW_MEMORY_ASPECT_LINKER_MAX_RELATION_TARGETS_V1;
-        }
-        return Object.freeze({
-          claimId: claim.claimId,
-          targetClaimIds: Object.freeze(
-            uniqueTargets
-              .slice(0, PAW_MEMORY_ASPECT_LINKER_MAX_RELATION_TARGETS_V1)
-              .map((target) => target.evidence.claimId),
-          ),
-        });
-      }),
-    );
+  const relationCandidates: readonly MemoryAspectLinkRelationCandidatesV1[] = Object.freeze(
+    input.claims.map((claim) => {
+      if (input.includeRelations === false) {
+        return Object.freeze({ claimId: claim.claimId, targetClaimIds: [] });
+      }
+      const claimTerms = terms(claim.statement);
+      const rankedTargets = selected.flatMap((aspect, aspectIndex) => {
+        const quota = RELATION_TARGET_QUOTAS[aspectIndex] ?? 0;
+        truncatedRelationTargetCount += Math.max(0, aspect.representatives.length - quota);
+        if (quota === 0) return [];
+        return aspect.representatives
+          .map(({ evidence }) => ({
+            evidence,
+            score: lexicalScore(claimTerms, terms(evidence.statement), termWeights),
+          }))
+          .sort(
+            (left, right) =>
+              right.score - left.score ||
+              left.evidence.claimId.localeCompare(right.evidence.claimId),
+          )
+          .slice(0, quota);
+      });
+      const uniqueTargets = [
+        ...new Map(rankedTargets.map((target) => [target.evidence.claimId, target])).values(),
+      ];
+      for (const target of uniqueTargets) {
+        relationEvidence.set(target.evidence.claimId, target.evidence);
+      }
+      if (uniqueTargets.length > PAW_MEMORY_ASPECT_LINKER_MAX_RELATION_TARGETS_V1) {
+        truncatedRelationTargetCount +=
+          uniqueTargets.length - PAW_MEMORY_ASPECT_LINKER_MAX_RELATION_TARGETS_V1;
+      }
+      return Object.freeze({
+        claimId: claim.claimId,
+        targetClaimIds: Object.freeze(
+          uniqueTargets
+            .slice(0, PAW_MEMORY_ASPECT_LINKER_MAX_RELATION_TARGETS_V1)
+            .map((target) => target.evidence.claimId),
+        ),
+      });
+    }),
+  );
   const relationEvidenceValues = Object.freeze(
     [...relationEvidence.values()]
       .sort((left, right) => left.claimId.localeCompare(right.claimId))
@@ -222,9 +193,7 @@ export function buildMemoryAspectLinkCandidatesV1(
     scope: input.scope,
     snapshot: input.snapshot,
     observedAt: input.observedAt,
-    claims: Object.freeze(
-      input.claims.map((claim) => Object.freeze({ ...claim })),
-    ),
+    claims: Object.freeze(input.claims.map((claim) => Object.freeze({ ...claim }))),
     aspectCandidates,
     relationEvidence: relationEvidenceValues,
     relationCandidates,
@@ -253,11 +222,7 @@ export function buildMemoryAspectLinkCandidatesV1(
     truncatedRepresentativeCount: selected.reduce(
       (count, item) =>
         count +
-        Math.max(
-          0,
-          item.representatives.length -
-            PAW_MEMORY_ASPECT_LINKER_MAX_REPRESENTATIVES_V1,
-        ),
+        Math.max(0, item.representatives.length - PAW_MEMORY_ASPECT_LINKER_MAX_REPRESENTATIVES_V1),
       0,
     ),
     truncatedRelationTargetCount,
@@ -315,8 +280,7 @@ function validateInput(input: MemoryAspectCandidateBuilderInputV1): void {
     if (
       !graphClaims.has(claim.claimId) ||
       inputIds.has(claim.claimId) ||
-      deriveMemoryAspectLinkStatementHashV1(claim.statement) !==
-        claim.statementHash
+      deriveMemoryAspectLinkStatementHashV1(claim.statement) !== claim.statementHash
     ) {
       throw namedError("MemoryAspectCandidateBuilderClaimInvalid");
     }
@@ -328,8 +292,7 @@ function validateInput(input: MemoryAspectCandidateBuilderInputV1): void {
       !graphClaims.has(item.claimId) ||
       inputIds.has(item.claimId) ||
       catalogIds.has(item.claimId) ||
-      deriveMemoryAspectLinkStatementHashV1(item.statement) !==
-        item.statementHash
+      deriveMemoryAspectLinkStatementHashV1(item.statement) !== item.statementHash
     ) {
       throw namedError("MemoryAspectCandidateBuilderCatalogInvalid");
     }
@@ -363,9 +326,7 @@ function candidateAspectId(
   snapshot: MemoryAspectGraphSnapshotV1,
   membership: MemoryClaimAspectMembershipV1,
 ): string | null {
-  const source = snapshot.aspects.find(
-    (aspect) => aspect.id === membership.aspectId,
-  );
+  const source = snapshot.aspects.find((aspect) => aspect.id === membership.aspectId);
   if (source?.status === "active") return source.id;
   if (source?.status !== "redirected") return null;
   const resolved = resolveMemoryAspectIdsV1(snapshot, source.id);
@@ -379,15 +340,12 @@ function rankAspect(
   queryTerms: readonly ReadonlySet<string>[],
   termWeights: ReadonlyMap<string, number>,
 ): RankedAspectV1 {
-  const identityTerms = terms(
-    [aspect.displayName, ...aspect.aliases].join(" "),
-  );
+  const identityTerms = terms([aspect.displayName, ...aspect.aliases].join(" "));
   const identityMatched = queryTerms.some(
     (query) => discriminantOverlapCount(query, identityTerms, termWeights) >= 1,
   );
   const identityScore = queryTerms.reduce(
-    (score, query) =>
-      Math.max(score, lexicalScore(query, identityTerms, termWeights) * 4),
+    (score, query) => Math.max(score, lexicalScore(query, identityTerms, termWeights) * 4),
     0,
   );
   const representatives = memberships
@@ -396,25 +354,18 @@ function rankAspect(
       if (evidence === undefined) return [];
       const candidateTerms = terms(evidence.statement);
       const score = queryTerms.reduce(
-        (best, query) =>
-          Math.max(best, lexicalScore(query, candidateTerms, termWeights)),
+        (best, query) => Math.max(best, lexicalScore(query, candidateTerms, termWeights)),
         0,
       );
       return [{ evidence, score }];
     })
     .sort(
       (left, right) =>
-        right.score - left.score ||
-        left.evidence.claimId.localeCompare(right.evidence.claimId),
+        right.score - left.score || left.evidence.claimId.localeCompare(right.evidence.claimId),
     );
   const memberMatched = representatives.some(({ evidence }) =>
     queryTerms.some(
-      (query) =>
-        discriminantOverlapCount(
-          query,
-          terms(evidence.statement),
-          termWeights,
-        ) >= 2,
+      (query) => discriminantOverlapCount(query, terms(evidence.statement), termWeights) >= 2,
     ),
   );
   return {
@@ -425,13 +376,8 @@ function rankAspect(
   };
 }
 
-function compareRankedAspects(
-  left: RankedAspectV1,
-  right: RankedAspectV1,
-): number {
-  return (
-    right.score - left.score || left.aspect.id.localeCompare(right.aspect.id)
-  );
+function compareRankedAspects(left: RankedAspectV1, right: RankedAspectV1): number {
+  return right.score - left.score || left.aspect.id.localeCompare(right.aspect.id);
 }
 
 function lexicalScore(
@@ -481,9 +427,7 @@ function inverseDocumentWeights(
 function terms(value: string): ReadonlySet<string> {
   const normalized = value.normalize("NFKC").toLocaleLowerCase();
   const result = new Set(
-    (normalized.match(/[\p{L}\p{N}]{2,}/gu) ?? []).filter(
-      (term) => !ENGLISH_STOP_WORDS.has(term),
-    ),
+    (normalized.match(/[\p{L}\p{N}]{2,}/gu) ?? []).filter((term) => !ENGLISH_STOP_WORDS.has(term)),
   );
   for (const match of normalized.matchAll(/[\p{Script=Han}]+/gu)) {
     const chars = [...match[0]];

@@ -1,22 +1,14 @@
 import type { JsonValue } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
-export const PAW_MEMORY_ASPECT_GRAPH_VERSION_V1 =
-  "paw.memory-aspect-graph.v1" as const;
-export const PAW_MEMORY_ASPECT_CLAIM_VERSION_V1 =
-  "paw.memory-aspect-claim.v1" as const;
+export const PAW_MEMORY_ASPECT_GRAPH_VERSION_V1 = "paw.memory-aspect-graph.v1" as const;
+export const PAW_MEMORY_ASPECT_CLAIM_VERSION_V1 = "paw.memory-aspect-claim.v1" as const;
 export const PAW_MEMORY_ASPECT_VERSION_V1 = "paw.memory-aspect.v1" as const;
-export const PAW_MEMORY_ASPECT_MEMBERSHIP_VERSION_V1 =
-  "paw.memory-aspect-membership.v1" as const;
-export const PAW_MEMORY_EVIDENCE_EDGE_VERSION_V1 =
-  "paw.memory-evidence-edge.v1" as const;
-export const PAW_MEMORY_ASPECT_TRANSITION_VERSION_V1 =
-  "paw.memory-aspect-transition.v1" as const;
+export const PAW_MEMORY_ASPECT_MEMBERSHIP_VERSION_V1 = "paw.memory-aspect-membership.v1" as const;
+export const PAW_MEMORY_EVIDENCE_EDGE_VERSION_V1 = "paw.memory-evidence-edge.v1" as const;
+export const PAW_MEMORY_ASPECT_TRANSITION_VERSION_V1 = "paw.memory-aspect-transition.v1" as const;
 export const PAW_MEMORY_ASPECT_LIFECYCLE_EVENT_VERSION_V1 =
   "paw.memory-aspect-lifecycle-event.v1" as const;
 export const PAW_MEMORY_ASPECT_STATE_PROJECTION_VERSION_V1 =
@@ -25,12 +17,7 @@ export const DEFAULT_MEMORY_ASPECT_CONTEXT_KEY_V1 = "global" as const;
 
 export type MemoryAspectClaimKindV1 = "assertion" | "episode";
 
-export type MemoryAspectClaimRoleV1 =
-  | "state"
-  | "fact"
-  | "event"
-  | "cause"
-  | "condition";
+export type MemoryAspectClaimRoleV1 = "state" | "fact" | "event" | "cause" | "condition";
 
 export type MemoryEvidenceEdgeTypeV1 =
   | "same_state"
@@ -200,10 +187,7 @@ export function deriveMemoryAspectIdV1(
   return hashCanonicalJsonV1({
     schemaVersion: PAW_MEMORY_ASPECT_VERSION_V1,
     scopeFingerprint: memoryScopeFingerprintV1(input.scope),
-    identitySeed: identity(
-      input.identitySeed,
-      "MemoryAspectIdentitySeedInvalid",
-    ),
+    identitySeed: identity(input.identitySeed, "MemoryAspectIdentitySeedInvalid"),
   });
 }
 
@@ -215,11 +199,7 @@ export function createMemoryAspectV1(
     aliases?: readonly string[];
   }>,
 ): MemoryAspectV1 {
-  const displayName = text(
-    input.displayName,
-    "MemoryAspectDisplayNameInvalid",
-    160,
-  );
+  const displayName = text(input.displayName, "MemoryAspectDisplayNameInvalid", 160);
   return Object.freeze({
     schemaVersion: PAW_MEMORY_ASPECT_VERSION_V1,
     id: deriveMemoryAspectIdV1(input),
@@ -241,10 +221,7 @@ export function createMemoryAspectClaimV1(
     evidenceRefs: readonly string[];
   }>,
 ): MemoryAspectClaimV1 {
-  const validFrom = isoTime(
-    input.validFrom,
-    "MemoryAspectClaimValidFromInvalid",
-  );
+  const validFrom = isoTime(input.validFrom, "MemoryAspectClaimValidFromInvalid");
   const validTo =
     input.validTo === undefined
       ? undefined
@@ -253,10 +230,7 @@ export function createMemoryAspectClaimV1(
     throw namedError("MemoryAspectClaimTimeRangeInvalid");
   }
   assertClaimKind(input.kind);
-  const evidenceRefs = stableIdentities(
-    input.evidenceRefs,
-    "MemoryAspectClaimEvidenceInvalid",
-  );
+  const evidenceRefs = stableIdentities(input.evidenceRefs, "MemoryAspectClaimEvidenceInvalid");
   if (evidenceRefs.length === 0) {
     throw namedError("MemoryAspectClaimEvidenceMissing");
   }
@@ -284,10 +258,7 @@ export function createMemoryClaimAspectMembershipV1(
   }>,
 ): MemoryClaimAspectMembershipV1 {
   const claimId = identity(input.claimId, "MemoryAspectMembershipClaimInvalid");
-  const aspectId = identity(
-    input.aspectId,
-    "MemoryAspectMembershipAspectInvalid",
-  );
+  const aspectId = identity(input.aspectId, "MemoryAspectMembershipAspectInvalid");
   const subjectKey = stateDimension(
     input.subjectKey ?? defaultMemoryAspectSubjectKeyV1(input.scope),
     "MemoryAspectMembershipSubjectInvalid",
@@ -303,10 +274,7 @@ export function createMemoryClaimAspectMembershipV1(
     contextKey,
   });
   assertClaimRole(input.role);
-  const createdAt = isoTime(
-    input.createdAt,
-    "MemoryAspectMembershipCreatedAtInvalid",
-  );
+  const createdAt = isoTime(input.createdAt, "MemoryAspectMembershipCreatedAtInvalid");
   return Object.freeze({
     schemaVersion: PAW_MEMORY_ASPECT_MEMBERSHIP_VERSION_V1,
     id: hashCanonicalJsonV1({
@@ -324,17 +292,12 @@ export function createMemoryClaimAspectMembershipV1(
     contextKey,
     stateKeyId,
     role: input.role,
-    confidence: confidence(
-      input.confidence,
-      "MemoryAspectMembershipConfidenceInvalid",
-    ),
+    confidence: confidence(input.confidence, "MemoryAspectMembershipConfidenceInvalid"),
     createdAt,
   });
 }
 
-export function defaultMemoryAspectSubjectKeyV1(
-  scope: PawNextMemoryScopeV1,
-): string {
+export function defaultMemoryAspectSubjectKeyV1(scope: PawNextMemoryScopeV1): string {
   return `user:${identity(scope.userId, "MemoryAspectScopeUserInvalid")}`;
 }
 
@@ -349,15 +312,9 @@ export function deriveMemoryAspectStateKeyIdV1(
   return hashCanonicalJsonV1({
     schemaVersion: "paw.memory-aspect-state-key.v1",
     scopeFingerprint: memoryScopeFingerprintV1(input.scope),
-    subjectKey: stateDimension(
-      input.subjectKey,
-      "MemoryAspectStateSubjectInvalid",
-    ),
+    subjectKey: stateDimension(input.subjectKey, "MemoryAspectStateSubjectInvalid"),
     aspectId: identity(input.aspectId, "MemoryAspectStateAspectInvalid"),
-    contextKey: stateDimension(
-      input.contextKey,
-      "MemoryAspectStateContextInvalid",
-    ),
+    contextKey: stateDimension(input.contextKey, "MemoryAspectStateContextInvalid"),
   });
 }
 
@@ -378,18 +335,11 @@ export function createMemoryEvidenceEdgeV1(
     createdAt: string;
   }>,
 ): MemoryEvidenceEdgeV1 {
-  let fromClaimId = identity(
-    input.fromClaimId,
-    "MemoryEvidenceEdgeSourceInvalid",
-  );
+  let fromClaimId = identity(input.fromClaimId, "MemoryEvidenceEdgeSourceInvalid");
   let toClaimId = identity(input.toClaimId, "MemoryEvidenceEdgeTargetInvalid");
-  if (fromClaimId === toClaimId)
-    throw namedError("MemoryEvidenceEdgeSelfReference");
+  if (fromClaimId === toClaimId) throw namedError("MemoryEvidenceEdgeSelfReference");
   assertEdgeType(input.edgeType);
-  if (
-    input.edgeType === "same_state" &&
-    fromClaimId.localeCompare(toClaimId) > 0
-  ) {
+  if (input.edgeType === "same_state" && fromClaimId.localeCompare(toClaimId) > 0) {
     [fromClaimId, toClaimId] = [toClaimId, fromClaimId];
   }
   if (isStateScopedEdgeType(input.edgeType) && input.stateScope === undefined) {
@@ -399,21 +349,15 @@ export function createMemoryEvidenceEdgeV1(
     input.stateScope === undefined
       ? undefined
       : freezeStateScope({
-          subjectKey:
-            input.stateScope.subjectKey ??
-            defaultMemoryAspectSubjectKeyV1(input.scope),
+          subjectKey: input.stateScope.subjectKey ?? defaultMemoryAspectSubjectKeyV1(input.scope),
           aspectId: input.stateScope.aspectId,
-          contextKey:
-            input.stateScope.contextKey ?? DEFAULT_MEMORY_ASPECT_CONTEXT_KEY_V1,
+          contextKey: input.stateScope.contextKey ?? DEFAULT_MEMORY_ASPECT_CONTEXT_KEY_V1,
         });
   const stateKeyId =
     stateScope === undefined
       ? undefined
       : deriveMemoryAspectStateKeyIdV1({ scope: input.scope, ...stateScope });
-  const createdAt = isoTime(
-    input.createdAt,
-    "MemoryEvidenceEdgeCreatedAtInvalid",
-  );
+  const createdAt = isoTime(input.createdAt, "MemoryEvidenceEdgeCreatedAtInvalid");
   const effectiveFrom = isoTime(
     input.effectiveFrom ?? createdAt,
     "MemoryEvidenceEdgeEffectiveFromInvalid",
@@ -433,14 +377,8 @@ export function createMemoryEvidenceEdgeV1(
     toClaimId,
     edgeType: input.edgeType,
     ...(stateScope === undefined ? {} : { stateScope, stateKeyId }),
-    confidence: confidence(
-      input.confidence,
-      "MemoryEvidenceEdgeConfidenceInvalid",
-    ),
-    evidenceRefs: stableIdentities(
-      input.evidenceRefs ?? [],
-      "MemoryEvidenceEdgeEvidenceInvalid",
-    ),
+    confidence: confidence(input.confidence, "MemoryEvidenceEdgeConfidenceInvalid"),
+    evidenceRefs: stableIdentities(input.evidenceRefs ?? [], "MemoryEvidenceEdgeEvidenceInvalid"),
     effectiveFrom,
     createdAt,
   });
@@ -459,12 +397,8 @@ export function createMemoryAspectLifecycleEventV1(
 ): MemoryAspectLifecycleEventV1 {
   assertLifecycleTargetKind(input.targetKind);
   const action = input.action ?? "retract";
-  if (action !== "retract")
-    throw namedError("MemoryAspectLifecycleActionInvalid");
-  const targetId = identity(
-    input.targetId,
-    "MemoryAspectLifecycleTargetInvalid",
-  );
+  if (action !== "retract") throw namedError("MemoryAspectLifecycleActionInvalid");
+  const targetId = identity(input.targetId, "MemoryAspectLifecycleTargetInvalid");
   return Object.freeze({
     schemaVersion: PAW_MEMORY_ASPECT_LIFECYCLE_EVENT_VERSION_V1,
     id: hashCanonicalJsonV1({
@@ -477,21 +411,11 @@ export function createMemoryAspectLifecycleEventV1(
     targetKind: input.targetKind,
     targetId,
     action,
-    reasonCode: text(
-      input.reasonCode,
-      "MemoryAspectLifecycleReasonInvalid",
-      120,
-    ),
+    reasonCode: text(input.reasonCode, "MemoryAspectLifecycleReasonInvalid", 120),
     evidenceRefs: Object.freeze(
-      stableIdentities(
-        input.evidenceRefs ?? [],
-        "MemoryAspectLifecycleEvidenceInvalid",
-      ),
+      stableIdentities(input.evidenceRefs ?? [], "MemoryAspectLifecycleEvidenceInvalid"),
     ),
-    occurredAt: isoTime(
-      input.occurredAt,
-      "MemoryAspectLifecycleOccurredAtInvalid",
-    ),
+    occurredAt: isoTime(input.occurredAt, "MemoryAspectLifecycleOccurredAtInvalid"),
   });
 }
 
@@ -505,10 +429,7 @@ export function createMemoryAspectTransitionV1(
     createdAt: string;
   }>,
 ): MemoryAspectTransitionV1 {
-  const fromAspectId = identity(
-    input.fromAspectId,
-    "MemoryAspectTransitionSourceInvalid",
-  );
+  const fromAspectId = identity(input.fromAspectId, "MemoryAspectTransitionSourceInvalid");
   const toAspectIds = stableIdentities(
     input.toAspectIds,
     "MemoryAspectTransitionTargetInvalid",
@@ -522,11 +443,7 @@ export function createMemoryAspectTransitionV1(
   if (input.kind !== "merge" && input.kind !== "split") {
     throw namedError("MemoryAspectTransitionKindInvalid");
   }
-  const reasonCode = text(
-    input.reasonCode,
-    "MemoryAspectTransitionReasonInvalid",
-    120,
-  );
+  const reasonCode = text(input.reasonCode, "MemoryAspectTransitionReasonInvalid", 120);
   return Object.freeze({
     schemaVersion: PAW_MEMORY_ASPECT_TRANSITION_VERSION_V1,
     id: hashCanonicalJsonV1({
@@ -540,10 +457,7 @@ export function createMemoryAspectTransitionV1(
     fromAspectId,
     toAspectIds: Object.freeze(toAspectIds),
     reasonCode,
-    createdAt: isoTime(
-      input.createdAt,
-      "MemoryAspectTransitionCreatedAtInvalid",
-    ),
+    createdAt: isoTime(input.createdAt, "MemoryAspectTransitionCreatedAtInvalid"),
   });
 }
 
@@ -586,10 +500,7 @@ export function applyMemoryAspectGraphMutationV1(
   try {
     const existing = validateSnapshot(input.snapshot);
     validateGraph(existing);
-    if (
-      input.expectedRevision !== undefined &&
-      input.expectedRevision !== existing.revision
-    ) {
+    if (input.expectedRevision !== undefined && input.expectedRevision !== existing.revision) {
       throw namedError("MemoryAspectGraphRevisionConflict");
     }
     const claims = appendImmutableById(
@@ -597,11 +508,7 @@ export function applyMemoryAspectGraphMutationV1(
       input.claims ?? [],
       "MemoryAspectClaimImmutableConflict",
     );
-    let aspects = upsertAspects(
-      existing.aspects,
-      input.aspects ?? [],
-      existing.scopeFingerprint,
-    );
+    let aspects = upsertAspects(existing.aspects, input.aspects ?? [], existing.scopeFingerprint);
     const memberships = appendImmutableById(
       existing.memberships,
       input.memberships ?? [],
@@ -634,10 +541,7 @@ export function applyMemoryAspectGraphMutationV1(
       lifecycleEvents,
     });
     validateGraph(snapshot);
-    emit(
-      options.onEvent,
-      eventFor(snapshot, "applied", startedAt, options.now),
-    );
+    emit(options.onEvent, eventFor(snapshot, "applied", startedAt, options.now));
     return snapshot;
   } catch (error) {
     const snapshot = input.snapshot;
@@ -662,9 +566,7 @@ export function resolveMemoryAspectIdsV1(
   snapshot: MemoryAspectGraphSnapshotV1,
   aspectId: string,
 ): readonly string[] {
-  const aspects = new Map(
-    snapshot.aspects.map((aspect) => [aspect.id, aspect]),
-  );
+  const aspects = new Map(snapshot.aspects.map((aspect) => [aspect.id, aspect]));
   if (!aspects.has(aspectId)) throw namedError("MemoryAspectMissing");
   const resolved = new Set<string>();
   const visiting = new Set<string>();
@@ -702,10 +604,7 @@ export function projectMemoryAspectStateV1(
     const snapshot = validateSnapshot(input.snapshot);
     validateGraph(snapshot);
     const asOf = isoTime(input.asOf, "MemoryAspectProjectionAsOfInvalid");
-    const resolvedAspectIds = resolveMemoryAspectIdsV1(
-      snapshot,
-      input.aspectId,
-    );
+    const resolvedAspectIds = resolveMemoryAspectIdsV1(snapshot, input.aspectId);
     const requestedAspect = requiredAspect(snapshot, input.aspectId);
     const membershipAspectIds = collectMembershipAspectIds(
       snapshot,
@@ -715,8 +614,7 @@ export function projectMemoryAspectStateV1(
     const retracted = retractedTargetIds(snapshot.lifecycleEvents, asOf);
     const candidateMemberships = snapshot.memberships.filter(
       (membership) =>
-        !retracted.memberships.has(membership.id) &&
-        membershipAspectIds.has(membership.aspectId),
+        !retracted.memberships.has(membership.id) && membershipAspectIds.has(membership.aspectId),
     );
     const dimensions = selectProjectionStateDimensions(
       candidateMemberships,
@@ -729,9 +627,7 @@ export function projectMemoryAspectStateV1(
         (membership.subjectKey === dimensions.subjectKey &&
           membership.contextKey === dimensions.contextKey),
     );
-    const claimIds = new Set(
-      memberships.map((membership) => membership.claimId),
-    );
+    const claimIds = new Set(memberships.map((membership) => membership.claimId));
     const claims = new Map(snapshot.claims.map((claim) => [claim.id, claim]));
     const activeEdges = snapshot.edges.filter(
       (edge) =>
@@ -746,10 +642,7 @@ export function projectMemoryAspectStateV1(
     );
     const superseded = new Set(
       activeEdges
-        .filter(
-          (edge) =>
-            edge.edgeType === "supersedes" && edge.stateScope !== undefined,
-        )
+        .filter((edge) => edge.edgeType === "supersedes" && edge.stateScope !== undefined)
         .map((edge) => edge.toClaimId),
     );
     const currentClaimIds: string[] = [];
@@ -782,8 +675,7 @@ export function projectMemoryAspectStateV1(
         futureClaimIds.push(claimId);
       } else if (
         superseded.has(claimId) ||
-        (claim.validTo !== undefined &&
-          Date.parse(claim.validTo) <= Date.parse(asOf))
+        (claim.validTo !== undefined && Date.parse(claim.validTo) <= Date.parse(asOf))
       ) {
         historicalClaimIds.push(claimId);
       } else {
@@ -792,10 +684,7 @@ export function projectMemoryAspectStateV1(
     }
     const edges = Object.freeze(
       activeEdges
-        .filter(
-          (edge) =>
-            claimIds.has(edge.fromClaimId) || claimIds.has(edge.toClaimId),
-        )
+        .filter((edge) => claimIds.has(edge.fromClaimId) || claimIds.has(edge.toClaimId))
         .sort(compareEdges),
     );
     const neighborClaimIds = Object.freeze(
@@ -826,10 +715,7 @@ export function projectMemoryAspectStateV1(
       edges,
       neighborClaimIds,
     }) satisfies MemoryAspectStateProjectionV1;
-    emit(
-      options.onEvent,
-      eventFor(snapshot, "projected", startedAt, options.now),
-    );
+    emit(options.onEvent, eventFor(snapshot, "projected", startedAt, options.now));
     return projection;
   } catch (error) {
     emit(options.onEvent, {
@@ -878,25 +764,17 @@ export function measureMemoryAspectGraphV1(
   return Object.freeze({
     claimCount: snapshot.claims.length,
     aspectCount: snapshot.aspects.length,
-    activeAspectCount: snapshot.aspects.filter(
-      (aspect) => aspect.status === "active",
-    ).length,
+    activeAspectCount: snapshot.aspects.filter((aspect) => aspect.status === "active").length,
     membershipCount: snapshot.memberships.length,
     activeMembershipCount: activeMemberships.length,
     edgeCount: snapshot.edges.length,
     lifecycleEventCount: snapshot.lifecycleEvents.length,
-    multiAspectClaimCount: [...aspectsByClaim.values()].filter(
-      (values) => values.size > 1,
-    ).length,
+    multiAspectClaimCount: [...aspectsByClaim.values()].filter((values) => values.size > 1).length,
     averageAspectsPerClaim:
-      snapshot.claims.length === 0
-        ? 0
-        : uniqueMembershipCount / snapshot.claims.length,
+      snapshot.claims.length === 0 ? 0 : uniqueMembershipCount / snapshot.claims.length,
     largestAspectClaimCount,
     largestAspectClaimShare:
-      snapshot.claims.length === 0
-        ? 0
-        : largestAspectClaimCount / snapshot.claims.length,
+      snapshot.claims.length === 0 ? 0 : largestAspectClaimCount / snapshot.claims.length,
   });
 }
 
@@ -916,31 +794,18 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
       throw namedError("MemoryAspectClaimInvalid");
     }
     assertClaimKind(claim.kind);
-    const validFrom = isoTime(
-      claim.validFrom,
-      "MemoryAspectClaimValidFromInvalid",
-    );
-    const ingestedAt = isoTime(
-      claim.ingestedAt,
-      "MemoryAspectClaimIngestedAtInvalid",
-    );
+    const validFrom = isoTime(claim.validFrom, "MemoryAspectClaimValidFromInvalid");
+    const ingestedAt = isoTime(claim.ingestedAt, "MemoryAspectClaimIngestedAtInvalid");
     if (validFrom !== claim.validFrom || ingestedAt !== claim.ingestedAt) {
       throw namedError("MemoryAspectClaimTimeNotCanonical");
     }
     if (claim.validTo !== undefined) {
       const validTo = isoTime(claim.validTo, "MemoryAspectClaimValidToInvalid");
-      if (
-        validTo !== claim.validTo ||
-        Date.parse(validTo) < Date.parse(validFrom)
-      ) {
+      if (validTo !== claim.validTo || Date.parse(validTo) < Date.parse(validFrom)) {
         throw namedError("MemoryAspectClaimTimeRangeInvalid");
       }
     }
-    assertStableIdentityList(
-      claim.evidenceRefs,
-      "MemoryAspectClaimEvidenceInvalid",
-      true,
-    );
+    assertStableIdentityList(claim.evidenceRefs, "MemoryAspectClaimEvidenceInvalid", true);
   }
 
   for (const aspect of aspects.values()) {
@@ -951,67 +816,42 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
     ) {
       throw namedError("MemoryAspectScopeMismatch");
     }
-    const displayName = text(
-      aspect.displayName,
-      "MemoryAspectDisplayNameInvalid",
-      160,
-    );
+    const displayName = text(aspect.displayName, "MemoryAspectDisplayNameInvalid", 160);
     if (
       displayName !== aspect.displayName ||
-      !sameStrings(
-        aspect.aliases,
-        stableLabels(aspect.aliases, aspect.displayName),
-      )
+      !sameStrings(aspect.aliases, stableLabels(aspect.aliases, aspect.displayName))
     ) {
       throw namedError("MemoryAspectLabelsNotCanonical");
     }
-    if (
-      aspect.status !== "active" &&
-      aspect.status !== "redirected" &&
-      aspect.status !== "split"
-    ) {
+    if (aspect.status !== "active" && aspect.status !== "redirected" && aspect.status !== "split") {
       throw namedError("MemoryAspectStatusInvalid");
     }
-    assertStableIdentityList(
-      aspect.redirectToAspectIds,
-      "MemoryAspectRedirectTargetInvalid",
-    );
+    assertStableIdentityList(aspect.redirectToAspectIds, "MemoryAspectRedirectTargetInvalid");
     if (
       (aspect.status === "active" && aspect.redirectToAspectIds.length !== 0) ||
-      (aspect.status === "redirected" &&
-        aspect.redirectToAspectIds.length !== 1) ||
+      (aspect.status === "redirected" && aspect.redirectToAspectIds.length !== 1) ||
       (aspect.status === "split" && aspect.redirectToAspectIds.length < 2)
     ) {
       throw namedError("MemoryAspectRedirectStateInvalid");
     }
     for (const target of aspect.redirectToAspectIds) {
-      if (!aspects.has(target))
-        throw namedError("MemoryAspectRedirectTargetMissing");
+      if (!aspects.has(target)) throw namedError("MemoryAspectRedirectTargetMissing");
     }
   }
-  for (const aspect of aspects.values())
-    resolveMemoryAspectIdsV1(snapshot, aspect.id);
+  for (const aspect of aspects.values()) resolveMemoryAspectIdsV1(snapshot, aspect.id);
 
   for (const membership of snapshot.memberships) {
     assertClaimRole(membership.role);
     if (
       membership.schemaVersion !== PAW_MEMORY_ASPECT_MEMBERSHIP_VERSION_V1 ||
-      stateDimension(
-        membership.subjectKey,
-        "MemoryAspectMembershipSubjectInvalid",
-      ) !== membership.subjectKey ||
-      stateDimension(
-        membership.contextKey,
-        "MemoryAspectMembershipContextInvalid",
-      ) !== membership.contextKey ||
-      confidence(
-        membership.confidence,
-        "MemoryAspectMembershipConfidenceInvalid",
-      ) !== membership.confidence ||
-      isoTime(
-        membership.createdAt,
-        "MemoryAspectMembershipCreatedAtInvalid",
-      ) !== membership.createdAt ||
+      stateDimension(membership.subjectKey, "MemoryAspectMembershipSubjectInvalid") !==
+        membership.subjectKey ||
+      stateDimension(membership.contextKey, "MemoryAspectMembershipContextInvalid") !==
+        membership.contextKey ||
+      confidence(membership.confidence, "MemoryAspectMembershipConfidenceInvalid") !==
+        membership.confidence ||
+      isoTime(membership.createdAt, "MemoryAspectMembershipCreatedAtInvalid") !==
+        membership.createdAt ||
       membership.stateKeyId !==
         deriveStateKeyIdFromFingerprint({
           scopeFingerprint: snapshot.scopeFingerprint,
@@ -1065,10 +905,8 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
     if (
       edge.schemaVersion !== PAW_MEMORY_EVIDENCE_EDGE_VERSION_V1 ||
       edge.fromClaimId === edge.toClaimId ||
-      confidence(edge.confidence, "MemoryEvidenceEdgeConfidenceInvalid") !==
-        edge.confidence ||
-      isoTime(edge.createdAt, "MemoryEvidenceEdgeCreatedAtInvalid") !==
-        edge.createdAt ||
+      confidence(edge.confidence, "MemoryEvidenceEdgeConfidenceInvalid") !== edge.confidence ||
+      isoTime(edge.createdAt, "MemoryEvidenceEdgeCreatedAtInvalid") !== edge.createdAt ||
       isoTime(edge.effectiveFrom, "MemoryEvidenceEdgeEffectiveFromInvalid") !==
         edge.effectiveFrom ||
       edge.id !==
@@ -1084,10 +922,7 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
     ) {
       throw namedError("MemoryEvidenceEdgeInvalid");
     }
-    assertStableIdentityList(
-      edge.evidenceRefs,
-      "MemoryEvidenceEdgeEvidenceInvalid",
-    );
+    assertStableIdentityList(edge.evidenceRefs, "MemoryEvidenceEdgeEvidenceInvalid");
     const from = claims.get(edge.fromClaimId);
     const to = claims.get(edge.toClaimId);
     if (!from || !to) throw namedError("MemoryEvidenceEdgeClaimMissing");
@@ -1108,10 +943,7 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
         throw namedError("MemoryEvidenceEdgeStateScopeInvalid");
       }
       const stateClaims = membershipsByStateKey.get(stateKeyId as string);
-      if (
-        !stateClaims?.has(edge.fromClaimId) ||
-        !stateClaims.has(edge.toClaimId)
-      ) {
+      if (!stateClaims?.has(edge.fromClaimId) || !stateClaims.has(edge.toClaimId)) {
         throw namedError("MemoryEvidenceEdgeStateMembershipMissing");
       }
     } else if (
@@ -1128,8 +960,7 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
       throw namedError("MemoryEvidenceSupersedesEffectiveTimeInvalid");
     }
     const stateGraph =
-      supersedesByStateKey.get(edge.stateKeyId as string) ??
-      new Map<string, Set<string>>();
+      supersedesByStateKey.get(edge.stateKeyId as string) ?? new Map<string, Set<string>>();
     add(stateGraph, edge.fromClaimId, edge.toClaimId);
     supersedesByStateKey.set(edge.stateKeyId as string, stateGraph);
   }
@@ -1146,15 +977,10 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
     if (
       transition.schemaVersion !== PAW_MEMORY_ASPECT_TRANSITION_VERSION_V1 ||
       (transition.kind !== "merge" && transition.kind !== "split") ||
-      isoTime(
-        transition.createdAt,
-        "MemoryAspectTransitionCreatedAtInvalid",
-      ) !== transition.createdAt ||
-      text(
-        transition.reasonCode,
-        "MemoryAspectTransitionReasonInvalid",
-        120,
-      ) !== transition.reasonCode ||
+      isoTime(transition.createdAt, "MemoryAspectTransitionCreatedAtInvalid") !==
+        transition.createdAt ||
+      text(transition.reasonCode, "MemoryAspectTransitionReasonInvalid", 120) !==
+        transition.reasonCode ||
       transition.id !==
         hashCanonicalJsonV1({
           schemaVersion: PAW_MEMORY_ASPECT_TRANSITION_VERSION_V1,
@@ -1166,11 +992,7 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
     ) {
       throw namedError("MemoryAspectTransitionInvalid");
     }
-    assertStableIdentityList(
-      transition.toAspectIds,
-      "MemoryAspectTransitionTargetInvalid",
-      true,
-    );
+    assertStableIdentityList(transition.toAspectIds, "MemoryAspectTransitionTargetInvalid", true);
     if (
       transition.toAspectIds.includes(transition.fromAspectId) ||
       (transition.kind === "merge" && transition.toAspectIds.length !== 1) ||
@@ -1185,12 +1007,10 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
     const source = aspects.get(transition.fromAspectId);
     if (!source) throw namedError("MemoryAspectTransitionSourceMissing");
     for (const target of transition.toAspectIds) {
-      if (!aspects.has(target))
-        throw namedError("MemoryAspectTransitionTargetMissing");
+      if (!aspects.has(target)) throw namedError("MemoryAspectTransitionTargetMissing");
     }
     if (
-      source.status !==
-        (transition.kind === "merge" ? "redirected" : "split") ||
+      source.status !== (transition.kind === "merge" ? "redirected" : "split") ||
       !sameStrings(source.redirectToAspectIds, transition.toAspectIds)
     ) {
       throw namedError("MemoryAspectTransitionProjectionMismatch");
@@ -1212,10 +1032,8 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
     if (
       event.schemaVersion !== PAW_MEMORY_ASPECT_LIFECYCLE_EVENT_VERSION_V1 ||
       event.action !== "retract" ||
-      isoTime(event.occurredAt, "MemoryAspectLifecycleOccurredAtInvalid") !==
-        event.occurredAt ||
-      text(event.reasonCode, "MemoryAspectLifecycleReasonInvalid", 120) !==
-        event.reasonCode ||
+      isoTime(event.occurredAt, "MemoryAspectLifecycleOccurredAtInvalid") !== event.occurredAt ||
+      text(event.reasonCode, "MemoryAspectLifecycleReasonInvalid", 120) !== event.reasonCode ||
       event.id !==
         hashCanonicalJsonV1({
           schemaVersion: PAW_MEMORY_ASPECT_LIFECYCLE_EVENT_VERSION_V1,
@@ -1227,10 +1045,7 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
     ) {
       throw namedError("MemoryAspectLifecycleEventInvalid");
     }
-    assertStableIdentityList(
-      event.evidenceRefs,
-      "MemoryAspectLifecycleEvidenceInvalid",
-    );
+    assertStableIdentityList(event.evidenceRefs, "MemoryAspectLifecycleEvidenceInvalid");
     const target =
       event.targetKind === "membership"
         ? memberships.get(event.targetId)
@@ -1247,9 +1062,7 @@ function validateGraph(snapshot: MemoryAspectGraphSnapshotV1): void {
   }
 }
 
-function validateSnapshot(
-  snapshot: MemoryAspectGraphSnapshotV1,
-): MemoryAspectGraphSnapshotV1 {
+function validateSnapshot(snapshot: MemoryAspectGraphSnapshotV1): MemoryAspectGraphSnapshotV1 {
   if (
     snapshot.schemaVersion !== PAW_MEMORY_ASPECT_GRAPH_VERSION_V1 ||
     !snapshot.scopeFingerprint.trim() ||
@@ -1285,8 +1098,7 @@ function applyAspectTransitions(
     const source = result.get(transition.fromAspectId);
     if (!source) throw namedError("MemoryAspectTransitionSourceMissing");
     for (const target of transition.toAspectIds) {
-      if (!result.has(target))
-        throw namedError("MemoryAspectTransitionTargetMissing");
+      if (!result.has(target)) throw namedError("MemoryAspectTransitionTargetMissing");
     }
     const expectedStatus = transition.kind === "merge" ? "redirected" : "split";
     if (
@@ -1305,9 +1117,7 @@ function applyAspectTransitions(
       }),
     );
   }
-  return Object.freeze(
-    [...result.values()].sort((left, right) => left.id.localeCompare(right.id)),
-  );
+  return Object.freeze([...result.values()].sort((left, right) => left.id.localeCompare(right.id)));
 }
 
 function collectMembershipAspectIds(
@@ -1355,14 +1165,10 @@ function freezeSnapshot(
   );
   const edges = Object.freeze(input.edges.map(freezeEdge).sort(compareEdges));
   const transitions = Object.freeze(
-    input.transitions
-      .map(freezeTransition)
-      .sort((a, b) => a.id.localeCompare(b.id)),
+    input.transitions.map(freezeTransition).sort((a, b) => a.id.localeCompare(b.id)),
   );
   const lifecycleEvents = Object.freeze(
-    input.lifecycleEvents
-      .map(freezeLifecycleEvent)
-      .sort((a, b) => a.id.localeCompare(b.id)),
+    input.lifecycleEvents.map(freezeLifecycleEvent).sort((a, b) => a.id.localeCompare(b.id)),
   );
   const revision = deriveSnapshotRevision({
     scopeFingerprint: input.scopeFingerprint,
@@ -1427,25 +1233,19 @@ function freezeAspect(aspect: MemoryAspectV1): MemoryAspectV1 {
 function freezeEdge(edge: MemoryEvidenceEdgeV1): MemoryEvidenceEdgeV1 {
   return Object.freeze({
     ...edge,
-    ...(edge.stateScope === undefined
-      ? {}
-      : { stateScope: freezeStateScope(edge.stateScope) }),
+    ...(edge.stateScope === undefined ? {} : { stateScope: freezeStateScope(edge.stateScope) }),
     evidenceRefs: Object.freeze([...edge.evidenceRefs]),
   });
 }
 
-function freezeLifecycleEvent(
-  event: MemoryAspectLifecycleEventV1,
-): MemoryAspectLifecycleEventV1 {
+function freezeLifecycleEvent(event: MemoryAspectLifecycleEventV1): MemoryAspectLifecycleEventV1 {
   return Object.freeze({
     ...event,
     evidenceRefs: Object.freeze([...event.evidenceRefs]),
   });
 }
 
-function freezeTransition(
-  transition: MemoryAspectTransitionV1,
-): MemoryAspectTransitionV1 {
+function freezeTransition(transition: MemoryAspectTransitionV1): MemoryAspectTransitionV1 {
   return Object.freeze({
     ...transition,
     toAspectIds: Object.freeze([...transition.toAspectIds]),
@@ -1472,9 +1272,7 @@ function upsertAspects(
     }
     result.set(aspect.id, aspect);
   }
-  return Object.freeze(
-    [...result.values()].sort((a, b) => a.id.localeCompare(b.id)),
-  );
+  return Object.freeze([...result.values()].sort((a, b) => a.id.localeCompare(b.id)));
 }
 
 function appendImmutableById<T extends { readonly id: string }>(
@@ -1489,9 +1287,7 @@ function appendImmutableById<T extends { readonly id: string }>(
     if (previous && !sameJson(previous, item)) throw namedError(conflictName);
     result.set(item.id, item);
   }
-  return Object.freeze(
-    [...result.values()].sort((a, b) => a.id.localeCompare(b.id)),
-  );
+  return Object.freeze([...result.values()].sort((a, b) => a.id.localeCompare(b.id)));
 }
 
 function uniqueMap<T extends { readonly id: string }>(
@@ -1507,10 +1303,7 @@ function uniqueMap<T extends { readonly id: string }>(
 }
 
 function sameJson(left: unknown, right: unknown): boolean {
-  return (
-    hashCanonicalJsonV1(left as JsonValue) ===
-    hashCanonicalJsonV1(right as JsonValue)
-  );
+  return hashCanonicalJsonV1(left as JsonValue) === hashCanonicalJsonV1(right as JsonValue);
 }
 
 function groupUnique<T>(
@@ -1527,20 +1320,13 @@ function groupUnique<T>(
   return result;
 }
 
-function compareClaims(
-  left: MemoryAspectClaimV1,
-  right: MemoryAspectClaimV1,
-): number {
+function compareClaims(left: MemoryAspectClaimV1, right: MemoryAspectClaimV1): number {
   return (
-    Date.parse(left.validFrom) - Date.parse(right.validFrom) ||
-    left.id.localeCompare(right.id)
+    Date.parse(left.validFrom) - Date.parse(right.validFrom) || left.id.localeCompare(right.id)
   );
 }
 
-function compareEdges(
-  left: MemoryEvidenceEdgeV1,
-  right: MemoryEvidenceEdgeV1,
-): number {
+function compareEdges(left: MemoryEvidenceEdgeV1, right: MemoryEvidenceEdgeV1): number {
   return (
     left.edgeType.localeCompare(right.edgeType) ||
     left.fromClaimId.localeCompare(right.fromClaimId) ||
@@ -1551,8 +1337,7 @@ function compareEdges(
 
 function semanticEdgeKey(edge: MemoryEvidenceEdgeV1): string {
   const [fromClaimId, toClaimId] =
-    edge.edgeType === "same_state" &&
-    edge.fromClaimId.localeCompare(edge.toClaimId) > 0
+    edge.edgeType === "same_state" && edge.fromClaimId.localeCompare(edge.toClaimId) > 0
       ? [edge.toClaimId, edge.fromClaimId]
       : [edge.fromClaimId, edge.toClaimId];
   return `${edge.edgeType}\n${edge.stateKeyId ?? "unscoped"}\n${fromClaimId}\n${toClaimId}`;
@@ -1564,10 +1349,7 @@ function required<T>(map: ReadonlyMap<string, T>, id: string): T {
   return value;
 }
 
-function requiredAspect(
-  snapshot: MemoryAspectGraphSnapshotV1,
-  id: string,
-): MemoryAspectV1 {
+function requiredAspect(snapshot: MemoryAspectGraphSnapshotV1, id: string): MemoryAspectV1 {
   const aspect = snapshot.aspects.find((item) => item.id === id);
   if (!aspect) throw namedError("MemoryAspectMissing");
   return aspect;
@@ -1578,22 +1360,13 @@ function selectProjectionStateDimensions(
   requestedSubjectKey: string | undefined,
   requestedContextKey: string | undefined,
 ): Readonly<{ subjectKey: string; contextKey: string }> | undefined {
-  if (
-    (requestedSubjectKey === undefined) !==
-    (requestedContextKey === undefined)
-  ) {
+  if ((requestedSubjectKey === undefined) !== (requestedContextKey === undefined)) {
     throw namedError("MemoryAspectProjectionStateScopeIncomplete");
   }
   if (requestedSubjectKey !== undefined && requestedContextKey !== undefined) {
     return Object.freeze({
-      subjectKey: stateDimension(
-        requestedSubjectKey,
-        "MemoryAspectProjectionSubjectInvalid",
-      ),
-      contextKey: stateDimension(
-        requestedContextKey,
-        "MemoryAspectProjectionContextInvalid",
-      ),
+      subjectKey: stateDimension(requestedSubjectKey, "MemoryAspectProjectionSubjectInvalid"),
+      contextKey: stateDimension(requestedContextKey, "MemoryAspectProjectionContextInvalid"),
     });
   }
   const pairs = new Map<string, { subjectKey: string; contextKey: string }>();
@@ -1603,8 +1376,7 @@ function selectProjectionStateDimensions(
       contextKey: membership.contextKey,
     });
   }
-  if (pairs.size > 1)
-    throw namedError("MemoryAspectProjectionStateScopeAmbiguous");
+  if (pairs.size > 1) throw namedError("MemoryAspectProjectionStateScopeAmbiguous");
   const selected = pairs.values().next().value;
   return selected === undefined ? undefined : Object.freeze(selected);
 }
@@ -1625,26 +1397,16 @@ function retractedTargetIds(
     ) {
       continue;
     }
-    (event.targetKind === "membership" ? memberships : edges).add(
-      event.targetId,
-    );
+    (event.targetKind === "membership" ? memberships : edges).add(event.targetId);
   }
   return { memberships, edges };
 }
 
-function freezeStateScope(
-  value: Readonly<MemoryAspectStateScopeV1>,
-): MemoryAspectStateScopeV1 {
+function freezeStateScope(value: Readonly<MemoryAspectStateScopeV1>): MemoryAspectStateScopeV1 {
   return Object.freeze({
-    subjectKey: stateDimension(
-      value.subjectKey,
-      "MemoryAspectStateSubjectInvalid",
-    ),
+    subjectKey: stateDimension(value.subjectKey, "MemoryAspectStateSubjectInvalid"),
     aspectId: identity(value.aspectId, "MemoryAspectStateAspectInvalid"),
-    contextKey: stateDimension(
-      value.contextKey,
-      "MemoryAspectStateContextInvalid",
-    ),
+    contextKey: stateDimension(value.contextKey, "MemoryAspectStateContextInvalid"),
   });
 }
 
@@ -1658,19 +1420,10 @@ function deriveStateKeyIdFromFingerprint(
 ): string {
   return hashCanonicalJsonV1({
     schemaVersion: "paw.memory-aspect-state-key.v1",
-    scopeFingerprint: identity(
-      input.scopeFingerprint,
-      "MemoryAspectStateScopeFingerprintInvalid",
-    ),
-    subjectKey: stateDimension(
-      input.subjectKey,
-      "MemoryAspectStateSubjectInvalid",
-    ),
+    scopeFingerprint: identity(input.scopeFingerprint, "MemoryAspectStateScopeFingerprintInvalid"),
+    subjectKey: stateDimension(input.subjectKey, "MemoryAspectStateSubjectInvalid"),
     aspectId: identity(input.aspectId, "MemoryAspectStateAspectInvalid"),
-    contextKey: stateDimension(
-      input.contextKey,
-      "MemoryAspectStateContextInvalid",
-    ),
+    contextKey: stateDimension(input.contextKey, "MemoryAspectStateContextInvalid"),
   });
 }
 
@@ -1707,26 +1460,16 @@ function assertAcyclic(
   for (const id of ids) visit(id);
 }
 
-function stableLabels(
-  values: readonly string[],
-  displayName: string,
-): readonly string[] {
+function stableLabels(values: readonly string[], displayName: string): readonly string[] {
   const display = normalizeLabel(displayName);
   return Object.freeze(
-    [
-      ...new Set(
-        values.map((value) => text(value, "MemoryAspectAliasInvalid", 160)),
-      ),
-    ]
+    [...new Set(values.map((value) => text(value, "MemoryAspectAliasInvalid", 160)))]
       .filter((value) => normalizeLabel(value) !== display)
       .sort((a, b) => a.localeCompare(b)),
   );
 }
 
-function stableIdentities(
-  values: readonly string[],
-  errorName: string,
-): string[] {
+function stableIdentities(values: readonly string[], errorName: string): string[] {
   return [...new Set(values.map((value) => identity(value, errorName)))].sort();
 }
 
@@ -1736,10 +1479,7 @@ function assertStableIdentityList(
   requireNonEmpty = false,
 ): void {
   const stable = stableIdentities(values, errorName);
-  if (
-    (requireNonEmpty && stable.length === 0) ||
-    !sameStrings(values, stable)
-  ) {
+  if ((requireNonEmpty && stable.length === 0) || !sameStrings(values, stable)) {
     throw namedError(errorName);
   }
 }
@@ -1764,25 +1504,18 @@ function normalizeLabel(value: string): string {
 }
 
 function isoTime(value: string, errorName: string): string {
-  if (
-    typeof value !== "string" ||
-    !value.trim() ||
-    !Number.isFinite(Date.parse(value))
-  ) {
+  if (typeof value !== "string" || !value.trim() || !Number.isFinite(Date.parse(value))) {
     throw namedError(errorName);
   }
   return new Date(value).toISOString();
 }
 
 function confidence(value: number, errorName: string): number {
-  if (!Number.isFinite(value) || value < 0 || value > 1)
-    throw namedError(errorName);
+  if (!Number.isFinite(value) || value < 0 || value > 1) throw namedError(errorName);
   return value;
 }
 
-function assertClaimRole(
-  value: string,
-): asserts value is MemoryAspectClaimRoleV1 {
+function assertClaimRole(value: string): asserts value is MemoryAspectClaimRoleV1 {
   if (
     !(["state", "fact", "event", "cause", "condition"] as const).includes(
       value as MemoryAspectClaimRoleV1,
@@ -1792,9 +1525,7 @@ function assertClaimRole(
   }
 }
 
-function assertClaimKind(
-  value: string,
-): asserts value is MemoryAspectClaimKindV1 {
+function assertClaimKind(value: string): asserts value is MemoryAspectClaimKindV1 {
   if (value !== "assertion" && value !== "episode") {
     throw namedError("MemoryAspectClaimKindInvalid");
   }
@@ -1808,9 +1539,7 @@ function assertLifecycleTargetKind(
   }
 }
 
-function assertEdgeType(
-  value: string,
-): asserts value is MemoryEvidenceEdgeTypeV1 {
+function assertEdgeType(value: string): asserts value is MemoryEvidenceEdgeTypeV1 {
   if (
     !(
       [
@@ -1828,14 +1557,8 @@ function assertEdgeType(
   }
 }
 
-function sameStrings(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  );
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function eventFor(
@@ -1871,9 +1594,7 @@ function emit(
 }
 
 function errorName(error: unknown): string {
-  return error instanceof Error && error.name
-    ? error.name
-    : "MemoryAspectGraphUnknownFailure";
+  return error instanceof Error && error.name ? error.name : "MemoryAspectGraphUnknownFailure";
 }
 
 function namedError(name: string): Error {

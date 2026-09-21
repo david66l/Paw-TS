@@ -54,9 +54,7 @@ describe("Model Retry", () => {
     });
     expect(result.status).toBe("completed");
     expect(calls).toBe(2);
-    const retry = events.find(
-      (event) => event.event.type === "model.retry.waiting",
-    );
+    const retry = events.find((event) => event.event.type === "model.retry.waiting");
     expect(retry?.event.type).toBe("model.retry.waiting");
     if (retry?.event.type === "model.retry.waiting") {
       expect(retry.event.errorType).toBe("timeout");
@@ -103,9 +101,7 @@ describe("Model Retry", () => {
     });
     expect(result.status).toBe("aborted");
     expect(calls).toBe(1);
-    expect(
-      events.some((event) => event.event.type === "model.retry.waiting"),
-    ).toBe(false);
+    expect(events.some((event) => event.event.type === "model.retry.waiting")).toBe(false);
   });
 
   test("transient error retries and eventually succeeds", async () => {
@@ -161,11 +157,7 @@ describe("Model Retry", () => {
     const dir = tmpDir("paw-retry-ex-");
     const events: RunEventEnvelope[] = [];
     const model = new FakeLanguageModel({
-      responses: [
-        { error: RETRYABLE_ERR },
-        { error: RETRYABLE_ERR },
-        { error: RETRYABLE_ERR },
-      ],
+      responses: [{ error: RETRYABLE_ERR }, { error: RETRYABLE_ERR }, { error: RETRYABLE_ERR }],
     });
     const o = new AgentOrchestrator({
       memoryLlm: "off",
@@ -265,9 +257,7 @@ describe("Model Retry", () => {
       workspaceRoot: dir,
       maxSteps: 3,
     });
-    const waitEvent = events.find(
-      (e) => e.event.type === "model.retry.waiting",
-    );
+    const waitEvent = events.find((e) => e.event.type === "model.retry.waiting");
     expect(waitEvent).toBeDefined();
     if (waitEvent?.event.type === "model.retry.waiting") {
       // Should be around 2s * jitter (0.5–1.0) = 1s–2s
@@ -320,9 +310,7 @@ describe("Model Retry", () => {
         workspaceRoot: dir,
         maxSteps: 3,
       });
-      const waitEvent = events.find(
-        (e) => e.event.type === "model.retry.waiting",
-      );
+      const waitEvent = events.find((e) => e.event.type === "model.retry.waiting");
       if (waitEvent?.event.type === "model.retry.waiting") {
         delays.push(waitEvent.event.delayMs);
       }
@@ -358,9 +346,7 @@ describe("Model Retry", () => {
       workspaceRoot: dir,
       maxSteps: 3,
     });
-    const waitEvent = events.find(
-      (e) => e.event.type === "model.retry.waiting",
-    );
+    const waitEvent = events.find((e) => e.event.type === "model.retry.waiting");
     expect(waitEvent).toBeDefined();
     if (waitEvent?.event.type === "model.retry.waiting") {
       expect(waitEvent.event.errorType).toBe("server_error");

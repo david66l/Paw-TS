@@ -31,12 +31,8 @@ describe("facet v2 ask-time query path", () => {
       query: "How did this change?",
     });
     expect(first.system).toBe(second.system);
-    expect(first.system).toContain(
-      "For a recommendation or decision, select the smallest set",
-    );
-    expect(first.system).toContain(
-      "decision for a recommendation, plan, or choice",
-    );
+    expect(first.system).toContain("For a recommendation or decision, select the smallest set");
+    expect(first.system).toContain("decision for a recommendation, plan, or choice");
     expect(first.system).toContain("Do not select an umbrella facet");
     const plan = parseMemoryFacetQueryPlanV2(
       JSON.stringify({
@@ -69,9 +65,7 @@ describe("facet v2 ask-time query path", () => {
       maxEvidence: 8,
       maxChars: 4_000,
     });
-    expect(current.evidence.map((item) => item.state.memoryId)).toEqual([
-      "current-participation",
-    ]);
+    expect(current.evidence.map((item) => item.state.memoryId)).toEqual(["current-participation"]);
 
     const timelinePlan = parseMemoryFacetQueryPlanV2(
       JSON.stringify({
@@ -171,9 +165,7 @@ describe("facet v2 ask-time query path", () => {
     });
     const plan = await planner.plan(setup.input, new AbortController().signal);
     expect(plan.facetIds).toEqual([setup.projection.facet.id]);
-    expect(events).toEqual([
-      expect.objectContaining({ type: "completed", repaired: true }),
-    ]);
+    expect(events).toEqual([expect.objectContaining({ type: "completed", repaired: true })]);
     expect(JSON.stringify(events)).not.toContain("investment");
   });
 });
@@ -310,11 +302,7 @@ function semantic(id: string, tValid: string, fact: string): MemoryEntry {
   });
 }
 
-function episodic(
-  id: string,
-  tValid: string,
-  perspective: string,
-): MemoryEntry {
+function episodic(id: string, tValid: string, perspective: string): MemoryEntry {
   return Object.freeze({
     ...common(id, tValid),
     kind: "episodic",

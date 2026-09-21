@@ -13,9 +13,7 @@ export const indexManager = {
    * 处理一批 outbox 事件，更新索引。
    * 幂等：通过 event_sequence 防止旧事件覆盖新索引。
    */
-  async processPending(
-    limit = 20,
-  ): Promise<{ processed: number; failed: number }> {
+  async processPending(limit = 20): Promise<{ processed: number; failed: number }> {
     const events = await outboxManager.pollPending(limit);
     let processed = 0;
     let failed = 0;
@@ -72,11 +70,7 @@ async function handleEvent(event: OutboxEvent): Promise<void> {
       if (!event.memoryId) break;
 
       // 检查 event_sequence 是否过时
-      const current = await getCurrentIndexRevision(
-        sql,
-        event.memoryId,
-        "VECTOR",
-      );
+      const current = await getCurrentIndexRevision(sql, event.memoryId, "VECTOR");
       if (event.sequence <= current) break; // 旧事件跳过
 
       // 更新元数据索引（memory_items 表自身的索引由 DDL 保证，这里写状态）
@@ -112,9 +106,7 @@ async function handleEvent(event: OutboxEvent): Promise<void> {
     case "MemorySoftDeleted":
     case "MemoryHardDeleted": {
       if (!event.memoryId) break;
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-        event.memoryId,
-      ]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [event.memoryId]);
       await sql.unsafe(
         `UPDATE memory_index_states SET index_state = 'DELETE_PENDING', updated_at = now()
          WHERE memory_id = $1`,
@@ -139,9 +131,7 @@ async function getCurrentIndexRevision(
     `SELECT index_revision FROM memory_index_states WHERE memory_id = $1 AND index_type = $2`,
     [memoryId, indexType],
   );
-  return rows.length > 0
-    ? (rows[0] as unknown as { index_revision: number }).index_revision
-    : 0;
+  return rows.length > 0 ? (rows[0] as unknown as { index_revision: number }).index_revision : 0;
 }
 
 async function upsertIndexState(

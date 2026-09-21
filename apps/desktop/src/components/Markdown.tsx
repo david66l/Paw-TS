@@ -42,10 +42,7 @@ const components: Components = {
 
 // ponytail: memo — text/className 是原语，默认浅比较即可。
 // 流式时只有当前气泡 text 变，历史气泡跳过 react-markdown 重解析。
-export const Markdown = memo(function Markdown({
-  text,
-  className,
-}: MarkdownProps): ReactNode {
+export const Markdown = memo(function Markdown({ text, className }: MarkdownProps): ReactNode {
   const cls = ["md", className].filter(Boolean).join(" ");
   return (
     <div className={cls}>

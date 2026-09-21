@@ -194,8 +194,7 @@ export function parseSelectedMemories(raw: unknown): MemoryHit[] {
     const id = typeof o.id === "string" ? o.id : "";
     const title = typeof o.title === "string" ? o.title : "";
     if (!id && !title) continue;
-    const summary =
-      typeof o.summary === "string" && o.summary.trim() ? o.summary : title;
+    const summary = typeof o.summary === "string" && o.summary.trim() ? o.summary : title;
     out.push({
       id: id || title,
       title: title || id,
@@ -274,10 +273,7 @@ const emptyMemory = (): MemorySnapshot => ({
   libraryOk: null,
 });
 
-export function useRightPanelData(
-  conversationId?: string,
-  hostReady = false,
-): RightPanelData {
+export function useRightPanelData(conversationId?: string, hostReady = false): RightPanelData {
   const [plan, setPlan] = useState<PlanState>({ items: [] });
   const [changes, setChanges] = useState<ChangeEntry[]>([]);
   const [context, setContext] = useState<ContextSnapshot | null>(null);
@@ -323,12 +319,7 @@ export function useRightPanelData(
       void api()
         ?.getContext?.({ conversationId })
         .then((result) => {
-          if (
-            current &&
-            version === contextVersion.current &&
-            result.ok &&
-            result.data
-          )
+          if (current && version === contextVersion.current && result.ok && result.data)
             setContext(result.data);
         })
         .catch(() => {});
@@ -382,10 +373,8 @@ export function useRightPanelData(
         }
 
         if (typ === "plan.updated") {
-          const revision =
-            typeof ev.revision === "number" ? ev.revision : undefined;
-          const itemCount =
-            typeof ev.itemCount === "number" ? ev.itemCount : undefined;
+          const revision = typeof ev.revision === "number" ? ev.revision : undefined;
+          const itemCount = typeof ev.itemCount === "number" ? ev.itemCount : undefined;
           const reason = typeof ev.reason === "string" ? ev.reason : undefined;
           const rawItems = Array.isArray(ev.items) ? ev.items : null;
 
@@ -415,18 +404,13 @@ export function useRightPanelData(
             const newItems: readonly unknown[] = Array.isArray(action.newItems)
               ? action.newItems
               : [];
-            const deprecatedItems: readonly string[] = Array.isArray(
-              action.deprecatedItems,
-            )
-              ? (action.deprecatedItems.filter(
-                  (d: unknown) => typeof d === "string",
-                ) as string[])
+            const deprecatedItems: readonly string[] = Array.isArray(action.deprecatedItems)
+              ? (action.deprecatedItems.filter((d: unknown) => typeof d === "string") as string[])
               : [];
             setPlan((prev) => ({
               ...prev,
               items: mergePlanItems(prev.items, newItems, deprecatedItems),
-              reason:
-                typeof action.reason === "string" ? action.reason : prev.reason,
+              reason: typeof action.reason === "string" ? action.reason : prev.reason,
             }));
           }
           return;
@@ -436,10 +420,7 @@ export function useRightPanelData(
           const tool = typeof ev.tool === "string" ? ev.tool : "";
           const path = extractPathFromArgs(ev.args);
           if (path && isPathTool(tool)) {
-            recentFilesRef.current = pushRecentPath(
-              recentFilesRef.current,
-              path,
-            );
+            recentFilesRef.current = pushRecentPath(recentFilesRef.current, path);
             setContext((prev) => ({
               ...prev,
               recentFiles: [...recentFilesRef.current],
@@ -452,10 +433,7 @@ export function useRightPanelData(
             tool,
             at: Date.now(),
           };
-          changesRef.current = [
-            entry,
-            ...changesRef.current.filter((c) => c.path !== path),
-          ];
+          changesRef.current = [entry, ...changesRef.current.filter((c) => c.path !== path)];
           setChanges([...changesRef.current]);
           return;
         }
@@ -463,11 +441,8 @@ export function useRightPanelData(
         if (typ === "tool.result" || typ === "workspace.changes") {
           const tool = typeof ev.tool === "string" ? ev.tool : "";
           const ok = ev.ok !== false;
-          const summary =
-            typeof ev.summary === "string" ? ev.summary : undefined;
-          const entry = changesRef.current.find(
-            (c) => c.tool === tool && c.ok === undefined,
-          );
+          const summary = typeof ev.summary === "string" ? ev.summary : undefined;
+          const entry = changesRef.current.find((c) => c.tool === tool && c.ok === undefined);
           if (entry) {
             entry.ok = ok;
             if (summary !== undefined) entry.summary = summary;
@@ -482,9 +457,7 @@ export function useRightPanelData(
               if (typeof r.path !== "string") continue;
               const added = typeof r.added === "number" ? r.added : 0;
               const removed = typeof r.removed === "number" ? r.removed : 0;
-              const existing = changesRef.current.find(
-                (c) => c.path === r.path,
-              );
+              const existing = changesRef.current.find((c) => c.path === r.path);
               if (existing) {
                 existing.added = (existing.added ?? 0) + added;
                 existing.removed = (existing.removed ?? 0) + removed;
@@ -515,12 +488,9 @@ export function useRightPanelData(
           setContext((prev) => ({
             ...prev,
             turn: typeof ev.turn === "number" ? ev.turn : prev?.turn,
-            maxSteps:
-              typeof ev.maxSteps === "number" ? ev.maxSteps : prev?.maxSteps,
+            maxSteps: typeof ev.maxSteps === "number" ? ev.maxSteps : prev?.maxSteps,
             estimatedTokens:
-              typeof ev.estimatedTokens === "number"
-                ? ev.estimatedTokens
-                : prev?.estimatedTokens,
+              typeof ev.estimatedTokens === "number" ? ev.estimatedTokens : prev?.estimatedTokens,
             recentFiles: recentFilesRef.current.length
               ? [...recentFilesRef.current]
               : prev?.recentFiles,
@@ -532,18 +502,13 @@ export function useRightPanelData(
           setContext((prev) => ({
             ...prev,
             budget: {
-              contextWindow:
-                typeof ev.contextWindow === "number" ? ev.contextWindow : 0,
+              contextWindow: typeof ev.contextWindow === "number" ? ev.contextWindow : 0,
               systemUsed: typeof ev.systemUsed === "number" ? ev.systemUsed : 0,
-              systemBudget:
-                typeof ev.systemBudget === "number" ? ev.systemBudget : 0,
+              systemBudget: typeof ev.systemBudget === "number" ? ev.systemBudget : 0,
               toolsUsed: typeof ev.toolsUsed === "number" ? ev.toolsUsed : 0,
-              toolsBudget:
-                typeof ev.toolsBudget === "number" ? ev.toolsBudget : 0,
-              historyUsed:
-                typeof ev.historyUsed === "number" ? ev.historyUsed : 0,
-              historyBudget:
-                typeof ev.historyBudget === "number" ? ev.historyBudget : 0,
+              toolsBudget: typeof ev.toolsBudget === "number" ? ev.toolsBudget : 0,
+              historyUsed: typeof ev.historyUsed === "number" ? ev.historyUsed : 0,
+              historyBudget: typeof ev.historyBudget === "number" ? ev.historyBudget : 0,
             },
             recentFiles: recentFilesRef.current.length
               ? [...recentFilesRef.current]
@@ -560,12 +525,7 @@ export function useRightPanelData(
             "fixedInputTokens",
             "estimatedOmittedInputTokens",
           ] as const;
-          if (
-            names.every(
-              (name) =>
-                typeof ev[name] === "number" && Number.isFinite(ev[name]),
-            )
-          ) {
+          if (names.every((name) => typeof ev[name] === "number" && Number.isFinite(ev[name]))) {
             setContext((prev) => ({
               ...prev,
               nextBudget: {
@@ -585,8 +545,7 @@ export function useRightPanelData(
                 selectedInputTokens: ev.selectedInputTokens as number,
                 reservedOutputTokens: ev.reservedOutputTokens as number,
                 fixedInputTokens: ev.fixedInputTokens as number,
-                estimatedOmittedInputTokens:
-                  ev.estimatedOmittedInputTokens as number,
+                estimatedOmittedInputTokens: ev.estimatedOmittedInputTokens as number,
                 level: typeof ev.level === "string" ? ev.level : "",
               },
             }));
@@ -598,18 +557,10 @@ export function useRightPanelData(
           setContext((prev) => ({
             ...prev,
             cost: {
-              totalTokens:
-                typeof ev.totalTokens === "number" ? ev.totalTokens : 0,
-              estimatedCostUsd:
-                typeof ev.estimatedCostUsd === "number"
-                  ? ev.estimatedCostUsd
-                  : 0,
-              promptTokens:
-                typeof ev.promptTokens === "number" ? ev.promptTokens : 0,
-              completionTokens:
-                typeof ev.completionTokens === "number"
-                  ? ev.completionTokens
-                  : 0,
+              totalTokens: typeof ev.totalTokens === "number" ? ev.totalTokens : 0,
+              estimatedCostUsd: typeof ev.estimatedCostUsd === "number" ? ev.estimatedCostUsd : 0,
+              promptTokens: typeof ev.promptTokens === "number" ? ev.promptTokens : 0,
+              completionTokens: typeof ev.completionTokens === "number" ? ev.completionTokens : 0,
             },
             recentFiles: recentFilesRef.current.length
               ? [...recentFilesRef.current]
@@ -623,14 +574,10 @@ export function useRightPanelData(
           setMemory((prev) => ({
             ...(prev ?? emptyMemory()),
             selectedCount:
-              typeof ev.selectedCount === "number"
-                ? ev.selectedCount
-                : sessionHits.length,
+              typeof ev.selectedCount === "number" ? ev.selectedCount : sessionHits.length,
             query: typeof ev.query === "string" ? ev.query : "",
             totalCandidates:
-              typeof ev.totalCandidates === "number"
-                ? ev.totalCandidates
-                : sessionHits.length,
+              typeof ev.totalCandidates === "number" ? ev.totalCandidates : sessionHits.length,
             sessionHits,
           }));
           return;
@@ -648,10 +595,7 @@ export function useRightPanelData(
           items: unknown;
           error?: string;
         }) => {
-          if (
-            pendingListReq.current &&
-            payload.requestId !== pendingListReq.current
-          ) {
+          if (pendingListReq.current && payload.requestId !== pendingListReq.current) {
             // still accept if we only track last request
           }
           pendingListReq.current = null;

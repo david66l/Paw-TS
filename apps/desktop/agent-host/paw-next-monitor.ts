@@ -1,18 +1,11 @@
 import type { ManagedJobReadV1, SubAgentResult } from "@paw/harness";
 import type { StageGraphSnapshot } from "@paw/paw-next";
 import type { RunJournalEnvelopeV1 } from "@paw/protocol";
-import type {
-  DesktopMonitorSnapshot,
-  MonitorTask,
-} from "../src/agent/monitorTypes.js";
+import type { DesktopMonitorSnapshot, MonitorTask } from "../src/agent/monitorTypes.js";
 const record = (v: unknown): Record<string, unknown> =>
-  v && typeof v === "object" && !Array.isArray(v)
-    ? (v as Record<string, unknown>)
-    : {};
+  v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 const strings = (v: unknown): string[] =>
-  Array.isArray(v)
-    ? v.filter((x): x is string => typeof x === "string").slice(0, 100)
-    : [];
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 100) : [];
 export class DesktopRunMonitor {
   private state: DesktopMonitorSnapshot;
   private activities = new Map<string, string>();
@@ -95,10 +88,7 @@ export class DesktopRunMonitor {
       this.emit();
       return;
     }
-    if (
-      fact.type === "tool.call_observed" &&
-      /(?:\.|_)delegate$/.test(fact.tool)
-    ) {
+    if (fact.type === "tool.call_observed" && /(?:\.|_)delegate$/.test(fact.tool)) {
       const args = record(fact.args);
       const plan = record(args.delegation_plan);
       const rawTasks = Array.isArray(plan.tasks)
@@ -183,9 +173,7 @@ export class DesktopRunMonitor {
     this.emit();
   }
   stageGraph(graph: StageGraphSnapshot) {
-    const ids = new Map(
-      graph.nodes.map((node) => [node.ref, `${this.runId}:${node.callId}`]),
-    );
+    const ids = new Map(graph.nodes.map((node) => [node.ref, `${this.runId}:${node.callId}`]));
     for (const node of graph.nodes) {
       const reason = graph.nodes.reduce(
         (text, source) => text?.replaceAll(source.ref, `「${source.goal}」`),
@@ -235,28 +223,20 @@ export class DesktopRunMonitor {
       output: job.text.slice(-64000),
     };
     const index = this.state.jobs.findIndex((item) => item.id === id);
-    if (
-      index >= 0 &&
-      JSON.stringify(this.state.jobs[index]) === JSON.stringify(next)
-    )
-      return;
+    if (index >= 0 && JSON.stringify(this.state.jobs[index]) === JSON.stringify(next)) return;
     if (index < 0) this.state.jobs.push(next);
     else this.state.jobs[index] = next;
     this.emit();
   }
   finish() {
-    if (
-      this.state.audit &&
-      ["checking", "repairing"].includes(this.state.audit.status)
-    )
+    if (this.state.audit && ["checking", "repairing"].includes(this.state.audit.status))
       this.state.audit = {
         ...this.state.audit,
         status: "unverified",
         summary: "任务停止或预算耗尽，尚未取得有效的验收结论。",
       };
     for (const task of this.state.tasks)
-      if (["running", "waiting"].includes(task.status))
-        task.status = "interrupted";
+      if (["running", "waiting"].includes(task.status)) task.status = "interrupted";
     this.emit();
   }
   private emit() {
@@ -266,13 +246,7 @@ export class DesktopRunMonitor {
         if (!["waiting", "failed"].includes(task.status)) continue;
         const dependency = task.dependencies
           .map((id) => this.state.tasks.find((t) => t.id === id))
-          .find(
-            (t) =>
-              t &&
-              ["failed", "cancelled", "blocked", "interrupted"].includes(
-                t.status,
-              ),
-          );
+          .find((t) => t && ["failed", "cancelled", "blocked", "interrupted"].includes(t.status));
         if (dependency) {
           task.status = "blocked";
           task.blocker = `依赖「${dependency.name}」${dependency.status === "cancelled" ? "已停止" : "未完成"}`;

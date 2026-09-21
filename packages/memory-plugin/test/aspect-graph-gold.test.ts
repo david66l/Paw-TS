@@ -48,9 +48,7 @@ describe("aspect graph sparse gold gate", () => {
           present: false,
         },
       ],
-      currentStates: [
-        { anchorClaimIds: ["old"], asOf: mar, currentClaimIds: ["current"] },
-      ],
+      currentStates: [{ anchorClaimIds: ["old"], asOf: mar, currentClaimIds: ["current"] }],
     });
 
     const perfect = evaluateMemoryAspectGraphGoldV1(goldSnapshot, gold);
@@ -74,9 +72,7 @@ describe("aspect graph sparse gold gate", () => {
 
   test("requires anchors to identify one state instead of unioning topics", () => {
     const base = graph(false, true);
-    const unrelated = base.aspects.find(
-      (item) => item.displayName === "Unrelated",
-    );
+    const unrelated = base.aspects.find((item) => item.displayName === "Unrelated");
     if (unrelated === undefined) throw new Error("missing fixture aspect");
     const ambiguous = applyMemoryAspectGraphMutationV1({
       snapshot: base,
@@ -85,13 +81,11 @@ describe("aspect graph sparse gold gate", () => {
     const ambiguousGold = createMemoryAspectGraphGoldV1({
       snapshot: ambiguous,
       annotationSetId: "ambiguous-anchor-v1",
-      currentStates: [
-        { anchorClaimIds: ["old"], asOf: mar, currentClaimIds: ["current"] },
-      ],
+      currentStates: [{ anchorClaimIds: ["old"], asOf: mar, currentClaimIds: ["current"] }],
     });
-    expect(() =>
-      evaluateMemoryAspectGraphGoldV1(ambiguous, ambiguousGold),
-    ).toThrow("MemoryAspectGoldCurrentStateAnchorAmbiguous");
+    expect(() => evaluateMemoryAspectGraphGoldV1(ambiguous, ambiguousGold)).toThrow(
+      "MemoryAspectGoldCurrentStateAnchorAmbiguous",
+    );
 
     const disambiguatedGold = createMemoryAspectGraphGoldV1({
       snapshot: ambiguous,
@@ -105,8 +99,7 @@ describe("aspect graph sparse gold gate", () => {
       ],
     });
     expect(
-      evaluateMemoryAspectGraphGoldV1(ambiguous, disambiguatedGold)
-        .currentStateExactMatch,
+      evaluateMemoryAspectGraphGoldV1(ambiguous, disambiguatedGold).currentStateExactMatch,
     ).toBe(1);
   });
 
@@ -115,19 +108,12 @@ describe("aspect graph sparse gold gate", () => {
     const gold = createMemoryAspectGraphGoldV1({
       snapshot,
       annotationSetId: "strict-v1",
-      pairs: [
-        { leftClaimId: "old", rightClaimId: "current", sameAspect: true },
-      ],
+      pairs: [{ leftClaimId: "old", rightClaimId: "current", sameAspect: true }],
     });
 
-    expect(
-      parseMemoryAspectGraphGoldV1(JSON.parse(JSON.stringify(gold)), snapshot),
-    ).toEqual(gold);
+    expect(parseMemoryAspectGraphGoldV1(JSON.parse(JSON.stringify(gold)), snapshot)).toEqual(gold);
     expect(() =>
-      parseMemoryAspectGraphGoldV1(
-        { ...gold, corpusRevision: "wrong" },
-        snapshot,
-      ),
+      parseMemoryAspectGraphGoldV1({ ...gold, corpusRevision: "wrong" }, snapshot),
     ).toThrow("MemoryAspectGoldCorpusRevisionMismatch");
     expect(() =>
       parseMemoryAspectGraphGoldV1(
@@ -152,11 +138,7 @@ function graph(
     identitySeed: "unrelated",
     displayName: "Unrelated",
   });
-  const claims = [
-    state("old", jan),
-    state("current", feb),
-    state("other", jan),
-  ];
+  const claims = [state("old", jan), state("current", feb), state("other", jan)];
   return applyMemoryAspectGraphMutationV1({
     snapshot: createEmptyMemoryAspectGraphSnapshotV1(scope),
     claims,

@@ -24,9 +24,7 @@ describe("planItemsFromUnknown", () => {
   });
 
   test("defaults invalid status to pending", () => {
-    const [one] = planItemsFromUnknown([
-      { id: "p", task_id: "t", status: "not-a-real-status" },
-    ]);
+    const [one] = planItemsFromUnknown([{ id: "p", task_id: "t", status: "not-a-real-status" }]);
     expect(one?.status).toBe(PlanItemStatus.PENDING);
   });
 });

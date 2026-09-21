@@ -39,8 +39,7 @@ describe("code-test dependency map", () => {
   test("maps test files to source files via import analysis", () => {
     const root = makeWorkspace({
       "sklearn/base.py": "class BaseEstimator: pass\n",
-      "sklearn/feature_selection/_base.py":
-        "from sklearn.base import BaseEstimator\n",
+      "sklearn/feature_selection/_base.py": "from sklearn.base import BaseEstimator\n",
       "tests/test_base.py":
         "from sklearn.base import BaseEstimator\n\ndef test_base():\n    assert BaseEstimator()\n",
       "tests/test_feature_select.py":
@@ -49,20 +48,14 @@ describe("code-test dependency map", () => {
     try {
       const map = buildTestMapV1(root);
       expect(map.entries.length).toBeGreaterThanOrEqual(2);
-      const testBase = map.entries.find((e) =>
-        e.testFile.includes("test_base.py"),
-      );
+      const testBase = map.entries.find((e) => e.testFile.includes("test_base.py"));
       expect(testBase).toBeDefined();
       expect(testBase?.sourceFiles).toContain("sklearn/base.py");
       expect(testBase?.matchedBy).toContain("import");
 
-      const testSelect = map.entries.find((e) =>
-        e.testFile.includes("test_feature_select.py"),
-      );
+      const testSelect = map.entries.find((e) => e.testFile.includes("test_feature_select.py"));
       expect(testSelect).toBeDefined();
-      expect(testSelect?.sourceFiles).toContain(
-        "sklearn/feature_selection/_base.py",
-      );
+      expect(testSelect?.sourceFiles).toContain("sklearn/feature_selection/_base.py");
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

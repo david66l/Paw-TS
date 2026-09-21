@@ -3,9 +3,7 @@ import { parseLoopV2EventLog, replayLoopV2 } from "../src/loop-v2/index.js";
 
 const input = process.argv[2];
 if (!input) {
-  console.error(
-    "Usage: bun run scripts/replay-loop-v2.ts <events.json|events.jsonl>",
-  );
+  console.error("Usage: bun run scripts/replay-loop-v2.ts <events.json|events.jsonl>");
   process.exit(2);
 }
 

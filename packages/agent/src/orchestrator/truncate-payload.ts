@@ -55,8 +55,7 @@ const MEDIUM_TRUNCATE_TOOLS = new Set([
 ]);
 
 /** 错误行信号（SWE-Pruner Pro 标注协议的保守侧：不确定行按保留处理） */
-const ERROR_LINE_PATTERN =
-  /error|fail(?:ed|ure)?|exception|traceback|exit code|FAILED|✗/i;
+const ERROR_LINE_PATTERN = /error|fail(?:ed|ure)?|exception|traceback|exit code|FAILED|✗/i;
 
 function toolLimit(tool: string, defaultMax: number): number {
   if (NO_TRUNCATE_TOOLS.has(tool)) return Number.POSITIVE_INFINITY;
@@ -128,11 +127,7 @@ export function truncateString(s: string, limit: number): string {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line !== undefined && ERROR_LINE_PATTERN.test(line)) {
-      for (
-        let j = Math.max(0, i - 2);
-        j <= Math.min(lines.length - 1, i + 2);
-        j++
-      ) {
+      for (let j = Math.max(0, i - 2); j <= Math.min(lines.length - 1, i + 2); j++) {
         kept.add(j);
       }
     }
@@ -147,8 +142,7 @@ export function truncateString(s: string, limit: number): string {
   }
 
   const marker = `\n...[truncated ${s.length - HEAD_CHARS - TAIL_CHARS} chars]...\n`;
-  const extraBlock =
-    extras.length > 0 ? `\n[kept error lines]\n${extras.join("\n")}\n` : "";
+  const extraBlock = extras.length > 0 ? `\n[kept error lines]\n${extras.join("\n")}\n` : "";
   return `${head}${marker}${extraBlock}${tail}`;
 }
 
@@ -161,9 +155,7 @@ export interface PayloadDeduper {
    * 检查 payload 是否已见过。
    * @returns 已见过 → {hash, turn}；否则 null
    */
-  check(
-    payload: unknown,
-  ): { readonly hash: string; readonly turn: number } | null;
+  check(payload: unknown): { readonly hash: string; readonly turn: number } | null;
   /** 记录 payload 并返回其 hash */
   record(payload: unknown, turn: number): string | null;
 }

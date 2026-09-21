@@ -1,10 +1,6 @@
 import path from "node:path";
 
-import type {
-  ToolBatchOptions,
-  ToolExecutor,
-  ToolSettlement,
-} from "@paw/agent-loop";
+import type { ToolBatchOptions, ToolExecutor, ToolSettlement } from "@paw/agent-loop";
 import type { ToolDefinition } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { MemoryEntry } from "@paw/memory/longterm";
@@ -16,15 +12,8 @@ import {
   canonicalRuntimeResourcePathV1,
 } from "@paw/runtime";
 
-import {
-  canonicalJsonStringifyV1,
-  hashCanonicalJsonV1,
-  hashTextV1,
-} from "./canonical.js";
-import type {
-  MemoryContextResolverV1,
-  MemoryResolvedContextPacketV1,
-} from "./context-resolver.js";
+import { canonicalJsonStringifyV1, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
+import type { MemoryContextResolverV1, MemoryResolvedContextPacketV1 } from "./context-resolver.js";
 import type { MemoryEvidenceLedgerV1 } from "./evidence-ledger.js";
 import type { PawNextMemoryPluginProfileV1 } from "./profile.js";
 import { memoryScopeFingerprintV1 } from "./profile.js";
@@ -35,10 +24,7 @@ import {
   createMemorySearchTextsV1,
 } from "./retrieval-input-port.js";
 import type { MemoryTopicDossierStoreV1 } from "./topic-dossier-store.js";
-import type {
-  MemoryTopicDossierStateV1,
-  MemoryTopicDossierV1,
-} from "./topic-dossier.js";
+import type { MemoryTopicDossierStateV1, MemoryTopicDossierV1 } from "./topic-dossier.js";
 import type { MemoryTopicEvidenceCatalogItemV1 } from "./topic-evidence-planner.js";
 import type { MemoryTopicEvidenceStoreV1 } from "./topic-evidence-store.js";
 
@@ -50,8 +36,7 @@ export const MEMORY_RESOLVE_CONTEXT_V1 = "memory.resolve_context" as const;
 export const MEMORY_SEARCH_ATOMS_V1 = "memory.search_atoms" as const;
 export const MEMORY_LIST_TOPICS_V1 = "memory.list_topics" as const;
 export const MEMORY_READ_TOPIC_V1 = "memory.read_topic" as const;
-export const MEMORY_SEARCH_CONVERSATION_V1 =
-  "memory.search_conversation" as const;
+export const MEMORY_SEARCH_CONVERSATION_V1 = "memory.search_conversation" as const;
 export const MEMORY_READ_EVIDENCE_V1 = "memory.read_evidence" as const;
 
 const MEMORY_TOOL_NAMES = Object.freeze([
@@ -76,10 +61,7 @@ export interface MemoryToolEventV1 {
 }
 
 export interface MemoryToolExecutorOptionsV1 {
-  readonly delegate: ToolExecutor<
-    RuntimeToolCallV1,
-    ToolSettlement<ToolRunResult>
-  >;
+  readonly delegate: ToolExecutor<RuntimeToolCallV1, ToolSettlement<ToolRunResult>>;
   readonly profile: PawNextMemoryPluginProfileV1;
   readonly provider?: MemoryProviderV1;
   readonly topicStore?: MemoryTopicEvidenceStoreV1;
@@ -231,11 +213,7 @@ export function createPawNextMemoryToolExecutorV1(
   }
   assertScope(input.topicStore?.scope, input.profile, "topic store");
   assertScope(input.dossierStore?.scope, input.profile, "dossier store");
-  assertScope(
-    input.rawEvidenceArchive?.scope,
-    input.profile,
-    "raw evidence archive",
-  );
+  assertScope(input.rawEvidenceArchive?.scope, input.profile, "raw evidence archive");
   const maxCalls = boundedInteger(input.maxCalls ?? 6, 1, 16, "call budget");
   const maxTotalChars = boundedInteger(
     input.maxTotalChars ?? 24_000,
@@ -249,31 +227,22 @@ export function createPawNextMemoryToolExecutorV1(
   const evidenceLedger = input.evidenceLedger;
   let callCount = 0;
   let returnedChars = 0;
-  let resolverStop: "unresolved" | "sufficient" | "partial" | "missing" =
-    "unresolved";
-  let topicCache:
-    | Awaited<ReturnType<MemoryTopicEvidenceStoreV1["load"]>>
-    | undefined;
+  let resolverStop: "unresolved" | "sufficient" | "partial" | "missing" = "unresolved";
+  let topicCache: Awaited<ReturnType<MemoryTopicEvidenceStoreV1["load"]>> | undefined;
 
   return Object.freeze({
-    async executeSettled(
-      calls: readonly RuntimeToolCallV1[],
-      options: ToolBatchOptions,
-    ) {
+    async executeSettled(calls: readonly RuntimeToolCallV1[], options: ToolBatchOptions) {
       // The base executor remains the sole owner of registry validation,
       // permission facts and resource locks. Harness does not know memory and
       // will return a non-success settlement for these read-only plugin names;
       // replace only those settlements after the common lifecycle completes.
       const output = [...(await input.delegate.executeSettled(calls, options))];
       const resolverIndex = calls.findIndex(
-        (call) =>
-          entries.get(call.name)?.internalName === MEMORY_RESOLVE_CONTEXT_V1,
+        (call) => entries.get(call.name)?.internalName === MEMORY_RESOLVE_CONTEXT_V1,
       );
       if (resolverIndex >= 0) {
         const resolverCall = calls[resolverIndex];
-        const resolverEntry = resolverCall
-          ? entries.get(resolverCall.name)
-          : undefined;
+        const resolverEntry = resolverCall ? entries.get(resolverCall.name) : undefined;
         if (resolverCall && resolverEntry) {
           output[resolverIndex] = await executeMemoryCall(
             resolverCall,
@@ -291,17 +260,10 @@ export function createPawNextMemoryToolExecutorV1(
           resolverStop !== "unresolved" &&
           toolEntry.internalName !== MEMORY_RESOLVE_CONTEXT_V1
         ) {
-          output[index] = failureSettlement(
-            call.id,
-            "MemoryContextResolverMustSettleFirst",
-          );
+          output[index] = failureSettlement(call.id, "MemoryContextResolverMustSettleFirst");
           continue;
         }
-        output[index] = await executeMemoryCall(
-          call,
-          toolEntry,
-          options.signal,
-        );
+        output[index] = await executeMemoryCall(call, toolEntry, options.signal);
       }
       return output.map((value, index) => {
         if (value) return value;
@@ -400,12 +362,7 @@ export function createPawNextMemoryToolExecutorV1(
       return { status: "success", callId: call.id, result };
     }
     try {
-      const rawResult = await runTool(
-        tool,
-        validated.args,
-        remainingChars,
-        signal,
-      );
+      const rawResult = await runTool(tool, validated.args, remainingChars, signal);
       const result = projectThroughEvidenceLedger(rawResult);
       const chars = JSON.stringify(result.payload).length;
       if (chars > remainingChars) {
@@ -464,17 +421,11 @@ export function createPawNextMemoryToolExecutorV1(
       if (!input.contextResolver) {
         throw namedError("MemoryContextResolverUnavailable");
       }
-      const packet = await input.contextResolver.resolve(
-        String(args.query),
-        signal,
-      );
+      const packet = await input.contextResolver.resolve(String(args.query), signal);
       resolverStop = packet.stop;
       return success(
         tool,
-        projectMemoryResolvedContextToolV1(
-          packet,
-          Math.min(remainingChars, 8_000),
-        ),
+        projectMemoryResolvedContextToolV1(packet, Math.min(remainingChars, 8_000)),
       );
     }
     if (tool === MEMORY_SEARCH_ATOMS_V1) {
@@ -519,9 +470,7 @@ export function createPawNextMemoryToolExecutorV1(
         catalog.map((candidate) => candidate.projection.topic.id),
       );
       if (!topicId) throw namedError("MemoryTopicNotFound");
-      const item = catalog.find(
-        (candidate) => candidate.projection.topic.id === topicId,
-      );
+      const item = catalog.find((candidate) => candidate.projection.topic.id === topicId);
       if (!item) throw namedError("MemoryTopicNotFound");
       const dossier = await input.dossierStore?.getCurrent(topicId, signal);
       if (dossier) {
@@ -545,10 +494,7 @@ export function createPawNextMemoryToolExecutorV1(
           ),
         });
       }
-      const states = projectMemoryTopicToolStatesV1(
-        item,
-        Number(args.max_states),
-      );
+      const states = projectMemoryTopicToolStatesV1(item, Number(args.max_states));
       return success(tool, {
         topic: {
           topicId,
@@ -582,10 +528,7 @@ export function createPawNextMemoryToolExecutorV1(
       signal,
     );
     return success(tool, {
-      spans: fitItems(
-        spans,
-        Math.min(Number(args.max_chars), remainingChars, 8_000),
-      ),
+      spans: fitItems(spans, Math.min(Number(args.max_chars), remainingChars, 8_000)),
     });
   }
 
@@ -648,9 +591,7 @@ function validateResolveContext(args: unknown) {
   const record = exactArgs(args, ["query"]);
   if (!record.ok) return record;
   const query = textArg(record.args.query, 8_192);
-  return !query
-    ? invalid("memory.resolve_context arguments are invalid")
-    : valid({ query });
+  return !query ? invalid("memory.resolve_context arguments are invalid") : valid({ query });
 }
 
 function validateListTopics(args: unknown) {
@@ -710,9 +651,7 @@ export function resolveMemoryTopicIdV1(
   const normalized = candidate.trim();
   if (!normalized) return undefined;
   if (knownTopicIds.includes(normalized)) return normalized;
-  const embedded = knownTopicIds.filter((topicId) =>
-    normalized.includes(topicId),
-  );
+  const embedded = knownTopicIds.filter((topicId) => normalized.includes(topicId));
   return embedded.length === 1 ? embedded[0] : undefined;
 }
 
@@ -754,18 +693,8 @@ export function projectMemoryTopicDossierToolV1(
   maxItems: number,
   maxChars: number,
 ): Readonly<Record<string, unknown>> {
-  const itemLimit = boundedInteger(
-    maxItems,
-    1,
-    24,
-    "topic dossier item budget",
-  );
-  const charLimit = boundedInteger(
-    maxChars,
-    1_024,
-    8_000,
-    "topic dossier char budget",
-  );
+  const itemLimit = boundedInteger(maxItems, 1, 24, "topic dossier item budget");
+  const charLimit = boundedInteger(maxChars, 1_024, 8_000, "topic dossier char budget");
   const currentConclusions: unknown[] = [];
   const evolutions: unknown[] = [];
   const conflicts: unknown[] = [];
@@ -838,12 +767,7 @@ export function projectMemoryResolvedContextToolV1(
   packet: MemoryResolvedContextPacketV1,
   maxChars: number,
 ): Readonly<Record<string, unknown>> {
-  const limit = boundedInteger(
-    maxChars,
-    1_024,
-    8_000,
-    "resolved context character budget",
-  );
+  const limit = boundedInteger(maxChars, 1_024, 8_000, "resolved context character budget");
   const requirements = packet.requirements.map((item) => ({
     ...item,
     description: item.description.slice(0, 512),
@@ -961,17 +885,12 @@ function renderEntry(entry: MemoryEntry | undefined): string {
   if (entry.kind === "semantic") return entry.fact;
   if (entry.kind === "profile") return entry.insight;
   if (entry.kind === "episodic") {
-    return [entry.whenToUse, entry.perspective, ...entry.modification]
-      .filter(Boolean)
-      .join("\n");
+    return [entry.whenToUse, entry.perspective, ...entry.modification].filter(Boolean).join("\n");
   }
   return "[vault reference omitted]";
 }
 
-function success(
-  tool: string,
-  payload: Record<string, unknown>,
-): ToolRunResult {
+function success(tool: string, payload: Record<string, unknown>): ToolRunResult {
   return Object.freeze({
     ok: true,
     summary: `${tool}: completed`,
@@ -986,9 +905,7 @@ function success(
 
 function withCacheHit(result: ToolRunResult): ToolRunResult {
   const payload =
-    result.payload &&
-    typeof result.payload === "object" &&
-    !Array.isArray(result.payload)
+    result.payload && typeof result.payload === "object" && !Array.isArray(result.payload)
       ? { ...(result.payload as Record<string, unknown>), cacheHit: true }
       : result.payload;
   return Object.freeze({ ...result, payload: Object.freeze(payload) });
@@ -998,9 +915,7 @@ function fitItems<T>(items: readonly T[], maxChars: number): readonly T[] {
   const output: T[] = [];
   let used = 2;
   for (const item of items) {
-    const chars =
-      canonicalJsonStringifyV1(item as never).length +
-      (output.length > 0 ? 1 : 0);
+    const chars = canonicalJsonStringifyV1(item as never).length + (output.length > 0 ? 1 : 0);
     if (used + chars > maxChars) break;
     output.push(item);
     used += chars;
@@ -1045,14 +960,8 @@ function textArg(value: unknown, maximum: number): string | undefined {
   return normalized && normalized.length <= maximum ? normalized : undefined;
 }
 
-function intArg(
-  value: unknown,
-  minimum: number,
-  maximum: number,
-): number | undefined {
-  return Number.isSafeInteger(value) &&
-    Number(value) >= minimum &&
-    Number(value) <= maximum
+function intArg(value: unknown, minimum: number, maximum: number): number | undefined {
+  return Number.isSafeInteger(value) && Number(value) >= minimum && Number(value) <= maximum
     ? Number(value)
     : undefined;
 }
@@ -1062,11 +971,7 @@ function stringArrayArg(
   maximumItems: number,
   maximumChars: number,
 ): readonly string[] | undefined {
-  if (
-    !Array.isArray(value) ||
-    value.length < 1 ||
-    value.length > maximumItems
-  ) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > maximumItems) {
     return undefined;
   }
   const items = value.map((item) => textArg(item, maximumChars));
@@ -1091,10 +996,7 @@ function assertScope(
   }
 }
 
-function failureSettlement(
-  callId: string,
-  reasonCode: string,
-): ToolSettlement<ToolRunResult> {
+function failureSettlement(callId: string, reasonCode: string): ToolSettlement<ToolRunResult> {
   const result = Object.freeze({
     ok: false,
     summary: reasonCode,
@@ -1108,12 +1010,7 @@ function failureSettlement(
   });
 }
 
-function boundedInteger(
-  value: number,
-  minimum: number,
-  maximum: number,
-  label: string,
-): number {
+function boundedInteger(value: number, minimum: number, maximum: number, label: string): number {
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
     throw new Error(`Memory tool ${label} is invalid`);
   }
@@ -1129,8 +1026,7 @@ function namedError(name: string): Error {
 function stableErrorCode(error: unknown): string {
   const name = error instanceof Error ? error.name : "Unknown";
   return (
-    `MemoryTool_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160) ||
-    "MemoryTool_Unknown"
+    `MemoryTool_${name}`.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160) || "MemoryTool_Unknown"
   );
 }
 

@@ -3,11 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  type ChatMessage,
-  InMemoryAppStateStore,
-  MAX_STEPS_WARNING,
-} from "@paw/core";
+import { type ChatMessage, InMemoryAppStateStore, MAX_STEPS_WARNING } from "@paw/core";
 import { SessionMemoryStore } from "@paw/memory";
 
 import {
@@ -18,10 +14,7 @@ import {
 import { CODING_PHASE_BUDGET_MARKER } from "../src/lifecycle/coding-phase.js";
 import { advanceRepeatToolReminder } from "../src/lifecycle/repeat-tool-reminder.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
-import {
-  TaskStateManager,
-  formatTaskStateForContext,
-} from "../src/task-state.js";
+import { TaskStateManager, formatTaskStateForContext } from "../src/task-state.js";
 
 describe("ContextAssembler v1", () => {
   test("returns a request snapshot without mutating durable transcript", () => {
@@ -58,9 +51,7 @@ describe("ContextAssembler v1", () => {
       {
         role: "user",
         content: "see attachment",
-        attachments: [
-          { type: "file", name: "note.txt", content: "attachment body" },
-        ],
+        attachments: [{ type: "file", name: "note.txt", content: "attachment body" }],
       },
       {
         role: "assistant",
@@ -105,10 +96,7 @@ describe("ContextAssembler v1", () => {
       hostState: { status: "fresh status" },
     });
 
-    expect(assembled.map((message) => message.role)).toEqual([
-      "system",
-      "user",
-    ]);
+    expect(assembled.map((message) => message.role)).toEqual(["system", "user"]);
   });
 
   test("renders typed host facts and only one ephemeral control", () => {
@@ -172,14 +160,12 @@ describe("ContextAssembler v1", () => {
       ]),
     ).toEqual({ kind: "progress", text: "first" });
     expect(
-      selectEphemeralControlV1([
-        { kind: "test_warden", text: "   " },
-        undefined,
-      ]),
+      selectEphemeralControlV1([{ kind: "test_warden", text: "   " }, undefined]),
     ).toBeUndefined();
-    expect(
-      selectEphemeralControlV1([{ kind: "status", text: "tests passed" }]),
-    ).toEqual({ kind: "status", text: "tests passed" });
+    expect(selectEphemeralControlV1([{ kind: "status", text: "tests passed" }])).toEqual({
+      kind: "status",
+      text: "tests passed",
+    });
     const completionOnly = assembleModelContextV1({
       durable: { messages: [] },
       control: {
@@ -232,10 +218,7 @@ describe("ContextAssembler v1", () => {
       "[Implementation checkpoint] Half of the available model turns have been used without a recorded source change. Consolidate the evidence into the smallest plausible implementation soon. If one specific unseen source span or materially different diagnostic is still required to edit safely, gather it now; avoid exact repeats and broad browsing. Then edit the product source and run the narrowest existing test.";
     const legacyConvergence =
       "[Convergence checkpoint] 4 model turns remain. Preserve the existing solution state and close the loop. Run the narrowest high-signal acceptance or regression test against the current source revision. Prefer an existing repository test or a direct command; do not build and debug a separate helper harness. Do not rely on a test that predates the latest edit.";
-    const impossibleContextGuard = legacyContextGuard.replace(
-      "123 / 100",
-      "1 / 2",
-    );
+    const impossibleContextGuard = legacyContextGuard.replace("123 / 100", "1 / 2");
     const assembled = assembleModelContextV1({
       durable: {
         messages: [
@@ -296,9 +279,7 @@ describe("ContextAssembler v1", () => {
 
   test("eval hook sees the exact array passed to the primary model", async () => {
     let hookMessages: readonly ChatMessage[] | undefined;
-    let providerMessages:
-      | readonly import("@paw/models").ChatMessage[]
-      | undefined;
+    let providerMessages: readonly import("@paw/models").ChatMessage[] | undefined;
     const orchestrator = new AgentOrchestrator({
       model: {
         label: "context-assembler-request-identity",
@@ -327,9 +308,7 @@ describe("ContextAssembler v1", () => {
   });
 
   test("fresh request renders the original goal and verbatim constraint once", async () => {
-    let providerMessages:
-      | readonly import("@paw/models").ChatMessage[]
-      | undefined;
+    let providerMessages: readonly import("@paw/models").ChatMessage[] | undefined;
     const orchestrator = new AgentOrchestrator({
       model: {
         label: "context-assembler-no-duplicates",
@@ -348,9 +327,7 @@ describe("ContextAssembler v1", () => {
       maxSteps: 1,
     });
 
-    const requestText = providerMessages
-      ?.map((message) => message.content)
-      .join("\n");
+    const requestText = providerMessages?.map((message) => message.content).join("\n");
     expect(requestText?.split("GOAL_ONCE_7F3")).toHaveLength(2);
     expect(requestText?.split("LOCKED_ONCE_91A")).toHaveLength(2);
   });
@@ -379,8 +356,7 @@ describe("ContextAssembler v1", () => {
           durableControlCounts.push(
             contextManager
               .buildMessages()
-              .filter((message) => message.content.includes("[TestWarden]"))
-              .length,
+              .filter((message) => message.content.includes("[TestWarden]")).length,
           );
         },
       },
@@ -405,9 +381,7 @@ describe("ContextAssembler v1", () => {
   });
 
   test("v2 ProgressAdvice appears once without growing durable history", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-control-progress-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-control-progress-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -443,8 +417,7 @@ describe("ContextAssembler v1", () => {
           durableProgressCounts.push(
             contextManager
               .buildMessages()
-              .filter((message) => message.content.includes("[ProgressAdvice:"))
-              .length,
+              .filter((message) => message.content.includes("[ProgressAdvice:")).length,
           );
         },
       },
@@ -458,19 +431,13 @@ describe("ContextAssembler v1", () => {
       maxSteps: 5,
     });
 
-    expect(
-      requestControls.filter((content) => content.includes("kind: progress")),
-    ).toHaveLength(1);
-    expect(requestControls.join("\n")).toContain(
-      "[ProgressAdvice:inspect_gap]",
-    );
+    expect(requestControls.filter((content) => content.includes("kind: progress"))).toHaveLength(1);
+    expect(requestControls.join("\n")).toContain("[ProgressAdvice:inspect_gap]");
     expect(durableProgressCounts.every((count) => count === 0)).toBe(true);
   });
 
   test("format recovery survives interruption once and stays out of durable history", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-format-recovery-resume-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-format-recovery-resume-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -510,9 +477,7 @@ describe("ContextAssembler v1", () => {
       stateStore
         .load(runId)
         ?.messages.some((message) =>
-          message.content.startsWith(
-            "[Your last output could not be parsed as a tool call",
-          ),
+          message.content.startsWith("[Your last output could not be parsed as a tool call"),
         ),
     ).toBe(false);
 
@@ -532,23 +497,17 @@ describe("ContextAssembler v1", () => {
 
     expect(
       request.filter((message) =>
-        message.content.includes(
-          "[Your last output could not be parsed as a tool call",
-        ),
+        message.content.includes("[Your last output could not be parsed as a tool call"),
       ),
     ).toHaveLength(1);
     expect(stateStore.load(runId)?.loopControl).toMatchObject({
       protocolRecovery: { formatErrorNudges: 1 },
     });
-    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
-      "pendingControl",
-    );
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty("pendingControl");
   });
 
   test("no-action recovery survives interruption and a valid action resets it", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-no-action-resume-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-no-action-resume-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -596,9 +555,7 @@ describe("ContextAssembler v1", () => {
       stateStore
         .load(runId)
         ?.messages.some((message) =>
-          message.content.startsWith(
-            "[You stopped without a final_answer action.",
-          ),
+          message.content.startsWith("[You stopped without a final_answer action."),
         ),
     ).toBe(false);
 
@@ -623,18 +580,14 @@ describe("ContextAssembler v1", () => {
         message.content.includes("[You stopped without a final_answer action."),
       ),
     ).toHaveLength(1);
-    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
-      "pendingControl",
-    );
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty("pendingControl");
     expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
       "protocolRecovery.noActionNudges",
     );
   });
 
   test("ask_user persists a valid-action reset before pausing and resume starts at attempt one", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-no-action-ask-user-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-no-action-ask-user-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -649,9 +602,7 @@ describe("ContextAssembler v1", () => {
       workspaceRoot,
       turn: 0,
       maxSteps: 4,
-      messages: [
-        { role: "user", content: "Ask which color to use, then report it." },
-      ],
+      messages: [{ role: "user", content: "Ask which color to use, then report it." }],
       loopControl: {
         schemaVersion: "paw.loop-control.v1",
         protocolRecovery: { noActionNudges: 1, hasEverUsedTools: true },
@@ -683,9 +634,7 @@ describe("ContextAssembler v1", () => {
     const waiting = stateStore.load(runId);
     expect(waiting?.interaction).toMatchObject({ status: "waiting_user" });
     expect(waiting?.loopControl).not.toHaveProperty("pendingControl");
-    expect(waiting?.loopControl).not.toHaveProperty(
-      "protocolRecovery.noActionNudges",
-    );
+    expect(waiting?.loopControl).not.toHaveProperty("protocolRecovery.noActionNudges");
     const requestId = waiting?.interaction?.requestId;
     if (!requestId) throw new Error("missing waiting request id");
 
@@ -719,9 +668,7 @@ describe("ContextAssembler v1", () => {
 
   for (const loopKernelVersion of ["v1", "v2"] as const) {
     test(`${loopKernelVersion} ask_user resolver failure preserves its committed cursor and recovery reset`, async () => {
-      const workspaceRoot = mkdtempSync(
-        path.join(tmpdir(), "paw-no-action-ask-failure-"),
-      );
+      const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-no-action-ask-failure-"));
       mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
       writeFileSync(
         path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -770,9 +717,7 @@ describe("ContextAssembler v1", () => {
       expect(saved?.turn).toBe(1);
       expect(saved?.interaction).toMatchObject({ status: "waiting_user" });
       expect(saved?.loopControl).not.toHaveProperty("pendingControl");
-      expect(saved?.loopControl).not.toHaveProperty(
-        "protocolRecovery.noActionNudges",
-      );
+      expect(saved?.loopControl).not.toHaveProperty("protocolRecovery.noActionNudges");
     });
   }
 
@@ -790,9 +735,7 @@ describe("ContextAssembler v1", () => {
       },
     ] as const) {
       test(`${loopKernelVersion} migrates an unconsumed legacy ${fixture.name} recovery once`, async () => {
-        const workspaceRoot = mkdtempSync(
-          path.join(tmpdir(), `paw-legacy-${loopKernelVersion}-`),
-        );
+        const workspaceRoot = mkdtempSync(path.join(tmpdir(), `paw-legacy-${loopKernelVersion}-`));
         mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
         writeFileSync(
           path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -839,21 +782,15 @@ describe("ContextAssembler v1", () => {
           ),
         ).toHaveLength(1);
         const saved = stateStore.load(runId);
-        expect(
-          saved?.messages.some((message) => message.content === fixture.marker),
-        ).toBe(false);
-        expect(
-          saved?.messages.some((message) => message.content === legitimate),
-        ).toBe(true);
+        expect(saved?.messages.some((message) => message.content === fixture.marker)).toBe(false);
+        expect(saved?.messages.some((message) => message.content === legitimate)).toBe(true);
         expect(saved?.loopControl).not.toHaveProperty("pendingControl");
       });
     }
   }
 
   test("completion gate survives provider failure, is delivered once, and never becomes durable", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-completion-gate-resume-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-completion-gate-resume-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -911,9 +848,7 @@ describe("ContextAssembler v1", () => {
           message.content.includes("gate: verification"),
       ),
     ).toHaveLength(1);
-    expect(stateStore.load(runId)?.loopControl).toHaveProperty(
-      "pendingControl",
-    );
+    expect(stateStore.load(runId)?.loopControl).toHaveProperty("pendingControl");
 
     const resumedRequests: (readonly ChatMessage[])[] = [];
     const resumed = new AgentOrchestrator({
@@ -938,27 +873,19 @@ describe("ContextAssembler v1", () => {
     const saved = stateStore.load(runId);
     expect(saved?.loopControl).not.toHaveProperty("pendingControl");
     expect(
-      saved?.messages.some((message) =>
-        message.content.startsWith("[VerificationGate]"),
-      ),
+      saved?.messages.some((message) => message.content.startsWith("[VerificationGate]")),
     ).toBe(false);
   });
 
   test("late guidance retries after provider failure, then checkpoints only a successful delivery", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-late-guidance-resume-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-late-guidance-resume-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
       JSON.stringify({ enable: false }),
       "utf8",
     );
-    writeFileSync(
-      path.join(workspaceRoot, "a.ts"),
-      "export const a = 1;",
-      "utf8",
-    );
+    writeFileSync(path.join(workspaceRoot, "a.ts"), "export const a = 1;", "utf8");
     const runId = "late-guidance-provider-failure";
     const goal = "Fix the parser bug";
     const initialTaskState = new TaskStateManager(goal).snapshot();
@@ -1033,27 +960,19 @@ describe("ContextAssembler v1", () => {
       lateGuidance: { implementationDelivered: true },
     });
     expect(
-      saved?.messages.some((message) =>
-        message.content.includes("[Implementation checkpoint]"),
-      ),
+      saved?.messages.some((message) => message.content.includes("[Implementation checkpoint]")),
     ).toBe(false);
   });
 
   test("tool recovery is one crash-safe control while the failed observation stays durable", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-tool-guidance-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-tool-guidance-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
       JSON.stringify({ enable: false }),
       "utf8",
     );
-    writeFileSync(
-      path.join(workspaceRoot, "a.ts"),
-      "export const a = 1;",
-      "utf8",
-    );
+    writeFileSync(path.join(workspaceRoot, "a.ts"), "export const a = 1;", "utf8");
     const stateStore = new InMemoryAppStateStore();
     const requests: (readonly ChatMessage[])[] = [];
     let calls = 0;
@@ -1089,9 +1008,7 @@ describe("ContextAssembler v1", () => {
       ),
     ).toHaveLength(1);
     expect(
-      requests[1]?.some((message) =>
-        message.content.includes("failed to match old_string"),
-      ),
+      requests[1]?.some((message) => message.content.includes("failed to match old_string")),
     ).toBe(true);
     const interrupted = stateStore.load("tool-guidance");
     expect(interrupted?.loopControl).toMatchObject({
@@ -1117,17 +1034,11 @@ describe("ContextAssembler v1", () => {
       workspaceRoot,
     });
     expect(
-      resumedRequests[0]?.filter((message) =>
-        message.content.includes("topic: tool_recovery"),
-      ),
+      resumedRequests[0]?.filter((message) => message.content.includes("topic: tool_recovery")),
     ).toHaveLength(1);
 
     const saved = stateStore.load("tool-guidance");
-    expect(
-      saved?.messages.some((message) =>
-        message.content.startsWith("[Recovery]"),
-      ),
-    ).toBe(false);
+    expect(saved?.messages.some((message) => message.content.startsWith("[Recovery]"))).toBe(false);
     expect(
       saved?.messages.some(
         (message) =>
@@ -1145,20 +1056,14 @@ describe("ContextAssembler v1", () => {
   });
 
   test("two saved failures resume into a third-failure idle fuse", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-idle-fuse-resume-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-idle-fuse-resume-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
       JSON.stringify({ enable: false }),
       "utf8",
     );
-    writeFileSync(
-      path.join(workspaceRoot, "a.ts"),
-      "export const a = 1;",
-      "utf8",
-    );
+    writeFileSync(path.join(workspaceRoot, "a.ts"), "export const a = 1;", "utf8");
     const runId = "idle-fuse-resume";
     const stateStore = new InMemoryAppStateStore();
     const failingEdit =
@@ -1210,9 +1115,7 @@ describe("ContextAssembler v1", () => {
     });
     await resumed.resumeRun({ runId, workspaceRoot });
     expect(
-      resumedRequests[0]?.some((message) =>
-        message.content.includes("topic: tool_recovery"),
-      ),
+      resumedRequests[0]?.some((message) => message.content.includes("topic: tool_recovery")),
     ).toBe(true);
     expect(
       resumedRequests[1]?.filter(
@@ -1229,26 +1132,18 @@ describe("ContextAssembler v1", () => {
     };
     expect(finalControl.toolLoop?.failureSignatures).toHaveLength(3);
     expect(finalControl.toolLoop?.idleFuseTrips).toBe(1);
-    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
-      "pendingControl",
-    );
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty("pendingControl");
   });
 
   test("a terminal post-tool checkpoint does not retain guidance with no consumer", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-tool-guidance-terminal-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-tool-guidance-terminal-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
       JSON.stringify({ enable: false }),
       "utf8",
     );
-    writeFileSync(
-      path.join(workspaceRoot, "a.ts"),
-      "export const a = 1;",
-      "utf8",
-    );
+    writeFileSync(path.join(workspaceRoot, "a.ts"), "export const a = 1;", "utf8");
     const stateStore = new InMemoryAppStateStore();
     const orchestrator = new AgentOrchestrator({
       appStateStore: stateStore,
@@ -1274,9 +1169,7 @@ describe("ContextAssembler v1", () => {
   });
 
   test("terminal drops a tool guidance that lost selection to TestWarden", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-tool-guidance-terminal-selection-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-tool-guidance-terminal-selection-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -1319,16 +1212,11 @@ describe("ContextAssembler v1", () => {
     expect(
       request.some(
         (message) =>
-          message.content.includes("kind: test_warden") &&
-          message.content.includes("[TestWarden]"),
+          message.content.includes("kind: test_warden") && message.content.includes("[TestWarden]"),
       ),
     ).toBe(true);
-    expect(
-      request.some((message) => message.content.includes("topic: repeat_tool")),
-    ).toBe(false);
-    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty(
-      "pendingControl",
-    );
+    expect(request.some((message) => message.content.includes("topic: repeat_tool"))).toBe(false);
+    expect(stateStore.load(runId)?.loopControl).not.toHaveProperty("pendingControl");
   });
 
   for (const fixture of [
@@ -1372,20 +1260,14 @@ describe("ContextAssembler v1", () => {
     },
   ] as const) {
     test(fixture.name, async () => {
-      const workspaceRoot = mkdtempSync(
-        path.join(tmpdir(), "paw-tool-loop-resume-"),
-      );
+      const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-tool-loop-resume-"));
       mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
       writeFileSync(
         path.join(workspaceRoot, ".paw", "memory-config.json"),
         JSON.stringify({ enable: false }),
         "utf8",
       );
-      writeFileSync(
-        path.join(workspaceRoot, "a.ts"),
-        "export const a = 1;",
-        "utf8",
-      );
+      writeFileSync(path.join(workspaceRoot, "a.ts"), "export const a = 1;", "utf8");
       const runId = `tool-loop-${fixture.topic}`;
       const stateStore = new InMemoryAppStateStore();
       stateStore.save({
@@ -1441,9 +1323,7 @@ describe("ContextAssembler v1", () => {
   }
 
   test("resume removes legacy host projections from runtime and next save", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-context-resume-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-context-resume-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -1463,8 +1343,7 @@ describe("ContextAssembler v1", () => {
         { role: "user", content: "[Status Snapshot v1]\nlegacy telemetry" },
         {
           role: "user",
-          content:
-            "[ProgressAdvice:inspect_gap] last 4 turns: no product progress",
+          content: "[ProgressAdvice:inspect_gap] last 4 turns: no product progress",
         },
         {
           role: "user",
@@ -1505,8 +1384,7 @@ describe("ContextAssembler v1", () => {
         { role: "user", content: "[ProviderProtocol] explain this label" },
         {
           role: "user",
-          content:
-            "[ProviderProtocol:empty_response] please explain this label",
+          content: "[ProviderProtocol:empty_response] please explain this label",
         },
         {
           role: "user",
@@ -1524,8 +1402,7 @@ describe("ContextAssembler v1", () => {
         },
         {
           role: "user",
-          content:
-            "[Protocol recovery attempt 3: please explain how recovery works]",
+          content: "[Protocol recovery attempt 3: please explain how recovery works]",
         },
         {
           role: "user",
@@ -1563,9 +1440,7 @@ describe("ContextAssembler v1", () => {
       message.content === "[Status Snapshot v1]" ||
       message.content.startsWith("[Status Snapshot v1]\n") ||
       message.content.startsWith("[ProgressAdvice:inspect_gap] ") ||
-      message.content.startsWith(
-        "[TestWarden] No Python test files detected;",
-      ) ||
+      message.content.startsWith("[TestWarden] No Python test files detected;") ||
       message.content.startsWith("[LoopV2Readiness:needs_work key=") ||
       message.content ===
         "[ProviderProtocol:empty_response] The provider returned no visible text or executable action. Retry once with complete tool calls, an explicit control action, or a visible candidate response." ||
@@ -1579,40 +1454,33 @@ describe("ContextAssembler v1", () => {
       message.content ===
         '[Protocol recovery attempt 3: do not narrate the action you intend to take. Emit the valid tool-call JSON now. If and only if the task is complete, emit {"action":"final_answer","summary":"<complete result>"}.]';
     expect(providerMessages.some(isLegacyProjection)).toBe(false);
-    expect(
-      durableSnapshots.some((messages) => messages.some(isLegacyProjection)),
-    ).toBe(false);
+    expect(durableSnapshots.some((messages) => messages.some(isLegacyProjection))).toBe(false);
     const saved = stateStore.load(runId);
     expect(saved?.messages.some(isLegacyProjection)).toBe(false);
     expect(
       saved?.messages.some(
-        (message) =>
-          message.content === "[Context Package] is my requested title",
+        (message) => message.content === "[Context Package] is my requested title",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) => message.content === "[TestWarden] please explain this label",
+      ),
+    ).toBe(true);
+    expect(
+      saved?.messages.some(
+        (message) => message.content === "[ProviderProtocol] explain this label",
       ),
     ).toBe(true);
     expect(
       saved?.messages.some(
         (message) =>
-          message.content === "[TestWarden] please explain this label",
+          message.content === "[ProviderProtocol:empty_response] please explain this label",
       ),
     ).toBe(true);
     expect(
       saved?.messages.some(
-        (message) =>
-          message.content === "[ProviderProtocol] explain this label",
-      ),
-    ).toBe(true);
-    expect(
-      saved?.messages.some(
-        (message) =>
-          message.content ===
-          "[ProviderProtocol:empty_response] please explain this label",
-      ),
-    ).toBe(true);
-    expect(
-      saved?.messages.some(
-        (message) =>
-          message.content === "[LoopControl:turn_boundary] explain this label",
+        (message) => message.content === "[LoopControl:turn_boundary] explain this label",
       ),
     ).toBe(true);
     expect(
@@ -1632,8 +1500,7 @@ describe("ContextAssembler v1", () => {
     expect(
       saved?.messages.some(
         (message) =>
-          message.content ===
-          "[Protocol recovery attempt 3: please explain how recovery works]",
+          message.content === "[Protocol recovery attempt 3: please explain how recovery works]",
       ),
     ).toBe(true);
     expect(
@@ -1686,30 +1553,23 @@ describe("ContextAssembler v1", () => {
     await orchestrator.resumeRun({ runId, workspaceRoot });
 
     expect(
-      request.filter((message) =>
-        message.content.includes("cold task sentinel"),
-      ),
+      request.filter((message) => message.content.includes("cold task sentinel")),
     ).toHaveLength(1);
+    expect(request.find((message) => message.role === "system")?.content).not.toContain(
+      "cold task sentinel",
+    );
     expect(
-      request.find((message) => message.role === "system")?.content,
-    ).not.toContain("cold task sentinel");
-    expect(
-      request.find((message) => message.content.includes("cold task sentinel"))
-        ?.content,
+      request.find((message) => message.content.includes("cold task sentinel"))?.content,
     ).toContain("[Previous Session Memory]");
     expect(
       stateStore
         .load(runId)
-        ?.messages.some((message) =>
-          message.content.includes("[Previous session context]"),
-        ),
+        ?.messages.some((message) => message.content.includes("[Previous session context]")),
     ).toBe(false);
   });
 
   test("rewind drops a later memory hint checkpoint", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-memory-rewind-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-memory-rewind-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -1746,18 +1606,14 @@ describe("ContextAssembler v1", () => {
 
     await orchestrator.resumeRun({ runId, workspaceRoot, fromTurn: 0 });
 
-    expect(
-      request.some((message) =>
-        message.content.includes("later failure sentinel"),
-      ),
-    ).toBe(false);
+    expect(request.some((message) => message.content.includes("later failure sentinel"))).toBe(
+      false,
+    );
     expect(stateStore.load(runId)?.memoryHint).toBeUndefined();
   });
 
   test("memory hint survives provider failure once, new checkpoint wins legacy, and success consumes it", async () => {
-    const workspaceRoot = mkdtempSync(
-      path.join(tmpdir(), "paw-memory-hint-resume-"),
-    );
+    const workspaceRoot = mkdtempSync(path.join(tmpdir(), "paw-memory-hint-resume-"));
     mkdirSync(path.join(workspaceRoot, ".paw"), { recursive: true });
     writeFileSync(
       path.join(workspaceRoot, ".paw", "memory-config.json"),
@@ -1802,15 +1658,11 @@ describe("ContextAssembler v1", () => {
     await failing.resumeRun({ runId, workspaceRoot });
 
     expect(
-      failedRequests[0]?.filter((message) =>
-        message.content.includes("new checkpoint sentinel"),
-      ),
+      failedRequests[0]?.filter((message) => message.content.includes("new checkpoint sentinel")),
     ).toHaveLength(1);
-    expect(
-      failedRequests[0]?.some((message) =>
-        message.content.includes("legacy sentinel"),
-      ),
-    ).toBe(false);
+    expect(failedRequests[0]?.some((message) => message.content.includes("legacy sentinel"))).toBe(
+      false,
+    );
     expect(stateStore.load(runId)?.memoryHint).toMatchObject({
       kind: "action_failed",
       text: "new checkpoint sentinel",
@@ -1829,15 +1681,11 @@ describe("ContextAssembler v1", () => {
     });
     await resumed.resumeRun({ runId, workspaceRoot });
     expect(
-      consumedRequest.filter((message) =>
-        message.content.includes("new checkpoint sentinel"),
-      ),
+      consumedRequest.filter((message) => message.content.includes("new checkpoint sentinel")),
     ).toHaveLength(1);
     expect(stateStore.load(runId)?.memoryHint).toBeUndefined();
     expect(
-      stateStore
-        .load(runId)
-        ?.messages.some((message) => message.content.includes("[Memory hint]")),
+      stateStore.load(runId)?.messages.some((message) => message.content.includes("[Memory hint]")),
     ).toBe(false);
   });
 });

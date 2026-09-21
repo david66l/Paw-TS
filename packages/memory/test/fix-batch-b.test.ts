@@ -12,29 +12,16 @@ import { collectGarbage } from "../src/longterm/lifecycle/gc.js";
 import { runLifecycleOnce } from "../src/longterm/lifecycle/janitor.js";
 import { collectMemoryDiff } from "../src/longterm/observability/diff.js";
 import { queryOpLog } from "../src/longterm/observability/op-log.js";
-import {
-  TriggeredRetriever,
-  parseQueryRewrite,
-} from "../src/longterm/retrieval/triggered.js";
-import type {
-  EpisodicExperience,
-  SemanticFact,
-} from "../src/longterm/store/engine.js";
+import { TriggeredRetriever, parseQueryRewrite } from "../src/longterm/retrieval/triggered.js";
+import type { EpisodicExperience, SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
-import {
-  type DistillerLlm,
-  MemoryDistiller,
-} from "../src/longterm/write/distiller.js";
+import { type DistillerLlm, MemoryDistiller } from "../src/longterm/write/distiller.js";
 import type { GovernorLlm } from "../src/longterm/write/governor.js";
 import { MemoryWritePipeline } from "../src/longterm/write/pipeline.js";
-import {
-  listTrialLessons,
-  parseTrialLessonOutput,
-} from "../src/longterm/write/trial.js";
+import { listTrialLessons, parseTrialLessonOutput } from "../src/longterm/write/trial.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -58,14 +45,10 @@ describe("parseTrialLessonOutput（#7）", () => {
 
   test("超 3 句 / 缺 whenToUse 前缀 / 非 JSON → null", () => {
     expect(
-      parseTrialLessonOutput(
-        '{"lesson":"一。二。三。四。","whenToUse":"When x","keywords":[]}',
-      ),
+      parseTrialLessonOutput('{"lesson":"一。二。三。四。","whenToUse":"When x","keywords":[]}'),
     ).toBeNull();
     expect(
-      parseTrialLessonOutput(
-        '{"lesson":"ok","whenToUse":"任何时候","keywords":[]}',
-      ),
+      parseTrialLessonOutput('{"lesson":"ok","whenToUse":"任何时候","keywords":[]}'),
     ).toBeNull();
     expect(parseTrialLessonOutput("garbage")).toBeNull();
   });
@@ -95,10 +78,7 @@ const engine = new PostgresMemoryStoreEngine();
 
 const CONFIRM = { confirm: async () => true };
 
-function makeSemantic(
-  fact: string,
-  overrides: Partial<SemanticFact> = {},
-): SemanticFact {
+function makeSemantic(fact: string, overrides: Partial<SemanticFact> = {}): SemanticFact {
   const now = new Date().toISOString();
   return {
     id: "",
@@ -152,8 +132,7 @@ describe("修复批次 B db 集成", () => {
             {
               kind: "episodic",
               whenToUse: "When peridot deploys fail with credential mismatch",
-              perspective:
-                "Peridot credential mismatches usually come from stale rotation windows",
+              perspective: "Peridot credential mismatches usually come from stale rotation windows",
               modification: ["Check the rotation window first"],
               failureFixPair: {
                 failed: "deploy",
@@ -187,11 +166,8 @@ describe("修复批次 B db 集成", () => {
     expect(entry.failureFixPair!.fixed).toBe("rotate window");
     // when_to_use 列落库
     const sql = getSql();
-    const rows =
-      await sql`SELECT when_to_use FROM memory_items WHERE id = ${r.memoryIds[0]!}`;
-    expect((rows[0] as { when_to_use: string }).when_to_use).toContain(
-      "peridot",
-    );
+    const rows = await sql`SELECT when_to_use FROM memory_items WHERE id = ${r.memoryIds[0]!}`;
+    expect((rows[0] as { when_to_use: string }).when_to_use).toContain("peridot");
   });
 
   it("#7 trial 教训由 LLM 蒸馏（含检索键）；超预算降级原文切片标注", async () => {
@@ -249,8 +225,7 @@ describe("修复批次 B db 集成", () => {
         complete: async () =>
           JSON.stringify({
             lesson: "我不该跳过预检，应该先跑 smoke 检查。",
-            whenToUse:
-              "When OlivineModuleResolutionError appears after config changes",
+            whenToUse: "When OlivineModuleResolutionError appears after config changes",
             keywords: ["OlivineModuleResolutionError"],
           }),
       }),
@@ -282,8 +257,7 @@ describe("修复批次 B db 集成", () => {
     for (let i = 0; i < 3; i++) {
       const pkg = await retriever.retrieve({
         type: "action_failed",
-        errorOutput:
-          "OlivineModuleResolutionError: boom\n    at load (x.ts:1:1)",
+        errorOutput: "OlivineModuleResolutionError: boom\n    at load (x.ts:1:1)",
         lastActionSummary: "run build (exit 1)",
         repo: REPO,
         runId: `${RUN}_dec_${i}`,
@@ -314,8 +288,7 @@ describe("修复批次 B db 集成", () => {
       freq: 0,
       utility: 0,
       whenToUse: "When sphene liveness probes flap during rolling updates",
-      perspective:
-        "Sphene probe flapping usually comes from misaligned grace periods",
+      perspective: "Sphene probe flapping usually comes from misaligned grace periods",
       modification: ["Align the grace period with startup time"],
       issueType: "ProbeFlapError",
       taskId: "tsk_fixb",
@@ -433,12 +406,8 @@ describe("修复批次 B db 集成", () => {
     });
     expect(r3.status).not.toBe("corrected");
     // 不存在 source=user_statement 的直写条目
-    const directEntries = (
-      await engine.query({ repo: REPO, kind: "semantic", limit: 50 })
-    ).filter(
-      (e) =>
-        e.source === "user_statement" &&
-        (e as SemanticFact).fact.includes("周五"),
+    const directEntries = (await engine.query({ repo: REPO, kind: "semantic", limit: 50 })).filter(
+      (e) => e.source === "user_statement" && (e as SemanticFact).fact.includes("周五"),
     );
     expect(directEntries).toHaveLength(1); // 只有路径 1 那一条
   });
@@ -493,9 +462,9 @@ describe("修复批次 B db 集成", () => {
       "Sunstone fact that must not be silently dropped",
     );
     // 死信可查（payload 保留完整事件）
-    expect(
-      (rows[0] as { payload: { trajectoryRef: string } }).payload.trajectoryRef,
-    ).toBe(`runs/${runId}`);
+    expect((rows[0] as { payload: { trajectoryRef: string } }).payload.trajectoryRef).toBe(
+      `runs/${runId}`,
+    );
   });
 
   it("#12 纯中文事实可被 searchText 命中（simple 兜底列）", async () => {

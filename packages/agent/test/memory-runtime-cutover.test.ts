@@ -26,25 +26,14 @@ afterAll(async () => {
   try {
     const sql = getSql();
     for (const mid of memoryIds) {
-      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-        mid,
-      ]);
-      await sql.unsafe("DELETE FROM memory_versions WHERE memory_id = $1", [
-        mid,
-      ]);
+      await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [mid]);
+      await sql.unsafe("DELETE FROM memory_versions WHERE memory_id = $1", [mid]);
       await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [mid]);
     }
     for (const tid of taskIds) {
-      await sql.unsafe("DELETE FROM tool_result_records WHERE task_id = $1", [
-        tid,
-      ]);
-      await sql.unsafe(
-        "DELETE FROM memory_candidates WHERE source_task_ids @> $1",
-        [[tid]],
-      );
-      await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [
-        tid,
-      ]);
+      await sql.unsafe("DELETE FROM tool_result_records WHERE task_id = $1", [tid]);
+      await sql.unsafe("DELETE FROM memory_candidates WHERE source_task_ids @> $1", [[tid]]);
+      await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [tid]);
       await sql.unsafe("DELETE FROM task_sessions WHERE id = $1", [tid]);
     }
     await closeSql();
@@ -63,9 +52,7 @@ describe("AgentOrchestrator memory_backend=db", () => {
       dbOk = false;
     }
     if (!dbOk) {
-      console.warn(
-        "skip memory-runtime-cutover: Postgres not available (set DATABASE_URL)",
-      );
+      console.warn("skip memory-runtime-cutover: Postgres not available (set DATABASE_URL)");
       return;
     }
 
@@ -101,9 +88,7 @@ describe("AgentOrchestrator memory_backend=db", () => {
     });
     expect(r1.status).toBe("completed");
 
-    const retrieve1 = events1.find(
-      (e) => e.event.type === "memory.retrieve.done",
-    );
+    const retrieve1 = events1.find((e) => e.event.type === "memory.retrieve.done");
     expect(retrieve1).toBeDefined();
 
     const extracted = events1.find((e) => e.event.type === "memory.extracted");
@@ -119,10 +104,9 @@ describe("AgentOrchestrator memory_backend=db", () => {
       for (const it of items) {
         memoryIds.push(it.id);
       }
-      const tasks = (await sql.unsafe(
-        `SELECT id FROM task_sessions WHERE repository_id LIKE $1`,
-        [`agent-cutover-%`],
-      )) as unknown as { id: string }[];
+      const tasks = (await sql.unsafe(`SELECT id FROM task_sessions WHERE repository_id LIKE $1`, [
+        `agent-cutover-%`,
+      ])) as unknown as { id: string }[];
       for (const t of tasks) {
         taskIds.push(t.id);
       }
@@ -142,9 +126,7 @@ describe("AgentOrchestrator memory_backend=db", () => {
       maxSteps: 4,
     });
     expect(r2.status).toBe("completed");
-    const retrieve2 = events2.find(
-      (e) => e.event.type === "memory.retrieve.done",
-    );
+    const retrieve2 = events2.find((e) => e.event.type === "memory.retrieve.done");
     expect(retrieve2?.event.type).toBe("memory.retrieve.done");
 
     // 恢复环境

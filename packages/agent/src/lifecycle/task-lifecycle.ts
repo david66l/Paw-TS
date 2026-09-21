@@ -6,10 +6,7 @@ import type { RunResult } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { TaskState } from "../task-state.js";
 import { formatTaskStateForContext } from "../task-state.js";
-import {
-  type AcceptanceGateDecision,
-  checkAcceptanceCriteria,
-} from "./acceptance-gate.js";
+import { type AcceptanceGateDecision, checkAcceptanceCriteria } from "./acceptance-gate.js";
 import {
   DEFAULT_LIFECYCLE_BUDGET,
   HEADLESS_LIFECYCLE_BUDGET,
@@ -129,10 +126,7 @@ export function evaluateBudgetExhaustion(
   });
 }
 
-export function runResultFromDecision(
-  runId: string,
-  decision: CompletionDecision,
-): RunResult {
+export function runResultFromDecision(runId: string, decision: CompletionDecision): RunResult {
   return toRunResult(runId, decision);
 }
 
@@ -163,11 +157,7 @@ export function collectToolRecoveryMessage(
     const hint = recoveryHintForToolResult(call.tool, result);
     if (hint) hints.push(hint);
   }
-  const signatures = updateFailureSignatures(
-    failureSignatures,
-    productCalls,
-    productResults,
-  );
+  const signatures = updateFailureSignatures(failureSignatures, productCalls, productResults);
   const fuse = idleFuseTripped(signatures);
   const base = formatRecoveryHints(hints);
   if (fuse) {

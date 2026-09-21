@@ -104,11 +104,8 @@ function snapshot(rightStatus: "committed" | "failed") {
         groupId: rightGroupId,
         requirementIds: rightRequirementIds,
         status: rightStatus,
-        assessments:
-          rightStatus === "committed" ? [assessment("right", "ref-right")] : [],
-        ...(rightStatus === "failed"
-          ? { failureCodes: ["SelectorGroupFailed"] }
-          : {}),
+        assessments: rightStatus === "committed" ? [assessment("right", "ref-right")] : [],
+        ...(rightStatus === "failed" ? { failureCodes: ["SelectorGroupFailed"] } : {}),
       },
     ],
   });
@@ -117,43 +114,33 @@ function snapshot(rightStatus: "committed" | "failed") {
 describe("typed evidence execution program v1", () => {
   test("binds aggregate operation and unit to the original query", () => {
     expect(
-      compileMemoryEvidenceAggregateRequestV1(
-        "How many different museums did I visit?",
-      ),
+      compileMemoryEvidenceAggregateRequestV1("How many different museums did I visit?"),
     ).toMatchObject({
       operator: "count",
       aggregationUnit: "semantic_value",
       countBasis: "enumerated_members",
     });
     expect(
-      compileMemoryEvidenceAggregateRequestV1(
-        "How many times did I attend an event?",
-      ),
+      compileMemoryEvidenceAggregateRequestV1("How many times did I attend an event?"),
     ).toMatchObject({
       operator: "count",
       aggregationUnit: "event",
       countBasis: "enumerated_members",
     });
     expect(
-      compileMemoryEvidenceAggregateRequestV1(
-        "What was the total amount I spent?",
-      ),
+      compileMemoryEvidenceAggregateRequestV1("What was the total amount I spent?"),
     ).toMatchObject({
       operator: "sum",
       aggregationUnit: "numeric_quantity",
       countBasis: null,
     });
-    expect(
-      compileMemoryEvidenceAggregateRequestV1("How many fish do I have?"),
-    ).toMatchObject({
+    expect(compileMemoryEvidenceAggregateRequestV1("How many fish do I have?")).toMatchObject({
       operator: "count",
       aggregationUnit: "entity",
       countBasis: "stated_cardinality",
     });
     expect(
-      compileMemoryEvidenceAggregateRequestV1(
-        "What percentage of the total was mine?",
-      ),
+      compileMemoryEvidenceAggregateRequestV1("What percentage of the total was mine?"),
     ).toMatchObject({
       operator: "ratio_percent",
       aggregationUnit: "numeric_quantity",
@@ -162,9 +149,7 @@ describe("typed evidence execution program v1", () => {
 
   test("binds recommendation completion to one answer-scoped context bundle", () => {
     expect(
-      compileMemoryEvidencePersonalizationRequestV1(
-        "What would be a good option for me?",
-      ),
+      compileMemoryEvidencePersonalizationRequestV1("What would be a good option for me?"),
     ).toMatchObject({
       scope: "answer_personalization",
       completionBasis: "bounded_context",
@@ -208,9 +193,7 @@ describe("typed evidence execution program v1", () => {
     expect(program.blockedRequirementCount).toBe(1);
     expect(
       program.nodes.find(
-        (node) =>
-          node.operation === "read_requirement" &&
-          node.requirementId === "right",
+        (node) => node.operation === "read_requirement" && node.requirementId === "right",
       ),
     ).toMatchObject({
       status: "blocked",

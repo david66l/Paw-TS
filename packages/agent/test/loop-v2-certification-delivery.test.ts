@@ -41,10 +41,7 @@ function djangoTerminalPatch(newStart = 1) {
   };
 }
 
-function append(
-  state: WorkingDecisionStateV2,
-  event: LoopV2Event,
-): WorkingDecisionStateV2 {
+function append(state: WorkingDecisionStateV2, event: LoopV2Event): WorkingDecisionStateV2 {
   return projectLoopV2Event(state, {
     schemaVersion: LOOP_V2_SCHEMA_VERSION,
     runId: RUN_ID,
@@ -177,9 +174,7 @@ function passingReview(): SemanticReviewV2 {
 describe("Loop Kernel v2 semantic certification and delivery", () => {
   test("review payload binds actual diff and source content to its stable identity", () => {
     const payload = djangoPayload();
-    expect(payload.mutationPatches[0]?.patch).toContain(
-      "self.func = func.func",
-    );
+    expect(payload.mutationPatches[0]?.patch).toContain("self.func = func.func");
     expect(payload.snapshots[0]?.content).toContain("ResolverMatch");
 
     const snapshot = payload.snapshots[0];
@@ -189,11 +184,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
       snapshots: [{ ...snapshot, content: "tampered" }],
     };
     expect(
-      reviewCandidateOnceV2(
-        createSemanticReviewLedgerV2(),
-        tampered,
-        async () => ({}),
-      ),
+      reviewCandidateOnceV2(createSemanticReviewLedgerV2(), tampered, async () => ({})),
     ).rejects.toThrow("snapshot mismatch");
 
     expect(
@@ -234,9 +225,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
     const result = await reviewer(payload);
 
     expect(calls).toBe(1);
-    expect(result).toEqual(
-      expect.objectContaining({ verdict: "pass", mutationRevision: 1 }),
-    );
+    expect(result).toEqual(expect.objectContaining({ verdict: "pass", mutationRevision: 1 }));
     expect(captured).toContain("self.func = func.func");
     expect(captured).toContain("ResolverMatch.func, args, and kwargs");
     expect(captured).not.toContain("proposedSummary");
@@ -252,9 +241,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
       base.terminalPatch,
     );
     const messages = buildSemanticReviewMessagesV2(payload);
-    const material = JSON.parse(
-      messages[1]?.content.split("\n\n").at(-1) ?? "{}",
-    ) as {
+    const material = JSON.parse(messages[1]?.content.split("\n\n").at(-1) ?? "{}") as {
       criteria: Array<{
         id: string;
         sourceHash: string;
@@ -347,9 +334,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
       ...base,
       goal: longGoal,
     });
-    const material = JSON.parse(
-      messages[1]?.content.split("\n\n").at(-1) ?? "{}",
-    ) as {
+    const material = JSON.parse(messages[1]?.content.split("\n\n").at(-1) ?? "{}") as {
       goal: string;
       goalFocus?: string;
     };
@@ -375,8 +360,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
       ].join("\n"),
     };
     const spacious = JSON.parse(
-      buildSemanticReviewMessagesV2(payload)[1]?.content.split("\n\n").at(-1) ??
-        "{}",
+      buildSemanticReviewMessagesV2(payload)[1]?.content.split("\n\n").at(-1) ?? "{}",
     ) as {
       goalFocus?: string;
       sourceContext: unknown;
@@ -388,9 +372,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
     );
     const tightBudget = JSON.stringify(withoutFocus).length;
     const tight = JSON.parse(
-      buildSemanticReviewMessagesV2(payload, tightBudget)[1]
-        ?.content.split("\n\n")
-        .at(-1) ?? "{}",
+      buildSemanticReviewMessagesV2(payload, tightBudget)[1]?.content.split("\n\n").at(-1) ?? "{}",
     ) as {
       goalFocus?: string;
       sourceContext: unknown;
@@ -417,8 +399,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
               invariantId: "invariant-resolver-public-state",
               file: "django/urls/resolvers.py",
               line: 3,
-              observedChange:
-                "ResolverMatch.__init__ rewrites func, args, and kwargs.",
+              observedChange: "ResolverMatch.__init__ rewrites func, args, and kwargs.",
               risk: "A repr-only request now changes observable public state.",
               minimalAlternative:
                 "Keep __init__ state unchanged and branch only inside __repr__ for functools.partial.",
@@ -435,9 +416,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
 
     expect(calls).toBe(1);
     expect(result.review.verdict).toBe("fail");
-    expect(result.review.findings[0]?.minimalAlternative).toContain(
-      "only inside __repr__",
-    );
+    expect(result.review.findings[0]?.minimalAlternative).toContain("only inside __repr__");
 
     const invalid = await reviewCandidateOnceV2(
       createSemanticReviewLedgerV2(),
@@ -462,10 +441,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
 
   test("R06 host report omits an unsupported manual-check claim without reviewing again", () => {
     const payload = djangoPayload();
-    const readiness = evaluateCandidateReadinessV2(
-      djangoCandidateState(),
-      artifact,
-    );
+    const readiness = evaluateCandidateReadinessV2(djangoCandidateState(), artifact);
     const review = passingReview();
     const outcome = deriveRunOutcomeV2({
       candidateProposed: true,
@@ -490,9 +466,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
     });
 
     expect(report.markdown).toContain("django-existing-tests-r1");
-    expect(report.markdown).not.toContain(
-      "A manual partial-function check passed.",
-    );
+    expect(report.markdown).not.toContain("A manual partial-function check passed.");
     expect(report.markdown).toContain("unsupported candidate verification");
     expect(report.omittedClaims).toEqual([
       expect.objectContaining({
@@ -503,10 +477,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
   });
 
   test("R08 keeps internal certification and external rejection orthogonal", () => {
-    const readiness = evaluateCandidateReadinessV2(
-      djangoCandidateState(),
-      artifact,
-    );
+    const readiness = evaluateCandidateReadinessV2(djangoCandidateState(), artifact);
     const outcome = deriveRunOutcomeV2({
       candidateProposed: true,
       readiness,
@@ -576,9 +547,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
 
     expect(modelCalls).toBe(0);
     expect(result.review.verdict).toBe("partial");
-    expect(result.ledger.records[result.reviewKey]?.reasonCode).toBe(
-      "reviewer_error",
-    );
+    expect(result.ledger.records[result.reviewKey]?.reasonCode).toBe("reviewer_error");
   });
 
   test("review material excludes historical patch bodies that are absent from the terminal candidate", () => {
@@ -592,9 +561,9 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
       })),
     });
     const captured = messages.map((message) => message.content).join("\n");
-    const material = JSON.parse(
-      messages[1]?.content.split("\n\n").at(-1) ?? "{}",
-    ) as { terminalPatch: { patch: string } };
+    const material = JSON.parse(messages[1]?.content.split("\n\n").at(-1) ?? "{}") as {
+      terminalPatch: { patch: string };
+    };
 
     expect(material.terminalPatch.patch).toBe(payload.terminalPatch.patch);
     expect(captured).not.toContain(stale);
@@ -602,18 +571,12 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
   });
 
   test("large source snapshots are projected to bounded excerpts and still make one model call", async () => {
-    const resolverLines = Array.from(
-      { length: 5_500 },
-      (_, index) => `resolver_filler_${index}`,
-    );
+    const resolverLines = Array.from({ length: 5_500 }, (_, index) => `resolver_filler_${index}`);
     resolverLines[2_700] = "class ResolverMatch:";
     resolverLines[2_701] = "    def __init__(self, func, args, kwargs):";
     resolverLines[2_702] = "        self.func = func.func";
     resolverLines[4_000] = "FAR_RESOLVER_SENTINEL_MUST_BE_OMITTED";
-    const helperLines = Array.from(
-      { length: 4_000 },
-      (_, index) => `helper_filler_${index}`,
-    );
+    const helperLines = Array.from({ length: 4_000 }, (_, index) => `helper_filler_${index}`);
     helperLines[2_000] = "FAR_HELPER_SENTINEL_MUST_BE_OMITTED";
     const resolver = resolverLines.join("\n");
     const helper = helperLines.join("\n");
@@ -634,10 +597,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
       djangoTerminalPatch(2_701),
     );
     expect(
-      payload.snapshots.reduce(
-        (sum, snapshot) => sum + snapshot.content.length,
-        0,
-      ),
+      payload.snapshots.reduce((sum, snapshot) => sum + snapshot.content.length, 0),
     ).toBeGreaterThan(120_000);
     let calls = 0;
     let captured = "";
@@ -673,14 +633,10 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
 
   test("multi-file hunk windows are whole units and every omitted window is explicit", () => {
     const base = djangoPayload();
-    const resolver = Array.from(
-      { length: 100 },
-      (_, index) => `resolver_line_${index + 1}`,
-    ).join("\n");
-    const helper = Array.from(
-      { length: 100 },
-      (_, index) => `helper_line_${index + 1}`,
-    ).join("\n");
+    const resolver = Array.from({ length: 100 }, (_, index) => `resolver_line_${index + 1}`).join(
+      "\n",
+    );
+    const helper = Array.from({ length: 100 }, (_, index) => `helper_line_${index + 1}`).join("\n");
     const patch = [
       "diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py",
       "--- a/django/urls/resolvers.py",
@@ -750,12 +706,8 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
         // The mandatory section or omission manifest does not fit yet.
       }
     }
-    if (!material)
-      throw new Error("fixture did not exercise bounded omissions");
-    const accounted = [
-      ...material.sourceContext.windows,
-      ...material.sourceContext.omissions,
-    ].map(
+    if (!material) throw new Error("fixture did not exercise bounded omissions");
+    const accounted = [...material.sourceContext.windows, ...material.sourceContext.omissions].map(
       (entry) => `${entry.path}:${entry.hunkStartLine}-${entry.hunkEndLine}`,
     );
 
@@ -771,9 +723,7 @@ describe("Loop Kernel v2 semantic certification and delivery", () => {
     }
     for (const window of material.sourceContext.windows) {
       expect(window.excerpt).not.toContain("omitted by semantic-review budget");
-      expect(
-        window.excerpt.split("\n").every((line) => /^\d+: /.test(line)),
-      ).toBeTrue();
+      expect(window.excerpt.split("\n").every((line) => /^\d+: /.test(line))).toBeTrue();
     }
   });
 });

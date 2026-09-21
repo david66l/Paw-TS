@@ -1,8 +1,4 @@
-import {
-  type JsonValue,
-  hashCanonicalJsonV1,
-  hashTextV1,
-} from "./canonical.js";
+import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryStateValidatedObservationV1 } from "./state-binding-certificate-v1.js";
 import type {
   MemoryResolvedStateFrameV2,
@@ -63,9 +59,7 @@ export interface MemoryStateMechanicalBindingSummaryV1 {
   readonly profileCount: number;
   readonly mechanicallyCompleteCount: number;
   readonly mechanicallyIncompleteCount: number;
-  readonly proofFailureCounts: Readonly<
-    Record<MemoryStateMechanicalProofNameV1, number>
-  >;
+  readonly proofFailureCounts: Readonly<Record<MemoryStateMechanicalProofNameV1, number>>;
   readonly summaryRevision: string;
 }
 
@@ -80,10 +74,7 @@ export function compileMemoryStateMechanicalBindingProfilesV1(input: {
   readonly frame: MemoryResolvedStateFrameV2;
 }): readonly MemoryStateMechanicalBindingProfileV1[] {
   const slotById = uniqueMap(input.slots, (slot) => slot.slotId);
-  const itemByRef = uniqueMap(
-    input.sourceLock.items,
-    (item) => item.evidenceRef,
-  );
+  const itemByRef = uniqueMap(input.sourceLock.items, (item) => item.evidenceRef);
   const scopeBySlot = uniqueMap(input.slotScopes, (scope) => scope.slotId);
   const frameBySlot = uniqueMap(input.frame.slots, (slot) => slot.slotId);
   const candidateCounts = new Map<string, number>();
@@ -109,19 +100,13 @@ export function compileMemoryStateMechanicalBindingProfilesV1(input: {
       const proofs = Object.freeze({
         sourceLockExact:
           observation.sourceLockDigest === input.sourceLock.sourceLockDigest &&
-          certificate.evidenceBinding.sourceLockDigest ===
-            input.sourceLock.sourceLockDigest &&
+          certificate.evidenceBinding.sourceLockDigest === input.sourceLock.sourceLockDigest &&
           input.frame.sourceLockDigest === input.sourceLock.sourceLockDigest,
-        supportingScopeExact: scope.evidenceRefs.includes(
-          observation.evidenceRef,
-        ),
-        slotRevisionExact:
-          certificate.slotBinding.slotRevision === slot.slotRevision,
-        originRevisionExact:
-          certificate.slotBinding.originRevision === slot.originRevision,
+        supportingScopeExact: scope.evidenceRefs.includes(observation.evidenceRef),
+        slotRevisionExact: certificate.slotBinding.slotRevision === slot.slotRevision,
+        originRevisionExact: certificate.slotBinding.originRevision === slot.originRevision,
         temporalBindingRevisionExact:
-          certificate.slotBinding.temporalBindingRevision ===
-          slot.temporalBindingRevision,
+          certificate.slotBinding.temporalBindingRevision === slot.temporalBindingRevision,
         evidenceIdentityExact:
           observation.evidenceRef === item.evidenceRef &&
           observation.sourceId === item.sourceId &&
@@ -129,21 +114,14 @@ export function compileMemoryStateMechanicalBindingProfilesV1(input: {
           certificate.evidenceBinding.sourceId === item.sourceId,
         contentDigestExact:
           observation.contentDigest === hashTextV1(item.content) &&
-          certificate.evidenceBinding.contentDigest ===
-            hashTextV1(item.content),
+          certificate.evidenceBinding.contentDigest === hashTextV1(item.content),
         valueSpanExact:
-          exactSpanListsEqual(
-            observation.valueSpans,
-            certificate.claimBinding.value.exactSpans,
-          ) &&
-          observation.valueSpans.every((span) =>
-            exactSpanMatchesContent(span, item.content),
-          ),
+          exactSpanListsEqual(observation.valueSpans, certificate.claimBinding.value.exactSpans) &&
+          observation.valueSpans.every((span) => exactSpanMatchesContent(span, item.content)),
         valueOccurrenceUnique: occurrenceCounts.every((count) => count === 1),
         valueEventTimeDisjoint: observation.valueSpans.every((value) =>
           observation.eventTimeSpans.every(
-            (eventTime) =>
-              value.end <= eventTime.start || eventTime.end <= value.start,
+            (eventTime) => value.end <= eventTime.start || eventTime.end <= value.start,
           ),
         ),
         roleExact:
@@ -157,8 +135,7 @@ export function compileMemoryStateMechanicalBindingProfilesV1(input: {
           item.role === "user" ||
           (item.certificateRevision !== undefined &&
             observation.certificateRevision === item.certificateRevision &&
-            certificate.evidenceBinding.dialogueCertificateRevision ===
-              item.certificateRevision),
+            certificate.evidenceBinding.dialogueCertificateRevision === item.certificateRevision),
         cutoffExact: cutoffMatches(slot, item.observedAt, observation),
       });
       const valueLength = observation.valueSpans.reduce(
@@ -169,9 +146,7 @@ export function compileMemoryStateMechanicalBindingProfilesV1(input: {
         operation: slot.operation,
         temporalMode: slot.temporalMode,
         valueSpanCardinality:
-          observation.valueSpans.length === 1
-            ? ("single" as const)
-            : ("multi" as const),
+          observation.valueSpans.length === 1 ? ("single" as const) : ("multi" as const),
         valueLengthBucket:
           valueLength <= 32
             ? ("short" as const)
@@ -182,9 +157,7 @@ export function compileMemoryStateMechanicalBindingProfilesV1(input: {
           ? ("one" as const)
           : ("multiple" as const),
         slotCandidateCardinality:
-          (candidateCounts.get(slot.slotId) ?? 0) === 1
-            ? ("single" as const)
-            : ("multi" as const),
+          (candidateCounts.get(slot.slotId) ?? 0) === 1 ? ("single" as const) : ("multi" as const),
         evidenceClauseCountBucket:
           countClauses(certificate.claimBinding.supportSpan.text) === 1
             ? ("one" as const)
@@ -255,10 +228,7 @@ export function summarizeMemoryStateMechanicalBindingProfilesV1(
   });
 }
 
-function uniqueMap<T>(
-  items: readonly T[],
-  key: (item: T) => string,
-): Map<string, T> {
+function uniqueMap<T>(items: readonly T[], key: (item: T) => string): Map<string, T> {
   const result = new Map<string, T>();
   for (const item of items) {
     const value = key(item);
@@ -286,10 +256,7 @@ function exactSpanListsEqual(
   );
 }
 
-function exactSpanMatchesContent(
-  span: MemoryStateExactSpanV2,
-  content: string,
-): boolean {
+function exactSpanMatchesContent(span: MemoryStateExactSpanV2, content: string): boolean {
   const text = content.slice(span.start, span.end);
   return span.text === text && span.textDigest === hashTextV1(text);
 }
@@ -336,9 +303,7 @@ function cutoffMatches(
     return observation.eventTimeCutoffStatus === undefined;
   }
   const expected =
-    observation.eventTimeInterval.upper > slot.evidenceTimeUpperBound
-      ? "straddles"
-      : "within";
+    observation.eventTimeInterval.upper > slot.evidenceTimeUpperBound ? "straddles" : "within";
   return observation.eventTimeCutoffStatus === expected;
 }
 

@@ -17,8 +17,7 @@ test("selected GLM Flash serves desktop workers and orchestrated roots", () => {
       expect(result.model).toBe(main);
       expect(Object.values(result.preferences)).toContain("flash");
       expect(Object.values(result.models).length).toBeGreaterThan(0);
-      for (const model of Object.values(result.models))
-        expect(model).toBe(main);
+      for (const model of Object.values(result.models)) expect(model).toBe(main);
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });

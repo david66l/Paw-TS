@@ -254,11 +254,9 @@ describe("runShellInWorkspaceStreaming", () => {
       "@echo off\r\necho quoted-stream-ok:%~1\r\n",
       "utf8",
     );
-    const r = await runShellInWorkspaceStreaming(
-      root,
-      '"probe runner.cmd" "hello world"',
-      { skipApprovalGate: true },
-    );
+    const r = await runShellInWorkspaceStreaming(root, '"probe runner.cmd" "hello world"', {
+      skipApprovalGate: true,
+    });
     expect(r.exit_code).toBe(0);
     expect(r.stdout).toContain("quoted-stream-ok:hello world");
   });
@@ -266,45 +264,29 @@ describe("runShellInWorkspaceStreaming", () => {
   test("stdout chunks are delivered", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-stream-"));
     const chunks: { text: string; isStderr: boolean }[] = [];
-    const r = await runShellInWorkspaceStreaming(
-      root,
-      "echo streaming-stdout",
-      {
-        onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
-      },
-    );
+    const r = await runShellInWorkspaceStreaming(root, "echo streaming-stdout", {
+      onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+    });
     expect(r.exit_code).toBe(0);
-    expect(
-      chunks.some((c) => !c.isStderr && c.text.includes("streaming-stdout")),
-    ).toBe(true);
+    expect(chunks.some((c) => !c.isStderr && c.text.includes("streaming-stdout"))).toBe(true);
   });
 
   test("stderr chunks are delivered", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-stream-err-"));
     const chunks: { text: string; isStderr: boolean }[] = [];
-    const r = await runShellInWorkspaceStreaming(
-      root,
-      "echo streaming-stderr >&2",
-      {
-        onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
-      },
-    );
+    const r = await runShellInWorkspaceStreaming(root, "echo streaming-stderr >&2", {
+      onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+    });
     expect(r.exit_code).toBe(0);
-    expect(
-      chunks.some((c) => c.isStderr && c.text.includes("streaming-stderr")),
-    ).toBe(true);
+    expect(chunks.some((c) => c.isStderr && c.text.includes("streaming-stderr"))).toBe(true);
   });
 
   test("mixed stdout and stderr are both delivered", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-stream-mix-"));
     const chunks: { text: string; isStderr: boolean }[] = [];
-    const r = await runShellInWorkspaceStreaming(
-      root,
-      "echo out-mixed && echo err-mixed >&2",
-      {
-        onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
-      },
-    );
+    const r = await runShellInWorkspaceStreaming(root, "echo out-mixed && echo err-mixed >&2", {
+      onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+    });
     expect(r.exit_code).toBe(0);
     const stdoutCombined = chunks
       .filter((c) => !c.isStderr)
@@ -321,13 +303,9 @@ describe("runShellInWorkspaceStreaming", () => {
   test("final result includes all stdout and stderr", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-stream-final-"));
     const chunks: { text: string; isStderr: boolean }[] = [];
-    const r = await runShellInWorkspaceStreaming(
-      root,
-      "echo final-out && echo final-err >&2",
-      {
-        onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
-      },
-    );
+    const r = await runShellInWorkspaceStreaming(root, "echo final-out && echo final-err >&2", {
+      onChunk: (text, isStderr) => chunks.push({ text, isStderr }),
+    });
     expect(r.exit_code).toBe(0);
     const stdoutChunks = chunks
       .filter((c) => !c.isStderr)

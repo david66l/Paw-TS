@@ -1,7 +1,6 @@
 import { CAPABILITY_EXPOSURE_SCHEMA_V1 } from "./capability-exposure.js";
 
-export const CAPABILITY_EXPOSURE_SUMMARY_SCHEMA_V1 =
-  "paw.capability-exposure-summary.v1" as const;
+export const CAPABILITY_EXPOSURE_SUMMARY_SCHEMA_V1 = "paw.capability-exposure-summary.v1" as const;
 
 export interface CapabilityExposureRunObservationV1 {
   readonly runId: string;
@@ -79,25 +78,18 @@ function isRecord(value: unknown): value is JsonRecord {
 }
 
 function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function stringArray(value: unknown): readonly string[] | undefined {
-  if (
-    !Array.isArray(value) ||
-    value.some((entry) => typeof entry !== "string")
-  ) {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
     return undefined;
   }
   return value;
 }
 
 function mean(values: readonly number[]): number | null {
-  return values.length > 0
-    ? values.reduce((sum, value) => sum + value, 0) / values.length
-    : null;
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
 export function parseCapabilityExposureTraceV1(input: {
@@ -147,27 +139,16 @@ export function parseCapabilityExposureTraceV1(input: {
   }
 
   const inventory = inventories[0];
-  const fullToolCount = inventory
-    ? finiteNumber(inventory.fullToolCount)
-    : undefined;
-  const suggestedToolCount = inventory
-    ? finiteNumber(inventory.suggestedToolCount)
-    : undefined;
-  const fullToolTokens = inventory
-    ? finiteNumber(inventory.fullToolTokens)
-    : undefined;
-  const suggestedToolTokens = inventory
-    ? finiteNumber(inventory.suggestedToolTokens)
-    : undefined;
+  const fullToolCount = inventory ? finiteNumber(inventory.fullToolCount) : undefined;
+  const suggestedToolCount = inventory ? finiteNumber(inventory.suggestedToolCount) : undefined;
+  const fullToolTokens = inventory ? finiteNumber(inventory.fullToolTokens) : undefined;
+  const suggestedToolTokens = inventory ? finiteNumber(inventory.suggestedToolTokens) : undefined;
   const estimatedSavingsTokens = inventory
     ? finiteNumber(inventory.estimatedSavingsTokens)
     : undefined;
 
   if (inventory) {
-    if (
-      inventory.schemaVersion !== CAPABILITY_EXPOSURE_SCHEMA_V1 ||
-      inventory.mode !== "shadow"
-    ) {
+    if (inventory.schemaVersion !== CAPABILITY_EXPOSURE_SCHEMA_V1 || inventory.mode !== "shadow") {
       issues.push("inventory schema or mode is incompatible");
     }
     if (
@@ -192,10 +173,7 @@ export function parseCapabilityExposureTraceV1(input: {
   let noToolSelections = 0;
   const outsideSuggestion = new Set<string>();
   for (const [index, selection] of selections.entries()) {
-    if (
-      selection.schemaVersion !== CAPABILITY_EXPOSURE_SCHEMA_V1 ||
-      selection.mode !== "shadow"
-    ) {
+    if (selection.schemaVersion !== CAPABILITY_EXPOSURE_SCHEMA_V1 || selection.mode !== "shadow") {
       issues.push(`selection[${index}] schema or mode is incompatible`);
     }
     const actual = stringArray(selection.actualTools);
@@ -204,10 +182,7 @@ export function parseCapabilityExposureTraceV1(input: {
       issues.push(`selection[${index}] tool lists are invalid`);
       continue;
     }
-    if (
-      fullToolCount !== undefined &&
-      selection.exposedToolCount !== fullToolCount
-    ) {
+    if (fullToolCount !== undefined && selection.exposedToolCount !== fullToolCount) {
       issues.push(`selection[${index}] exposedToolCount changed`);
     }
     for (const tool of outside) outsideSuggestion.add(tool);
@@ -249,10 +224,7 @@ export function parseCapabilityExposureTraceV1(input: {
     if (typeof result.instanceId === "string" && result.instanceId.length > 0) {
       instanceId = result.instanceId;
     }
-    if (
-      typeof result.sourceCommit === "string" &&
-      /^[0-9a-f]{40}$/i.test(result.sourceCommit)
-    ) {
+    if (typeof result.sourceCommit === "string" && /^[0-9a-f]{40}$/i.test(result.sourceCommit)) {
       sourceCommit = result.sourceCommit;
     }
     const integrity = isRecord(result.integrity) ? result.integrity : undefined;
@@ -304,21 +276,13 @@ export function summarizeCapabilityExposureV1(
 ): CapabilityExposureSummaryV1 {
   const minimum = Math.max(1, Math.floor(minimumQualifyingRuns));
   const structurallyValid = runs.filter((run) => run.valid);
-  const qualifying = structurallyValid.filter(
-    (run) => run.evidenceClass === "public_benchmark",
-  );
-  const hitSelections = structurallyValid.reduce(
-    (sum, run) => sum + run.hitSelections,
-    0,
-  );
+  const qualifying = structurallyValid.filter((run) => run.evidenceClass === "public_benchmark");
+  const hitSelections = structurallyValid.reduce((sum, run) => sum + run.hitSelections, 0);
   const fallbackSelections = structurallyValid.reduce(
     (sum, run) => sum + run.fallbackSelections,
     0,
   );
-  const noToolSelections = structurallyValid.reduce(
-    (sum, run) => sum + run.noToolSelections,
-    0,
-  );
+  const noToolSelections = structurallyValid.reduce((sum, run) => sum + run.noToolSelections, 0);
   const toolSelections = hitSelections + fallbackSelections;
   const qualifyingToolSelections = qualifying.reduce(
     (sum, run) => sum + run.hitSelections + run.fallbackSelections,
@@ -334,10 +298,7 @@ export function summarizeCapabilityExposureV1(
     for (const tool of run.outsideSuggestion) {
       outsideCounts.set(tool, (outsideCounts.get(tool) ?? 0) + 1);
       if (run.evidenceClass === "public_benchmark") {
-        qualifyingOutsideCounts.set(
-          tool,
-          (qualifyingOutsideCounts.get(tool) ?? 0) + 1,
-        );
+        qualifyingOutsideCounts.set(tool, (qualifyingOutsideCounts.get(tool) ?? 0) + 1);
       }
     }
   }
@@ -348,17 +309,12 @@ export function summarizeCapabilityExposureV1(
   const shadowCoverageReady = enoughRuns && cleanScan && noFallbacks;
   const blockers: string[] = [];
   if (!enoughRuns) {
-    blockers.push(
-      `need ${minimum - qualifying.length} more qualifying shadow run(s)`,
-    );
+    blockers.push(`need ${minimum - qualifying.length} more qualifying shadow run(s)`);
   }
   if (!cleanScan) blockers.push("trace scan contains corrupt or invalid runs");
-  if (!noFallbacks)
-    blockers.push("shadow selector omitted tools used by the model");
+  if (!noFallbacks) blockers.push("shadow selector omitted tools used by the model");
   if (shadowCoverageReady) {
-    blockers.push(
-      "controlled memory-off full-vs-deferred resolved comparison missing",
-    );
+    blockers.push("controlled memory-off full-vs-deferred resolved comparison missing");
   } else {
     blockers.push("shadow coverage gate not ready for a controlled trial");
   }
@@ -372,26 +328,17 @@ export function summarizeCapabilityExposureV1(
     qualifyingRuns: qualifying.length,
     invalidRuns: runs.length - structurallyValid.length,
     scanFailures: Object.freeze([...scanFailures]),
-    inventoryEvents: structurallyValid.reduce(
-      (sum, run) => sum + run.inventoryEvents,
-      0,
-    ),
-    selectionEvents: structurallyValid.reduce(
-      (sum, run) => sum + run.selectionEvents,
-      0,
-    ),
+    inventoryEvents: structurallyValid.reduce((sum, run) => sum + run.inventoryEvents, 0),
+    selectionEvents: structurallyValid.reduce((sum, run) => sum + run.selectionEvents, 0),
     toolSelections,
     hitSelections,
     fallbackSelections,
     noToolSelections,
-    fallbackRate:
-      toolSelections > 0 ? fallbackSelections / toolSelections : null,
+    fallbackRate: toolSelections > 0 ? fallbackSelections / toolSelections : null,
     qualifyingToolSelections,
     qualifyingFallbackSelections,
     qualifyingFallbackRate:
-      qualifyingToolSelections > 0
-        ? qualifyingFallbackSelections / qualifyingToolSelections
-        : null,
+      qualifyingToolSelections > 0 ? qualifyingFallbackSelections / qualifyingToolSelections : null,
     meanFullToolCount: mean(
       structurallyValid.flatMap((run) =>
         run.fullToolCount === undefined ? [] : [run.fullToolCount],
@@ -404,26 +351,18 @@ export function summarizeCapabilityExposureV1(
     ),
     meanEstimatedSavingsTokens: mean(
       structurallyValid.flatMap((run) =>
-        run.estimatedSavingsTokens === undefined
-          ? []
-          : [run.estimatedSavingsTokens],
+        run.estimatedSavingsTokens === undefined ? [] : [run.estimatedSavingsTokens],
       ),
     ),
     outsideSuggestion: Object.freeze(
       [...outsideCounts]
         .map(([tool, count]) => Object.freeze({ tool, count }))
-        .sort(
-          (left, right) =>
-            right.count - left.count || left.tool.localeCompare(right.tool),
-        ),
+        .sort((left, right) => right.count - left.count || left.tool.localeCompare(right.tool)),
     ),
     qualifyingOutsideSuggestion: Object.freeze(
       [...qualifyingOutsideCounts]
         .map(([tool, count]) => Object.freeze({ tool, count }))
-        .sort(
-          (left, right) =>
-            right.count - left.count || left.tool.localeCompare(right.tool),
-        ),
+        .sort((left, right) => right.count - left.count || left.tool.localeCompare(right.tool)),
     ),
     linkedResultRuns: qualifying.filter((run) => run.linkedResult).length,
     resolvedRuns: qualifying.filter((run) => run.resolved === true).length,

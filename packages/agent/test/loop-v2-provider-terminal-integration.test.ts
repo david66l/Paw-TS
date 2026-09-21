@@ -3,11 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import {
-  FileSystemAppStateStore,
-  FileSystemSessionStore,
-  type RunEventEnvelope,
-} from "@paw/core";
+import { FileSystemAppStateStore, FileSystemSessionStore, type RunEventEnvelope } from "@paw/core";
 import { FakeLanguageModel, type LanguageModel } from "@paw/models";
 
 import type { ToolEffectPolicy } from "../src/execution-policy.js";
@@ -115,8 +111,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       );
       const candidateIndex = events.findIndex(
         (event) =>
-          event.event.type === "agent.action" &&
-          event.event.action.type === "final_answer",
+          event.event.type === "agent.action" && event.event.action.type === "final_answer",
       );
       expect(boundaryIndex).toBeGreaterThanOrEqual(0);
       expect(candidateIndex).toBeGreaterThan(boundaryIndex);
@@ -131,14 +126,9 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           ?.some((event) => event.event.type === "provider.turn_stopped"),
       ).toBeTrue();
       const candidate = parseLoopV2LiveCandidateArtifactV1(
-        fs.readFileSync(
-          loopV2LiveArtifactPath(workspaceRoot, "v2-provider-natural"),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, "v2-provider-natural"), "utf8"),
       );
-      expect(candidate.report.state.currentCandidate?.source).toBe(
-        "legacy_final_answer",
-      );
+      expect(candidate.report.state.currentCandidate?.source).toBe("legacy_final_answer");
       expect(candidate.report.controlState).toMatchObject({
         status: "candidate",
         turn: 2,
@@ -173,9 +163,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         },
         comparison: "legacy_more_permissive",
       });
-      expect(
-        assessLoopV2AuthorityEligibilityV1(terminal, candidate),
-      ).toMatchObject({
+      expect(assessLoopV2AuthorityEligibilityV1(terminal, candidate)).toMatchObject({
         eligible: false,
         reasons: expect.arrayContaining([
           "product_mutation_not_required",
@@ -219,30 +207,22 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
 
       expect(result.status).toBe("incomplete");
-      expect(
-        events.filter((event) => event.event.type === "model.request"),
-      ).toHaveLength(3);
-      expect(
-        events.filter((event) => event.event.type === "provider.turn_stopped"),
-      ).toHaveLength(3);
+      expect(events.filter((event) => event.event.type === "model.request")).toHaveLength(3);
+      expect(events.filter((event) => event.event.type === "provider.turn_stopped")).toHaveLength(
+        3,
+      );
       expect(
         events.some(
           (event) =>
-            event.event.type === "agent.action" &&
-            event.event.action.type === "final_answer",
+            event.event.type === "agent.action" && event.event.action.type === "final_answer",
         ),
       ).toBeFalse();
       expect(
-        fs.existsSync(
-          loopV2LiveArtifactPath(workspaceRoot, "v2-provider-boundary-loop"),
-        ),
+        fs.existsSync(loopV2LiveArtifactPath(workspaceRoot, "v2-provider-boundary-loop")),
       ).toBeFalse();
       const checkpoint = parseLoopV2ProjectionCheckpointV1(
         fs.readFileSync(
-          loopV2ProjectionCheckpointPath(
-            workspaceRoot,
-            "v2-provider-boundary-loop",
-          ),
+          loopV2ProjectionCheckpointPath(workspaceRoot, "v2-provider-boundary-loop"),
           "utf8",
         ),
       );
@@ -340,10 +320,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         ],
       }),
       onEvent(envelope) {
-        if (
-          envelope.event.type === "provider.turn_stopped" &&
-          envelope.event.empty
-        ) {
+        if (envelope.event.type === "provider.turn_stopped" && envelope.event.empty) {
           abort.abort();
         }
       },
@@ -417,9 +394,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       workspaceRoot,
       turn: 1,
       maxSteps: 3,
-      messages: [
-        { role: "user", content: "Recover the pending provider turn." },
-      ],
+      messages: [{ role: "user", content: "Recover the pending provider turn." }],
       loopControl: {
         schemaVersion: "paw.loop-control.v1",
         providerTerminal: {
@@ -498,11 +473,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("terminal dual-calculation covers max-step exhaustion and runtime failure", async () => {
     const exhaustedWorkspace = tempWorkspace("paw-v2-terminal-exhausted-");
     const failedWorkspace = tempWorkspace("paw-v2-terminal-failed-");
-    fs.writeFileSync(
-      path.join(exhaustedWorkspace, "note.txt"),
-      "hello\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(exhaustedWorkspace, "note.txt"), "hello\n", "utf8");
 
     try {
       const exhausted = await new AgentOrchestrator({
@@ -527,10 +498,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(
         parseLoopV2LiveTerminalArtifactV1(
           fs.readFileSync(
-            loopV2LiveTerminalArtifactPath(
-              exhaustedWorkspace,
-              "v2-terminal-exhausted",
-            ),
+            loopV2LiveTerminalArtifactPath(exhaustedWorkspace, "v2-terminal-exhausted"),
             "utf8",
           ),
         ),
@@ -564,10 +532,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(
         parseLoopV2LiveTerminalArtifactV1(
           fs.readFileSync(
-            loopV2LiveTerminalArtifactPath(
-              failedWorkspace,
-              "v2-terminal-failed",
-            ),
+            loopV2LiveTerminalArtifactPath(failedWorkspace, "v2-terminal-failed"),
             "utf8",
           ),
         ),
@@ -588,16 +553,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("resume rebuilds pre-candidate rich commits from the durable journal without a checkpoint", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-projection-resume-");
     const runId = "v2-projection-resume";
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     const appStateStore = new FileSystemAppStateStore({
       statesDir: path.join(workspaceRoot, ".paw", "states"),
     });
@@ -634,10 +591,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(interrupted.status).toBe("aborted");
       expect(
         parseLoopV2LiveTerminalArtifactV1(
-          fs.readFileSync(
-            loopV2LiveTerminalArtifactPath(workspaceRoot, runId),
-            "utf8",
-          ),
+          fs.readFileSync(loopV2LiveTerminalArtifactPath(workspaceRoot, runId), "utf8"),
         ),
       ).toMatchObject({
         legacyTerminal: { status: "aborted" },
@@ -649,10 +603,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
 
       const checkpoint = parseLoopV2ProjectionCheckpointV1(
-        fs.readFileSync(
-          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId), "utf8"),
       );
       expect(checkpoint.report.state.currentMutationRevision).toBe(1);
       expect(checkpoint.report.state.currentCandidate).toBeUndefined();
@@ -660,34 +611,20 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         (event) => event.seq <= checkpoint.report.sourceThroughSeq,
       );
       const replayed = replayLegacyTraceToLoopV2ShadowV1(runId, durablePrefix);
-      expect(replayed.projectedEvents).toEqual(
-        checkpoint.report.projectedEvents,
-      );
+      expect(replayed.projectedEvents).toEqual(checkpoint.report.projectedEvents);
       expect(replayed.stateHash).toBe(checkpoint.report.stateHash);
-      expect(replayed.controlStateHash).toBe(
-        checkpoint.report.controlStateHash,
-      );
+      expect(replayed.controlStateHash).toBe(checkpoint.report.controlStateHash);
       expect(replayed.artifactBlobs).toEqual(checkpoint.report.artifactBlobs);
-      expect(replayed.sourceThroughSeq).toBe(
-        checkpoint.report.sourceThroughSeq,
-      );
+      expect(replayed.sourceThroughSeq).toBe(checkpoint.report.sourceThroughSeq);
       const tampered = JSON.parse(
-        fs.readFileSync(
-          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId), "utf8"),
       ) as { report: { state: { currentMutationRevision: number } } };
       tampered.report.state.currentMutationRevision = 2;
-      expect(() =>
-        parseLoopV2ProjectionCheckpointV1(JSON.stringify(tampered)),
-      ).toThrow("projected state mismatch");
-      fs.unlinkSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId));
-      const journalPath = path.join(
-        workspaceRoot,
-        ".paw",
-        "sessions",
-        `${runId}.jsonl`,
+      expect(() => parseLoopV2ProjectionCheckpointV1(JSON.stringify(tampered))).toThrow(
+        "projected state mismatch",
       );
+      fs.unlinkSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId));
+      const journalPath = path.join(workspaceRoot, ".paw", "sessions", `${runId}.jsonl`);
       const validJournal = fs.readFileSync(journalPath, "utf8");
       const legacyJournal = validJournal
         .split("\n")
@@ -713,9 +650,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         message: expect.stringContaining("lacks a decision commit"),
       });
       fs.writeFileSync(journalPath, validJournal, "utf8");
-      expect(
-        fs.existsSync(loopV2LiveArtifactPath(workspaceRoot, runId)),
-      ).toBeFalse();
+      expect(fs.existsSync(loopV2LiveArtifactPath(workspaceRoot, runId))).toBeFalse();
 
       const resumed = new AgentOrchestrator({
         loopKernelVersion: "v2",
@@ -812,10 +747,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           status: "not_executed",
         },
       });
-      const projectionPath = loopV2ProjectionCheckpointPath(
-        workspaceRoot,
-        runId,
-      );
+      const projectionPath = loopV2ProjectionCheckpointPath(workspaceRoot, runId);
       if (fs.existsSync(projectionPath)) fs.unlinkSync(projectionPath);
 
       let resumeCalls = 0;
@@ -844,16 +776,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
 
   test("v2 readiness feeds back one missing-verification gap then accepts a changed candidate", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-readiness-repair-");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     const model = new FakeLanguageModel({
       responses: [
         {
@@ -906,21 +830,9 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
 
   test("novel investigation evidence reopens readiness repair without allowing prose-only loops", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-readiness-investigate-");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "notes.txt"),
-      "implementation clue\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "notes.txt"), "implementation clue\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     const model = new FakeLanguageModel({
       responses: [
         {
@@ -983,16 +895,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("explicit v2 persists and accounts one semantic review before completion", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-semantic-pass-");
     const runId = "v2-semantic-pass";
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     const model = new FakeLanguageModel({
       responses: [
         {
@@ -1016,16 +920,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       async complete(messages) {
         reviewCalls += 1;
         const material = messages.at(-1)?.content ?? "";
-        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
-          material,
-        )?.[1];
-        const mutationRevision = Number(
-          /"mutationRevision":(\d+)/.exec(material)?.[1],
-        );
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(material)?.[1];
+        const mutationRevision = Number(/"mutationRevision":(\d+)/.exec(material)?.[1]);
         if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
-          throw new Error(
-            "Reviewer fixture did not receive candidate identity",
-          );
+          throw new Error("Reviewer fixture did not receive candidate identity");
         }
         return {
           text: JSON.stringify({
@@ -1078,21 +976,13 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
       );
       const persistedReview = parseLoopV2LiveReviewArtifactV1(
-        fs.readFileSync(
-          loopV2LiveReviewArtifactPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2LiveReviewArtifactPath(workspaceRoot, runId), "utf8"),
         candidate,
       );
-      expect(
-        fs.existsSync(loopV2LiveReviewClaimPath(workspaceRoot, runId)),
-      ).toBeTrue();
+      expect(fs.existsSync(loopV2LiveReviewClaimPath(workspaceRoot, runId))).toBeTrue();
       expect(persistedReview.record.review.verdict).toBe("pass");
       const terminal = parseLoopV2LiveTerminalArtifactV1(
-        fs.readFileSync(
-          loopV2LiveTerminalArtifactPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2LiveTerminalArtifactPath(workspaceRoot, runId), "utf8"),
         candidate,
         persistedReview,
       );
@@ -1112,18 +1002,12 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         },
         comparison: "equal",
       });
-      expect(
-        assessLoopV2AuthorityEligibilityV1(
-          terminal,
-          candidate,
-          persistedReview,
-        ),
-      ).toEqual({ eligible: true, reasons: [] });
+      expect(assessLoopV2AuthorityEligibilityV1(terminal, candidate, persistedReview)).toEqual({
+        eligible: true,
+        reasons: [],
+      });
       const resultShadow = parseLoopV2RunResultShadowArtifactV1(
-        fs.readFileSync(
-          loopV2RunResultShadowArtifactPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2RunResultShadowArtifactPath(workspaceRoot, runId), "utf8"),
         terminal,
         candidate,
         persistedReview,
@@ -1144,9 +1028,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         },
       });
       expect(resultShadow.mappedResult?.message).toContain("# Paw Run Report");
-      expect(
-        events.find((event) => event.event.type === "candidate.review")?.event,
-      ).toMatchObject({
+      expect(events.find((event) => event.event.type === "candidate.review")?.event).toMatchObject({
         type: "candidate.review",
         candidateId: candidate.assessment.candidateId,
         reviewKey: persistedReview.reviewKey,
@@ -1156,10 +1038,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         usage: { promptTokens: 11, completionTokens: 3, totalTokens: 14 },
       });
       const controlCheckpoint = parseLoopV2ProjectionCheckpointV1(
-        fs.readFileSync(
-          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId), "utf8"),
       );
       expect(controlCheckpoint.report.controlState).toMatchObject({
         status: "completed",
@@ -1177,16 +1056,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("explicit v2 reviews and probes a verified inspected revision before final_answer", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-stable-checkpoint-");
     const runId = "v2-stable-checkpoint";
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     for (const args of [
       ["init"],
       ["config", "user.email", "paw@example.test"],
@@ -1230,12 +1101,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         reviewCalls += 1;
         expect(model.callCount).toBe(3);
         const material = messages.at(-1)?.content ?? "";
-        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
-          material,
-        )?.[1];
-        const mutationRevision = Number(
-          /"mutationRevision":(\d+)/.exec(material)?.[1],
-        );
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(material)?.[1];
+        const mutationRevision = Number(/"mutationRevision":(\d+)/.exec(material)?.[1]);
         if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
           throw new Error("stable reviewer did not receive candidate identity");
         }
@@ -1299,10 +1166,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       onLoopV2CandidateAssessment() {
         candidateArtifacts.push(
           parseLoopV2LiveCandidateArtifactV1(
-            fs.readFileSync(
-              loopV2LiveArtifactPath(workspaceRoot, runId),
-              "utf8",
-            ),
+            fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
           ),
         );
       },
@@ -1322,9 +1186,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       // adjudicator rather than executing model-generated code on the host.
       expect(probeCalls).toBe(1);
       expect(model.callCount).toBe(5);
-      expect(
-        events.filter((event) => event.event.type === "candidate.checkpoint"),
-      ).toHaveLength(1);
+      expect(events.filter((event) => event.event.type === "candidate.checkpoint")).toHaveLength(1);
       const reviews = events
         .filter((event) => event.event.type === "candidate.review")
         .map((event) => event.event);
@@ -1371,25 +1233,19 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       expect(
         events.findIndex(
-          (event) =>
-            event.event.type === "candidate.review" &&
-            event.event.stage === "checkpoint",
+          (event) => event.event.type === "candidate.review" && event.event.stage === "checkpoint",
         ),
       ).toBeLessThan(
         events.findIndex(
           (event) =>
-            event.event.type === "agent.action" &&
-            event.event.action.type === "final_answer",
+            event.event.type === "agent.action" && event.event.action.type === "final_answer",
         ),
       );
       const candidate = parseLoopV2LiveCandidateArtifactV1(
         fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
       );
       const review = parseLoopV2LiveReviewArtifactV1(
-        fs.readFileSync(
-          loopV2LiveReviewArtifactPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2LiveReviewArtifactPath(workspaceRoot, runId), "utf8"),
         candidate,
       );
       expect(review.reuse).toEqual({
@@ -1397,10 +1253,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         semanticSubjectHash: expect.any(String),
       });
       const terminal = parseLoopV2LiveTerminalArtifactV1(
-        fs.readFileSync(
-          loopV2LiveTerminalArtifactPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2LiveTerminalArtifactPath(workspaceRoot, runId), "utf8"),
         candidate,
         review,
       );
@@ -1409,14 +1262,12 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         localVerification: "passed",
         reasonCode: "candidate_certified",
       });
-      expect(
-        assessLoopV2AuthorityEligibilityV1(terminal, candidate, review),
-      ).toEqual({ eligible: true, reasons: [] });
+      expect(assessLoopV2AuthorityEligibilityV1(terminal, candidate, review)).toEqual({
+        eligible: true,
+        reasons: [],
+      });
       const reducerCheckpoint = parseLoopV2ProjectionCheckpointV1(
-        fs.readFileSync(
-          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId), "utf8"),
       );
       expect(reducerCheckpoint.report.controlState).toMatchObject({
         status: "completed",
@@ -1426,16 +1277,12 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           outcome: "inconclusive",
         },
       });
-      expect(
-        reducerCheckpoint.report.controlState?.candidateRequirements,
-      ).toEqual({
+      expect(reducerCheckpoint.report.controlState?.candidateRequirements).toEqual({
         semanticReview: "required",
         verificationProbe: "required",
         externalVerification: "not_configured",
       });
-      expect(
-        reducerCheckpoint.report.projectedEvents.at(-1)?.event,
-      ).toMatchObject({
+      expect(reducerCheckpoint.report.projectedEvents.at(-1)?.event).toMatchObject({
         type: "verification_probe.recorded",
         candidateId: candidate.assessment.candidateId,
         outcome: "inconclusive",
@@ -1446,10 +1293,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       // candidate container hash while the semantic review key stays exact.
       // Rebind the settled record without inventing a same-key reuse edge or
       // invoking the reviewer again.
-      const controlOnlyObserver = createLoopV2ShadowObserver(
-        runId,
-        candidate.report,
-      );
+      const controlOnlyObserver = createLoopV2ShadowObserver(runId, candidate.report);
       controlOnlyObserver.observe({
         runId,
         seq: candidate.report.sourceThroughSeq + 1,
@@ -1460,9 +1304,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         controlOnlyObserver.snapshot(),
         candidate.policy,
       );
-      expect(controlOnlyCandidate.artifactHash).not.toBe(
-        candidate.artifactHash,
-      );
+      expect(controlOnlyCandidate.artifactHash).not.toBe(candidate.artifactHash);
       expect(controlOnlyCandidate.assessment.candidateInputHash).toBe(
         candidate.assessment.candidateInputHash,
       );
@@ -1486,10 +1328,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       expect(controlOnlyReviewCalls).toBe(0);
       const controlOnlyReview = parseLoopV2LiveReviewArtifactV1(
-        fs.readFileSync(
-          loopV2LiveReviewArtifactPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2LiveReviewArtifactPath(workspaceRoot, runId), "utf8"),
         controlOnlyCandidate,
       );
       expect(controlOnlyReview.reviewKey).toBe(review.reviewKey);
@@ -1582,10 +1421,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     const workspaceRoot = tempWorkspace("paw-v2-stable-commit-crash-");
     const runId = "v2-stable-commit-crash";
     fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n");
     for (const args of [
       ["init"],
       ["config", "user.email", "paw@example.test"],
@@ -1617,12 +1453,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       async complete(messages) {
         reviewCalls += 1;
         const material = messages.at(-1)?.content ?? "";
-        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
-          material,
-        )?.[1];
-        const mutationRevision = Number(
-          /"mutationRevision":(\d+)/.exec(material)?.[1],
-        );
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(material)?.[1];
+        const mutationRevision = Number(/"mutationRevision":(\d+)/.exec(material)?.[1]);
         return {
           text: JSON.stringify({
             candidateInputHash,
@@ -1633,19 +1465,13 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         };
       },
     };
-    type CandidateCommit = (
-      artifactPath: string,
-      artifact: LoopV2LiveCandidateArtifactV1,
-    ) => void;
+    type CandidateCommit = (artifactPath: string, artifact: LoopV2LiveCandidateArtifactV1) => void;
     const prototype = LoopV2LiveReviewRuntimeV1.prototype as unknown as {
       commitCandidateArtifact: CandidateCommit;
     };
     const originalCommit = prototype.commitCandidateArtifact;
     let commits = 0;
-    prototype.commitCandidateArtifact = function crashSecondCommit(
-      artifactPath,
-      artifact,
-    ) {
+    prototype.commitCandidateArtifact = function crashSecondCommit(artifactPath, artifact) {
       commits += 1;
       if (commits === 2) throw new Error("injected candidate commit crash");
       return originalCommit.call(this, artifactPath, artifact);
@@ -1701,16 +1527,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("a blocking stable semantic review feeds back without running the probe or terminal reducer", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-stable-block-");
     const runId = "v2-stable-block";
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     for (const args of [
       ["init"],
       ["config", "user.email", "paw@example.test"],
@@ -1757,9 +1575,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       label: "stable-block-review",
       async complete(messages) {
         reviewCalls += 1;
-        const material = JSON.parse(
-          messages.at(-1)?.content.split("\n\n").at(-1) ?? "{}",
-        ) as { candidateInputHash: string; mutationRevision: number };
+        const material = JSON.parse(messages.at(-1)?.content.split("\n\n").at(-1) ?? "{}") as {
+          candidateInputHash: string;
+          mutationRevision: number;
+        };
         return {
           text: JSON.stringify({
             candidateInputHash: material.candidateInputHash,
@@ -1770,8 +1589,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
                 severity: "blocking",
                 criterionId: HOST_TASK_GOAL_REVIEW_CRITERION_ID,
                 file: "source.txt",
-                observedChange:
-                  "The terminal value does not satisfy the complete task goal.",
+                observedChange: "The terminal value does not satisfy the complete task goal.",
                 risk: "The requested observable behavior remains incomplete.",
                 evidenceRefs: ["snapshot:source.txt"],
               },
@@ -1813,12 +1631,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(probeCalls).toBe(0);
       expect(sawInspectedPatch).toBe(true);
       expect(sawCheckpointFeedback).toBe(true);
-      expect(
-        events.filter((event) => event.event.type === "candidate.checkpoint"),
-      ).toHaveLength(1);
-      expect(
-        events.filter((event) => event.event.type === "candidate.review"),
-      ).toEqual([
+      expect(events.filter((event) => event.event.type === "candidate.checkpoint")).toHaveLength(1);
+      expect(events.filter((event) => event.event.type === "candidate.review")).toEqual([
         expect.objectContaining({
           event: expect.objectContaining({
             stage: "checkpoint",
@@ -1827,9 +1641,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           }),
         }),
       ]);
-      expect(
-        events.some((event) => event.event.type === "candidate.readiness"),
-      ).toBe(false);
+      expect(events.some((event) => event.event.type === "candidate.readiness")).toBe(false);
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -1838,21 +1650,9 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("a later failing verification replaces checkpoint readiness without repeating review", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-stable-late-failure-");
     const runId = "v2-stable-late-failure";
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "pass-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "fail-test.js"),
-      "process.exit(1);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "pass-test.js"), "process.exit(0);\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "fail-test.js"), "process.exit(1);\n", "utf8");
     for (const args of [
       ["init"],
       ["config", "user.email", "paw@example.test"],
@@ -1885,12 +1685,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       async complete(messages) {
         reviewCalls += 1;
         const material = messages.at(-1)?.content ?? "";
-        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
-          material,
-        )?.[1];
-        const mutationRevision = Number(
-          /"mutationRevision":(\d+)/.exec(material)?.[1],
-        );
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(material)?.[1];
+        const mutationRevision = Number(/"mutationRevision":(\d+)/.exec(material)?.[1]);
         if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
           throw new Error("review identity missing");
         }
@@ -1935,12 +1731,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.completionReason).toBe("model_abort");
       expect(reviewCalls).toBe(1);
       expect(probeCalls).toBe(1);
-      expect(
-        events.filter((event) => event.event.type === "candidate.review"),
-      ).toHaveLength(1);
-      expect(
-        events.filter((event) => event.event.type === "candidate.probe"),
-      ).toHaveLength(1);
+      expect(events.filter((event) => event.event.type === "candidate.review")).toHaveLength(1);
+      expect(events.filter((event) => event.event.type === "candidate.probe")).toHaveLength(1);
       expect(
         events.some(
           (event) =>
@@ -1964,10 +1756,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     const workspaceRoot = tempWorkspace("paw-v2-stable-not-ready-");
     const runId = "v2-stable-not-ready";
     fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "fail-test.js"),
-      "process.exit(1);\n",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "fail-test.js"), "process.exit(1);\n");
     for (const args of [
       ["init"],
       ["config", "user.email", "paw@example.test"],
@@ -2018,12 +1807,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       expect(result.status).toBe("failed");
       expect(reviewCalls).toBe(0);
-      expect(
-        events.filter((event) => event.event.type === "candidate.checkpoint"),
-      ).toHaveLength(0);
-      expect(
-        events.filter((event) => event.event.type === "candidate.review"),
-      ).toHaveLength(0);
+      expect(events.filter((event) => event.event.type === "candidate.checkpoint")).toHaveLength(0);
+      expect(events.filter((event) => event.event.type === "candidate.review")).toHaveLength(0);
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -2031,16 +1816,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
 
   test("v2 readiness does not run the old verification gate again", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-no-double-verification-");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     const model = new FakeLanguageModel({
       responses: [
         {
@@ -2095,16 +1872,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
 
   test("external base-checkout code failure still reaches one semantic review", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-external-code-failed-");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(1);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(1);\n", "utf8");
     const model = new FakeLanguageModel({
       responses: [
         {
@@ -2133,16 +1902,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         reviewCalls += 1;
         const material = messages.at(-1)?.content ?? "";
         reviewMaterial = material;
-        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
-          material,
-        )?.[1];
-        const mutationRevision = Number(
-          /"mutationRevision":(\d+)/.exec(material)?.[1],
-        );
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(material)?.[1];
+        const mutationRevision = Number(/"mutationRevision":(\d+)/.exec(material)?.[1]);
         if (!candidateInputHash || !Number.isSafeInteger(mutationRevision)) {
-          throw new Error(
-            "Reviewer fixture did not receive candidate identity",
-          );
+          throw new Error("Reviewer fixture did not receive candidate identity");
         }
         return {
           text: JSON.stringify({
@@ -2227,13 +1990,9 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       expect(reviewCalls).toBe(1);
       expect(probeCalls).toBe(1);
-      expect(probePlannerPrompt).toContain(
-        "repository_test:tests/test_visible.py::test_contract",
-      );
+      expect(probePlannerPrompt).toContain("repository_test:tests/test_visible.py::test_contract");
       expect(reviewMaterial).toContain('"authority":"external"');
-      expect(reviewMaterial).toContain(
-        '"localEvidenceRole":"diagnostic_not_acceptance"',
-      );
+      expect(reviewMaterial).toContain('"localEvidenceRole":"diagnostic_not_acceptance"');
       expect(reviewMaterial).toContain('"externalVerification":"pending"');
       expect(reviewMaterial).toContain('"outcome":"code_failed"');
       expect(orchestrator.getLastLoopV2CandidateAssessment()).toMatchObject({
@@ -2244,17 +2003,13 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           gaps: [],
         },
       });
-      expect(
-        events.find((event) => event.event.type === "candidate.review")?.event,
-      ).toMatchObject({
+      expect(events.find((event) => event.event.type === "candidate.review")?.event).toMatchObject({
         type: "candidate.review",
         verdict: "pass",
         externalVerification: "pending",
         modelCalls: 1,
       });
-      expect(
-        events.find((event) => event.event.type === "candidate.probe")?.event,
-      ).toMatchObject({
+      expect(events.find((event) => event.event.type === "candidate.probe")?.event).toMatchObject({
         type: "candidate.probe",
         verdict: "error",
         outcome: "inconclusive",
@@ -2263,10 +2018,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       });
       const checkpoint = parseLoopV2ProjectionCheckpointV1(
         fs.readFileSync(
-          loopV2ProjectionCheckpointPath(
-            workspaceRoot,
-            "v2-external-code-failed",
-          ),
+          loopV2ProjectionCheckpointPath(workspaceRoot, "v2-external-code-failed"),
           "utf8",
         ),
       );
@@ -2287,16 +2039,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("resume reuses the same semantic candidate and does not review revised prose", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-semantic-resume-");
     const runId = "v2-semantic-resume";
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     const appStateStore = new FileSystemAppStateStore({
       statesDir: path.join(workspaceRoot, ".paw", "states"),
     });
@@ -2308,12 +2052,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       async complete(messages) {
         reviewCalls += 1;
         const material = messages.at(-1)?.content ?? "";
-        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(
-          material,
-        )?.[1];
-        const mutationRevision = Number(
-          /"mutationRevision":(\d+)/.exec(material)?.[1],
-        );
+        const candidateInputHash = /"candidateInputHash":"([^"]+)"/.exec(material)?.[1];
+        const mutationRevision = Number(/"mutationRevision":(\d+)/.exec(material)?.[1]);
         return {
           text: JSON.stringify({
             candidateInputHash,
@@ -2403,8 +2143,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       );
       expect(resumedCandidate.artifactHash).toBe(firstCandidate.artifactHash);
       expect(
-        resumedEvents.find((event) => event.event.type === "candidate.review")
-          ?.event,
+        resumedEvents.find((event) => event.event.type === "candidate.review")?.event,
       ).toBeUndefined();
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
@@ -2414,16 +2153,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("resume converts an unsettled review claim to partial without another model call", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-semantic-claim-resume-");
     const runId = "v2-semantic-claim-resume";
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     const appStateStore = new FileSystemAppStateStore({
       statesDir: path.join(workspaceRoot, ".paw", "states"),
     });
@@ -2508,10 +2239,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         fs.readFileSync(loopV2LiveArtifactPath(workspaceRoot, runId), "utf8"),
       );
       const interruptedReview = parseLoopV2LiveReviewArtifactV1(
-        fs.readFileSync(
-          loopV2LiveReviewArtifactPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2LiveReviewArtifactPath(workspaceRoot, runId), "utf8"),
         resumedCandidate,
       );
       expect(interruptedReview.record).toMatchObject({
@@ -2526,11 +2254,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
 
   test("v2 readiness opens a durable obligation that rejects repeated final answers", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-readiness-bounded-");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
     const model = new FakeLanguageModel({
       responses: [
         {
@@ -2585,21 +2309,17 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.message).toContain("another final_answer do not satisfy");
       expect(model.callCount).toBe(5);
       expect(reviewerCalls).toBe(0);
-      expect(
-        events.filter((event) => event.event.type === "candidate.readiness"),
-      ).toHaveLength(1);
-      expect(
-        events.filter((event) => event.event.type === "provider.turn_stopped"),
-      ).toHaveLength(1);
+      expect(events.filter((event) => event.event.type === "candidate.readiness")).toHaveLength(1);
+      expect(events.filter((event) => event.event.type === "provider.turn_stopped")).toHaveLength(
+        1,
+      );
       const checkpoint = parseLoopV2ProjectionCheckpointV1(
         fs.readFileSync(
           loopV2ProjectionCheckpointPath(workspaceRoot, "v2-readiness-bounded"),
           "utf8",
         ),
       );
-      expect(
-        checkpoint.report.controlState?.openRepairObligation,
-      ).toMatchObject({
+      expect(checkpoint.report.controlState?.openRepairObligation).toMatchObject({
         kind: "direct_verification",
         revision: 1,
         runnerFamily: "any",
@@ -2611,16 +2331,8 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
 
   test("a material-change obligation survives reads and clears only after a committed mutation", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-material-repair-");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
     const events: RunEventEnvelope[] = [];
     const model = new FakeLanguageModel({
       responses: [
@@ -2665,9 +2377,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
 
       expect(result.status).toBe("completed");
       expect(model.callCount).toBe(5);
-      const readinessFacts = events.filter(
-        (event) => event.event.type === "candidate.readiness",
-      );
+      const readinessFacts = events.filter((event) => event.event.type === "candidate.readiness");
       expect(readinessFacts).toHaveLength(2);
       expect(readinessFacts[0]?.event).toMatchObject({
         type: "candidate.readiness",
@@ -2690,9 +2400,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         status: "completed",
         mutationRevision: 1,
       });
-      expect(
-        checkpoint.report.controlState?.openRepairObligation,
-      ).toBeUndefined();
+      expect(checkpoint.report.controlState?.openRepairObligation).toBeUndefined();
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -2701,11 +2409,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
   test("resume preserves the durable repair obligation identity", async () => {
     const workspaceRoot = tempWorkspace("paw-v2-readiness-resume-");
     const runId = "v2-readiness-resume";
-    fs.writeFileSync(
-      path.join(workspaceRoot, "source.txt"),
-      "before\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "source.txt"), "before\n", "utf8");
     const appStateStore = new FileSystemAppStateStore({
       statesDir: path.join(workspaceRoot, ".paw", "states"),
     });
@@ -2764,16 +2468,11 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         pendingControl: { kind: "readiness" },
       });
       const beforeResume = parseLoopV2ProjectionCheckpointV1(
-        fs.readFileSync(
-          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId), "utf8"),
       ).report.controlState?.openRepairObligation;
       expect(beforeResume?.kind).toBe("direct_verification");
       expect(
-        sessionStore
-          .loadRun(runId)
-          ?.some((event) => event.event.type === "candidate.readiness"),
+        sessionStore.loadRun(runId)?.some((event) => event.event.type === "candidate.readiness"),
       ).toBeTrue();
 
       const resumedModel = new FakeLanguageModel({
@@ -2784,8 +2483,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           },
         ],
       });
-      const resumedRequests: (readonly import("@paw/models").ChatMessage[])[] =
-        [];
+      const resumedRequests: (readonly import("@paw/models").ChatMessage[])[] = [];
       const resumed = new AgentOrchestrator({
         loopKernelVersion: "v2",
         memoryExtraction: "off",
@@ -2809,15 +2507,10 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(
         appStateStore
           .load(runId)
-          ?.messages.some((message) =>
-            message.content.startsWith("[LoopV2Readiness:needs_work"),
-          ),
+          ?.messages.some((message) => message.content.startsWith("[LoopV2Readiness:needs_work")),
       ).toBeFalse();
       const afterResume = parseLoopV2ProjectionCheckpointV1(
-        fs.readFileSync(
-          loopV2ProjectionCheckpointPath(workspaceRoot, runId),
-          "utf8",
-        ),
+        fs.readFileSync(loopV2ProjectionCheckpointPath(workspaceRoot, runId), "utf8"),
       ).report.controlState?.openRepairObligation;
       expect(afterResume).toEqual(beforeResume);
     } finally {
@@ -2834,9 +2527,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
           finishReason: "length",
         },
         {
-          text: finalAnswer(
-            "The truncated request was discarded; no change was applied.",
-          ),
+          text: finalAnswer("The truncated request was discarded; no change was applied."),
           finishReason: "stop",
         },
       ],
@@ -2896,11 +2587,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
     const workspaceRoot = tempWorkspace("paw-v2-live-candidate-");
     const sourcePath = path.join(workspaceRoot, "source.txt");
     fs.writeFileSync(sourcePath, "before\n", "utf8");
-    fs.writeFileSync(
-      path.join(workspaceRoot, "smoke-test.js"),
-      "process.exit(0);\n",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(workspaceRoot, "smoke-test.js"), "process.exit(0);\n", "utf8");
 
     const runTrajectory = async (
       terminalText: string,
@@ -2963,18 +2650,11 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       expect(result.status).toBe("completed");
       expect(orchestrator.getLastLoopV2CandidateAssessment()).toEqual(captured);
       if (!captured) throw new Error("Missing live candidate assessment");
-      const artifactPath = loopV2LiveArtifactPath(
-        workspaceRoot,
-        "v2-live-candidate-identity",
-      );
-      const persisted = parseLoopV2LiveCandidateArtifactV1(
-        fs.readFileSync(artifactPath, "utf8"),
-      );
+      const artifactPath = loopV2LiveArtifactPath(workspaceRoot, "v2-live-candidate-identity");
+      const persisted = parseLoopV2LiveCandidateArtifactV1(fs.readFileSync(artifactPath, "utf8"));
       expect(persisted.assessment).toEqual(captured);
       const reviewPayload = buildLoopV2LiveReviewPayloadV1(persisted.report);
-      expect(reviewPayload.candidateInputHash).toBe(
-        captured.candidateInputHash,
-      );
+      expect(reviewPayload.candidateInputHash).toBe(captured.candidateInputHash);
       expect(reviewPayload.snapshots).toEqual([
         expect.objectContaining({
           path: "source.txt",
@@ -2987,8 +2667,7 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
         persisted,
       );
       expect(parsedClaim.reviewKey).toBe(claim.reviewKey);
-      const interruptedRecord =
-        createInterruptedSemanticReviewRecordV2(reviewPayload);
+      const interruptedRecord = createInterruptedSemanticReviewRecordV2(reviewPayload);
       const interruptedArtifact = parseLoopV2LiveReviewArtifactV1(
         serializeLoopV2LiveReviewArtifactV1(
           buildLoopV2LiveReviewArtifactV1(persisted, interruptedRecord),
@@ -3059,27 +2738,21 @@ describe("Loop Kernel v2 provider terminal production seam", () => {
       };
       tamperedReview.record.review.verdict = "fail";
       expect(() =>
-        parseLoopV2LiveReviewArtifactV1(
-          JSON.stringify(tamperedReview),
-          persisted,
-        ),
+        parseLoopV2LiveReviewArtifactV1(JSON.stringify(tamperedReview), persisted),
       ).toThrow();
       return captured;
     };
 
     try {
       const first = await runTrajectory("First explicit wording.");
-      const artifactPath = loopV2LiveArtifactPath(
-        workspaceRoot,
-        "v2-live-candidate-identity",
-      );
+      const artifactPath = loopV2LiveArtifactPath(workspaceRoot, "v2-live-candidate-identity");
       const tampered = JSON.parse(fs.readFileSync(artifactPath, "utf8")) as {
         assessment: { candidateInputHash: string };
       };
       tampered.assessment.candidateInputHash = "tampered";
-      expect(() =>
-        parseLoopV2LiveCandidateArtifactV1(JSON.stringify(tampered)),
-      ).toThrow("assessment does not match");
+      expect(() => parseLoopV2LiveCandidateArtifactV1(JSON.stringify(tampered))).toThrow(
+        "assessment does not match",
+      );
       fs.writeFileSync(sourcePath, "before\n", "utf8");
       const second = await runTrajectory("Different explicit wording.");
 

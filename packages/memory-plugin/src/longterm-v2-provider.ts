@@ -26,10 +26,9 @@ import type {
 
 export function createPawNextMemoryV2PostgresProviderV1(
   profile: PawNextMemoryPluginProfileV1,
-  cache?: Omit<
-    CachedMemoryProviderOptionsV1,
-    "revisionToken" | "storageNamespace"
-  > & { readonly storageNamespace?: string },
+  cache?: Omit<CachedMemoryProviderOptionsV1, "revisionToken" | "storageNamespace"> & {
+    readonly storageNamespace?: string;
+  },
 ): MemoryProviderV1 {
   const frozen = freezePawNextMemoryPluginProfileV1(profile);
   if (frozen.providerVersion !== PAW_NEXT_MEMORY_V2_PROVIDER_VERSION_V1) {
@@ -39,16 +38,13 @@ export function createPawNextMemoryV2PostgresProviderV1(
   const provider = createPawNextMemoryV2ProviderV1({ engine });
   return createCachedMemoryProviderV1(provider, {
     ...cache,
-    storageNamespace:
-      cache?.storageNamespace ?? postgresMemoryStorageNamespaceV1(),
+    storageNamespace: cache?.storageNamespace ?? postgresMemoryStorageNamespaceV1(),
     revisionToken: engine.retrievalRevisionToken.bind(engine),
   });
 }
 
 export function postgresMemoryStorageNamespaceV1(): string {
-  const databaseUrl =
-    process.env.DATABASE_URL?.trim() ||
-    "postgresql://localhost:5432/paw_memory";
+  const databaseUrl = process.env.DATABASE_URL?.trim() || "postgresql://localhost:5432/paw_memory";
   return `postgres:${hashCanonicalJsonV1(databaseUrl as unknown as JsonValue)}`;
 }
 
@@ -79,9 +75,7 @@ export function createPawNextMemoryV2ProviderV1(input: {
       ]);
       if (signal.aborted) throw abortError();
       const candidates = [...episodic.items, ...profiles.items].sort(
-        (left, right) =>
-          right.score - left.score ||
-          left.entry.id.localeCompare(right.entry.id),
+        (left, right) => right.score - left.score || left.entry.id.localeCompare(right.entry.id),
       );
       const cards: MemoryCardV1[] = [];
       let usedTokens = 0;
@@ -97,8 +91,7 @@ export function createPawNextMemoryV2ProviderV1(input: {
         usedTokens += tokens;
       }
       return Object.freeze({
-        status:
-          episodic.degraded || profiles.degraded ? "degraded" : "completed",
+        status: episodic.degraded || profiles.degraded ? "degraded" : "completed",
         cards: Object.freeze(cards),
         ...(episodic.degraded || profiles.degraded
           ? { reasonCode: "memory_v2_partial_recall" }
@@ -113,11 +106,7 @@ export function memoryEntryToCardV1(
   query: MemoryProviderQueryV1,
 ): MemoryCardV1 | undefined {
   const entry = item.entry;
-  if (
-    entry.kind !== "semantic" &&
-    entry.kind !== "episodic" &&
-    entry.kind !== "profile"
-  ) {
+  if (entry.kind !== "semantic" && entry.kind !== "episodic" && entry.kind !== "profile") {
     return undefined;
   }
   const statement = renderStatement(entry).slice(0, 16_384);
@@ -125,9 +114,7 @@ export function memoryEntryToCardV1(
   const sources = Object.freeze(
     [...new Set([`memory:item/${entry.id}`, ...entry.evidence])]
       .slice(0, 32)
-      .map((ref) =>
-        Object.freeze({ kind: "memory_store_evidence" as const, ref }),
-      ),
+      .map((ref) => Object.freeze({ kind: "memory_store_evidence" as const, ref })),
   );
   const base = Object.freeze({
     id: entry.id,
@@ -136,19 +123,12 @@ export function memoryEntryToCardV1(
     statement,
     applicability:
       entry.kind !== "profile" &&
-      [
-        "agent_verified",
-        "user_statement",
-        "repo_docs",
-        "trial_graduated",
-      ].includes(entry.source)
+      ["agent_verified", "user_statement", "repo_docs", "trial_graduated"].includes(entry.source)
         ? ("applicable" as const)
         : ("reference" as const),
     scope: Object.freeze({
       repositoryId: query.scope.repositoryId,
-      ...(entry.kind === "episodic" && entry.branch
-        ? { branch: entry.branch }
-        : {}),
+      ...(entry.kind === "episodic" && entry.branch ? { branch: entry.branch } : {}),
     }),
     sources,
     confidence: clampConfidence(entry.confidence),
@@ -192,9 +172,7 @@ export function assertMemoryEngineScopeV1(
     scope.workspaceId !== query.scope.workspaceId ||
     scope.repositoryId !== query.scope.repositoryId
   ) {
-    throw new Error(
-      "Memory provider scope does not match the frozen task scope",
-    );
+    throw new Error("Memory provider scope does not match the frozen task scope");
   }
 }
 

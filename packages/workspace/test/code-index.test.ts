@@ -18,15 +18,9 @@ describe("code index", () => {
     buildCodeIndex(root);
     const blocks = selectCodeContext(root, "fix loginUser bug");
 
-    expect(
-      existsSync(path.join(root, ".paw", "code-index", "repo-map.json")),
-    ).toBe(true);
-    expect(
-      existsSync(path.join(root, ".paw", "code-index", "symbols.json")),
-    ).toBe(true);
-    expect(
-      existsSync(path.join(root, ".paw", "code-index", "test-map.json")),
-    ).toBe(true);
+    expect(existsSync(path.join(root, ".paw", "code-index", "repo-map.json"))).toBe(true);
+    expect(existsSync(path.join(root, ".paw", "code-index", "symbols.json"))).toBe(true);
+    expect(existsSync(path.join(root, ".paw", "code-index", "test-map.json"))).toBe(true);
     expect(blocks[0]?.path).toBe("src/auth.ts");
     expect(blocks[0]?.symbols).toContain("loginUser");
   });
@@ -47,11 +41,7 @@ describe("code index", () => {
 
   test("falls back to discoverContext when index has no match", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-code-index-"));
-    writeFileSync(
-      path.join(root, "notes.ts"),
-      "export const needle = 'rareword';\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "notes.ts"), "export const needle = 'rareword';\n", "utf8");
     buildCodeIndex(root);
 
     const blocks = selectCodeContext(root, "rareword");

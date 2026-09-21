@@ -128,9 +128,7 @@ export interface ShellCommandClassification {
  * Classify a shell command as read-only or mutating.
  * Handles compound commands (pipelines, && chains) by checking every segment.
  */
-export function classifyShellCommand(
-  command: string,
-): ShellCommandClassification {
+export function classifyShellCommand(command: string): ShellCommandClassification {
   const segments = splitCommandSegments(command);
   if (segments.length === 0) {
     return { isReadOnly: false, isSilent: false, commandType: "unknown" };
@@ -152,18 +150,7 @@ export function classifyShellCommand(
 
     if (READ_COMMANDS.has(base)) {
       hasRead = true;
-      if (
-        [
-          "grep",
-          "rg",
-          "ag",
-          "ack",
-          "find",
-          "locate",
-          "which",
-          "whereis",
-        ].includes(base)
-      ) {
+      if (["grep", "rg", "ag", "ack", "find", "locate", "which", "whereis"].includes(base)) {
         hasSearch = true;
       }
       if (["ls", "tree", "du"].includes(base)) {
@@ -184,8 +171,7 @@ export function classifyShellCommand(
 
   const isReadOnly = !hasWrite;
   // Only mark as silent when ALL non-neutral commands are in the explicit silent set
-  const isSilent =
-    hasWrite && !hasRead && !hasSearch && !hasList && hasExplicitSilent;
+  const isSilent = hasWrite && !hasRead && !hasSearch && !hasList && hasExplicitSilent;
 
   let commandType: ShellCommandClassification["commandType"] = "unknown";
   if (hasWrite) commandType = "write";
@@ -206,10 +192,7 @@ export interface ExitCodeInterpretation {
 }
 
 /** Per-command semantic rules for non-zero exit codes. */
-const COMMAND_SEMANTICS = new Map<
-  string,
-  (exitCode: number) => ExitCodeInterpretation
->([
+const COMMAND_SEMANTICS = new Map<string, (exitCode: number) => ExitCodeInterpretation>([
   [
     "grep",
     (code) => ({

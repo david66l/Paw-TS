@@ -49,17 +49,17 @@ export function ContextMeter({
     const outside = (event: PointerEvent) => {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
-    const escape = (event: globalThis.KeyboardEvent) => {
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
         trigger.current?.focus();
       }
     };
     document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
+    document.addEventListener("keydown", handleEscape);
     return () => {
       document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", escape);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, [open]);
   return (
@@ -77,22 +77,17 @@ export function ContextMeter({
         <span
           className={styles.ring}
           role="progressbar"
+          tabIndex={0}
           aria-label="上下文占用"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(percent)}
-          aria-valuetext={
-            capacity ? `${fmt(used)} / ${fmt(capacity)} tokens` : "尚未计算"
-          }
+          aria-valuetext={capacity ? `${fmt(used)} / ${fmt(capacity)} tokens` : "尚未计算"}
           style={{ "--usage": `${percent}%` } as CSSProperties}
         />
       </button>
       {open && (
-        <section
-          id="context-details"
-          className={styles.popover}
-          aria-label="上下文详情"
-        >
+        <section id="context-details" className={styles.popover} aria-label="上下文详情">
           <header>
             <strong>上下文占用</strong>
             <span>最近上下文 · 估算</span>
@@ -143,23 +138,18 @@ export function ContextMeter({
               </div>
               <div>
                 <span>可用余量</span>
-                <span>
-                  {fmt(
-                    Math.max(0, capacity - used - next.reservedOutputTokens),
-                  )}{" "}
-                  tokens
-                </span>
+                <span>{fmt(Math.max(0, capacity - used - next.reservedOutputTokens))} tokens</span>
               </div>
             </div>
           )}
-          <p role="status">
+          <output>
             {message ||
               (busy
                 ? "当前任务执行中，结束后可压缩上下文。"
                 : next
                   ? "将较早的内容整理成摘要，保留近期对话与关键证据。"
                   : "开始对话后显示实际调用的上下文占用。")}
-          </p>
+          </output>
           <button
             type="button"
             className={styles.compress}
@@ -172,11 +162,7 @@ export function ContextMeter({
                 const result = await onCompress();
                 setMessage(result.message);
               } catch (error) {
-                setMessage(
-                  error instanceof Error
-                    ? error.message
-                    : "压缩失败，请稍后重试。",
-                );
+                setMessage(error instanceof Error ? error.message : "压缩失败，请稍后重试。");
               } finally {
                 setCompressing(false);
               }

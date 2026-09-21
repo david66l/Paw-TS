@@ -1,15 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-  PROGRESS_READ,
-  TODO_WRITE,
-  type TaskProgressServiceV1,
-  executeTool,
-} from "@paw/harness";
-import type {
-  InputFactV1,
-  JsonValue,
-  RunJournalEnvelopeV1,
-} from "@paw/protocol";
+import { PROGRESS_READ, TODO_WRITE, type TaskProgressServiceV1, executeTool } from "@paw/harness";
+import type { InputFactV1, JsonValue, RunJournalEnvelopeV1 } from "@paw/protocol";
 import { createFrozenToolRegistryV1 } from "@paw/runtime";
 
 import {
@@ -91,8 +82,7 @@ describe("durable task progress plugin", () => {
     });
     if (!first.ok) throw new Error(first.reason);
 
-    const beforeCommit =
-      await createTaskProgressServiceV1(options).read(signal);
+    const beforeCommit = await createTaskProgressServiceV1(options).read(signal);
     expect(beforeCommit).toMatchObject({
       ok: true,
       value: { activities: [{ id: "shell-1", elapsedMs: 60 }] },
@@ -213,9 +203,7 @@ describe("durable task progress plugin", () => {
         payload: inline({ ...valid, percent: 5 }),
       },
     });
-    await expect(projectTaskProgressSnapshotV1(forged, load)).rejects.toThrow(
-      "derived fields",
-    );
+    await expect(projectTaskProgressSnapshotV1(forged, load)).rejects.toThrow("derived fields");
   });
 
   test("rejects ambiguous parallel progress writes before issuing a revision", async () => {

@@ -92,9 +92,7 @@ describe("work segment start planner", () => {
       ...prefixWithDecisionTail("queue-1"),
       factEnvelope(7, promotion("queue-1")),
     ];
-    expect(() =>
-      buildPlan(promotedPrefix, "queue-1", promotion("queue-1")),
-    ).toThrow();
+    expect(() => buildPlan(promotedPrefix, "queue-1", promotion("queue-1"))).toThrow();
 
     const drifted = prefixWithDecisionTail("queue-1").map((envelope) =>
       envelope.record.kind === "derived_decision"
@@ -110,9 +108,7 @@ describe("work segment start planner", () => {
           }
         : envelope,
     );
-    expect(() => buildPlan(drifted, "queue-1", promotion("queue-1"))).toThrow(
-      /replay divergence/i,
-    );
+    expect(() => buildPlan(drifted, "queue-1", promotion("queue-1"))).toThrow(/replay divergence/i);
 
     expect(() =>
       planWorkSegmentStartV1({
@@ -127,17 +123,12 @@ describe("work segment start planner", () => {
   test("validates the full historical lifecycle before deriving the segment cursor", () => {
     const valid = prefixWithDecisionTail("queue-1");
     const openModel = valid.flatMap((envelope) =>
-      envelope.seq === 4
-        ? []
-        : [envelope.seq > 4 ? resequence(envelope, -1) : envelope],
+      envelope.seq === 4 ? [] : [envelope.seq > 4 ? resequence(envelope, -1) : envelope],
     );
-    expect(() =>
-      buildPlan(openModel, "queue-1", promotion("queue-1")),
-    ).toThrow();
+    expect(() => buildPlan(openModel, "queue-1", promotion("queue-1"))).toThrow();
 
     const wrongTurn = valid.map((envelope) =>
-      envelope.record.kind === "input_fact" &&
-      envelope.record.fact.type === "model.settled"
+      envelope.record.kind === "input_fact" && envelope.record.fact.type === "model.settled"
         ? {
             ...envelope,
             record: {
@@ -147,17 +138,11 @@ describe("work segment start planner", () => {
           }
         : envelope,
     );
-    expect(() =>
-      buildPlan(wrongTurn, "queue-1", promotion("queue-1")),
-    ).toThrow();
+    expect(() => buildPlan(wrongTurn, "queue-1", promotion("queue-1"))).toThrow();
   });
 
   test("does not reuse a previous segment terminal for newly completed work", () => {
-    const first = buildPlan(
-      prefixWithDecisionTail("queue-1"),
-      "queue-1",
-      promotion("queue-1"),
-    );
+    const first = buildPlan(prefixWithDecisionTail("queue-1"), "queue-1", promotion("queue-1"));
     const activeFacts: InputFactV1[] = [
       {
         type: "model.dispatch_recorded",
@@ -194,9 +179,9 @@ describe("work segment start planner", () => {
       ),
     ];
 
-    expect(() =>
-      buildPlan(missingCurrentDecision, "queue-2", promotion("queue-2")),
-    ).toThrow(/current segment.*terminal decision/i);
+    expect(() => buildPlan(missingCurrentDecision, "queue-2", promotion("queue-2"))).toThrow(
+      /current segment.*terminal decision/i,
+    );
   });
 
   test("returns a deterministic detached recursively frozen plan", () => {
@@ -214,9 +199,7 @@ describe("work segment start planner", () => {
     expect(isDeepFrozen(first)).toBeTrue();
     (mutablePromotion as { content: string }).content = "mutated";
     const acceptedFact = mutablePrefix.find(
-      (item) =>
-        item.record.kind === "input_fact" &&
-        item.record.fact.type === "input.accepted",
+      (item) => item.record.kind === "input_fact" && item.record.fact.type === "input.accepted",
     );
     if (
       acceptedFact?.record.kind === "input_fact" &&
@@ -233,15 +216,10 @@ function prefixWithDecisionTail(
   extraAccepted: readonly InputAcceptedFactV1[] = [],
 ): readonly RunJournalEnvelopeV1[] {
   const facts = [...baseFacts(), accepted(inputId), ...extraAccepted];
-  return [
-    ...facts.map((fact, index) => factEnvelope(index + 1, fact)),
-    decisionEnvelope(facts),
-  ];
+  return [...facts.map((fact, index) => factEnvelope(index + 1, fact)), decisionEnvelope(facts)];
 }
 
-function prefixWithAcceptedTail(
-  inputId: string,
-): readonly RunJournalEnvelopeV1[] {
+function prefixWithAcceptedTail(inputId: string): readonly RunJournalEnvelopeV1[] {
   const facts = baseFacts();
   return [
     ...facts.map((fact, index) => factEnvelope(index + 1, fact)),
@@ -358,9 +336,7 @@ function verification(runConfig: InteractiveControlConfigV2) {
 }
 
 function derivedDecision(input: {
-  readonly state: ReturnType<
-    ReturnType<typeof createInteractiveControlReducerV2>["reduce"]
-  >;
+  readonly state: ReturnType<ReturnType<typeof createInteractiveControlReducerV2>["reduce"]>;
   readonly inputThroughSeq: number;
   readonly stateHash: string;
   readonly reducerVersion: string;
@@ -374,9 +350,7 @@ function derivedDecision(input: {
   };
 }
 
-function actionFromDecision(
-  decision: ControlDecision,
-): ControlDecisionActionV1 {
+function actionFromDecision(decision: ControlDecision): ControlDecisionActionV1 {
   switch (decision.kind) {
     case "continue":
       return { kind: "continue", reasonCode: "continue" };
@@ -410,10 +384,7 @@ function factEnvelope(seq: number, fact: InputFactV1): RunJournalEnvelopeV1 {
   };
 }
 
-function resequence(
-  envelope: RunJournalEnvelopeV1,
-  delta: number,
-): RunJournalEnvelopeV1 {
+function resequence(envelope: RunJournalEnvelopeV1, delta: number): RunJournalEnvelopeV1 {
   return { ...envelope, seq: envelope.seq + delta };
 }
 

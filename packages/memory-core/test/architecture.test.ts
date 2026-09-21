@@ -24,13 +24,9 @@ describe("evidence-first product architecture", () => {
 
   test("has no Aspect, Facet, or temporal-graph module in its dependency closure", () => {
     const closure = localDependencyClosure(productEntry);
-    const files = closure.map((file) =>
-      relative(sourceRoot, file).replaceAll("\\", "/"),
-    );
+    const files = closure.map((file) => relative(sourceRoot, file).replaceAll("\\", "/"));
     const forbidden = files.filter(
-      (file) =>
-        /(^|\/)(?:aspect|facet)-/u.test(file) ||
-        /(^|\/)temporal-graph\.ts$/u.test(file),
+      (file) => /(^|\/)(?:aspect|facet)-/u.test(file) || /(^|\/)temporal-graph\.ts$/u.test(file),
     );
     expect(files).toContain("state-observation.ts");
     expect(forbidden).toEqual([]);
@@ -41,18 +37,14 @@ describe("evidence-first product architecture", () => {
     const violations = closure.flatMap((file) => {
       const source = readFileSync(file, "utf8");
       return [...source.matchAll(/from\s+["'](@paw\/[^"']+)["']/gu)].map(
-        (match) =>
-          `${relative(sourceRoot, file).replaceAll("\\", "/")}: ${match[1]}`,
+        (match) => `${relative(sourceRoot, file).replaceAll("\\", "/")}: ${match[1]}`,
       );
     });
     expect(violations).toEqual([]);
   });
 });
 
-function localDependencyClosure(
-  entry: string,
-  includeTypeOnly = false,
-): readonly string[] {
+function localDependencyClosure(entry: string, includeTypeOnly = false): readonly string[] {
   const pending = [entry];
   const visited = new Set<string>();
   while (pending.length > 0) {
@@ -68,13 +60,9 @@ function localDependencyClosure(
   return Object.freeze([...visited].sort());
 }
 
-function relativeSpecifiers(
-  source: string,
-  includeTypeOnly: boolean,
-): readonly string[] {
+function relativeSpecifiers(source: string, includeTypeOnly: boolean): readonly string[] {
   const values: string[] = [];
-  const fromPattern =
-    /(?:^|\n)\s*(?:import|export)\s+([\s\S]*?)\s+from\s+["'](\.[^"']+)["'];?/gu;
+  const fromPattern = /(?:^|\n)\s*(?:import|export)\s+([\s\S]*?)\s+from\s+["'](\.[^"']+)["'];?/gu;
   for (const match of source.matchAll(fromPattern)) {
     const clause = match[1]?.trim();
     const value = match[2];
@@ -101,21 +89,11 @@ function isTypeOnlyClause(clause: string): boolean {
     .split(",")
     .map((member) => member.trim())
     .filter(Boolean);
-  return (
-    members.length > 0 && members.every((member) => member.startsWith("type "))
-  );
+  return members.length > 0 && members.every((member) => member.startsWith("type "));
 }
 
-function resolveTypeScriptImport(
-  importer: string,
-  specifier: string,
-): string | null {
+function resolveTypeScriptImport(importer: string, specifier: string): string | null {
   const raw = resolve(dirname(importer), specifier);
-  const candidates = [
-    raw,
-    raw.replace(/\.js$/u, ".ts"),
-    `${raw}.ts`,
-    resolve(raw, "index.ts"),
-  ];
+  const candidates = [raw, raw.replace(/\.js$/u, ".ts"), `${raw}.ts`, resolve(raw, "index.ts")];
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }

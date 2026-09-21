@@ -27,8 +27,7 @@ export function containsExecutedGitDiffCommand(command: string): boolean {
   if (/[<>$`]/.test(command) || hasUnquotedShellComment(command)) return false;
   const segments = parseCommandChain(command);
   if (!segments?.length) return false;
-  if (segments.slice(0, -1).some((segment) => segment.connectorAfter !== "&&"))
-    return false;
+  if (segments.slice(0, -1).some((segment) => segment.connectorAfter !== "&&")) return false;
   const finalSegment = segments.at(-1);
   return finalSegment ? tokensExposeGitDiff(finalSegment.tokens) : false;
 }
@@ -115,10 +114,7 @@ function gitDiffSubcommandIndex(tokens: readonly string[]): number | undefined {
       index += 2;
       continue;
     }
-    if (
-      (token.startsWith("-C") && token.length > 2) ||
-      isAttachedLongGitOption(token)
-    ) {
+    if ((token.startsWith("-C") && token.length > 2) || isAttachedLongGitOption(token)) {
       index += 1;
       continue;
     }
@@ -189,9 +185,7 @@ interface RawCommandSegment {
  * evidence classifiers. It deliberately preserves control operators rather
  * than pretending every segment shares the final shell exit status.
  */
-export function parseCommandChain(
-  command: string,
-): readonly ShellCommandSegment[] | null {
+export function parseCommandChain(command: string): readonly ShellCommandSegment[] | null {
   const rawSegments: RawCommandSegment[] = [];
   let current = "";
   let quote: "'" | '"' | undefined;
@@ -230,10 +224,7 @@ export function parseCommandChain(
 
     // Preserve POSIX/CMD fd duplication and Bash combined redirection. These
     // ampersands are redirection syntax, not command-chain connectors.
-    if (
-      character === "&" &&
-      (current.trimEnd().endsWith(">") || command[index + 1] === ">")
-    ) {
+    if (character === "&" && (current.trimEnd().endsWith(">") || command[index + 1] === ">")) {
       current += character;
       continue;
     }
@@ -246,12 +237,7 @@ export function parseCommandChain(
     } else if (character === "\r" && command[index + 1] === "\n") {
       connector = "\n";
       index += 1;
-    } else if (
-      character === ";" ||
-      character === "&" ||
-      character === "|" ||
-      character === "\n"
-    ) {
+    } else if (character === ";" || character === "&" || character === "|" || character === "\n") {
       connector = character === "\n" ? "\n" : character;
     }
 
@@ -287,12 +273,8 @@ export function parseCommandChain(
     parsed.push({
       text: segment.text,
       tokens,
-      ...(index > 0
-        ? { connectorBefore: rawSegments[index - 1]?.connectorAfter }
-        : {}),
-      ...(segment.connectorAfter
-        ? { connectorAfter: segment.connectorAfter }
-        : {}),
+      ...(index > 0 ? { connectorBefore: rawSegments[index - 1]?.connectorAfter } : {}),
+      ...(segment.connectorAfter ? { connectorAfter: segment.connectorAfter } : {}),
     });
   }
   return parsed;
@@ -367,9 +349,7 @@ export function tokenizeCommandSegment(segment: string): string[] | null {
  * shared, quote-aware view of executable and argument tokens.
  */
 export function tokenizeCommandSegments(command: string): string[][] | null {
-  return (
-    parseCommandChain(command)?.map((segment) => [...segment.tokens]) ?? null
-  );
+  return parseCommandChain(command)?.map((segment) => [...segment.tokens]) ?? null;
 }
 
 export function exitStatusProvesVerification(

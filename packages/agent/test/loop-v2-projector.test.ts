@@ -59,11 +59,7 @@ describe("Loop Kernel v2 event projector", () => {
       }),
     ]);
 
-    expect(result.steps.map((step) => step.delta.meaningful)).toEqual([
-      true,
-      true,
-      true,
-    ]);
+    expect(result.steps.map((step) => step.delta.meaningful)).toEqual([true, true, true]);
     const coverage = Object.values(result.state.readCoverage);
     expect(coverage).toHaveLength(1);
     expect(coverage[0]?.intervals).toEqual([
@@ -91,23 +87,14 @@ describe("Loop Kernel v2 event projector", () => {
       { ...read, seq: 4, ts: 1_004 },
     ]);
 
-    expect(result.steps.map((step) => step.delta.meaningful)).toEqual([
-      true,
-      true,
-      false,
-      false,
-    ]);
+    expect(result.steps.map((step) => step.delta.meaningful)).toEqual([true, true, false, false]);
     const evidence = Object.values(result.state.evidence);
     expect(evidence).toHaveLength(1);
     expect(evidence[0]?.observationCount).toBe(3);
     expect(evidence[0]?.firstObservedSeq).toBe(2);
     expect(evidence[0]?.lastObservedSeq).toBe(4);
-    expect(result.steps[1]?.decisionStateHash).toBe(
-      result.steps[2]?.decisionStateHash,
-    );
-    expect(result.steps[2]?.decisionStateHash).toBe(
-      result.steps[3]?.decisionStateHash,
-    );
+    expect(result.steps[1]?.decisionStateHash).toBe(result.steps[2]?.decisionStateHash);
+    expect(result.steps[2]?.decisionStateHash).toBe(result.steps[3]?.decisionStateHash);
   });
 
   test("R03 the same search after a repository revision changes is new evidence", () => {
@@ -198,13 +185,9 @@ describe("Loop Kernel v2 event projector", () => {
     );
 
     expect(after.steps[0]?.delta.meaningful).toBeFalse();
-    expect(decisionStateHash(after.state)).toBe(
-      decisionStateHash(before.state),
-    );
+    expect(decisionStateHash(after.state)).toBe(decisionStateHash(before.state));
     expect(after.state.contextCompactions).toBe(1);
-    expect(after.state.contextArtifactRefs).toEqual([
-      "artifact://old-tool-output",
-    ]);
+    expect(after.state.contextArtifactRefs).toEqual(["artifact://old-tool-output"]);
   });
 
   test("R15 checkpoint resume is projection-identical to uninterrupted replay", () => {
@@ -267,11 +250,7 @@ describe("Loop Kernel v2 event projector", () => {
     ];
     const uninterrupted = replayLoopV2(RUN_ID, events);
     const prefix = replayLoopV2(RUN_ID, events.slice(0, 3));
-    const resumed = replayLoopV2(
-      RUN_ID,
-      events.slice(3),
-      createLoopV2Checkpoint(prefix.state),
-    );
+    const resumed = replayLoopV2(RUN_ID, events.slice(3), createLoopV2Checkpoint(prefix.state));
 
     expect(resumed.state).toEqual(uninterrupted.state);
     expect(resumed.decisionStateHash).toBe(uninterrupted.decisionStateHash);
@@ -288,9 +267,7 @@ describe("Loop Kernel v2 event projector", () => {
         projectionHash: "tampered",
       }),
     ).toThrow("projection hash mismatch");
-    expect(() => replayLoopV2(RUN_ID, [started()], checkpoint)).toThrow(
-      "seq must be contiguous",
-    );
+    expect(() => replayLoopV2(RUN_ID, [started()], checkpoint)).toThrow("seq must be contiguous");
     expect(() =>
       replayLoopV2(RUN_ID, [
         started(),
@@ -313,16 +290,14 @@ describe("Loop Kernel v2 event projector", () => {
       }),
     ];
     expect(parseLoopV2EventLog(JSON.stringify(valid))).toEqual(valid);
-    expect(
-      parseLoopV2EventLog(valid.map((item) => JSON.stringify(item)).join("\n")),
-    ).toEqual(valid);
+    expect(parseLoopV2EventLog(valid.map((item) => JSON.stringify(item)).join("\n"))).toEqual(
+      valid,
+    );
+    expect(() => parseLoopV2EventLog(JSON.stringify([{ ...started(), seq: 0 }]))).toThrow(
+      "seq must be a safe integer",
+    );
     expect(() =>
-      parseLoopV2EventLog(JSON.stringify([{ ...started(), seq: 0 }])),
-    ).toThrow("seq must be a safe integer");
-    expect(() =>
-      parseLoopV2EventLog(
-        JSON.stringify([{ ...started(), event: { type: "invented" } }]),
-      ),
+      parseLoopV2EventLog(JSON.stringify([{ ...started(), event: { type: "invented" } }])),
     ).toThrow("Unsupported loop v2 event type");
     expect(() =>
       parseLoopV2EventLog(
@@ -379,11 +354,9 @@ describe("Loop Kernel v2 event projector", () => {
 
   test("kernel version is explicit and defaults to v1", () => {
     expect(resolveLoopKernelVersion({})).toBe("v1");
-    expect(
-      resolveLoopKernelVersion({ PAW_LOOP_KERNEL_VERSION: "v2-shadow" }),
-    ).toBe("v2-shadow");
-    expect(() =>
-      resolveLoopKernelVersion({ PAW_LOOP_KERNEL_VERSION: "benchmark-auto" }),
-    ).toThrow("Unsupported PAW_LOOP_KERNEL_VERSION");
+    expect(resolveLoopKernelVersion({ PAW_LOOP_KERNEL_VERSION: "v2-shadow" })).toBe("v2-shadow");
+    expect(() => resolveLoopKernelVersion({ PAW_LOOP_KERNEL_VERSION: "benchmark-auto" })).toThrow(
+      "Unsupported PAW_LOOP_KERNEL_VERSION",
+    );
   });
 });

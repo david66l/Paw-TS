@@ -96,27 +96,11 @@ export function SettingsModal({
 
   return (
     <div className={styles.overlay}>
-      <button
-        type="button"
-        className={styles.backdrop}
-        aria-label="关闭设置"
-        onClick={onClose}
-      />
-      <dialog
-        ref={dialogRef}
-        className={styles.dialog}
-        open
-        aria-modal="true"
-        aria-label="设置"
-      >
+      <button type="button" className={styles.backdrop} aria-label="关闭设置" onClick={onClose} />
+      <dialog ref={dialogRef} className={styles.dialog} open aria-modal="true" aria-label="设置">
         <header className={styles.header}>
           <span className={styles.title}>设置</span>
-          <button
-            type="button"
-            className={styles.close}
-            aria-label="关闭"
-            onClick={onClose}
-          >
+          <button type="button" className={styles.close} aria-label="关闭" onClick={onClose}>
             <X size={18} />
           </button>
         </header>
@@ -130,8 +114,7 @@ export function SettingsModal({
                 <div className={styles.rowLabel}>模型预设</div>
                 <div className={styles.rowDesc}>
                   当前模型：
-                  {modelPresets.find((p) => p.id === provider)?.model ||
-                    "未选择"}
+                  {modelPresets.find((p) => p.id === provider)?.model || "未选择"}
                 </div>
               </div>
               <Segmented
@@ -148,9 +131,7 @@ export function SettingsModal({
             <div className={styles.row}>
               <div className={styles.rowText}>
                 <div className={styles.rowLabel}>审批模式</div>
-                <div className={styles.rowDesc}>
-                  控制修改文件、运行命令前的确认
-                </div>
+                <div className={styles.rowDesc}>控制修改文件、运行命令前的确认</div>
               </div>
               <Segmented
                 value={approvalMode}
@@ -187,11 +168,7 @@ export function SettingsModal({
                   aria-pressed={colorTheme === id}
                   onClick={() => onColorThemeChange(id)}
                 >
-                  <span
-                    className={styles.skinPreview}
-                    data-skin={id}
-                    aria-hidden="true"
-                  >
+                  <span className={styles.skinPreview} data-skin={id} aria-hidden="true">
                     <span className={styles.previewSidebar} />
                     <span className={styles.previewPage}>
                       <span />

@@ -36,28 +36,16 @@ export function createJsonMemoryEvidenceQueryPlannerV3(input: {
   }
   return Object.freeze({
     plannerVersion: PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
-    async plan(
-      query: string,
-      signal: AbortSignal,
-      options?: MemoryEvidenceQueryPlanOptionsV3,
-    ) {
+    async plan(query: string, signal: AbortSignal, options?: MemoryEvidenceQueryPlanOptionsV3) {
       const intent = classifyMemoryEvidenceQueryV3(query);
-      if (
-        !intent.needsPlanning &&
-        options?.force !== true &&
-        options?.revision === undefined
-      ) {
+      if (!intent.needsPlanning && options?.force !== true && options?.revision === undefined) {
         return Object.freeze({
           plannerVersion: PAW_MEMORY_EVIDENCE_QUERY_PLANNER_VERSION_V3,
           ...intent,
           requirements: Object.freeze([]),
         });
       }
-      const request = buildMemoryEvidenceQueryPlanRequestV3(
-        query,
-        intent,
-        options?.revision,
-      );
+      const request = buildMemoryEvidenceQueryPlanRequestV3(query, intent, options?.revision);
       if (signal.aborted) throw abortError();
       const result = await input.model.complete(request, { signal });
       if (signal.aborted || result.status === "cancelled") throw abortError();
@@ -79,12 +67,9 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
   revision?: MemoryEvidenceQueryPlanRevisionV1,
 ): Readonly<{ system: string; user: string }> {
   const value = boundedQuery(query);
-  const planRevision = revision
-    ? validatePlanRevision(revision, intent, value)
-    : undefined;
+  const planRevision = revision ? validatePlanRevision(revision, intent, value) : undefined;
   const certifiedAssistantDialogueCandidate =
-    intent.roleConstraint === "user" &&
-    needsCertifiedAssistantDialogueCandidateV1(value);
+    intent.roleConstraint === "user" && needsCertifiedAssistantDialogueCandidateV1(value);
   return Object.freeze({
     system: [
       "You plan retrieval requirements, not the answer.",
@@ -135,23 +120,20 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
       ...(planRevision
         ? {
             revision: {
-              currentRequirements: planRevision.currentRequirements.map(
-                (requirement) => ({
-                  requirementId: requirement.requirementId,
-                  label: requirement.label,
-                  searchText: requirement.searchText,
-                  relation: requirement.relation ?? "direct",
-                  coverageMode:
-                    requirement.coverageMode ??
-                    (requirement.temporalMode === "latest" ? "latest" : "any"),
-                  minimumEvidence: requirement.minimumEvidence ?? 1,
-                  temporalMode: requirement.temporalMode,
-                  roleConstraint: requirement.roleConstraint,
-                  dependencyRelation:
-                    requirement.dependencyRelation ?? "independent",
-                  dependsOn: requirement.dependsOnRequirementIds ?? [],
-                }),
-              ),
+              currentRequirements: planRevision.currentRequirements.map((requirement) => ({
+                requirementId: requirement.requirementId,
+                label: requirement.label,
+                searchText: requirement.searchText,
+                relation: requirement.relation ?? "direct",
+                coverageMode:
+                  requirement.coverageMode ??
+                  (requirement.temporalMode === "latest" ? "latest" : "any"),
+                minimumEvidence: requirement.minimumEvidence ?? 1,
+                temporalMode: requirement.temporalMode,
+                roleConstraint: requirement.roleConstraint,
+                dependencyRelation: requirement.dependencyRelation ?? "independent",
+                dependsOn: requirement.dependsOnRequirementIds ?? [],
+              })),
               deficiencies: planRevision.deficiencies.map((deficiency) => ({
                 reason: deficiency.reason,
                 targetRequirementId: deficiency.targetRequirementId,
@@ -159,9 +141,7 @@ export function buildMemoryEvidenceQueryPlanRequestV3(
             },
           }
         : {}),
-      ...(certifiedAssistantDialogueCandidate
-        ? { certifiedAssistantDialogueCandidate: true }
-        : {}),
+      ...(certifiedAssistantDialogueCandidate ? { certifiedAssistantDialogueCandidate: true } : {}),
       maxRequirements: 4,
       maxItemChars: 192,
     }),
@@ -191,10 +171,7 @@ function validatePlanRevision(
   ]);
   for (const requirement of revision.currentRequirements) {
     if (
-      !memoryEvidenceLeafTemporalModeAllowedV1(
-        intent.temporalMode,
-        requirement.temporalMode,
-      ) ||
+      !memoryEvidenceLeafTemporalModeAllowedV1(intent.temporalMode, requirement.temporalMode) ||
       !axisValueAllowed(
         requirement.roleConstraint,
         intent.roleConstraint,
@@ -220,9 +197,7 @@ function validatePlanRevision(
     }
   }
   const requirementIds = new Set(
-    revision.currentRequirements.map(
-      (requirement) => requirement.requirementId,
-    ),
+    revision.currentRequirements.map((requirement) => requirement.requirementId),
   );
   const deficiencies = revision.deficiencies.map((deficiency) => {
     if (
@@ -259,27 +234,13 @@ export function parseMemoryEvidenceQueryPlanV3(
   if (
     !isRecord(parsed) ||
     Object.keys(parsed).some(
-      (key) =>
-        !new Set([
-          "answerShape",
-          "temporalMode",
-          "roleConstraint",
-          "requirements",
-        ]).has(key),
+      (key) => !new Set(["answerShape", "temporalMode", "roleConstraint", "requirements"]).has(key),
     ) ||
     !isMemoryEvidenceAnswerShapeV3(parsed.answerShape) ||
     !isMemoryEvidenceTemporalModeV3(parsed.temporalMode) ||
     !isMemoryEvidenceRoleConstraintV3(parsed.roleConstraint) ||
-    !axisValueAllowed(
-      parsed.answerShape,
-      intent.answerShape,
-      boundary.answerShape,
-    ) ||
-    !axisValueAllowed(
-      parsed.temporalMode,
-      intent.temporalMode,
-      boundary.temporalMode,
-    )
+    !axisValueAllowed(parsed.answerShape, intent.answerShape, boundary.answerShape) ||
+    !axisValueAllowed(parsed.temporalMode, intent.temporalMode, boundary.temporalMode)
   ) {
     throw namedError("MemoryEvidenceQueryPlanShapeInvalid");
   }
@@ -289,19 +250,9 @@ export function parseMemoryEvidenceQueryPlanV3(
     roleConstraint: parsed.roleConstraint,
     needsPlanning: intent.needsPlanning,
   });
-  const bounded = boundedRequirements(
-    parsed.requirements,
-    provisionalIntent,
-    query,
-  );
-  const plannedObligationShape = compileMemoryEvidenceObligationShapeV1(
-    query,
-    provisionalIntent,
-  );
-  const classifiedObligationShape = compileMemoryEvidenceObligationShapeV1(
-    query,
-    intent,
-  );
+  const bounded = boundedRequirements(parsed.requirements, provisionalIntent, query);
+  const plannedObligationShape = compileMemoryEvidenceObligationShapeV1(query, provisionalIntent);
+  const classifiedObligationShape = compileMemoryEvidenceObligationShapeV1(query, intent);
   const requirements = collapseRecommendationContextV1(
     bounded,
     provisionalIntent,
@@ -362,9 +313,7 @@ function collapseRecommendationContextV1(
   // collapsing four focused facets into one compound search text blurred
   // source discovery and dropped the slice from 60% to 30% accuracy, so the
   // original all-or-nothing union guard is retained on purpose.
-  const searchFacets = [
-    ...new Set(requirements.map((requirement) => requirement.searchText)),
-  ]
+  const searchFacets = [...new Set(requirements.map((requirement) => requirement.searchText))]
     .map((facet) => facet.trim().replace(/\s+/gu, " "))
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right, "en-US"));
@@ -403,17 +352,13 @@ function axisValueAllowed<T extends string>(
 function isMemoryEvidenceAnswerShapeV3(
   value: unknown,
 ): value is MemoryEvidenceQueryIntentV3["answerShape"] {
-  return new Set(["lookup", "compare", "aggregate", "recommend"]).has(
-    String(value),
-  );
+  return new Set(["lookup", "compare", "aggregate", "recommend"]).has(String(value));
 }
 
 function isMemoryEvidenceTemporalModeV3(
   value: unknown,
 ): value is MemoryEvidenceQueryIntentV3["temporalMode"] {
-  return new Set(["any", "latest", "as_of", "history", "range"]).has(
-    String(value),
-  );
+  return new Set(["any", "latest", "as_of", "history", "range"]).has(String(value));
 }
 
 function isMemoryEvidenceRoleConstraintV3(
@@ -451,8 +396,7 @@ function boundedRequirements(
       throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
     }
     const keys = Object.keys(raw).sort().join("\0");
-    const legacy =
-      keys === "coverageMode\0label\0minimumEvidence\0relation\0searchText";
+    const legacy = keys === "coverageMode\0label\0minimumEvidence\0relation\0searchText";
     const obligationDag =
       keys ===
       "coverageMode\0dependencyRelation\0dependsOn\0key\0label\0minimumEvidence\0relation\0roleConstraint\0searchText\0temporalMode";
@@ -460,30 +404,20 @@ function boundedRequirements(
       (!legacy && !obligationDag) ||
       typeof raw.label !== "string" ||
       typeof raw.searchText !== "string" ||
-      !new Set(["direct", "temporal", "comparative", "inferred"]).has(
-        String(raw.relation),
-      ) ||
-      !new Set(["any", "all", "latest", "convergent"]).has(
-        String(raw.coverageMode),
-      ) ||
+      !new Set(["direct", "temporal", "comparative", "inferred"]).has(String(raw.relation)) ||
+      !new Set(["any", "all", "latest", "convergent"]).has(String(raw.coverageMode)) ||
       !Number.isSafeInteger(raw.minimumEvidence) ||
       (raw.minimumEvidence as number) < 1 ||
       (raw.minimumEvidence as number) > 3 ||
       (raw.relation === "inferred" &&
-        (raw.coverageMode !== "convergent" ||
-          (raw.minimumEvidence as number) < 2)) ||
+        (raw.coverageMode !== "convergent" || (raw.minimumEvidence as number) < 2)) ||
       (raw.coverageMode === "convergent" && (raw.minimumEvidence as number) < 2)
     ) {
       throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
     }
     const label = raw.label.trim().replace(/\s+/gu, " ");
     const searchText = raw.searchText.trim().replace(/\s+/gu, " ");
-    if (
-      !label ||
-      label.length > 192 ||
-      !searchText ||
-      searchText.length > 192
-    ) {
+    if (!label || label.length > 192 || !searchText || searchText.length > 192) {
       throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
     }
     if (
@@ -492,23 +426,15 @@ function boundedRequirements(
         raw.key.length < 1 ||
         raw.key.length > 128 ||
         !isMemoryEvidenceTemporalModeV3(raw.temporalMode) ||
-        !memoryEvidenceLeafTemporalModeAllowedV1(
-          intent.temporalMode,
-          raw.temporalMode,
-        ) ||
+        !memoryEvidenceLeafTemporalModeAllowedV1(intent.temporalMode, raw.temporalMode) ||
         !new Set(["user", "assistant"]).has(String(raw.roleConstraint)) ||
-        !new Set([
-          "independent",
-          "depends_on",
-          "responds_to",
-          "supersedes",
-        ]).has(String(raw.dependencyRelation)) ||
+        !new Set(["independent", "depends_on", "responds_to", "supersedes"]).has(
+          String(raw.dependencyRelation),
+        ) ||
         !Array.isArray(raw.dependsOn) ||
         raw.dependsOn.some(
           (dependency) =>
-            typeof dependency !== "string" ||
-            dependency.length < 1 ||
-            dependency.length > 128,
+            typeof dependency !== "string" || dependency.length < 1 || dependency.length > 128,
         ))
     ) {
       throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
@@ -521,9 +447,7 @@ function boundedRequirements(
     }
     seenKeys.add(requirementId);
     const dependsOnRequirementIds = obligationDag
-      ? Object.freeze(
-          (raw.dependsOn as string[]).map(canonicalizeModelRequirementKeyV1),
-        )
+      ? Object.freeze((raw.dependsOn as string[]).map(canonicalizeModelRequirementKeyV1))
       : undefined;
     provisional.push(
       Object.freeze({
@@ -542,8 +466,7 @@ function boundedRequirements(
         minimumEvidence: raw.minimumEvidence as number,
         ...(obligationDag && dependsOnRequirementIds
           ? {
-              dependencyRelation:
-                raw.dependencyRelation as MemoryEvidenceRequirementDependencyV4,
+              dependencyRelation: raw.dependencyRelation as MemoryEvidenceRequirementDependencyV4,
               dependsOnRequirementIds,
             }
           : {}),
@@ -551,11 +474,7 @@ function boundedRequirements(
     );
   }
   for (const requirement of provisional) {
-    if (
-      requirement.dependsOnRequirementIds?.some(
-        (dependency) => !seenKeys.has(dependency),
-      )
-    ) {
+    if (requirement.dependsOnRequirementIds?.some((dependency) => !seenKeys.has(dependency))) {
       throw namedError("MemoryEvidenceQueryPlanRequirementDependencyInvalid");
     }
   }
@@ -603,9 +522,7 @@ function roleEnvelopeAllowed(
   requirements: readonly MemoryEvidenceRequirementV3[],
 ): boolean {
   if (axisValueAllowed(envelope, classified, authority)) return true;
-  const roles = new Set(
-    requirements.map((requirement) => requirement.roleConstraint),
-  );
+  const roles = new Set(requirements.map((requirement) => requirement.roleConstraint));
   return (
     envelope === "any" &&
     roles.has("user") &&
@@ -619,24 +536,16 @@ function deriveRequirementRoleEnvelope(
   requirements: readonly MemoryEvidenceRequirementV3[],
 ): MemoryEvidenceQueryIntentV3["roleConstraint"] {
   if (
-    !requirements.some(
-      (requirement) => requirement.dependencyRelation !== undefined,
-    ) ||
+    !requirements.some((requirement) => requirement.dependencyRelation !== undefined) ||
     requirements.length === 0
   ) {
     return proposedEnvelope;
   }
-  const roles = new Set(
-    requirements.map((requirement) => requirement.roleConstraint),
-  );
-  return roles.size === 1
-    ? (requirements[0]?.roleConstraint ?? proposedEnvelope)
-    : "any";
+  const roles = new Set(requirements.map((requirement) => requirement.roleConstraint));
+  return roles.size === 1 ? (requirements[0]?.roleConstraint ?? proposedEnvelope) : "any";
 }
 
-function validateRequirementDag(
-  requirements: readonly MemoryEvidenceRequirementV3[],
-): void {
+function validateRequirementDag(requirements: readonly MemoryEvidenceRequirementV3[]): void {
   const dagRequirements = requirements.filter(
     (requirement) => requirement.dependencyRelation !== undefined,
   );
@@ -644,9 +553,7 @@ function validateRequirementDag(
   if (dagRequirements.length !== requirements.length) {
     throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
   }
-  const byId = new Map(
-    requirements.map((requirement) => [requirement.requirementId, requirement]),
-  );
+  const byId = new Map(requirements.map((requirement) => [requirement.requirementId, requirement]));
   if (byId.size !== requirements.length) {
     throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
   }
@@ -655,18 +562,13 @@ function validateRequirementDag(
     if (
       new Set(dependencies).size !== dependencies.length ||
       dependencies.some(
-        (dependency) =>
-          dependency === requirement.requirementId || !byId.has(dependency),
+        (dependency) => dependency === requirement.requirementId || !byId.has(dependency),
       ) ||
-      (requirement.dependencyRelation === "independent") !==
-        (dependencies.length === 0) ||
+      (requirement.dependencyRelation === "independent") !== (dependencies.length === 0) ||
       (requirement.dependencyRelation === "responds_to" &&
         (requirement.roleConstraint !== "assistant" ||
-          !dependencies.some(
-            (dependency) => byId.get(dependency)?.roleConstraint === "user",
-          ))) ||
-      (requirement.dependencyRelation === "supersedes" &&
-        requirement.temporalMode === "any")
+          !dependencies.some((dependency) => byId.get(dependency)?.roleConstraint === "user"))) ||
+      (requirement.dependencyRelation === "supersedes" && requirement.temporalMode === "any")
     ) {
       throw namedError("MemoryEvidenceQueryPlanRequirementsInvalid");
     }
@@ -679,8 +581,7 @@ function validateRequirementDag(
     }
     if (visited.has(requirementId)) return;
     visiting.add(requirementId);
-    for (const dependency of byId.get(requirementId)?.dependsOnRequirementIds ??
-      []) {
+    for (const dependency of byId.get(requirementId)?.dependsOnRequirementIds ?? []) {
       visit(dependency);
     }
     visiting.delete(requirementId);
@@ -702,9 +603,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function stableName(value: string): string {
-  return /^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(value)
-    ? value
-    : "MemoryEvidenceQueryPlannerFailed";
+  return /^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(value) ? value : "MemoryEvidenceQueryPlannerFailed";
 }
 
 function namedError(name: string): Error {

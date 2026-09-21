@@ -26,10 +26,7 @@ import {
   walkCommands,
   walkPipelines,
 } from "./shell-ast.js";
-import {
-  evaluatePolicy,
-  getDefaultPolicyConfig,
-} from "./shell-policy-config.js";
+import { evaluatePolicy, getDefaultPolicyConfig } from "./shell-policy-config.js";
 
 export interface ShellGuardResult {
   readonly allowed: boolean;
@@ -95,15 +92,7 @@ const NETWORK_UPLOAD_FLAGS = new Set([
 ]);
 
 /** 接受内联代码的脚本解释器 */
-const SCRIPT_INTERPRETERS = new Set([
-  "python",
-  "python3",
-  "node",
-  "bun",
-  "ruby",
-  "perl",
-  "php",
-]);
+const SCRIPT_INTERPRETERS = new Set(["python", "python3", "node", "bun", "ruby", "perl", "php"]);
 
 /** 内联代码标志（如 python -c, node -e） */
 const SCRIPT_INLINE_FLAGS = new Set(["-c", "-e"]);
@@ -132,12 +121,10 @@ const INJECTION_MARKERS = ["$(", "`", "<<<"];
 function fastLiteralScan(raw: string): ShellGuardResult | null {
   const low = raw.toLowerCase();
   for (const lit of DANGEROUS_LITERALS) {
-    if (low.includes(lit))
-      return { allowed: false, reason: `blocked literal: ${lit}` };
+    if (low.includes(lit)) return { allowed: false, reason: `blocked literal: ${lit}` };
   }
   for (const m of INJECTION_MARKERS) {
-    if (raw.includes(m))
-      return { allowed: false, reason: `disallowed pattern (injection): ${m}` };
+    if (raw.includes(m)) return { allowed: false, reason: `disallowed pattern (injection): ${m}` };
   }
   return null;
 }
@@ -233,8 +220,7 @@ function checkInjection(cmd: Command): ShellGuardResult | null {
       };
   }
   for (const arg of cmd.args) {
-    if (arg.raw.includes("<<<"))
-      return { allowed: false, reason: "blocked: here-string" };
+    if (arg.raw.includes("<<<")) return { allowed: false, reason: "blocked: here-string" };
   }
   return null;
 }
@@ -278,11 +264,7 @@ function checkDataExfiltration(pipeline: Pipeline): ShellGuardResult | null {
       }
       if (prevName === "tar" || prevName === "zip") {
         const prevArgs = argValues(prev);
-        if (
-          prevArgs.includes("-c") ||
-          prevArgs.includes("-cf") ||
-          prevArgs.includes("-czf")
-        ) {
+        if (prevArgs.includes("-c") || prevArgs.includes("-cf") || prevArgs.includes("-czf")) {
           return {
             allowed: false,
             reason: "blocked: archive piped to network command",
@@ -314,8 +296,7 @@ function checkDestructiveScript(cmd: Command): ShellGuardResult | null {
   const scriptRaw = rawArgs[scriptIndex]!;
   const script = scriptRaw.replace(/^["'](.*)["']$/, "$1");
   for (const pat of DANGEROUS_SCRIPT_PATTERNS) {
-    if (pat.test(script))
-      return { allowed: false, reason: "blocked: destructive inline script" };
+    if (pat.test(script)) return { allowed: false, reason: "blocked: destructive inline script" };
   }
   return null;
 }
@@ -366,10 +347,7 @@ function checkRedirects(cmd: Command): ShellGuardResult | null {
  * 4. 检查独立的上传命令
  * 5. 无阻断 + 有 ask → 返回审批要求
  */
-export function analyzeCommandLine(
-  ast: ASTNode,
-  raw: string,
-): ShellGuardResult {
+export function analyzeCommandLine(ast: ASTNode, raw: string): ShellGuardResult {
   // 1. 快速字面量扫描
   const hasQuotes = raw.includes('"') || raw.includes("'");
   if (!hasQuotes) {
@@ -417,8 +395,7 @@ export function analyzeCommandLine(
         const hasUploadFlag = args.some((a) =>
           [...NETWORK_UPLOAD_FLAGS].some((f) => a === f || a.startsWith(f)),
         );
-        if (hasUploadFlag)
-          return { allowed: false, reason: "blocked: network upload command" };
+        if (hasUploadFlag) return { allowed: false, reason: "blocked: network upload command" };
       }
     }
   }

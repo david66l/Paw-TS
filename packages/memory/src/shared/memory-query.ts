@@ -25,11 +25,7 @@
  */
 
 import type { ChatMessage } from "@paw/core";
-import {
-  isToolResultMessage,
-  parseToolResult,
-  splitToolBlocks,
-} from "@paw/core";
+import { isToolResultMessage, parseToolResult, splitToolBlocks } from "@paw/core";
 import type { MemoryRecord } from "./memory-record.js";
 
 /**
@@ -123,11 +119,7 @@ export function buildRetrievalSignalsFromMessages(
 export function isMemoryMetaQuery(goal: string): boolean {
   const g = goal.trim();
   // 中文元查询模式：记得/记不记得、什么记忆、之前的记忆
-  if (
-    /(?:还记得|记不记得|之前的记忆|有哪些\s*(?:reference\s*)?记忆|什么记忆|记得.*吗)/i.test(
-      g,
-    )
-  ) {
+  if (/(?:还记得|记不记得|之前的记忆|有哪些\s*(?:reference\s*)?记忆|什么记忆|记得.*吗)/i.test(g)) {
     return true;
   }
   // "以前...记" —— "记"后面不能跟"录/录器/账/号/者"
@@ -135,11 +127,7 @@ export function isMemoryMetaQuery(goal: string): boolean {
     return true;
   }
   // 英文元查询模式
-  if (
-    /\b(?:what|which|list|show)\s+(?:are\s+)?(?:my|the|all|stored)?\s*memories\b/i.test(
-      g,
-    )
-  ) {
+  if (/\b(?:what|which|list|show)\s+(?:are\s+)?(?:my|the|all|stored)?\s*memories\b/i.test(g)) {
     return true;
   }
   if (/\bdo\s+you\s+remember\b/i.test(g)) {
@@ -263,11 +251,7 @@ const SIMPLE_SCRIPT_KEYWORDS = [
  * - simple_script: 简单脚本（需要最少上下文）
  * - general: 通用任务（默认）
  */
-export type TaskProfile =
-  | "refactor_arch"
-  | "bug_fix"
-  | "simple_script"
-  | "general";
+export type TaskProfile = "refactor_arch" | "bug_fix" | "simple_script" | "general";
 
 /**
  * 根据 goal 文本对用户任务进行分类。
@@ -316,9 +300,7 @@ function matchWord(keyword: string, text: string): boolean {
   // 先用词边界正则匹配；对 CJK 和多词关键词降级使用 includes
   // （因为 CJK 字符的边界不可靠）
   try {
-    const re = new RegExp(
-      `(?:^|[\\s\\-_.,;:!?()])${escapeRegExp(keyword)}(?:$|[\\s\\-_.,;:!?()])`,
-    );
+    const re = new RegExp(`(?:^|[\\s\\-_.,;:!?()])${escapeRegExp(keyword)}(?:$|[\\s\\-_.,;:!?()])`);
     if (re.test(text)) return true;
   } catch {
     // 正则太复杂 —— 降级到 includes
@@ -346,8 +328,7 @@ function escapeRegExp(s: string): string {
 export function extractFilePaths(text: string): string[] {
   const paths: string[] = [];
   // 匹配常见路径模式：包含至少一个目录层级和文件扩展名
-  const re =
-    /(?:\.\/|[a-zA-Z0-9_-]+\/)(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+/g;
+  const re = /(?:\.\/|[a-zA-Z0-9_-]+\/)(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+/g;
   let m: RegExpExecArray | null = re.exec(text);
   while (m !== null) {
     paths.push(m[0]);
@@ -366,9 +347,7 @@ export function extractFilePaths(text: string): string[] {
  *
  * Extract concise error signatures from full error descriptions.
  */
-export function extractErrorSignatures(
-  errorsAndFixes?: readonly string[],
-): string[] {
+export function extractErrorSignatures(errorsAndFixes?: readonly string[]): string[] {
   if (!errorsAndFixes) return [];
   const signatures: string[] = [];
 
@@ -378,17 +357,13 @@ export function extractErrorSignatures(
     if (tsCodes) signatures.push(...tsCodes);
 
     // 提取异常类型名
-    const exceptions = text.match(
-      /\b(Error|TypeError|ReferenceError|SyntaxError|RangeError)\b/g,
-    );
+    const exceptions = text.match(/\b(Error|TypeError|ReferenceError|SyntaxError|RangeError)\b/g);
     if (exceptions) signatures.push(...exceptions);
 
     // 提取关键错误行（前 2 行看起来像错误的行），截断到 80 字符
     const keyLines = text
       .split("\n")
-      .filter((l) =>
-        /cannot|does not|is not|failed|undefined|null/.test(l.toLowerCase()),
-      )
+      .filter((l) => /cannot|does not|is not|failed|undefined|null/.test(l.toLowerCase()))
       .slice(0, 2);
     for (const line of keyLines) {
       const normalized = line.trim().slice(0, 80);
@@ -414,26 +389,17 @@ export function inferTags(sm: {
 }): string[] {
   const tags = new Set<string>();
   // 拼合所有文本字段并转为小写
-  const text = [sm.task, sm.currentState, ...(sm.errorsAndFixes ?? [])]
-    .join(" ")
-    .toLowerCase();
+  const text = [sm.task, sm.currentState, ...(sm.errorsAndFixes ?? [])].join(" ").toLowerCase();
 
   // 各领域关键词命中即打标
-  if (text.includes("bug") || text.includes("fix") || text.includes("error"))
-    tags.add("bug");
+  if (text.includes("bug") || text.includes("fix") || text.includes("error")) tags.add("bug");
   if (text.includes("refactor")) tags.add("refactor");
   if (text.includes("test") || text.includes("spec")) tags.add("testing");
   if (text.includes("api") || text.includes("endpoint")) tags.add("api");
-  if (
-    text.includes("perf") ||
-    text.includes("performance") ||
-    text.includes("slow")
-  )
+  if (text.includes("perf") || text.includes("performance") || text.includes("slow"))
     tags.add("performance");
-  if (text.includes("typescript") || text.includes("type "))
-    tags.add("typescript");
-  if (text.includes("react") || text.includes("component"))
-    tags.add("frontend");
+  if (text.includes("typescript") || text.includes("type ")) tags.add("typescript");
+  if (text.includes("react") || text.includes("component")) tags.add("frontend");
   if (text.includes("memory") || text.includes("context")) tags.add("memory");
   if (text.includes("build") || text.includes("compile")) tags.add("build");
   if (text.includes("lint") || text.includes("format")) tags.add("lint");

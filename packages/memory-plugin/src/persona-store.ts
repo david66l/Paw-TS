@@ -43,9 +43,7 @@ export function createPostgresMemoryPersonaStoreV1(
       if (signal.aborted) throw abortError();
       const entries = profiles.filter(
         (entry) =>
-          entry.repo === scope.repositoryId &&
-          entry.tInvalid === null &&
-          entry.kind === "profile",
+          entry.repo === scope.repositoryId && entry.tInvalid === null && entry.kind === "profile",
       );
       emit(input.onEvent, {
         schemaVersion: "paw.memory-persona-store-event.v1",
@@ -58,10 +56,7 @@ export function createPostgresMemoryPersonaStoreV1(
   });
 }
 
-function assertScopedEngine(
-  engine: MemoryStoreEngine,
-  scope: PawNextMemoryScopeV1,
-): void {
+function assertScopedEngine(engine: MemoryStoreEngine, scope: PawNextMemoryScopeV1): void {
   if (
     !engine.scope ||
     engine.scope.tenantId !== scope.tenantId ||

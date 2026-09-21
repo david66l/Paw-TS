@@ -6,15 +6,11 @@
  */
 
 import { getSql } from "../../db/connection.js";
-import {
-  DEFAULT_LIFECYCLE_CONFIG,
-  scanDeletionCandidates,
-} from "../lifecycle/janitor.js";
+import { DEFAULT_LIFECYCLE_CONFIG, scanDeletionCandidates } from "../lifecycle/janitor.js";
 
 /** spec §9.4 默认值（展示文案用；判定逻辑在 lifecycle/janitor.scanDeletionCandidates） */
 export const DELETE_MIN_FREQ = DEFAULT_LIFECYCLE_CONFIG.deleteMinFreq;
-export const DELETE_MAX_UTILITY_RATIO =
-  DEFAULT_LIFECYCLE_CONFIG.deleteMaxUtilityRatio;
+export const DELETE_MAX_UTILITY_RATIO = DEFAULT_LIFECYCLE_CONFIG.deleteMaxUtilityRatio;
 /** spec §10.4-3：unverified 占比告警阈值 */
 export const UNVERIFIED_WARN_RATIO = 0.1;
 
@@ -70,8 +66,7 @@ export async function collectMemoryStats(): Promise<MemoryStats> {
     WHERE t_invalid IS NULL GROUP BY type ORDER BY n DESC
   `;
   const byKind: Record<string, number> = {};
-  for (const r of kindRows as unknown as { type: string; n: number }[])
-    byKind[r.type] = r.n;
+  for (const r of kindRows as unknown as { type: string; n: number }[]) byKind[r.type] = r.n;
 
   const [writeOps] = await sql`
     SELECT count(*)::int AS n FROM memory_op_log

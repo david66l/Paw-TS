@@ -1,8 +1,4 @@
-import type {
-  SubAgentLaunchOptions,
-  SubAgentLauncher,
-  SubAgentResult,
-} from "@paw/harness";
+import type { SubAgentLaunchOptions, SubAgentLauncher, SubAgentResult } from "@paw/harness";
 
 import {
   type CollaborationPolicyV1,
@@ -34,9 +30,7 @@ export function createBoundedSubAgentLauncherV1(
   if (!input.delegate || typeof input.delegate.launch !== "function") {
     throw new TypeError("Collaboration delegate is invalid");
   }
-  const policy = freezeCollaborationPolicyV1(
-    input.policy ?? DEFAULT_COLLABORATION_POLICY_V1,
-  );
+  const policy = freezeCollaborationPolicyV1(input.policy ?? DEFAULT_COLLABORATION_POLICY_V1);
   const roster = input.roster ?? DEFAULT_COLLABORATION_ROSTER_V1;
   const slots = new Semaphore(policy.maxConcurrentChildren);
 
@@ -49,11 +43,7 @@ export function createBoundedSubAgentLauncherV1(
       const bounded = normalizeLaunch(goal, maxSteps, options, policy, roster);
       try {
         return boundResult(
-          await input.delegate.launch(
-            bounded.goal,
-            bounded.maxSteps,
-            bounded.options,
-          ),
+          await input.delegate.launch(bounded.goal, bounded.maxSteps, bounded.options),
           policy,
         );
       } catch (error) {
@@ -64,9 +54,7 @@ export function createBoundedSubAgentLauncherV1(
 
   return Object.freeze({
     launch,
-    async launchStreaming(
-      options: Parameters<SubAgentLauncher["launchStreaming"]>[0],
-    ) {
+    async launchStreaming(options: Parameters<SubAgentLauncher["launchStreaming"]>[0]) {
       return launch(options.goal, options.maxSteps, {
         args: options.args,
         sharedContext: options.sharedContext,
@@ -81,10 +69,8 @@ export function createBoundedSubAgentLauncherV1(
 }
 
 /** @deprecated Use createBoundedSubAgentLauncherV1. */
-export const createBoundedReadOnlySubAgentLauncherV1 =
-  createBoundedSubAgentLauncherV1;
-export type CreateBoundedReadOnlySubAgentLauncherInputV1 =
-  CreateBoundedSubAgentLauncherInputV1;
+export const createBoundedReadOnlySubAgentLauncherV1 = createBoundedSubAgentLauncherV1;
+export type CreateBoundedReadOnlySubAgentLauncherInputV1 = CreateBoundedSubAgentLauncherInputV1;
 
 function normalizeLaunch(
   goal: string,
@@ -99,9 +85,7 @@ function normalizeLaunch(
 } {
   const normalizedGoal = goal.trim();
   if (!normalizedGoal || normalizedGoal.length > policy.maxGoalChars) {
-    throw new Error(
-      `Child goal must be between 1 and ${policy.maxGoalChars} characters`,
-    );
+    throw new Error(`Child goal must be between 1 and ${policy.maxGoalChars} characters`);
   }
   const requestedRole = isCollaborationRoleV1(options?.args?.role)
     ? options.args.role
@@ -113,9 +97,7 @@ function normalizeLaunch(
   const maxForAgent = Math.min(agent.maxSteps, policy.maxChildSteps);
   const steps = maxSteps ?? maxForAgent;
   if (!Number.isSafeInteger(steps) || steps < 1 || steps > maxForAgent) {
-    throw new Error(
-      `Child maxSteps must be between 1 and ${maxForAgent} for ${agent.id}`,
-    );
+    throw new Error(`Child maxSteps must be between 1 and ${maxForAgent} for ${agent.id}`);
   }
   return {
     goal: normalizedGoal,
@@ -137,10 +119,7 @@ function normalizeLaunch(
   };
 }
 
-function boundResult(
-  value: SubAgentResult,
-  policy: CollaborationPolicyV1,
-): SubAgentResult {
+function boundResult(value: SubAgentResult, policy: CollaborationPolicyV1): SubAgentResult {
   return Object.freeze({
     status: value.status,
     summary: truncate(value.summary, policy.maxSummaryChars),
@@ -149,19 +128,13 @@ function boundResult(
           environmentAudit: Object.freeze({
             ...value.environmentAudit,
             inspected: Object.freeze(
-              value.environmentAudit.inspected.map((file) =>
-                Object.freeze({ ...file }),
-              ),
+              value.environmentAudit.inspected.map((file) => Object.freeze({ ...file })),
             ),
-            unmetCriteria: Object.freeze([
-              ...value.environmentAudit.unmetCriteria,
-            ]),
+            unmetCriteria: Object.freeze([...value.environmentAudit.unmetCriteria]),
           }),
         }
       : {}),
-    ...(value.childRun
-      ? { childRun: Object.freeze({ ...value.childRun }) }
-      : {}),
+    ...(value.childRun ? { childRun: Object.freeze({ ...value.childRun }) } : {}),
     ...(value.collaborationTask
       ? {
           collaborationTask: Object.freeze({ ...value.collaborationTask }),
@@ -169,9 +142,7 @@ function boundResult(
       : {}),
     ...(value.findings
       ? {
-          findings: Object.freeze(
-            value.findings.slice(0, 20).map((item) => truncate(item, 1_000)),
-          ),
+          findings: Object.freeze(value.findings.slice(0, 20).map((item) => truncate(item, 1_000))),
         }
       : {}),
     ...(value.changedFiles
@@ -180,9 +151,7 @@ function boundResult(
     ...(value.testsRun
       ? {
           testsRun: Object.freeze(
-            value.testsRun
-              .slice(0, 50)
-              .map((item) => Object.freeze({ ...item })),
+            value.testsRun.slice(0, 50).map((item) => Object.freeze({ ...item })),
           ),
         }
       : {}),
@@ -191,21 +160,15 @@ function boundResult(
           outcome: Object.freeze({
             ...value.outcome,
             commands: Object.freeze(
-              value.outcome.commands
-                .slice(0, 50)
-                .map((item) => Object.freeze({ ...item })),
+              value.outcome.commands.slice(0, 50).map((item) => Object.freeze({ ...item })),
             ),
-            artifactRefs: Object.freeze(
-              value.outcome.artifactRefs.slice(0, 50),
-            ),
+            artifactRefs: Object.freeze(value.outcome.artifactRefs.slice(0, 50)),
           }),
         }
       : {}),
     ...(value.errors
       ? {
-          errors: Object.freeze(
-            value.errors.slice(0, 20).map((item) => truncate(item, 1_000)),
-          ),
+          errors: Object.freeze(value.errors.slice(0, 20).map((item) => truncate(item, 1_000))),
         }
       : {}),
   });
@@ -224,9 +187,7 @@ function failed(error: unknown, policy: CollaborationPolicyV1): SubAgentResult {
 }
 
 function truncate(value: string, limit: number): string {
-  return value.length <= limit
-    ? value
-    : `${value.slice(0, limit)}\n[truncated]`;
+  return value.length <= limit ? value : `${value.slice(0, limit)}\n[truncated]`;
 }
 
 class Semaphore {
@@ -235,10 +196,7 @@ class Semaphore {
 
   constructor(private readonly limit: number) {}
 
-  async run<T>(
-    signal: AbortSignal | undefined,
-    work: () => Promise<T>,
-  ): Promise<T> {
+  async run<T>(signal: AbortSignal | undefined, work: () => Promise<T>): Promise<T> {
     await this.acquire(signal);
     try {
       return await work();
@@ -276,7 +234,5 @@ class Semaphore {
 }
 
 function abortError(signal: AbortSignal | undefined): Error {
-  return signal?.reason instanceof Error
-    ? signal.reason
-    : new Error("Child dispatch aborted");
+  return signal?.reason instanceof Error ? signal.reason : new Error("Child dispatch aborted");
 }

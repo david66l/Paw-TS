@@ -77,10 +77,7 @@ export interface MemoryEvidenceExecutionObservationValueV1 {
   readonly slotId: string;
   readonly valueText: string;
   readonly valueKey: string;
-  readonly valueComposition:
-    | "single"
-    | "contiguous_composite"
-    | "ordered_tuple";
+  readonly valueComposition: "single" | "contiguous_composite" | "ordered_tuple";
   readonly predicateKind: MemoryStateBoundObservationV2["predicateKind"];
   readonly polarity: MemoryStateBoundObservationV2["polarity"];
   readonly modality: MemoryStateBoundObservationV2["modality"];
@@ -123,17 +120,8 @@ export interface MemoryEvidenceExecutionComparisonValueV1 {
 export interface MemoryEvidenceExecutionAggregateValueV1 {
   readonly kind: "aggregate";
   readonly valueId: string;
-  readonly operator:
-    | "collect_unique"
-    | "count"
-    | "sum"
-    | "difference"
-    | "ratio_percent";
-  readonly aggregationUnit:
-    | "event"
-    | "semantic_value"
-    | "entity"
-    | "numeric_quantity";
+  readonly operator: "collect_unique" | "count" | "sum" | "difference" | "ratio_percent";
+  readonly aggregationUnit: "event" | "semantic_value" | "entity" | "numeric_quantity";
   readonly countBasis: "enumerated_members" | "stated_cardinality" | null;
   readonly memberValueIds: readonly string[];
   readonly lowerBoundCount: number;
@@ -168,16 +156,11 @@ export interface MemoryEvidenceDurationEndpointBindingCertificateV1 {
   readonly stateProgramRevision: string;
   readonly resolvedStateFrameRevision: string;
   readonly sourceLockDigest: string;
-  readonly endpointContractKind:
-    | "distinct_evidence_pair"
-    | "evidence_to_host_anchor";
+  readonly endpointContractKind: "distinct_evidence_pair" | "evidence_to_host_anchor";
   readonly endpointValueIds: readonly string[];
   readonly endpointClaimIdentities: readonly string[];
   readonly endpointEventIdentities: readonly string[];
-  readonly endpointIdentityBases: readonly (
-    | "stable_event_key"
-    | "typed_role_interval"
-  )[];
+  readonly endpointIdentityBases: readonly ("stable_event_key" | "typed_role_interval")[];
   readonly endpointTimeBases: readonly MemoryStateBoundObservationV2["eventTimeBasis"][];
   readonly endpointRoles: readonly MemoryStateBoundObservationV2["durationEndpointRole"][];
   readonly endpointRequirementIds: readonly string[];
@@ -350,21 +333,13 @@ export function executeMemoryEvidenceProgramV1(input: {
   ) {
     throw namedError("MemoryEvidenceExecutionRuntimeFrameInvalid");
   }
-  const readNodes = input.program.nodes.filter(
-    (node) => node.operation === "read_requirement",
-  );
+  const readNodes = input.program.nodes.filter((node) => node.operation === "read_requirement");
   const readyReadNodes = readNodes.filter((node) => node.status === "ready");
   const readNodeByRequirement = new Map(
-    readNodes.flatMap((node) =>
-      node.requirementId ? [[node.requirementId, node] as const] : [],
-    ),
+    readNodes.flatMap((node) => (node.requirementId ? [[node.requirementId, node] as const] : [])),
   );
-  const slotByRequirement = new Map(
-    input.slots.map((slot) => [slot.requirementId, slot]),
-  );
-  const stateSlotById = new Map(
-    input.frame.slots.map((slot) => [slot.slotId, slot]),
-  );
+  const slotByRequirement = new Map(input.slots.map((slot) => [slot.requirementId, slot]));
+  const stateSlotById = new Map(input.frame.slots.map((slot) => [slot.slotId, slot]));
   const certificateRegistry = validateExecutionBindingCertificates(
     input.program,
     input.slots,
@@ -372,20 +347,14 @@ export function executeMemoryEvidenceProgramV1(input: {
     input.validatedObservations,
     input.bindingCertificateValidationContexts,
   );
-  const certificateByObservationId =
-    certificateRegistry.certificateByObservationId;
+  const certificateByObservationId = certificateRegistry.certificateByObservationId;
   if (
     !input.program.programRevision.trim() ||
     !input.frame.programRevision.trim() ||
     slotByRequirement.size !== input.slots.length ||
     stateSlotById.size !== input.frame.slots.length ||
-    input.slots.some(
-      (slot) => !readNodeByRequirement.has(slot.requirementId),
-    ) ||
-    readyReadNodes.some(
-      (node) =>
-        !node.requirementId || !slotByRequirement.has(node.requirementId),
-    )
+    input.slots.some((slot) => !readNodeByRequirement.has(slot.requirementId)) ||
+    readyReadNodes.some((node) => !node.requirementId || !slotByRequirement.has(node.requirementId))
   ) {
     throw namedError("MemoryEvidenceExecutionRuntimeInputInvalid");
   }
@@ -398,17 +367,13 @@ export function executeMemoryEvidenceProgramV1(input: {
         const readNode = readNodeByRequirement.get(coverage.requirementId);
         return (
           !readNode ||
-          (readNode.status === "ready" &&
-            !slotByRequirement.has(coverage.requirementId)) ||
+          (readNode.status === "ready" && !slotByRequirement.has(coverage.requirementId)) ||
           coverage.requirementRevision !== readNode.requirementRevision ||
-          coverage.temporalBindingRevision !==
-            readNode.temporalBindingRevision ||
+          coverage.temporalBindingRevision !== readNode.temporalBindingRevision ||
           coverage.supportingEvidenceSetRevision !==
             hashCanonicalJsonV1({
               schemaVersion: "paw.memory-supporting-evidence-set.v1",
-              evidenceRefs: Object.freeze(
-                [...(readNode.supportingEvidenceRefs ?? [])].sort(),
-              ),
+              evidenceRefs: Object.freeze([...(readNode.supportingEvidenceRefs ?? [])].sort()),
             } as never)
         );
       }))
@@ -416,9 +381,7 @@ export function executeMemoryEvidenceProgramV1(input: {
     throw namedError("MemoryEvidenceExecutionRuntimeCoverageInvalid");
   }
   if (input.coverageCertificate) {
-    validateMemoryEvidenceExecutionCoverageCertificateV1(
-      input.coverageCertificate,
-    );
+    validateMemoryEvidenceExecutionCoverageCertificateV1(input.coverageCertificate);
   }
   const closedRequirementIds = new Set(
     input.coverageCertificate?.requirements.flatMap((coverage) =>
@@ -435,32 +398,20 @@ export function executeMemoryEvidenceProgramV1(input: {
   for (const node of input.program.nodes) {
     const operands = node.operandNodeIds.map((nodeId) => {
       const result = results.get(nodeId);
-      if (!result)
-        throw namedError("MemoryEvidenceExecutionRuntimeGraphInvalid");
+      if (!result) throw namedError("MemoryEvidenceExecutionRuntimeGraphInvalid");
       return result;
     });
     const result =
       node.operation === "read_requirement"
-        ? executeReadNode(
-            node,
-            slotByRequirement,
-            stateSlotById,
-            certificateByObservationId,
-          )
-        : executeDerivedNode(
-            node,
-            operands,
-            closedRequirementIds,
-            coverageByRequirement,
-            {
-              program: input.program,
-              programRevision: input.program.programRevision,
-              selectorSnapshotRevision: input.program.selectorSnapshotRevision,
-              stateProgramRevision: input.frame.programRevision,
-              resolvedStateFrameRevision: input.frame.frameRevision,
-              sourceLockDigest: input.frame.sourceLockDigest,
-            },
-          );
+        ? executeReadNode(node, slotByRequirement, stateSlotById, certificateByObservationId)
+        : executeDerivedNode(node, operands, closedRequirementIds, coverageByRequirement, {
+            program: input.program,
+            programRevision: input.program.programRevision,
+            selectorSnapshotRevision: input.program.selectorSnapshotRevision,
+            stateProgramRevision: input.frame.programRevision,
+            resolvedStateFrameRevision: input.frame.frameRevision,
+            sourceLockDigest: input.frame.sourceLockDigest,
+          });
     results.set(node.nodeId, result);
   }
   const root = results.get(input.program.rootNodeId);
@@ -468,8 +419,7 @@ export function executeMemoryEvidenceProgramV1(input: {
   const nodes = Object.freeze(
     input.program.nodes.map((node) => {
       const result = results.get(node.nodeId);
-      if (!result)
-        throw namedError("MemoryEvidenceExecutionRuntimeGraphInvalid");
+      if (!result) throw namedError("MemoryEvidenceExecutionRuntimeGraphInvalid");
       return result;
     }),
   );
@@ -482,11 +432,9 @@ export function executeMemoryEvidenceProgramV1(input: {
     ...(input.coverageCertificate === undefined
       ? {}
       : {
-          coverageCertificateRevision:
-            input.coverageCertificate.certificateRevision,
+          coverageCertificateRevision: input.coverageCertificate.certificateRevision,
         }),
-    stateBindingCertificateRegistryRevision:
-      certificateRegistry.registryRevision,
+    stateBindingCertificateRegistryRevision: certificateRegistry.registryRevision,
     stateBindingCertificates: certificateRegistry.frameCertificates,
     status: root.status,
     rootNodeId: input.program.rootNodeId,
@@ -502,14 +450,8 @@ export function executeMemoryEvidenceProgramV1(input: {
 function executeReadNode(
   node: MemoryEvidenceExecutionNodeV1,
   slotByRequirement: ReadonlyMap<string, MemoryStateSlotSpecV2>,
-  stateSlotById: ReadonlyMap<
-    string,
-    MemoryResolvedStateFrameV2["slots"][number]
-  >,
-  certificateByObservationId: ReadonlyMap<
-    string,
-    MemoryStateBindingCertificateV1
-  >,
+  stateSlotById: ReadonlyMap<string, MemoryResolvedStateFrameV2["slots"][number]>,
+  certificateByObservationId: ReadonlyMap<string, MemoryStateBindingCertificateV1>,
 ): MemoryEvidenceExecutionNodeResultV1 {
   if (node.status !== "ready") {
     return result(node, "missing", [], [], [], "plan_node_blocked", []);
@@ -573,29 +515,18 @@ function executeReadNode(
   const independent = new Set(observations.map(independenceKey));
   const minimum = node.minimumIndependentEvidence ?? 1;
   if (independent.size < minimum) {
-    return result(
-      node,
-      "partial",
-      values,
-      history,
-      [],
-      "minimum_evidence_unsatisfied",
-      [...state.coverageProof],
-    );
+    return result(node, "partial", values, history, [], "minimum_evidence_unsatisfied", [
+      ...state.coverageProof,
+    ]);
   }
-  return result(node, "complete", values, history, [], undefined, [
-    ...state.coverageProof,
-  ]);
+  return result(node, "complete", values, history, [], undefined, [...state.coverageProof]);
 }
 
 function executeDerivedNode(
   node: MemoryEvidenceExecutionNodeV1,
   operands: readonly MemoryEvidenceExecutionNodeResultV1[],
   closedRequirementIds: ReadonlySet<string>,
-  coverageByRequirement: ReadonlyMap<
-    string,
-    MemoryEvidenceExecutionRequirementCoverageV1
-  >,
+  coverageByRequirement: ReadonlyMap<string, MemoryEvidenceExecutionRequirementCoverageV1>,
   executionIdentity: Readonly<{
     program: MemoryEvidenceExecutionProgramV1;
     programRevision: string;
@@ -610,18 +541,14 @@ function executeDerivedNode(
   }
   if (node.operation === "resolve_latest")
     return executeLatest(node, operands, closedRequirementIds);
-  if (node.operation === "resolve_as_of")
-    return executeAsOf(node, operands, closedRequirementIds);
+  if (node.operation === "resolve_as_of") return executeAsOf(node, operands, closedRequirementIds);
   if (node.operation === "restrict_range")
     return executeRange(node, operands, closedRequirementIds);
   if (node.operation === "preserve_history") {
     const observations = observationValues(operands);
-    if (observations.length === 0)
-      return incompleteFromOperands(node, operands);
+    if (observations.length === 0) return incompleteFromOperands(node, operands);
     const ordered = orderHistory(observations);
-    const closed = observations.every((value) =>
-      closedRequirementIds.has(value.requirementId),
-    );
+    const closed = observations.every((value) => closedRequirementIds.has(value.requirementId));
     const hasMixedClock =
       observations.some((value) => value.eventTimeInterval) &&
       observations.some((value) => !value.eventTimeInterval);
@@ -631,11 +558,7 @@ function executeDerivedNode(
       ordered,
       ordered,
       [],
-      closed
-        ? hasMixedClock
-          ? "mixed_clock"
-          : undefined
-        : "closed_world_unproven",
+      closed ? (hasMixedClock ? "mixed_clock" : undefined) : "closed_world_unproven",
       flattenProofs(operands),
     );
   }
@@ -670,8 +593,7 @@ function executeDerivedNode(
     );
   }
   if (node.operation === "compare_operands") {
-    if (firstIncomplete(operands))
-      return incompleteFromOperands(node, operands);
+    if (firstIncomplete(operands)) return incompleteFromOperands(node, operands);
     const comparison = comparisonValue(node, operands);
     return result(
       node,
@@ -684,8 +606,7 @@ function executeDerivedNode(
     );
   }
   if (node.operation === "aggregate_operands") {
-    if (firstIncomplete(operands))
-      return incompleteFromOperands(node, operands);
+    if (firstIncomplete(operands)) return incompleteFromOperands(node, operands);
     const request = node.aggregateRequest;
     if (!request) {
       return result(
@@ -716,9 +637,7 @@ function executeDerivedNode(
     const members = aggregateInput.members;
     const coverageClosed =
       aggregateInput.eligible.length > 0 &&
-      aggregateInput.eligible.every((value) =>
-        closedRequirementIds.has(value.requirementId),
-      );
+      aggregateInput.eligible.every((value) => closedRequirementIds.has(value.requirementId));
     const materializationExact = aggregateMaterializationExactV1(
       aggregateInput.eligible,
       coverageByRequirement,
@@ -736,10 +655,7 @@ function executeDerivedNode(
         flattenProofs(operands),
       );
     }
-    if (
-      request.operator === "difference" ||
-      request.operator === "ratio_percent"
-    ) {
+    if (request.operator === "difference" || request.operator === "ratio_percent") {
       return result(
         node,
         "unsupported",
@@ -750,10 +666,7 @@ function executeDerivedNode(
         flattenProofs(operands),
       );
     }
-    if (
-      request.operator === "count" &&
-      request.countBasis !== "enumerated_members"
-    ) {
+    if (request.operator === "count" && request.countBasis !== "enumerated_members") {
       return result(
         node,
         "unsupported",
@@ -765,13 +678,7 @@ function executeDerivedNode(
       );
     }
     if (!aggregateInput.unitProofExact) {
-      const aggregate = aggregateValue(
-        node,
-        members,
-        closed,
-        materializationExact,
-        request,
-      );
+      const aggregate = aggregateValue(node, members, closed, materializationExact, request);
       return result(
         node,
         "partial",
@@ -786,8 +693,7 @@ function executeDerivedNode(
     if (
       request.operator === "sum" &&
       (quantities.some((quantity) => quantity === null) ||
-        new Set(quantities.map((quantity) => quantity?.unit).filter(Boolean))
-          .size !== 1)
+        new Set(quantities.map((quantity) => quantity?.unit).filter(Boolean)).size !== 1)
     ) {
       return result(
         node,
@@ -803,8 +709,7 @@ function executeDerivedNode(
       request.operator === "sum"
         ? sumExactQuantitiesV1(
             quantities.filter(
-              (quantity): quantity is NonNullable<typeof quantity> =>
-                quantity !== null,
+              (quantity): quantity is NonNullable<typeof quantity> => quantity !== null,
             ),
           )
         : request.operator === "count"
@@ -814,14 +719,7 @@ function executeDerivedNode(
               unit: "count",
             }
           : undefined;
-    const aggregate = aggregateValue(
-      node,
-      members,
-      closed,
-      materializationExact,
-      request,
-      numeric,
-    );
+    const aggregate = aggregateValue(node, members, closed, materializationExact, request, numeric);
     return result(
       node,
       closed ? "complete" : "partial",
@@ -842,8 +740,7 @@ function executeDerivedNode(
     return executePersonalization(node, operands, executionIdentity);
   }
   if (node.operation === "render_answer") {
-    if (firstIncomplete(operands))
-      return incompleteFromOperands(node, operands);
+    if (firstIncomplete(operands)) return incompleteFromOperands(node, operands);
     const source = operands[0];
     if (!source) return incompleteFromOperands(node, operands);
     const value = Object.freeze({
@@ -854,9 +751,7 @@ function executeDerivedNode(
       }),
       sourceNodeId: source.nodeId,
     });
-    return result(node, "complete", [value], [], [], undefined, [
-      source.resultRevision,
-    ]);
+    return result(node, "complete", [value], [], [], undefined, [source.resultRevision]);
   }
   return result(
     node,
@@ -874,15 +769,8 @@ function executeLatest(
   operands: readonly MemoryEvidenceExecutionNodeResultV1[],
   closedRequirementIds: ReadonlySet<string>,
 ): MemoryEvidenceExecutionNodeResultV1 {
-  const observations = observationValues(operands).filter(
-    (value) => value.modality === "observed",
-  );
-  return executeLatestObservations(
-    node,
-    operands,
-    observations,
-    closedRequirementIds,
-  );
+  const observations = observationValues(operands).filter((value) => value.modality === "observed");
+  return executeLatestObservations(node, operands, observations, closedRequirementIds);
 }
 
 function executeAsOf(
@@ -903,9 +791,7 @@ function executeAsOf(
     );
   }
   const anchor = window.anchor;
-  const observations = observationValues(operands).filter(
-    (value) => value.modality === "observed",
-  );
+  const observations = observationValues(operands).filter((value) => value.modality === "observed");
   const clock = temporalClock(observations);
   if (clock === "mixed") {
     return result(
@@ -933,12 +819,7 @@ function executeAsOf(
       flattenProofs(operands),
     );
   }
-  return executeLatestObservations(
-    node,
-    operands,
-    filtered,
-    closedRequirementIds,
-  );
+  return executeLatestObservations(node, operands, filtered, closedRequirementIds);
 }
 
 function executeRange(
@@ -974,9 +855,7 @@ function executeRange(
   }
   const filtered = observations.filter((observation) => {
     const interval = executionInterval(observation, clock);
-    return interval
-      ? interval.lower < range.upper && range.lower < interval.upper
-      : false;
+    return interval ? interval.lower < range.upper && range.lower < interval.upper : false;
   });
   if (filtered.length === 0) {
     return result(
@@ -1010,11 +889,7 @@ function executeLatestObservations(
   closedRequirementIds: ReadonlySet<string>,
 ): MemoryEvidenceExecutionNodeResultV1 {
   if (observations.length === 0) return incompleteFromOperands(node, operands);
-  if (
-    observations.some(
-      (observation) => !closedRequirementIds.has(observation.requirementId),
-    )
-  ) {
+  if (observations.some((observation) => !closedRequirementIds.has(observation.requirementId))) {
     return result(
       node,
       "partial",
@@ -1025,9 +900,7 @@ function executeLatestObservations(
       flattenProofs(operands),
     );
   }
-  if (
-    observations.some((value) => value.eventTimeCutoffStatus === "straddles")
-  ) {
+  if (observations.some((value) => value.eventTimeCutoffStatus === "straddles")) {
     return result(
       node,
       "partial",
@@ -1050,10 +923,7 @@ function executeLatestObservations(
       flattenProofs(operands),
     );
   }
-  const maxima =
-    eventTimed.length > 0
-      ? eventMaxima(observations)
-      : observedMaxima(observations);
+  const maxima = eventTimed.length > 0 ? eventMaxima(observations) : observedMaxima(observations);
   if (maxima.length === 0) {
     return result(
       node,
@@ -1090,15 +960,9 @@ function executeLatestObservations(
     );
   }
   if (!new Set(["assert", "update", "confirm"]).has(winner.predicateKind)) {
-    return result(
-      node,
-      "partial",
-      maxima,
-      observations,
-      [],
-      "clock_incomplete",
-      [...flattenProofs(operands)],
-    );
+    return result(node, "partial", maxima, observations, [], "clock_incomplete", [
+      ...flattenProofs(operands),
+    ]);
   }
   return result(
     node,
@@ -1117,22 +981,16 @@ function executePreference(
 ): MemoryEvidenceExecutionNodeResultV1 {
   const observations = observationValues(operands);
   const positive = observations.filter(
-    (value) =>
-      value.predicateKind === "prefer" && value.polarity === "positive",
+    (value) => value.predicateKind === "prefer" && value.polarity === "positive",
   );
   const negative = observations.filter(
-    (value) =>
-      value.predicateKind === "disprefer" || value.polarity === "negative",
+    (value) => value.predicateKind === "disprefer" || value.polarity === "negative",
   );
   const goals = observations.filter((value) => value.modality === "goal");
-  const explicit = new Set(
-    [...positive, ...negative, ...goals].map((value) => value.valueId),
-  );
+  const explicit = new Set([...positive, ...negative, ...goals].map((value) => value.valueId));
   const oneOff = observations.filter((value) => !explicit.has(value.valueId));
   const positiveKeys = new Set(positive.map((value) => value.valueKey));
-  const conflicts = negative.filter((value) =>
-    positiveKeys.has(value.valueKey),
-  );
+  const conflicts = negative.filter((value) => positiveKeys.has(value.valueKey));
   const profile = preferenceValue(node, positive, negative, goals, oneOff);
   if (conflicts.length > 0) {
     return result(
@@ -1204,13 +1062,12 @@ function executePersonalization(
       flattenProofs(operands),
     );
   }
-  const lifecycleCertificates =
-    compilePersonalizationClaimLifecycleCertificatesV1({
-      observations,
-      programRevision: executionIdentity.programRevision,
-      resolvedStateFrameRevision: executionIdentity.resolvedStateFrameRevision,
-      sourceLockDigest: executionIdentity.sourceLockDigest,
-    });
+  const lifecycleCertificates = compilePersonalizationClaimLifecycleCertificatesV1({
+    observations,
+    programRevision: executionIdentity.programRevision,
+    resolvedStateFrameRevision: executionIdentity.resolvedStateFrameRevision,
+    sourceLockDigest: executionIdentity.sourceLockDigest,
+  });
   if (!lifecycleCertificates) {
     return result(
       node,
@@ -1240,9 +1097,7 @@ function executePersonalization(
       !inactiveClaimIdentities.has(value.claimIdentity) &&
       readRoleByRequirement.get(value.requirementId) === "user",
   );
-  const goals = activeUserObservations.filter(
-    (value) => value.modality === "goal",
-  );
+  const goals = activeUserObservations.filter((value) => value.modality === "goal");
   const goalIds = new Set(goals.map((value) => value.valueId));
   const explicitPositive = activeUserObservations.filter(
     (value) =>
@@ -1251,13 +1106,10 @@ function executePersonalization(
       value.polarity === "positive",
   );
   const explicitNegative = activeUserObservations.filter(
-    (value) =>
-      !goalIds.has(value.valueId) && value.predicateKind === "disprefer",
+    (value) => !goalIds.has(value.valueId) && value.predicateKind === "disprefer",
   );
   const explicitOrGoal = new Set(
-    [...explicitPositive, ...explicitNegative, ...goals].map(
-      (value) => value.valueId,
-    ),
+    [...explicitPositive, ...explicitNegative, ...goals].map((value) => value.valueId),
   );
   const contextual = activeUserObservations.filter(
     (value) =>
@@ -1267,13 +1119,10 @@ function executePersonalization(
   );
   const contextualIds = new Set(contextual.map((value) => value.valueId));
   const oneOff = observations.filter(
-    (value) =>
-      !explicitOrGoal.has(value.valueId) && !contextualIds.has(value.valueId),
+    (value) => !explicitOrGoal.has(value.valueId) && !contextualIds.has(value.valueId),
   );
   const positiveKeys = new Set(explicitPositive.map((value) => value.valueKey));
-  const conflicts = explicitNegative.filter((value) =>
-    positiveKeys.has(value.valueKey),
-  );
+  const conflicts = explicitNegative.filter((value) => positiveKeys.has(value.valueKey));
   if (conflicts.length > 0) {
     const profile = personalizationValue(
       node,
@@ -1372,21 +1221,11 @@ function executePersonalization(
   return result(
     node,
     "complete",
-    [
-      profile,
-      ...explicitPositive,
-      ...explicitNegative,
-      ...goals,
-      ...contextual,
-    ],
+    [profile, ...explicitPositive, ...explicitNegative, ...goals, ...contextual],
     [],
     [],
     undefined,
-    [
-      ...flattenProofs(operands),
-      request.requestRevision,
-      coverageCertificate.certificateRevision,
-    ],
+    [...flattenProofs(operands), request.requestRevision, coverageCertificate.certificateRevision],
   );
 }
 
@@ -1404,10 +1243,7 @@ function inactivePersonalizationClaimIdentities(
     ),
   );
   for (const certificate of lifecycleCertificates) {
-    if (
-      certificate.relation === "retracts" ||
-      certificate.relation === "supersedes"
-    ) {
+    if (certificate.relation === "retracts" || certificate.relation === "supersedes") {
       inactive.add(certificate.targetClaimIdentity);
     }
   }
@@ -1421,10 +1257,7 @@ function compilePersonalizationClaimLifecycleCertificatesV1(input: {
   sourceLockDigest: string;
 }): readonly MemoryEvidencePersonalizationClaimLifecycleCertificateV1[] | null {
   const bySlotAndEvidence = new Map(
-    input.observations.map((value) => [
-      `${value.slotId}\0${value.evidenceRef}`,
-      value,
-    ]),
+    input.observations.map((value) => [`${value.slotId}\0${value.evidenceRef}`, value]),
   );
   if (
     bySlotAndEvidence.size !== input.observations.length ||
@@ -1437,8 +1270,7 @@ function compilePersonalizationClaimLifecycleCertificatesV1(input: {
   const lifecycleSources = input.observations.filter((value) =>
     new Set(["update", "retract", "confirm"]).has(value.predicateKind),
   );
-  const certificates: MemoryEvidencePersonalizationClaimLifecycleCertificateV1[] =
-    [];
+  const certificates: MemoryEvidencePersonalizationClaimLifecycleCertificateV1[] = [];
   for (const source of lifecycleSources) {
     const expectedRelation =
       source.predicateKind === "retract"
@@ -1447,9 +1279,7 @@ function compilePersonalizationClaimLifecycleCertificatesV1(input: {
           ? ("supersedes" as const)
           : ("confirms" as const);
     const target = source.lifecycleTargetEvidenceRef
-      ? bySlotAndEvidence.get(
-          `${source.slotId}\0${source.lifecycleTargetEvidenceRef}`,
-        )
+      ? bySlotAndEvidence.get(`${source.slotId}\0${source.lifecycleTargetEvidenceRef}`)
       : undefined;
     if (
       source.lifecycleRelation !== expectedRelation ||
@@ -1465,8 +1295,7 @@ function compilePersonalizationClaimLifecycleCertificatesV1(input: {
       return null;
     }
     const identity = {
-      certificateVersion:
-        "paw.memory-personalization-claim-lifecycle-certificate.v1" as const,
+      certificateVersion: "paw.memory-personalization-claim-lifecycle-certificate.v1" as const,
       relation: expectedRelation,
       sourceClaimIdentity: source.claimIdentity,
       targetClaimIdentity: target.claimIdentity,
@@ -1514,9 +1343,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
   sourceLockDigest: string;
   answerNodeRevision: string;
 }): MemoryEvidencePersonalizationCoverageCertificateV1 | null {
-  const answerNode = input.program.nodes.find(
-    (node) => node.nodeId === input.program.answerNodeId,
-  );
+  const answerNode = input.program.nodes.find((node) => node.nodeId === input.program.answerNodeId);
   const readNodeByRequirement = new Map(
     input.program.nodes.flatMap((node) =>
       node.operation === "read_requirement" && node.requirementId
@@ -1545,9 +1372,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
     input.constraints.length < input.request.minimumContextObservations ||
     input.constraints.some(
       ({ value }) =>
-        !value.claimIdentity.trim() ||
-        !value.evidenceRef.trim() ||
-        !value.bindingRevision.trim(),
+        !value.claimIdentity.trim() || !value.evidenceRef.trim() || !value.bindingRevision.trim(),
     ) ||
     !input.programRevision.trim() ||
     input.programRevision !== input.program.programRevision ||
@@ -1560,21 +1385,16 @@ function compilePersonalizationCoverageCertificateV1(input: {
     return null;
   }
   const uniqueAdmitted = [
-    ...new Map(
-      input.admittedObservations.map((value) => [value.valueId, value]),
-    ).values(),
+    ...new Map(input.admittedObservations.map((value) => [value.valueId, value])).values(),
   ];
-  const admittedClaimIdentities = new Set(
-    uniqueAdmitted.map((value) => value.claimIdentity),
-  );
+  const admittedClaimIdentities = new Set(uniqueAdmitted.map((value) => value.claimIdentity));
   if (
     input.lifecycleCertificates.some((certificate) => {
       const { certificateRevision, ...identity } = certificate;
       return (
         hashCanonicalJsonV1(identity as never) !== certificateRevision ||
         certificate.programRevision !== input.programRevision ||
-        certificate.resolvedStateFrameRevision !==
-          input.resolvedStateFrameRevision ||
+        certificate.resolvedStateFrameRevision !== input.resolvedStateFrameRevision ||
         certificate.sourceLockDigest !== input.sourceLockDigest ||
         !admittedClaimIdentities.has(certificate.sourceClaimIdentity) ||
         !admittedClaimIdentities.has(certificate.targetClaimIdentity)
@@ -1584,18 +1404,12 @@ function compilePersonalizationCoverageCertificateV1(input: {
     return null;
   }
   const constraintByValue = new Map(
-    input.constraints.map((constraint) => [
-      constraint.value.valueId,
-      constraint,
-    ]),
+    input.constraints.map((constraint) => [constraint.value.valueId, constraint]),
   );
   if (
     constraintByValue.size < input.request.minimumContextObservations ||
     input.constraints.some(
-      (constraint) =>
-        !uniqueAdmitted.some(
-          (value) => value.valueId === constraint.value.valueId,
-        ),
+      (constraint) => !uniqueAdmitted.some((value) => value.valueId === constraint.value.valueId),
     )
   ) {
     return null;
@@ -1619,9 +1433,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
       });
     }),
   );
-  const usableClaims = claims.filter(
-    (claim) => claim.disposition !== "excluded_inactive",
-  );
+  const usableClaims = claims.filter((claim) => claim.disposition !== "excluded_inactive");
   if (
     usableClaims.length < input.request.minimumContextObservations ||
     claims.some((claim) => {
@@ -1629,8 +1441,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
       return (
         !readNode ||
         !readNode.supportingEvidenceRefs?.includes(claim.evidenceRef) ||
-        (claim.disposition !== "excluded_inactive" &&
-          readNode.resolvedRole !== "user")
+        (claim.disposition !== "excluded_inactive" && readNode.resolvedRole !== "user")
       );
     })
   ) {
@@ -1647,8 +1458,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
     ),
   } as never);
   const identity = {
-    certificateVersion:
-      "paw.memory-personalization-coverage-certificate.v1" as const,
+    certificateVersion: "paw.memory-personalization-coverage-certificate.v1" as const,
     requestRevision: input.request.requestRevision,
     programRevision: input.programRevision,
     answerNodeRevision: input.answerNodeRevision,
@@ -1674,9 +1484,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
     lifecycleCertificateSetRevision,
     lifecycleCertificates: Object.freeze([...input.lifecycleCertificates]),
     claims,
-    usableClaimCount: new Set(
-      usableClaims.map((claim) => claim.claimIdentityRevision),
-    ).size,
+    usableClaimCount: new Set(usableClaims.map((claim) => claim.claimIdentityRevision)).size,
     minimumUsableClaimCount: 1 as const,
     coverageBasis: "all_answer_operands_complete" as const,
   };
@@ -1743,20 +1551,10 @@ function executeDuration(
   if (
     endpoints.some(
       (value) =>
-        !value.bindingRevision.trim() ||
-        !value.eventTimeInterval ||
-        !value.eventIdentity?.trim(),
+        !value.bindingRevision.trim() || !value.eventTimeInterval || !value.eventIdentity?.trim(),
     )
   ) {
-    return result(
-      node,
-      "partial",
-      endpoints,
-      [],
-      [],
-      "clock_incomplete",
-      flattenProofs(operands),
-    );
+    return result(node, "partial", endpoints, [], [], "clock_incomplete", flattenProofs(operands));
   }
   if (
     request.endpointContract.kind === "distinct_evidence_pair" &&
@@ -1774,9 +1572,7 @@ function executeDuration(
       flattenProofs(operands),
     );
   }
-  if (
-    endpoints.some((endpoint) => endpoint.eventTimeCutoffStatus === "straddles")
-  ) {
+  if (endpoints.some((endpoint) => endpoint.eventTimeCutoffStatus === "straddles")) {
     return result(
       node,
       "partial",
@@ -1789,40 +1585,13 @@ function executeDuration(
   }
   const clock = temporalClock(endpoints);
   if (clock === "mixed") {
-    return result(
-      node,
-      "partial",
-      endpoints,
-      [],
-      [],
-      "mixed_clock",
-      flattenProofs(operands),
-    );
+    return result(node, "partial", endpoints, [], [], "mixed_clock", flattenProofs(operands));
   }
   if (clock === "incomplete") {
-    return result(
-      node,
-      "partial",
-      endpoints,
-      [],
-      [],
-      "clock_incomplete",
-      flattenProofs(operands),
-    );
+    return result(node, "partial", endpoints, [], [], "clock_incomplete", flattenProofs(operands));
   }
-  if (
-    request.endpointPolicy === "evidence_to_query_anchor" &&
-    clock !== "event"
-  ) {
-    return result(
-      node,
-      "partial",
-      endpoints,
-      [],
-      [],
-      "clock_incomplete",
-      flattenProofs(operands),
-    );
+  if (request.endpointPolicy === "evidence_to_query_anchor" && clock !== "event") {
+    return result(node, "partial", endpoints, [], [], "clock_incomplete", flattenProofs(operands));
   }
   if (
     request.endpointContract.kind === "distinct_evidence_pair" &&
@@ -1856,17 +1625,11 @@ function executeDuration(
       flattenProofs(operands),
     );
   }
-  const start = executionInterval(
-    endpoints[0] as MemoryEvidenceExecutionObservationValueV1,
-    clock,
-  );
+  const start = executionInterval(endpoints[0] as MemoryEvidenceExecutionObservationValueV1, clock);
   const end =
     request.endpointPolicy === "evidence_to_query_anchor"
       ? queryAnchorInterval(request.queryAnchor)
-      : executionInterval(
-          endpoints[1] as MemoryEvidenceExecutionObservationValueV1,
-          clock,
-        );
+      : executionInterval(endpoints[1] as MemoryEvidenceExecutionObservationValueV1, clock);
   if (request.endpointPolicy === "evidence_to_query_anchor" && end === null) {
     return result(
       node,
@@ -1902,15 +1665,7 @@ function executeDuration(
         request,
         endpointCertificate,
       )
-    : intervalDurationValue(
-        node,
-        endpoints,
-        start,
-        end,
-        unit,
-        request,
-        endpointCertificate,
-      );
+    : intervalDurationValue(node, endpoints, start, end, unit, request, endpointCertificate);
   return result(
     node,
     exact ? "complete" : "partial",
@@ -1918,11 +1673,7 @@ function executeDuration(
     [],
     [],
     exact ? undefined : "duration_precision_insufficient",
-    [
-      ...flattenProofs(operands),
-      request.requestRevision,
-      endpointCertificate.certificateRevision,
-    ],
+    [...flattenProofs(operands), request.requestRevision, endpointCertificate.certificateRevision],
   );
 }
 
@@ -1933,10 +1684,7 @@ function orderDurationEndpoints(
   if (request.endpointContract.kind === "evidence_to_host_anchor") {
     return Object.freeze([...endpoints]);
   }
-  const roleOrder = new Map<
-    MemoryStateBoundObservationV2["durationEndpointRole"],
-    number
-  >([
+  const roleOrder = new Map<MemoryStateBoundObservationV2["durationEndpointRole"], number>([
     ["start", 0],
     ["end", 1],
     ["evidence", 2],
@@ -1990,8 +1738,7 @@ function compileDurationEndpointCertificateV1(input: {
     return null;
   }
   const identity = {
-    certificateVersion:
-      "paw.memory-duration-endpoint-binding-certificate.v1" as const,
+    certificateVersion: "paw.memory-duration-endpoint-binding-certificate.v1" as const,
     requestRevision: request.requestRevision,
     programRevision: input.programRevision,
     selectorSnapshotRevision: input.selectorSnapshotRevision,
@@ -2000,38 +1747,23 @@ function compileDurationEndpointCertificateV1(input: {
     sourceLockDigest: input.sourceLockDigest,
     endpointContractKind: request.endpointContract.kind,
     endpointValueIds: Object.freeze(endpoints.map((item) => item.valueId)),
-    endpointClaimIdentities: Object.freeze(
-      endpoints.map((item) => item.claimIdentity),
-    ),
-    endpointEventIdentities: Object.freeze(
-      endpoints.map((item) => item.eventIdentity as string),
-    ),
+    endpointClaimIdentities: Object.freeze(endpoints.map((item) => item.claimIdentity)),
+    endpointEventIdentities: Object.freeze(endpoints.map((item) => item.eventIdentity as string)),
     endpointIdentityBases: Object.freeze(
       endpoints.map(
-        (item) =>
-          item.eventIdentityBasis as "stable_event_key" | "typed_role_interval",
+        (item) => item.eventIdentityBasis as "stable_event_key" | "typed_role_interval",
       ),
     ),
-    endpointTimeBases: Object.freeze(
-      endpoints.map((item) => item.eventTimeBasis),
-    ),
-    endpointRoles: Object.freeze(
-      endpoints.map((item) => item.durationEndpointRole),
-    ),
-    endpointRequirementIds: Object.freeze(
-      endpoints.map((item) => item.requirementId),
-    ),
+    endpointTimeBases: Object.freeze(endpoints.map((item) => item.eventTimeBasis)),
+    endpointRoles: Object.freeze(endpoints.map((item) => item.durationEndpointRole)),
+    endpointRequirementIds: Object.freeze(endpoints.map((item) => item.requirementId)),
     endpointSlotIds: Object.freeze(endpoints.map((item) => item.slotId)),
-    endpointBindingRevisions: Object.freeze(
-      endpoints.map((item) => item.bindingRevision),
-    ),
+    endpointBindingRevisions: Object.freeze(endpoints.map((item) => item.bindingRevision)),
     endpointStateBindingCertificateIds: Object.freeze(
       endpoints.map((item) => item.stateBindingCertificateId),
     ),
     endpointIntervals: Object.freeze(
-      endpoints.map(
-        (item) => item.eventTimeInterval as MemoryStateEventTimeIntervalV2,
-      ),
+      endpoints.map((item) => item.eventTimeInterval as MemoryStateEventTimeIntervalV2),
     ),
     ...(request.endpointContract.kind === "evidence_to_host_anchor"
       ? { anchorRevision: request.endpointContract.anchorRevision }
@@ -2111,12 +1843,9 @@ function incompleteFromOperands(
 function propagatedStatus(
   operands: readonly MemoryEvidenceExecutionNodeResultV1[],
 ): MemoryEvidenceExecutionNodeResultStatusV1 {
-  if (operands.some((operand) => operand.status === "conflict"))
-    return "conflict";
-  if (operands.some((operand) => operand.status === "unsupported"))
-    return "unsupported";
-  if (operands.every((operand) => operand.status === "missing"))
-    return "missing";
+  if (operands.some((operand) => operand.status === "conflict")) return "conflict";
+  if (operands.some((operand) => operand.status === "unsupported")) return "unsupported";
+  if (operands.every((operand) => operand.status === "missing")) return "missing";
   return "partial";
 }
 
@@ -2166,8 +1895,7 @@ function observationValue(
   } as never);
   const eventIdentity =
     observation.eventTimeInterval &&
-    (observation.eventKey?.trim() ||
-      observation.durationEndpointRole !== "not_applicable")
+    (observation.eventKey?.trim() || observation.durationEndpointRole !== "not_applicable")
       ? hashCanonicalJsonV1({
           schemaVersion: "paw.memory-semantic-event-endpoint-identity.v2",
           eventTimeBasis: observation.eventTimeBasis,
@@ -2207,24 +1935,16 @@ function observationValue(
     modality: observation.modality,
     evidenceRef: observation.evidenceRef,
     sourceId: observation.sourceId,
-    ...(observation.eventKey === undefined
-      ? {}
-      : { eventKey: observation.eventKey }),
+    ...(observation.eventKey === undefined ? {} : { eventKey: observation.eventKey }),
     ...(observation.eventTimeInterval === undefined
       ? {}
       : { eventTimeInterval: observation.eventTimeInterval }),
     ...(observation.eventTimeCutoffStatus === undefined
       ? {}
       : { eventTimeCutoffStatus: observation.eventTimeCutoffStatus }),
-    ...(observation.observedAt === undefined
-      ? {}
-      : { observedAt: observation.observedAt }),
-    ...(observation.episodeOrder === undefined
-      ? {}
-      : { episodeOrder: observation.episodeOrder }),
-    ...(observation.turnOrder === undefined
-      ? {}
-      : { turnOrder: observation.turnOrder }),
+    ...(observation.observedAt === undefined ? {} : { observedAt: observation.observedAt }),
+    ...(observation.episodeOrder === undefined ? {} : { episodeOrder: observation.episodeOrder }),
+    ...(observation.turnOrder === undefined ? {} : { turnOrder: observation.turnOrder }),
     bindingRevision: observation.bindingRevision,
     stateBindingCertificateId: certificate.certificateId,
   };
@@ -2242,10 +1962,7 @@ function validateExecutionBindingCertificates(
   validated: readonly MemoryStateValidatedObservationV1[],
   validationContexts: readonly MemoryStateBindingCertificateValidationInputV1[],
 ): Readonly<{
-  certificateByObservationId: ReadonlyMap<
-    string,
-    MemoryStateBindingCertificateV1
-  >;
+  certificateByObservationId: ReadonlyMap<string, MemoryStateBindingCertificateV1>;
   frameCertificates: readonly MemoryStateBindingCertificateV1[];
   registryRevision: string;
 }> {
@@ -2255,20 +1972,11 @@ function validateExecutionBindingCertificates(
     ...slot.conflicts,
   ]);
   const frameById = new Map(
-    frameObservations.map((observation) => [
-      observation.observationId,
-      observation,
-    ]),
+    frameObservations.map((observation) => [observation.observationId, observation]),
   );
   const slotById = new Map(slots.map((slot) => [slot.slotId, slot]));
-  const allCertificateByObservationId = new Map<
-    string,
-    MemoryStateBindingCertificateV1
-  >();
-  const contextByObservationId = new Map<
-    string,
-    MemoryStateBindingCertificateValidationInputV1
-  >();
+  const allCertificateByObservationId = new Map<string, MemoryStateBindingCertificateV1>();
+  const contextByObservationId = new Map<string, MemoryStateBindingCertificateValidationInputV1>();
   for (const context of validationContexts) {
     for (const observation of context.proposedObservations) {
       if (contextByObservationId.has(observation.observationId)) {
@@ -2285,16 +1993,11 @@ function validateExecutionBindingCertificates(
   ) {
     throw namedError("MemoryEvidenceExecutionRuntimeCertificateInvalid");
   }
-  const usedContextIdentities = new Map<
-    string,
-    Readonly<Record<string, unknown>>
-  >();
+  const usedContextIdentities = new Map<string, Readonly<Record<string, unknown>>>();
   let transactionQueryRevision: string | undefined;
   for (const item of validated) {
     const frameObservation = frameById.get(item.observation.observationId);
-    const validationContext = contextByObservationId.get(
-      item.observation.observationId,
-    );
+    const validationContext = contextByObservationId.get(item.observation.observationId);
     const { certificateId, ...certificateIdentity } = item.certificate;
     if (
       !validationContext ||
@@ -2309,9 +2012,7 @@ function validateExecutionBindingCertificates(
     ) {
       throw namedError("MemoryEvidenceExecutionRuntimeCertificateInvalid");
     }
-    const contextSlotById = new Map(
-      validationContext.slots.map((slot) => [slot.slotId, slot]),
-    );
+    const contextSlotById = new Map(validationContext.slots.map((slot) => [slot.slotId, slot]));
     const queryRevision = hashCanonicalJsonV1(validationContext.query as never);
     let contextOriginRevision: string;
     try {
@@ -2323,21 +2024,17 @@ function validateExecutionBindingCertificates(
     }
     if (
       !validationContext.query.trim() ||
-      validationContext.sourceLock.sourceLockDigest !==
-        frame.sourceLockDigest ||
+      validationContext.sourceLock.sourceLockDigest !== frame.sourceLockDigest ||
       contextOriginRevision !== program.originRevision ||
       contextSlotById.size !== validationContext.slots.length ||
       contextSlotById.size < 1 ||
       [...contextSlotById].some(([slotId, contextSlot]) => {
         const slot = slotById.get(slotId);
         return (
-          !slot ||
-          hashCanonicalJsonV1(contextSlot as never) !==
-            hashCanonicalJsonV1(slot as never)
+          !slot || hashCanonicalJsonV1(contextSlot as never) !== hashCanonicalJsonV1(slot as never)
         );
       }) ||
-      (transactionQueryRevision !== undefined &&
-        transactionQueryRevision !== queryRevision)
+      (transactionQueryRevision !== undefined && transactionQueryRevision !== queryRevision)
     ) {
       throw namedError("MemoryEvidenceExecutionRuntimeCertificateInvalid");
     }
@@ -2347,10 +2044,7 @@ function validateExecutionBindingCertificates(
     } catch {
       throw namedError("MemoryEvidenceExecutionRuntimeCertificateInvalid");
     }
-    allCertificateByObservationId.set(
-      item.observation.observationId,
-      item.certificate,
-    );
+    allCertificateByObservationId.set(item.observation.observationId, item.certificate);
     const usedContextIdentity = {
       queryRevision,
       sourceLockDigest: validationContext.sourceLock.sourceLockDigest,
@@ -2361,26 +2055,17 @@ function validateExecutionBindingCertificates(
       ),
       proposedBindingRevisions: Object.freeze(
         [...validationContext.proposedObservations]
-          .sort((left, right) =>
-            left.observationId.localeCompare(right.observationId),
-          )
+          .sort((left, right) => left.observationId.localeCompare(right.observationId))
           .map((observation) => observation.bindingRevision),
       ),
       verificationRevision: validationContext.verification.verificationRevision,
     };
-    const usedContextRevision = hashCanonicalJsonV1(
-      usedContextIdentity as never,
-    );
+    const usedContextRevision = hashCanonicalJsonV1(usedContextIdentity as never);
     usedContextIdentities.set(usedContextRevision, usedContextIdentity);
   }
-  const frameCertificateByObservationId = new Map<
-    string,
-    MemoryStateBindingCertificateV1
-  >();
+  const frameCertificateByObservationId = new Map<string, MemoryStateBindingCertificateV1>();
   for (const observation of frameObservations) {
-    const certificate = allCertificateByObservationId.get(
-      observation.observationId,
-    );
+    const certificate = allCertificateByObservationId.get(observation.observationId);
     if (!certificate) {
       throw namedError("MemoryEvidenceExecutionRuntimeCertificateInvalid");
     }
@@ -2450,13 +2135,10 @@ function dependencyValue(
   const identity = {
     nodeId: node.nodeId,
     relation:
-      node.dependencyRelation === "responds_to" ||
-      node.dependencyRelation === "supersedes"
+      node.dependencyRelation === "responds_to" || node.dependencyRelation === "supersedes"
         ? node.dependencyRelation
         : ("depends_on" as const),
-    operandResultRevisions: Object.freeze(
-      operands.map((operand) => operand.resultRevision),
-    ),
+    operandResultRevisions: Object.freeze(operands.map((operand) => operand.resultRevision)),
     memberValueIds: Object.freeze(members.map((value) => value.valueId)),
   };
   return Object.freeze({
@@ -2557,10 +2239,7 @@ function temporalClock(
   const eventCount = values.filter((value) => value.eventTimeInterval).length;
   if (eventCount > 0 && eventCount < values.length) return "mixed";
   if (eventCount === values.length && values.length > 0) return "event";
-  if (
-    values.length > 0 &&
-    values.every((value) => value.observedAt !== undefined)
-  ) {
+  if (values.length > 0 && values.every((value) => value.observedAt !== undefined)) {
     return "observed";
   }
   return "incomplete";
@@ -2631,14 +2310,8 @@ function intervalDurationValue(
   request: MemoryEvidenceExecutionNodeV1["durationRequest"],
   endpointCertificate: MemoryEvidenceDurationEndpointBindingCertificateV1,
 ): MemoryEvidenceExecutionDurationValueV1 {
-  const minimumDays = Math.max(
-    0,
-    (Date.parse(end.lower) - Date.parse(start.upper)) / 86_400_000,
-  );
-  const maximumDays = Math.max(
-    0,
-    (Date.parse(end.upper) - Date.parse(start.lower)) / 86_400_000,
-  );
+  const minimumDays = Math.max(0, (Date.parse(end.lower) - Date.parse(start.upper)) / 86_400_000);
+  const maximumDays = Math.max(0, (Date.parse(end.upper) - Date.parse(start.lower)) / 86_400_000);
   const [minimum, maximum] =
     unit === "day"
       ? [minimumDays, maximumDays]
@@ -2668,9 +2341,7 @@ function intervalDurationValue(
 
 function completedCalendarMonths(start: Date, end: Date): number {
   let months =
-    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
-    end.getUTCMonth() -
-    start.getUTCMonth();
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + end.getUTCMonth() - start.getUTCMonth();
   if (end.getUTCDate() < start.getUTCDate()) months -= 1;
   return months;
 }
@@ -2679,8 +2350,7 @@ function completedCalendarYears(start: Date, end: Date): number {
   let years = end.getUTCFullYear() - start.getUTCFullYear();
   if (
     end.getUTCMonth() < start.getUTCMonth() ||
-    (end.getUTCMonth() === start.getUTCMonth() &&
-      end.getUTCDate() < start.getUTCDate())
+    (end.getUTCMonth() === start.getUTCMonth() && end.getUTCDate() < start.getUTCDate())
   ) {
     years -= 1;
   }
@@ -2719,16 +2389,10 @@ function personalizationValue(
 ): MemoryEvidenceExecutionPersonalizationValueV1 {
   const identity = {
     nodeId: node.nodeId,
-    explicitPositiveValueIds: Object.freeze(
-      explicitPositive.map((value) => value.valueId),
-    ),
-    explicitNegativeValueIds: Object.freeze(
-      explicitNegative.map((value) => value.valueId),
-    ),
+    explicitPositiveValueIds: Object.freeze(explicitPositive.map((value) => value.valueId)),
+    explicitNegativeValueIds: Object.freeze(explicitNegative.map((value) => value.valueId)),
     goalValueIds: Object.freeze(goals.map((value) => value.valueId)),
-    contextualConstraintValueIds: Object.freeze(
-      contextual.map((value) => value.valueId),
-    ),
+    contextualConstraintValueIds: Object.freeze(contextual.map((value) => value.valueId)),
     oneOffValueIds: Object.freeze(oneOff.map((value) => value.valueId)),
     scope: "answer_personalization" as const,
     ...(coverageCertificate === undefined
@@ -2751,8 +2415,7 @@ function observationValues(
   return uniqueObservationValues(
     operands.flatMap((operand) =>
       operand.values.filter(
-        (value): value is MemoryEvidenceExecutionObservationValueV1 =>
-          value.kind === "observation",
+        (value): value is MemoryEvidenceExecutionObservationValueV1 => value.kind === "observation",
       ),
     ),
   );
@@ -2763,10 +2426,7 @@ function eventMaxima(
 ): readonly MemoryEvidenceExecutionObservationValueV1[] {
   return values.filter((candidate) =>
     values.every((other) => {
-      const comparison = compareIntervals(
-        candidate.eventTimeInterval,
-        other.eventTimeInterval,
-      );
+      const comparison = compareIntervals(candidate.eventTimeInterval, other.eventTimeInterval);
       return comparison !== null && comparison >= 0;
     }),
   );
@@ -2775,8 +2435,7 @@ function eventMaxima(
 function observedMaxima(
   values: readonly MemoryEvidenceExecutionObservationValueV1[],
 ): readonly MemoryEvidenceExecutionObservationValueV1[] {
-  if (values.some((value) => value.observedAt === undefined))
-    return Object.freeze([]);
+  if (values.some((value) => value.observedAt === undefined)) return Object.freeze([]);
   const ordered = [...values].sort(
     (left, right) =>
       (right.observedAt as string).localeCompare(left.observedAt as string) ||
@@ -2811,12 +2470,9 @@ function orderHistory(
   return Object.freeze(
     [...values].sort((left, right) => {
       if (left.eventTimeInterval && right.eventTimeInterval) {
-        return left.eventTimeInterval.lower.localeCompare(
-          right.eventTimeInterval.lower,
-        );
+        return left.eventTimeInterval.lower.localeCompare(right.eventTimeInterval.lower);
       }
-      if (left.eventTimeInterval || right.eventTimeInterval)
-        return left.eventTimeInterval ? -1 : 1;
+      if (left.eventTimeInterval || right.eventTimeInterval) return left.eventTimeInterval ? -1 : 1;
       return (
         (left.observedAt ?? "").localeCompare(right.observedAt ?? "") ||
         (left.episodeOrder ?? -1) - (right.episodeOrder ?? -1) ||
@@ -2829,9 +2485,7 @@ function orderHistory(
 function uniqueObservations(
   observations: readonly MemoryStateBoundObservationV2[],
 ): readonly MemoryStateBoundObservationV2[] {
-  return [
-    ...new Map(observations.map((item) => [item.observationId, item])).values(),
-  ];
+  return [...new Map(observations.map((item) => [item.observationId, item])).values()];
 }
 
 function uniqueObservationValues(
@@ -2862,12 +2516,8 @@ function dedupeAggregateObservations(
       ),
     ),
   );
-  const excluded = Object.freeze(
-    values.filter((value) => !eligible.includes(value)),
-  );
-  const sorted = [...eligible].sort((left, right) =>
-    left.valueId.localeCompare(right.valueId),
-  );
+  const excluded = Object.freeze(values.filter((value) => !eligible.includes(value)));
+  const sorted = [...eligible].sort((left, right) => left.valueId.localeCompare(right.valueId));
   const unitKey = (value: MemoryEvidenceExecutionObservationValueV1): string =>
     aggregationUnit === "event"
       ? value.eventKey?.trim()
@@ -2896,16 +2546,12 @@ function dedupeAggregateObservations(
 
 function aggregateMaterializationExactV1(
   values: readonly MemoryEvidenceExecutionObservationValueV1[],
-  coverageByRequirement: ReadonlyMap<
-    string,
-    MemoryEvidenceExecutionRequirementCoverageV1
-  >,
+  coverageByRequirement: ReadonlyMap<string, MemoryEvidenceExecutionRequirementCoverageV1>,
 ): boolean {
   if (values.length === 0) return false;
   const refsByRequirement = new Map<string, Set<string>>();
   for (const value of values) {
-    const refs =
-      refsByRequirement.get(value.requirementId) ?? new Set<string>();
+    const refs = refsByRequirement.get(value.requirementId) ?? new Set<string>();
     refs.add(value.evidenceRef);
     refsByRequirement.set(value.requirementId, refs);
   }
@@ -2936,20 +2582,16 @@ function parseNumericQuantityV1(
   const numericMatch = /^([-+]?)(\d+)(?:\.(\d+))?$/u.exec(numericToken);
   if (!numericMatch) return null;
   const fraction = numericMatch[3] ?? "";
-  const coefficient = BigInt(
-    `${numericMatch[1] === "-" ? "-" : ""}${numericMatch[2]}${fraction}`,
-  );
+  const coefficient = BigInt(`${numericMatch[1] === "-" ? "-" : ""}${numericMatch[2]}${fraction}`);
   const unitFor = (token: string | undefined): string | null => {
     const normalized = token?.toLocaleLowerCase("en-US");
     if (!normalized) return null;
-    if (new Set(["$", "usd", "dollar", "dollars"]).has(normalized))
-      return "USD";
+    if (new Set(["$", "usd", "dollar", "dollars"]).has(normalized)) return "USD";
     if (new Set(["£", "gbp", "pound", "pounds"]).has(normalized)) return "GBP";
     if (new Set(["€", "eur", "euro", "euros"]).has(normalized)) return "EUR";
     if (new Set(["¥", "jpy", "yen"]).has(normalized)) return "JPY";
     if (new Set(["cny", "rmb", "yuan"]).has(normalized)) return "CNY";
-    if (new Set(["%", "percent", "percentage"]).has(normalized))
-      return "percent";
+    if (new Set(["%", "percent", "percentage"]).has(normalized)) return "percent";
     if (/^(?:hours?|hrs?)$/u.test(normalized)) return "hour";
     if (/^minutes?$/u.test(normalized)) return "minute";
     if (/^days?$/u.test(normalized)) return "day";
@@ -2987,16 +2629,13 @@ function sumExactQuantitiesV1(
   const scale = Math.max(...quantities.map((quantity) => quantity.scale));
   const coefficient = quantities.reduce(
     (total, quantity) =>
-      total +
-      quantity.coefficient * 10n ** BigInt(Math.max(0, scale - quantity.scale)),
+      total + quantity.coefficient * 10n ** BigInt(Math.max(0, scale - quantity.scale)),
     0n,
   );
   const decimal = formatExactDecimalV1(coefficient, scale);
   const numeric = Number(decimal);
   const safeIntegerValue =
-    /^-?\d+$/u.test(decimal) && Number.isSafeInteger(numeric)
-      ? numeric
-      : undefined;
+    /^-?\d+$/u.test(decimal) && Number.isSafeInteger(numeric) ? numeric : undefined;
   return Object.freeze({
     decimal,
     ...(safeIntegerValue === undefined ? {} : { safeIntegerValue }),
@@ -3006,9 +2645,7 @@ function sumExactQuantitiesV1(
 
 function formatExactDecimalV1(coefficient: bigint, scale: number): string {
   const negative = coefficient < 0n;
-  const digits = (negative ? -coefficient : coefficient)
-    .toString()
-    .padStart(scale + 1, "0");
+  const digits = (negative ? -coefficient : coefficient).toString().padStart(scale + 1, "0");
   if (scale === 0) return `${negative ? "-" : ""}${digits}`;
   const integer = digits.slice(0, -scale) || "0";
   const fraction = digits.slice(-scale).replace(/0+$/u, "");
@@ -3016,9 +2653,7 @@ function formatExactDecimalV1(coefficient: bigint, scale: number): string {
   return `${negative ? "-" : ""}${integer}.${fraction}`;
 }
 
-function semanticObservationKey(
-  value: MemoryEvidenceExecutionObservationValueV1,
-): string {
+function semanticObservationKey(value: MemoryEvidenceExecutionObservationValueV1): string {
   return `${value.valueKey}\0${value.predicateKind}\0${value.polarity}`;
 }
 
@@ -3041,17 +2676,13 @@ function flattenValues(
 function flattenHistory(
   operands: readonly MemoryEvidenceExecutionNodeResultV1[],
 ): readonly MemoryEvidenceExecutionObservationValueV1[] {
-  return Object.freeze(
-    uniqueObservationValues(operands.flatMap((operand) => operand.history)),
-  );
+  return Object.freeze(uniqueObservationValues(operands.flatMap((operand) => operand.history)));
 }
 
 function flattenConflicts(
   operands: readonly MemoryEvidenceExecutionNodeResultV1[],
 ): readonly MemoryEvidenceExecutionObservationValueV1[] {
-  return Object.freeze(
-    uniqueObservationValues(operands.flatMap((operand) => operand.conflicts)),
-  );
+  return Object.freeze(uniqueObservationValues(operands.flatMap((operand) => operand.conflicts)));
 }
 
 function flattenProofs(
@@ -3059,10 +2690,7 @@ function flattenProofs(
 ): readonly string[] {
   return Object.freeze([
     ...new Set(
-      operands.flatMap((operand) => [
-        operand.resultRevision,
-        ...operand.completionProofRevisions,
-      ]),
+      operands.flatMap((operand) => [operand.resultRevision, ...operand.completionProofRevisions]),
     ),
   ]);
 }

@@ -144,10 +144,7 @@ describe("memory temporal graph", () => {
       new AbortController().signal,
     );
 
-    expect(recalled.map((item) => item.id)).toEqual([
-      "lexical-memory",
-      "vector-memory",
-    ]);
+    expect(recalled.map((item) => item.id)).toEqual(["lexical-memory", "vector-memory"]);
   });
 
   test("repairs a failed relation write by replay without duplicating versions", async () => {
@@ -207,9 +204,9 @@ describe("memory temporal graph", () => {
       atoms: Object.freeze([atom]),
     });
 
-    await expect(
-      store.apply(applyInput, new AbortController().signal),
-    ).rejects.toThrow("temporary graph failure");
+    await expect(store.apply(applyInput, new AbortController().signal)).rejects.toThrow(
+      "temporary graph failure",
+    );
     expect(entries.get(old.id)?.tInvalid).toBe("2025-02-01T00:00:00.000Z");
 
     const replay = await store.apply(applyInput, new AbortController().signal);
@@ -318,9 +315,9 @@ describe("memory temporal graph", () => {
       }),
     ];
 
-    expect(() =>
-      projectMemoryTrajectoriesV1({ entries: [first, second], relations }),
-    ).toThrow("MemoryTrajectoryCycleDetected");
+    expect(() => projectMemoryTrajectoriesV1({ entries: [first, second], relations })).toThrow(
+      "MemoryTrajectoryCycleDetected",
+    );
   });
 });
 
@@ -351,10 +348,7 @@ function semantic(
   });
 }
 
-function memoryEngine(
-  entries: Map<string, MemoryEntry>,
-  onPut: () => void,
-): MemoryStoreEngine {
+function memoryEngine(entries: Map<string, MemoryEntry>, onPut: () => void): MemoryStoreEngine {
   return {
     scope,
     async put(entry) {

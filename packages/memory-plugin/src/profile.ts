@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
 
-export const PAW_NEXT_MEMORY_PLUGIN_POLICY_VERSION_V1 =
-  "paw.next-memory-plugin.v1" as const;
-export const PAW_NEXT_MEMORY_V2_PROVIDER_VERSION_V1 =
-  "paw.memory-v2-readonly-provider.v1" as const;
+export const PAW_NEXT_MEMORY_PLUGIN_POLICY_VERSION_V1 = "paw.next-memory-plugin.v1" as const;
+export const PAW_NEXT_MEMORY_V2_PROVIDER_VERSION_V1 = "paw.memory-v2-readonly-provider.v1" as const;
 export const PAW_NEXT_MEMORY_RRF_PROVIDER_VERSION_V1 =
   "paw.memory-v2-readonly-provider.rrf.v1" as const;
 export const PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1 =
@@ -109,21 +107,13 @@ export interface PawNextMemoryPluginIdentityV1 {
   readonly writePolicy: "disabled" | "journal_two_phase";
 }
 
-export function freezePawNextMemoryPluginProfileV1(
-  value: unknown,
-): PawNextMemoryPluginProfileV1 {
+export function freezePawNextMemoryPluginProfileV1(value: unknown): PawNextMemoryPluginProfileV1 {
   const raw = objectRecord(value, "Paw Next memory plugin profile");
-  const expectsReranker =
-    raw.providerVersion === PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1;
+  const expectsReranker = raw.providerVersion === PAW_NEXT_MEMORY_RRF_RERANK_PROVIDER_VERSION_V1;
   const hasEmbedding = Object.prototype.hasOwnProperty.call(raw, "embedding");
   const hasWriter = Object.prototype.hasOwnProperty.call(raw, "writer");
-  if (
-    hasEmbedding &&
-    raw.providerVersion === PAW_NEXT_MEMORY_V2_PROVIDER_VERSION_V1
-  ) {
-    throw new Error(
-      "Legacy memory provider cannot bind a dense embedding identity",
-    );
+  if (hasEmbedding && raw.providerVersion === PAW_NEXT_MEMORY_V2_PROVIDER_VERSION_V1) {
+    throw new Error("Legacy memory provider cannot bind a dense embedding identity");
   }
   const record = exactRecord(value, "Paw Next memory plugin profile", [
     "policyVersion",
@@ -139,17 +129,11 @@ export function freezePawNextMemoryPluginProfileV1(
   if (record.policyVersion !== PAW_NEXT_MEMORY_PLUGIN_POLICY_VERSION_V1) {
     throw new Error("Unsupported Paw Next memory plugin policy version");
   }
-  if (
-    record.mode !== "off" &&
-    record.mode !== "read_only" &&
-    record.mode !== "read_write"
-  ) {
+  if (record.mode !== "off" && record.mode !== "read_only" && record.mode !== "read_write") {
     throw new Error("Paw Next memory plugin mode is invalid");
   }
   if ((record.mode === "read_write") !== hasWriter) {
-    throw new Error(
-      "Paw Next read-write memory requires an exclusive writer profile",
-    );
+    throw new Error("Paw Next read-write memory requires an exclusive writer profile");
   }
   if (
     record.providerVersion !== PAW_NEXT_MEMORY_V2_PROVIDER_VERSION_V1 &&
@@ -180,12 +164,8 @@ export function freezePawNextMemoryPluginProfileV1(
     workspaceId: scopePart(scopeRecord.workspaceId, "workspaceId"),
     repositoryId: scopePart(scopeRecord.repositoryId, "repositoryId"),
   });
-  const reranker = expectsReranker
-    ? freezeRerankerIdentity(record.reranker)
-    : undefined;
-  const embedding = hasEmbedding
-    ? freezeEmbeddingIdentity(record.embedding)
-    : undefined;
+  const reranker = expectsReranker ? freezeRerankerIdentity(record.reranker) : undefined;
+  const embedding = hasEmbedding ? freezeEmbeddingIdentity(record.embedding) : undefined;
   const writer = hasWriter ? freezeWriterProfile(record.writer) : undefined;
   return Object.freeze({
     policyVersion: PAW_NEXT_MEMORY_PLUGIN_POLICY_VERSION_V1,
@@ -203,9 +183,7 @@ export function freezePawNextMemoryPluginProfileV1(
 export function memoryScopeFingerprintV1(scope: PawNextMemoryScopeV1): string {
   const frozen = freezeScope(scope);
   return createHash("sha256")
-    .update(
-      `${frozen.tenantId}\n${frozen.userId}\n${frozen.workspaceId}\n${frozen.repositoryId}`,
-    )
+    .update(`${frozen.tenantId}\n${frozen.userId}\n${frozen.workspaceId}\n${frozen.repositoryId}`)
     .digest("hex")
     .slice(0, 20);
 }
@@ -226,8 +204,7 @@ export function createPawNextMemoryPluginIdentityV1(
     ...(frozen.writer ? { writer: frozen.writer } : {}),
     triggerPolicy: "task_and_work_segment_start",
     authority: "untrusted_evidence_only",
-    writePolicy:
-      frozen.mode === "read_write" ? "journal_two_phase" : "disabled",
+    writePolicy: frozen.mode === "read_write" ? "journal_two_phase" : "disabled",
   });
 }
 
@@ -264,9 +241,7 @@ function objectRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function freezeRerankerIdentity(
-  value: unknown,
-): PawNextMemoryRerankerIdentityV1 {
+function freezeRerankerIdentity(value: unknown): PawNextMemoryRerankerIdentityV1 {
   const record = exactRecord(value, "Paw Next memory reranker identity", [
     "provider",
     "model",
@@ -279,9 +254,7 @@ function freezeRerankerIdentity(
   });
 }
 
-function freezeEmbeddingIdentity(
-  value: unknown,
-): PawNextMemoryEmbeddingIdentityV1 {
+function freezeEmbeddingIdentity(value: unknown): PawNextMemoryEmbeddingIdentityV1 {
   const record = exactRecord(value, "Paw Next memory embedding identity", [
     "model",
     "version",
@@ -333,71 +306,46 @@ function freezeWriterProfile(value: unknown): PawNextMemoryWriterProfileV1 {
     topicOrganizer: freezeTopicOrganizerProfile(record.topicOrganizer),
     personaProjector: freezePersonaProjectorProfile(record.personaProjector),
     evidencePlanner: freezeEvidencePlannerProfile(record.evidencePlanner),
-    rawEvidenceResolver: freezeRawEvidenceResolverProfile(
-      record.rawEvidenceResolver,
-    ),
+    rawEvidenceResolver: freezeRawEvidenceResolverProfile(record.rawEvidenceResolver),
     coveragePlanner: freezeCoveragePlannerProfile(record.coveragePlanner),
   });
 }
 
-function freezeCoveragePlannerProfile(
-  value: unknown,
-): PawNextMemoryCoveragePlannerProfileV1 {
-  const record = exactRecord(
-    value,
-    "Paw Next memory coverage planner profile",
-    [
-      "policyVersion",
-      "extractorVersion",
-      "maxRequirements",
-      "maxExpansionTopics",
-      "maxSupplementalStates",
-      "maxSupplementalChars",
-    ],
-  );
+function freezeCoveragePlannerProfile(value: unknown): PawNextMemoryCoveragePlannerProfileV1 {
+  const record = exactRecord(value, "Paw Next memory coverage planner profile", [
+    "policyVersion",
+    "extractorVersion",
+    "maxRequirements",
+    "maxExpansionTopics",
+    "maxSupplementalStates",
+    "maxSupplementalChars",
+  ]);
   if (record.policyVersion !== "paw.memory-evidence-coverage-planner.v1") {
-    throw new Error(
-      "Unsupported Paw Next memory coverage planner policy version",
-    );
+    throw new Error("Unsupported Paw Next memory coverage planner policy version");
   }
-  if (
-    record.extractorVersion !==
-    "paw.memory-evidence-requirement-planner.json.v1"
-  ) {
-    throw new Error(
-      "Unsupported Paw Next memory coverage planner extractor version",
-    );
+  if (record.extractorVersion !== "paw.memory-evidence-requirement-planner.json.v1") {
+    throw new Error("Unsupported Paw Next memory coverage planner extractor version");
   }
   return Object.freeze({
     policyVersion: "paw.memory-evidence-coverage-planner.v1",
     extractorVersion: "paw.memory-evidence-requirement-planner.json.v1",
     maxRequirements: boundedProfileInteger(record.maxRequirements, 1, 6),
     maxExpansionTopics: boundedProfileInteger(record.maxExpansionTopics, 1, 8),
-    maxSupplementalStates: boundedProfileInteger(
-      record.maxSupplementalStates,
-      1,
-      16,
-    ),
-    maxSupplementalChars: boundedProfileInteger(
-      record.maxSupplementalChars,
-      256,
-      8_192,
-    ),
+    maxSupplementalStates: boundedProfileInteger(record.maxSupplementalStates, 1, 16),
+    maxSupplementalChars: boundedProfileInteger(record.maxSupplementalChars, 256, 8_192),
   });
 }
 
 function freezeRawEvidenceResolverProfile(
   value: unknown,
 ): PawNextMemoryRawEvidenceResolverProfileV1 {
-  const record = exactRecord(
-    value,
-    "Paw Next memory raw evidence resolver profile",
-    ["policyVersion", "maxSpans", "maxChars"],
-  );
+  const record = exactRecord(value, "Paw Next memory raw evidence resolver profile", [
+    "policyVersion",
+    "maxSpans",
+    "maxChars",
+  ]);
   if (record.policyVersion !== "paw.memory-raw-evidence-resolver.v1") {
-    throw new Error(
-      "Unsupported Paw Next memory raw evidence resolver policy version",
-    );
+    throw new Error("Unsupported Paw Next memory raw evidence resolver policy version");
   }
   return Object.freeze({
     policyVersion: "paw.memory-raw-evidence-resolver.v1",
@@ -406,18 +354,15 @@ function freezeRawEvidenceResolverProfile(
   });
 }
 
-function freezePersonaProjectorProfile(
-  value: unknown,
-): PawNextMemoryPersonaProjectorProfileV1 {
-  const record = exactRecord(
-    value,
-    "Paw Next memory persona projector profile",
-    ["policyVersion", "maxClaims", "maxChars", "minimumConfidence"],
-  );
+function freezePersonaProjectorProfile(value: unknown): PawNextMemoryPersonaProjectorProfileV1 {
+  const record = exactRecord(value, "Paw Next memory persona projector profile", [
+    "policyVersion",
+    "maxClaims",
+    "maxChars",
+    "minimumConfidence",
+  ]);
   if (record.policyVersion !== "paw.memory-persona-evidence-projector.v1") {
-    throw new Error(
-      "Unsupported Paw Next memory persona projector policy version",
-    );
+    throw new Error("Unsupported Paw Next memory persona projector policy version");
   }
   const maxClaims = boundedProfileInteger(record.maxClaims, 1, 64);
   const maxChars = boundedProfileInteger(record.maxChars, 512, 16_384);
@@ -437,37 +382,21 @@ function freezePersonaProjectorProfile(
   });
 }
 
-function freezeEvidencePlannerProfile(
-  value: unknown,
-): PawNextMemoryEvidencePlannerProfileV1 {
-  const record = exactRecord(
-    value,
-    "Paw Next memory evidence planner profile",
-    [
-      "policyVersion",
-      "maxIndexTopics",
-      "maxSelectedTopics",
-      "maxStates",
-      "maxEvidenceChars",
-    ],
-  );
+function freezeEvidencePlannerProfile(value: unknown): PawNextMemoryEvidencePlannerProfileV1 {
+  const record = exactRecord(value, "Paw Next memory evidence planner profile", [
+    "policyVersion",
+    "maxIndexTopics",
+    "maxSelectedTopics",
+    "maxStates",
+    "maxEvidenceChars",
+  ]);
   if (record.policyVersion !== "paw.memory-topic-evidence-planner.v1") {
-    throw new Error(
-      "Unsupported Paw Next memory evidence planner policy version",
-    );
+    throw new Error("Unsupported Paw Next memory evidence planner policy version");
   }
   const maxIndexTopics = boundedProfileInteger(record.maxIndexTopics, 1, 128);
-  const maxSelectedTopics = boundedProfileInteger(
-    record.maxSelectedTopics,
-    1,
-    8,
-  );
+  const maxSelectedTopics = boundedProfileInteger(record.maxSelectedTopics, 1, 8);
   const maxStates = boundedProfileInteger(record.maxStates, 1, 32);
-  const maxEvidenceChars = boundedProfileInteger(
-    record.maxEvidenceChars,
-    1_024,
-    32_768,
-  );
+  const maxEvidenceChars = boundedProfileInteger(record.maxEvidenceChars, 1_024, 32_768);
   return Object.freeze({
     policyVersion: "paw.memory-topic-evidence-planner.v1",
     maxIndexTopics,
@@ -477,33 +406,21 @@ function freezeEvidencePlannerProfile(
   });
 }
 
-function boundedProfileInteger(
-  value: unknown,
-  minimum: number,
-  maximum: number,
-): number {
-  if (
-    !Number.isSafeInteger(value) ||
-    (value as number) < minimum ||
-    (value as number) > maximum
-  ) {
+function boundedProfileInteger(value: unknown, minimum: number, maximum: number): number {
+  if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
     throw new Error("Paw Next memory evidence planner budget is invalid");
   }
   return value as number;
 }
 
-function freezeTopicOrganizerProfile(
-  value: unknown,
-): PawNextMemoryTopicOrganizerProfileV1 {
+function freezeTopicOrganizerProfile(value: unknown): PawNextMemoryTopicOrganizerProfileV1 {
   const record = exactRecord(value, "Paw Next memory topic organizer profile", [
     "policyVersion",
     "extractorVersion",
     "maxTopics",
   ]);
   if (record.policyVersion !== "paw.memory-topic-organization.v1") {
-    throw new Error(
-      "Unsupported Paw Next memory topic organizer policy version",
-    );
+    throw new Error("Unsupported Paw Next memory topic organizer policy version");
   }
   if (record.extractorVersion !== "paw.memory-topic-extractor.json.v1") {
     throw new Error("Unsupported Paw Next memory topic extractor version");
@@ -538,8 +455,7 @@ function identityPart(value: unknown, name: string): string {
 }
 
 function scopePart(value: unknown, name: string): string {
-  if (typeof value !== "string")
-    throw new Error(`Invalid memory scope ${name}`);
+  if (typeof value !== "string") throw new Error(`Invalid memory scope ${name}`);
   const normalized = value.trim();
   const invalid = [...normalized].some((character) => {
     const code = character.codePointAt(0) ?? 0;

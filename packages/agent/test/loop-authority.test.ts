@@ -5,10 +5,7 @@ import path from "node:path";
 
 import type { RunEventEnvelope } from "@paw/core";
 
-import {
-  LOOP_AUTHORITY_SCHEMA_V1,
-  resolveLoopAuthorityPolicyV1,
-} from "../src/loop-authority.js";
+import { LOOP_AUTHORITY_SCHEMA_V1, resolveLoopAuthorityPolicyV1 } from "../src/loop-authority.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";
 
 describe("LoopAuthorityPolicyV1", () => {
@@ -80,20 +77,15 @@ describe("LoopAuthorityPolicyV1", () => {
     });
 
     expect(result.status).toBe("completed");
-    expect(readFileSync(path.join(workspaceRoot, "source.txt"), "utf8")).toBe(
-      "after\n",
-    );
+    expect(readFileSync(path.join(workspaceRoot, "source.txt"), "utf8")).toBe("after\n");
     const readResult = events.find(
-      (event) =>
-        event.event.type === "tool.result" &&
-        event.event.tool === "workspace.read_file",
+      (event) => event.event.type === "tool.result" && event.event.tool === "workspace.read_file",
     );
     expect(readResult).toMatchObject({ event: { ok: true } });
     expect(
       events.some(
         (event) =>
-          event.event.type === "tool.result" &&
-          event.event.summary.includes("LoopPolicy:"),
+          event.event.type === "tool.result" && event.event.summary.includes("LoopPolicy:"),
       ),
     ).toBe(false);
   });
@@ -133,8 +125,6 @@ describe("LoopAuthorityPolicyV1", () => {
       status: "completed",
       completionReason: "final_answer_dialogue",
     });
-    expect(
-      events.filter((event) => event.event.type === "plan.updated"),
-    ).toHaveLength(1);
+    expect(events.filter((event) => event.event.type === "plan.updated")).toHaveLength(1);
   });
 });

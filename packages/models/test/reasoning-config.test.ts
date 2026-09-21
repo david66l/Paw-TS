@@ -123,9 +123,7 @@ describe("reasoning configuration", () => {
       thinkingEnabled: true,
       reasoningEffort: "max",
     });
-    for await (const _chunk of openAi.completeStream([
-      { role: "user", content: "solve" },
-    ])) {
+    for await (const _chunk of openAi.completeStream([{ role: "user", content: "solve" }])) {
       // drain stream
     }
     expect(openAiCaptured[0]?.thinking).toEqual({ type: "enabled" });
@@ -143,9 +141,7 @@ describe("reasoning configuration", () => {
       model: "deepseek-v4-flash",
       reasoningEffort: "max",
     });
-    for await (const _chunk of anthropic.completeStream([
-      { role: "user", content: "solve" },
-    ])) {
+    for await (const _chunk of anthropic.completeStream([{ role: "user", content: "solve" }])) {
       // drain stream
     }
     expect(anthropicCaptured[0]?.output_config).toEqual({ effort: "max" });
@@ -180,10 +176,10 @@ describe("reasoning configuration", () => {
       'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
       streamCaptured,
     );
-    for await (const _chunk of openAi.completeStream(
-      [{ role: "user", content: "short JSON" }],
-      { thinkingEnabled: false, maxOutputTokens: 1_024 },
-    )) {
+    for await (const _chunk of openAi.completeStream([{ role: "user", content: "short JSON" }], {
+      thinkingEnabled: false,
+      maxOutputTokens: 1_024,
+    })) {
       // drain stream
     }
     expect(streamCaptured[0]).toMatchObject({
@@ -234,10 +230,10 @@ describe("reasoning configuration", () => {
       'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
       streamCaptured,
     );
-    for await (const _chunk of generic.completeStream(
-      [{ role: "user", content: "short JSON" }],
-      { thinkingEnabled: false, maxOutputTokens: 512 },
-    )) {
+    for await (const _chunk of generic.completeStream([{ role: "user", content: "short JSON" }], {
+      thinkingEnabled: false,
+      maxOutputTokens: 512,
+    })) {
       // drain stream
     }
     expect(streamCaptured[0]).not.toHaveProperty("thinking");
@@ -387,12 +383,9 @@ describe("reasoning configuration", () => {
     let attempt = 0;
     global.fetch = Object.assign(
       async (_input: string | URL | Request, init?: RequestInit) => {
-        captured.push(
-          JSON.parse(String(init?.body)) as Record<string, unknown>,
-        );
+        captured.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
         attempt += 1;
-        if (attempt === 1)
-          return new Response("unsupported stream_options", { status: 400 });
+        if (attempt === 1) return new Response("unsupported stream_options", { status: 400 });
         const stream = new ReadableStream({
           start(controller) {
             controller.enqueue(

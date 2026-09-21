@@ -14,10 +14,7 @@ import {
   VERIFIED_CANONICAL_PAYLOAD_BUDGET_POLICY_VERSION_V1,
 } from "@paw/runtime";
 import type { PawSettingsLocal } from "@paw/settings";
-import {
-  PAW_AGENT_SYSTEM_PROMPT,
-  PAW_CODING_EXECUTION_GUIDANCE,
-} from "./agent-system-prompt.js";
+import { PAW_AGENT_SYSTEM_PROMPT, PAW_CODING_EXECUTION_GUIDANCE } from "./agent-system-prompt.js";
 import { desktopProjectContext } from "./project-context.js";
 
 export const fingerprint = (value: unknown): string =>
@@ -31,21 +28,14 @@ export function desktopProfile(
   memoryEnabled = true,
 ): PawNextProductProfileV3 {
   const runtime = model.runtimeProfile;
-  if (!runtime)
-    throw new Error(
-      "请先在设置中配置可用的模型；Paw Next 不使用占位模型执行任务。",
-    );
+  if (!runtime) throw new Error("请先在设置中配置可用的模型；Paw Next 不使用占位模型执行任务。");
   const protocol = runtime.protocol;
   const scope = resolveScope({ workspaceRoot });
   const writable = settings.paid_memory_extraction !== false;
   const contextWindow = model.capabilities?.contextWindow ?? 128_000;
-  const outputLimit = resolveModelOutputLimit(
-    model.capabilities?.maxOutputTokens,
-  );
+  const outputLimit = resolveModelOutputLimit(model.capabilities?.maxOutputTokens);
   const sandbox = resolveShellSandboxConfig(workspaceRoot);
-  const skills = loadSkillsFromDirectory(
-    path.join(workspaceRoot, ".paw", "skills"),
-  );
+  const skills = loadSkillsFromDirectory(path.join(workspaceRoot, ".paw", "skills"));
   const skillCatalog = skills.length
     ? `\nWorkspace skills (read their files before applying):\n${JSON.stringify(skills.map((skill) => ({ id: skill.id, description: skill.description, directory: skill.skillDir ?? path.join(workspaceRoot, ".paw", "skills") })))}`
     : "";
@@ -60,9 +50,7 @@ export function desktopProfile(
       model: runtime.model,
       baseUrl: runtime.baseUrl,
       capabilities: {
-        ...(model.capabilities?.imageInput
-          ? { imageInput: true as const }
-          : {}),
+        ...(model.capabilities?.imageInput ? { imageInput: true as const } : {}),
         contextWindow,
         maxOutputTokens: outputLimit,
       },
@@ -89,9 +77,7 @@ export function desktopProfile(
     permission: {
       policyVersion: "paw.desktop-permission.v1",
       defaultAction: "ask",
-      rules: [
-        { id: "read", layer: "default", category: "read", action: "allow" },
-      ],
+      rules: [{ id: "read", layer: "default", category: "read", action: "allow" }],
     },
     approval: "available",
     heartbeat: {
@@ -107,8 +93,7 @@ export function desktopProfile(
             runtime: sandbox.runtime ?? "docker",
             memoryMb: sandbox.memoryMb ?? 2048,
             cpus: sandbox.cpus ?? 2,
-            containerWorkspaceRoot:
-              sandbox.containerWorkspaceRoot ?? "/workspace",
+            containerWorkspaceRoot: sandbox.containerWorkspaceRoot ?? "/workspace",
             commandShell: sandbox.commandShell ?? "sh",
             pullPolicy: sandbox.pullPolicy ?? "missing",
             workspaceReadOnly: sandbox.workspaceReadOnly ?? false,
@@ -167,8 +152,7 @@ export function desktopProfile(
                     },
                     coveragePlanner: {
                       policyVersion: "paw.memory-evidence-coverage-planner.v1",
-                      extractorVersion:
-                        "paw.memory-evidence-requirement-planner.json.v1",
+                      extractorVersion: "paw.memory-evidence-requirement-planner.json.v1",
                       maxRequirements: 4,
                       maxExpansionTopics: 3,
                       maxSupplementalStates: 8,

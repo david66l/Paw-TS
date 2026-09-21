@@ -7,21 +7,11 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 type Revision = Map<string, string> | undefined;
 /** Bounded content snapshot of Git-visible files; never trust a shell's claimed effects. */
-export async function captureWorkspaceRevision(
-  root: string,
-): Promise<Revision> {
+export async function captureWorkspaceRevision(root: string): Promise<Revision> {
   try {
     const { stdout } = await run(
       "git",
-      [
-        "-C",
-        root,
-        "ls-files",
-        "-z",
-        "--cached",
-        "--others",
-        "--exclude-standard",
-      ],
+      ["-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
       { windowsHide: true, timeout: 2000, maxBuffer: 512 * 1024 },
     );
     const names = [...new Set(stdout.split("\0").filter(Boolean))];
@@ -30,21 +20,12 @@ export async function captureWorkspaceRevision(
     const result = new Map<string, string>();
     let remaining = 16 * 1024 * 1024;
     for (const name of names.sort()) {
-      if (
-        name === ".paw" ||
-        name.startsWith(".paw/") ||
-        name.startsWith(".git/")
-      )
-        continue;
+      if (name === ".paw" || name.startsWith(".paw/") || name.startsWith(".git/")) continue;
       const file = path.resolve(root, name);
       const relative = path.relative(canonical, file);
-      if (
-        relative === ".." ||
-        relative.startsWith(`..${path.sep}`) ||
-        path.isAbsolute(relative)
-      )
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
         return undefined;
-      let stat;
+      let stat: Awaited<ReturnType<typeof fs.lstat>>;
       try {
         stat = await fs.lstat(file);
       } catch (e) {
@@ -56,8 +37,7 @@ export async function captureWorkspaceRevision(
       }
       if (stat.isSymbolicLink() || !stat.isFile()) return undefined;
       const real = await fs.realpath(file);
-      if (real !== file && path.relative(canonical, real).startsWith(".."))
-        return undefined;
+      if (real !== file && path.relative(canonical, real).startsWith("..")) return undefined;
       remaining -= stat.size;
       if (remaining < 0) return undefined;
       result.set(

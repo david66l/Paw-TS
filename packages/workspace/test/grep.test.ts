@@ -34,11 +34,7 @@ describe("grepWorkspaceText", () => {
 
   test("content mode with context", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-grep-"));
-    writeFileSync(
-      path.join(root, "a.ts"),
-      "line1\nline2\nfoo\nline4\nline5\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "a.ts"), "line1\nline2\nfoo\nline4\nline5\n", "utf8");
     const r = grepWorkspaceText(root, ".", {
       pattern: "foo",
       outputMode: "content",

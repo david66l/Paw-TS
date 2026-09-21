@@ -60,73 +60,45 @@ type CatalogEntryV3 =
 /** Explicit aggregate catalog; exact configHash misses never cross versions. */
 export function createPawNextProductProfileCatalogV3(
   options: CreatePawNextProductProfileCatalogOptionsV3,
-): (
-  identity: PawNextStartupRunIdentityV1,
-) => PawNextProductProfileCatalogResolutionV3 | undefined {
+): (identity: PawNextStartupRunIdentityV1) => PawNextProductProfileCatalogResolutionV3 | undefined {
   const sources = freezeCatalogOptions(options);
-  const workspaceRoot = canonicalPawNextWorkspaceInternal(
-    sources.workspaceRoot,
-  );
+  const workspaceRoot = canonicalPawNextWorkspaceInternal(sources.workspaceRoot);
   const byHash = new Map<string, CatalogEntryV3>();
   const revisions = new Set<string>();
 
   if (sources.v1 !== undefined) {
     const store = loadPawNextProductProfileStoreV1({
       workspaceRoot,
-      ...(sources.v1.profilePath === undefined
-        ? {}
-        : { profilePath: sources.v1.profilePath }),
+      ...(sources.v1.profilePath === undefined ? {} : { profilePath: sources.v1.profilePath }),
     });
-    const settingsPath =
-      sources.v1.settingsPath ?? defaultSettingsPath(workspaceRoot);
+    const settingsPath = sources.v1.settingsPath ?? defaultSettingsPath(workspaceRoot);
     for (const profile of store.profiles) {
-      addEntry(
-        byHash,
-        revisions,
-        Object.freeze({ productVersion: "v1", profile, settingsPath }),
-      );
+      addEntry(byHash, revisions, Object.freeze({ productVersion: "v1", profile, settingsPath }));
     }
   }
   if (sources.v2 !== undefined) {
     const store = loadPawNextProductProfileStoreV2({
       workspaceRoot,
-      ...(sources.v2.profilePath === undefined
-        ? {}
-        : { profilePath: sources.v2.profilePath }),
+      ...(sources.v2.profilePath === undefined ? {} : { profilePath: sources.v2.profilePath }),
     });
-    const settingsPath =
-      sources.v2.settingsPath ?? defaultSettingsPath(workspaceRoot);
+    const settingsPath = sources.v2.settingsPath ?? defaultSettingsPath(workspaceRoot);
     for (const profile of store.profiles) {
-      addEntry(
-        byHash,
-        revisions,
-        Object.freeze({ productVersion: "v2", profile, settingsPath }),
-      );
+      addEntry(byHash, revisions, Object.freeze({ productVersion: "v2", profile, settingsPath }));
     }
   }
   if (sources.v3 !== undefined) {
     const store = loadPawNextProductProfileStoreV3({
       workspaceRoot,
-      ...(sources.v3.profilePath === undefined
-        ? {}
-        : { profilePath: sources.v3.profilePath }),
+      ...(sources.v3.profilePath === undefined ? {} : { profilePath: sources.v3.profilePath }),
     });
-    const settingsPath =
-      sources.v3.settingsPath ?? defaultSettingsPath(workspaceRoot);
+    const settingsPath = sources.v3.settingsPath ?? defaultSettingsPath(workspaceRoot);
     for (const profile of store.profiles) {
-      addEntry(
-        byHash,
-        revisions,
-        Object.freeze({ productVersion: "v3", profile, settingsPath }),
-      );
+      addEntry(byHash, revisions, Object.freeze({ productVersion: "v3", profile, settingsPath }));
     }
   }
 
   return (identity) => {
-    if (
-      canonicalPawNextWorkspaceInternal(identity.workspaceRoot) !==
-      workspaceRoot
-    ) {
+    if (canonicalPawNextWorkspaceInternal(identity.workspaceRoot) !== workspaceRoot) {
       throw new Error("Paw Next V3 product profile catalog workspace mismatch");
     }
     const entry = byHash.get(identity.configHash);
@@ -187,15 +159,8 @@ function freezeCatalogOptions(
     throw new Error("Paw Next V3 product profile catalog options are invalid");
   }
   for (const key of Object.keys(value)) {
-    if (
-      key !== "workspaceRoot" &&
-      key !== "v1" &&
-      key !== "v2" &&
-      key !== "v3"
-    ) {
-      throw new Error(
-        "Paw Next V3 product profile catalog options are invalid",
-      );
+    if (key !== "workspaceRoot" && key !== "v1" && key !== "v2" && key !== "v3") {
+      throw new Error("Paw Next V3 product profile catalog options are invalid");
     }
   }
   if (
@@ -226,20 +191,13 @@ function freezeSource(
     }
   }
   for (const candidate of [value.profilePath, value.settingsPath]) {
-    if (
-      candidate !== undefined &&
-      (typeof candidate !== "string" || !candidate.trim())
-    ) {
+    if (candidate !== undefined && (typeof candidate !== "string" || !candidate.trim())) {
       throw new Error(`Paw Next ${label} catalog source is invalid`);
     }
   }
   return Object.freeze({
-    ...(value.profilePath === undefined
-      ? {}
-      : { profilePath: value.profilePath }),
-    ...(value.settingsPath === undefined
-      ? {}
-      : { settingsPath: value.settingsPath }),
+    ...(value.profilePath === undefined ? {} : { profilePath: value.profilePath }),
+    ...(value.settingsPath === undefined ? {} : { settingsPath: value.settingsPath }),
   });
 }
 
@@ -251,10 +209,7 @@ function addEntry(
   if (byHash.has(entry.profile.configHash)) {
     throw new Error("Duplicate Paw Next V3 catalog configHash");
   }
-  const revision = JSON.stringify([
-    entry.profile.profileId,
-    entry.profile.revision,
-  ]);
+  const revision = JSON.stringify([entry.profile.profileId, entry.profile.revision]);
   if (revisions.has(revision)) {
     throw new Error("Duplicate Paw Next V3 catalog profile revision");
   }

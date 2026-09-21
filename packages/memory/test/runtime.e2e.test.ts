@@ -9,10 +9,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { closeSql, getSql } from "../src/db/connection.js";
-import {
-  type MemoryRuntime,
-  createMemoryRuntime,
-} from "../src/runtime/index.js";
+import { type MemoryRuntime, createMemoryRuntime } from "../src/runtime/index.js";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgresql:///paw_memory_test";
 process.env.DATABASE_URL = DB_URL;
@@ -44,37 +41,18 @@ beforeAll(async () => {
 afterAll(async () => {
   const sql = getSql();
   for (const mid of writtenIds) {
-    await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [
-      mid,
-    ]);
-    await sql.unsafe("DELETE FROM memory_index_states WHERE memory_id = $1", [
-      mid,
-    ]);
+    await sql.unsafe("DELETE FROM memory_embeddings WHERE memory_id = $1", [mid]);
+    await sql.unsafe("DELETE FROM memory_index_states WHERE memory_id = $1", [mid]);
     await sql.unsafe("DELETE FROM memory_versions WHERE memory_id = $1", [mid]);
     await sql.unsafe("DELETE FROM memory_items WHERE id = $1", [mid]);
   }
   if (taskId) {
-    await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [
-      taskId,
-    ]);
-    await sql.unsafe("DELETE FROM tool_result_records WHERE task_id = $1", [
-      taskId,
-    ]);
-    await sql.unsafe(
-      "DELETE FROM governance_decisions WHERE candidate_id LIKE $1",
-      ["cand_%"],
-    );
-    await sql.unsafe(
-      "DELETE FROM memory_candidates WHERE source_task_ids @> $1",
-      [[taskId]],
-    );
-    await sql.unsafe(
-      "DELETE FROM working_memory_snapshots WHERE task_id = $1",
-      [taskId],
-    );
-    await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [
-      taskId,
-    ]);
+    await sql.unsafe("DELETE FROM outbox_events WHERE aggregate_id = $1", [taskId]);
+    await sql.unsafe("DELETE FROM tool_result_records WHERE task_id = $1", [taskId]);
+    await sql.unsafe("DELETE FROM governance_decisions WHERE candidate_id LIKE $1", ["cand_%"]);
+    await sql.unsafe("DELETE FROM memory_candidates WHERE source_task_ids @> $1", [[taskId]]);
+    await sql.unsafe("DELETE FROM working_memory_snapshots WHERE task_id = $1", [taskId]);
+    await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [taskId]);
     await sql.unsafe("DELETE FROM task_sessions WHERE id = $1", [taskId]);
   }
   await runtime.shutdown();
@@ -155,15 +133,12 @@ describe("MemoryRuntime Phase 1 closed loop", () => {
     const result = await runtime.completeTask({
       taskId,
       status: "completed",
-      finalMessage:
-        "Decided to use ioredis for Redis client; prefer vitest for unit tests",
+      finalMessage: "Decided to use ioredis for Redis client; prefer vitest for unit tests",
     });
 
     expect(result.candidates).toBeGreaterThan(0);
     // 至少 task_summary / decision / preference 中应有可自动批准的
-    expect(result.approved + result.pendingReview + result.rejected).toBe(
-      result.candidates,
-    );
+    expect(result.approved + result.pendingReview + result.rejected).toBe(result.candidates);
     expect(result.writtenMemoryIds.length).toBeGreaterThan(0);
     writtenIds.push(...result.writtenMemoryIds);
   });
@@ -185,24 +160,20 @@ describe("MemoryRuntime Phase 1 closed loop", () => {
     // 召回列表或 prompt 中应出现先前写入的内容
     const hitById = section.items.some((i) => writtenIds.includes(i.id));
     const hitByText =
-      /redis|ioredis|vitest|auth/i.test(section.promptSection) &&
-      section.items.length > 0;
+      /redis|ioredis|vitest|auth/i.test(section.promptSection) && section.items.length > 0;
 
     expect(hitById || hitByText).toBe(true);
 
     // cleanup second task
     const sql = getSql();
-    await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [
-      run2.taskId,
-    ]);
+    await sql.unsafe("DELETE FROM working_memories WHERE task_id = $1", [run2.taskId]);
     await sql.unsafe("DELETE FROM task_sessions WHERE id = $1", [run2.taskId]);
   });
 
   test("6. memory.save 显式写入走治理", async () => {
     const saved = await runtime.saveMemory({
       title: "Prefer ioredis over node-redis",
-      summary:
-        "In this monorepo, always use ioredis for Redis clients in auth services.",
+      summary: "In this monorepo, always use ioredis for Redis clients in auth services.",
       type: "project_knowledge",
     });
     expect(saved.candidateId).toStartWith("cand_");

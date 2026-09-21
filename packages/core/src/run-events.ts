@@ -170,13 +170,7 @@ export type RunEvent =
    */
   | {
       readonly type: "phase";
-      readonly name:
-        | "plan"
-        | "model"
-        | "tool"
-        | "parse"
-        | "waiting_children"
-        | "merging_results";
+      readonly name: "plan" | "model" | "tool" | "parse" | "waiting_children" | "merging_results";
     }
   /** 解析出结构化的代理动作（V2 §8.5），编排器据此决定下一步分支 */
   /** Parsed structured outcome (V2 §8.5) before orchestrator branches. */
@@ -215,11 +209,7 @@ export type RunEvent =
       readonly probeKey: string;
       readonly verdict: "pass" | "fail" | "error";
       /** Structured reducer input. Missing only on pre-v2 durable journals. */
-      readonly outcome?:
-        | "clear"
-        | "candidate_defect"
-        | "inconclusive"
-        | "interrupted";
+      readonly outcome?: "clear" | "candidate_defect" | "inconclusive" | "interrupted";
       readonly externalVerification?: "not_configured" | "pending";
       readonly semanticReviewKey?: string;
       readonly semanticReviewNotRequired?: true;
@@ -581,13 +571,7 @@ export type RunEvent =
       /** 各块的账本行：id / 类型 / token / 轮龄 / 状态 */
       readonly blocks: readonly {
         readonly id: string;
-        readonly type:
-          | "system"
-          | "summary"
-          | "pinned"
-          | "tool"
-          | "conversation"
-          | "recall";
+        readonly type: "system" | "summary" | "pinned" | "tool" | "conversation" | "recall";
         readonly tokens: number;
         readonly ageTurns: number;
         readonly status: "pinned" | "visible" | "archived";

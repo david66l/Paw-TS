@@ -52,10 +52,7 @@ describe("createDeepSeekFlashModel", () => {
     try {
       global.fetch = Object.assign(
         async (_input: string | URL | Request, init?: RequestInit) => {
-          requestBody = JSON.parse(String(init?.body)) as Record<
-            string,
-            unknown
-          >;
+          requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
           return new Response(
             JSON.stringify({
               choices: [{ message: { content: "{}" }, finish_reason: "stop" }],

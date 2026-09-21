@@ -16,16 +16,8 @@ describe("discoverContext", () => {
 
   test("discovers files matching keywords", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-auto-"));
-    writeFileSync(
-      path.join(root, "auth.ts"),
-      "export function login() { return true; }\n",
-      "utf8",
-    );
-    writeFileSync(
-      path.join(root, "utils.ts"),
-      "export function helper() {}\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "auth.ts"), "export function login() { return true; }\n", "utf8");
+    writeFileSync(path.join(root, "utils.ts"), "export function helper() {}\n", "utf8");
     const r = discoverContext(root, "how does login work");
     expect(r.filesRead).toContain("auth.ts");
     expect(r.filesRead).not.toContain("utils.ts");
@@ -37,16 +29,8 @@ describe("discoverContext", () => {
 
   test("excludes files passed in excludeFiles", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-auto-"));
-    writeFileSync(
-      path.join(root, "auth.ts"),
-      "export function login() {}\n",
-      "utf8",
-    );
-    writeFileSync(
-      path.join(root, "login.ts"),
-      "export function login() {}\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "auth.ts"), "export function login() {}\n", "utf8");
+    writeFileSync(path.join(root, "login.ts"), "export function login() {}\n", "utf8");
     const r = discoverContext(root, "how does login work", ["auth.ts"]);
     expect(r.filesRead).not.toContain("auth.ts");
     expect(r.filesRead).toContain("login.ts");
@@ -65,16 +49,8 @@ describe("discoverContext", () => {
 
   test("scores source files higher than data files", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-auto-"));
-    writeFileSync(
-      path.join(root, "config.json"),
-      '{ "login": true }\n',
-      "utf8",
-    );
-    writeFileSync(
-      path.join(root, "auth.ts"),
-      "export function login() {}\n",
-      "utf8",
-    );
+    writeFileSync(path.join(root, "config.json"), '{ "login": true }\n', "utf8");
+    writeFileSync(path.join(root, "auth.ts"), "export function login() {}\n", "utf8");
     const r = discoverContext(root, "login");
     // auth.ts should rank above config.json due to source extension bonus
     const authIndex = r.filesRead.indexOf("auth.ts");
@@ -87,11 +63,7 @@ describe("discoverContext", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-auto-"));
     const nested = path.join(root, "src", "auth");
     mkdirSync(nested, { recursive: true });
-    writeFileSync(
-      path.join(nested, "login.ts"),
-      "export function login() {}\n",
-      "utf8",
-    );
+    writeFileSync(path.join(nested, "login.ts"), "export function login() {}\n", "utf8");
     const r = discoverContext(root, "how does login work");
     // discoverContext 返回的工作区相对路径按约定始终是 posix 分隔符
     // （见 files/read.ts 的 relPosix 与 glob.test.ts 的 "src/a.ts"）。
@@ -105,31 +77,17 @@ describe("discoverContext", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-auto-"));
     const nm = path.join(root, "node_modules", "foo");
     mkdirSync(nm, { recursive: true });
-    writeFileSync(
-      path.join(nm, "login.ts"),
-      "export function login() {}\n",
-      "utf8",
-    );
-    writeFileSync(
-      path.join(root, "auth.ts"),
-      "export function login() {}\n",
-      "utf8",
-    );
+    writeFileSync(path.join(nm, "login.ts"), "export function login() {}\n", "utf8");
+    writeFileSync(path.join(root, "auth.ts"), "export function login() {}\n", "utf8");
     const r = discoverContext(root, "login");
     expect(r.filesRead).toContain("auth.ts");
-    expect(r.filesRead).not.toContain(
-      path.join("node_modules", "foo", "login.ts"),
-    );
+    expect(r.filesRead).not.toContain(path.join("node_modules", "foo", "login.ts"));
   });
 
   test("caps max files at 8", () => {
     const root = mkdtempSync(path.join(tmpdir(), "paw-auto-"));
     for (let i = 0; i < 12; i++) {
-      writeFileSync(
-        path.join(root, `file${i}.ts`),
-        `export function login${i}() {}\n`,
-        "utf8",
-      );
+      writeFileSync(path.join(root, `file${i}.ts`), `export function login${i}() {}\n`, "utf8");
     }
     const r = discoverContext(root, "login");
     expect(r.filesRead.length).toBeLessThanOrEqual(8);

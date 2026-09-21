@@ -172,9 +172,7 @@ export function verifyImpactedTests(opts: {
       testFile: entry.testFile,
       command: entry.testCommand,
       passed: result.exit_code === 0,
-      ...(typeof result.exit_code === "number"
-        ? { exitCode: result.exit_code }
-        : {}),
+      ...(typeof result.exit_code === "number" ? { exitCode: result.exit_code } : {}),
       output: output.slice(-1200),
     });
   }
@@ -184,9 +182,7 @@ export function verifyImpactedTests(opts: {
 
   const summaryParts: string[] = [];
   if (allPassed) {
-    summaryParts.push(
-      `[TestWarden] ${executed.length} impacted test file(s) all passed.`,
-    );
+    summaryParts.push(`[TestWarden] ${executed.length} impacted test file(s) all passed.`);
   } else {
     summaryParts.push(
       `[TestWarden] ${failures.length}/${executed.length} impacted test file(s) FAILED:`,

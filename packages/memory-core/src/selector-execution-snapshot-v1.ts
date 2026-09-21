@@ -13,10 +13,7 @@ import type {
 export const PAW_MEMORY_SELECTOR_EXECUTION_SNAPSHOT_POLICY_V1 =
   "paw.memory-selector-execution-snapshot.v1:group-atomic-commit" as const;
 
-export type MemorySelectorExecutionGroupStatusV1 =
-  | "committed"
-  | "failed"
-  | "blocked";
+export type MemorySelectorExecutionGroupStatusV1 = "committed" | "failed" | "blocked";
 
 export type MemorySelectorRequirementExecutionStatusV1 =
   | "assessed"
@@ -103,10 +100,7 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
     throw namedError("MemorySelectorExecutionSnapshotInputInvalid");
   }
   const requirementById = new Map(
-    input.requirements.map((requirement) => [
-      requirement.requirementId,
-      requirement,
-    ]),
+    input.requirements.map((requirement) => [requirement.requirementId, requirement]),
   );
   const temporalByRequirement = new Map(
     input.requirements.map((requirement, index) => [
@@ -142,12 +136,10 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
     input.groups.some(
       (group, index) =>
         group.groupId !== expectedGroups[index]?.groupId ||
-        group.requirementIds.length !==
-          expectedGroups[index]?.requirementIds.length ||
+        group.requirementIds.length !== expectedGroups[index]?.requirementIds.length ||
         group.requirementIds.some(
           (requirementId, requirementIndex) =>
-            requirementId !==
-            expectedGroups[index]?.requirementIds[requirementIndex],
+            requirementId !== expectedGroups[index]?.requirementIds[requirementIndex],
         ),
     )
   ) {
@@ -161,22 +153,16 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
       new Set(group.requirementIds).size !== group.requirementIds.length ||
       group.requirementIds.some(
         (requirementId) =>
-          !requirementById.has(requirementId) ||
-          seenRequirements.has(requirementId),
+          !requirementById.has(requirementId) || seenRequirements.has(requirementId),
       ) ||
-      (group.status === "committed" &&
-        group.assessments.length !== group.requirementIds.length) ||
+      (group.status === "committed" && group.assessments.length !== group.requirementIds.length) ||
       (group.status !== "committed" && group.assessments.length !== 0)
     ) {
       throw namedError("MemorySelectorExecutionSnapshotGroupInvalid");
     }
-    const failureCodes = Object.freeze(
-      [...new Set(group.failureCodes ?? [])].sort(),
-    );
+    const failureCodes = Object.freeze([...new Set(group.failureCodes ?? [])].sort());
     if (
-      failureCodes.some(
-        (code) => !/^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(code),
-      ) ||
+      failureCodes.some((code) => !/^[A-Za-z][A-Za-z0-9_]{0,95}$/u.test(code)) ||
       (group.status === "committed" && failureCodes.length > 0)
     ) {
       throw namedError("MemorySelectorExecutionSnapshotGroupInvalid");
@@ -186,16 +172,12 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
       seenRequirements.add(requirementId);
     }
     const assessmentByRequirement = new Map(
-      group.assessments.map((assessment) => [
-        assessment.requirementId,
-        assessment,
-      ]),
+      group.assessments.map((assessment) => [assessment.requirementId, assessment]),
     );
     if (
       assessmentByRequirement.size !== group.assessments.length ||
       group.assessments.some(
-        (assessment) =>
-          !group.requirementIds.includes(assessment.requirementId),
+        (assessment) => !group.requirementIds.includes(assessment.requirementId),
       )
     ) {
       throw namedError("MemorySelectorExecutionSnapshotGroupInvalid");
@@ -314,9 +296,7 @@ function validateAssessment(
     new Set(partition).size !== partition.length ||
     partition.some((evidenceRef) => !scope.has(evidenceRef)) ||
     assessment.evidenceDispositions?.some(
-      (item) =>
-        item.requirementId !== assessment.requirementId ||
-        !scope.has(item.evidenceRef),
+      (item) => item.requirementId !== assessment.requirementId || !scope.has(item.evidenceRef),
     )
   ) {
     throw namedError("MemorySelectorExecutionSnapshotAssessmentInvalid");
@@ -331,10 +311,7 @@ function resolveAssessmentRole(
   const supporting = new Set(assessment.supportingEvidenceRefs);
   const roles = new Set(
     (assessment.evidenceDispositions ?? [])
-      .filter(
-        (item) =>
-          item.disposition === "supporting" && supporting.has(item.evidenceRef),
-      )
+      .filter((item) => item.disposition === "supporting" && supporting.has(item.evidenceRef))
       .map((item) => item.resolvedRole),
   );
   if (roles.has("unknown") || roles.size > 1) {

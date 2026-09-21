@@ -36,8 +36,7 @@ describe("extractEmbeddedThinking", () => {
 
 describe("formatModelOutputForUi", () => {
   test("final_answer 只取 summary", () => {
-    const raw =
-      '分析完毕。\n{"action":"final_answer","summary":"顶层有 apps 和 packages"}';
+    const raw = '分析完毕。\n{"action":"final_answer","summary":"顶层有 apps 和 packages"}';
     const r = formatModelOutputForUi(raw);
     expect(r.content).toContain("顶层有 apps");
     expect(r.content).not.toContain("final_answer");
@@ -69,8 +68,7 @@ describe("formatModelOutputForUi", () => {
       tool: "workspace.write_file",
       args: {
         path: "public/styles.css",
-        content:
-          "* {\nmargin: 0;\nbox-sizing: border-box;\n}\nbody { color: red; }\n",
+        content: "* {\nmargin: 0;\nbox-sizing: border-box;\n}\nbody { color: red; }\n",
       },
     });
     expect(formatModelOutputForUi(raw).content).toBeNull();

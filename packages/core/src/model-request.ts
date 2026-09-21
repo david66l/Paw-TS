@@ -55,9 +55,7 @@ export interface ModelRequestV1 {
  * policy. Rapidly changing runtime activity is appended at the tail so it does
  * not invalidate the otherwise append-only conversation prefix.
  */
-export function materializeModelRequestMessagesV1(
-  request: ModelRequestV1,
-): readonly ChatMessage[] {
+export function materializeModelRequestMessagesV1(request: ModelRequestV1): readonly ChatMessage[] {
   const sections = request.contextSections ?? [];
   if (sections.length === 0) return request.messages;
   const ids = new Set<string>();
@@ -78,11 +76,8 @@ export function materializeModelRequestMessagesV1(
   const runtimeActivityMessages = rendered
     .filter((message) => message.kind === "runtime_activity")
     .map(({ role, content }) => ({ role, content }));
-  const leadingSystemCount = request.messages.findIndex(
-    (message) => message.role !== "system",
-  );
-  const insertionIndex =
-    leadingSystemCount < 0 ? request.messages.length : leadingSystemCount;
+  const leadingSystemCount = request.messages.findIndex((message) => message.role !== "system");
+  const insertionIndex = leadingSystemCount < 0 ? request.messages.length : leadingSystemCount;
   return [
     ...request.messages.slice(0, insertionIndex),
     ...memoryMessages,
@@ -131,10 +126,7 @@ function renderContextSection(section: ModelContextSectionV1): string {
   ].join("\n");
 }
 
-function assertContextSection(
-  section: ModelContextSectionV1,
-  ids: Set<string>,
-): void {
+function assertContextSection(section: ModelContextSectionV1, ids: Set<string>): void {
   if (
     section.schemaVersion !== 1 ||
     (section.kind !== "task_checkpoint" &&
@@ -188,10 +180,7 @@ function canonicalJsonStringify(value: JsonValue): string {
   const record = value as Readonly<Record<string, JsonValue>>;
   return `{${Object.keys(record)
     .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalJsonStringify(record[key] as JsonValue)}`,
-    )
+    .map((key) => `${JSON.stringify(key)}:${canonicalJsonStringify(record[key] as JsonValue)}`)
     .join(",")}}`;
 }
 
@@ -200,9 +189,7 @@ function isStableLineToken(value: string): boolean {
 }
 
 function isBoundedSingleLine(value: string): boolean {
-  return (
-    value.length > 0 && value.length <= 8_192 && !hasControlCharacter(value)
-  );
+  return value.length > 0 && value.length <= 8_192 && !hasControlCharacter(value);
 }
 
 function hasControlCharacter(value: string): boolean {

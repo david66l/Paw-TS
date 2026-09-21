@@ -39,10 +39,7 @@ describe("context compaction policy", () => {
   });
 
   test("selects complete old units and retains the newest live unit", () => {
-    const result = planContextCompactionV1(
-      contextPlan({ fullInputTokens: 80 }),
-      policy,
-    );
+    const result = planContextCompactionV1(contextPlan({ fullInputTokens: 80 }), policy);
 
     expect(result).toEqual({
       action: "distill",

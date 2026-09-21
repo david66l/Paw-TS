@@ -29,18 +29,12 @@ const waitAbort = (signal: AbortSignal) =>
         once: true,
       });
   });
-async function collect(
-  model: LanguageModel,
-  opts: ModelCompleteOptions = options,
-) {
+async function collect(model: LanguageModel, opts: ModelCompleteOptions = options) {
   const chunks: ModelStreamChunk[] = [];
-  for await (const chunk of model.completeStream!(messages, opts))
-    chunks.push(chunk);
+  for await (const chunk of model.completeStream!(messages, opts)) chunks.push(chunk);
   return chunks;
 }
-function fake(
-  stream: NonNullable<LanguageModel["completeStream"]>,
-): LanguageModel {
+function fake(stream: NonNullable<LanguageModel["completeStream"]>): LanguageModel {
   return {
     label: "test",
     capabilities: { contextWindow: 1000000, maxOutputTokens: 128000 },
@@ -79,10 +73,7 @@ describe("experimental thinking recovery", () => {
       }),
       policy,
     );
-    const history = (
-      id: string,
-      status: "completed" | "failed" = "completed",
-    ): ChatMessage => ({
+    const history = (id: string, status: "completed" | "failed" = "completed"): ChatMessage => ({
       role: "assistant",
       content: "write",
       nativeToolTurn: {
@@ -111,10 +102,7 @@ describe("experimental thinking recovery", () => {
       [history("one"), history("one"), history("bad", "failed")],
       [history("one"), history("two")],
     ]) {
-      for await (const _ of model.completeStream!(
-        [...messages, ...additions],
-        options,
-      )) {
+      for await (const _ of model.completeStream!([...messages, ...additions], options)) {
         /* consume */
       }
     }
@@ -253,15 +241,16 @@ describe("experimental thinking recovery", () => {
       }),
       policy,
     );
-    await expect(
-      collect(model, { ...options, signal: controller.signal }),
-    ).rejects.toThrow("user stopped");
+    await expect(collect(model, { ...options, signal: controller.signal })).rejects.toThrow(
+      "user stopped",
+    );
     expect(calls).toBe(1);
   });
 
   test("provider failures and silent requests are not automatically retried", async () => {
     let calls = 0;
     const model = createThinkingRecoveryModel(
+      // biome-ignore lint/correctness/useYield: deliberate failing test double — it must expose the async-generator interface and reject on first next()
       fake(async function* () {
         calls++;
         throw new Error("HTTP failure");
@@ -280,10 +269,7 @@ describe("experimental thinking recovery", () => {
       yield { type: "done" };
     });
     const model = createThinkingRecoveryModel(base, policy);
-    expect(await collect(model)).toEqual([
-      { type: "text", delta: "ok" },
-      { type: "done" },
-    ]);
+    expect(await collect(model)).toEqual([{ type: "text", delta: "ok" }, { type: "done" }]);
     expect(await collect(model, {})).toHaveLength(2);
     expect(await model.complete(messages)).toEqual({ text: "auxiliary" });
   });
@@ -293,14 +279,8 @@ describe("experimental thinking recovery", () => {
       label: "test",
       complete: async () => ({ text: "ok" }),
     };
-    expect(() =>
-      createThinkingRecoveryModel(model, { ...policy, noActionMs: 0 }),
-    ).toThrow();
-    expect(() =>
-      createThinkingRecoveryModel(model, { ...policy, maxRecoveries: -1 }),
-    ).toThrow();
-    expect(
-      createThinkingRecoveryModel(model, policy).completeStream,
-    ).toBeUndefined();
+    expect(() => createThinkingRecoveryModel(model, { ...policy, noActionMs: 0 })).toThrow();
+    expect(() => createThinkingRecoveryModel(model, { ...policy, maxRecoveries: -1 })).toThrow();
+    expect(createThinkingRecoveryModel(model, policy).completeStream).toBeUndefined();
   });
 });

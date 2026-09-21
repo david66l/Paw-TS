@@ -40,9 +40,7 @@ export class MemoryWriter {
   private policy: WritePolicy;
 
   constructor(policyEngine?: PolicyEngine) {
-    this.policy =
-      policyEngine?.getDefaults().write ??
-      new PolicyEngine().getDefaults().write;
+    this.policy = policyEngine?.getDefaults().write ?? new PolicyEngine().getDefaults().write;
   }
   /**
    * 从任务结束状态生成候选记忆。
@@ -108,9 +106,7 @@ export class MemoryWriter {
     const title = cleanMemoryTitle(wm.goal || `Task ${taskId}`);
 
     if (title) summaryLines.push(`Goal: ${title}`);
-    const realSteps = wm.completedSteps.filter(
-      (s) => !isSystemFinalizeMessage(s.summary),
-    );
+    const realSteps = wm.completedSteps.filter((s) => !isSystemFinalizeMessage(s.summary));
     summaryLines.push(`Steps completed: ${realSteps.length}`);
     for (const step of realSteps) {
       summaryLines.push(`- ${step.summary}`);
@@ -122,11 +118,7 @@ export class MemoryWriter {
     }
 
     // 只有 goal 且无步骤/改动时不生成空洞 summary
-    if (
-      realSteps.length === 0 &&
-      !wm.diffSummary &&
-      wm.executedTools.length === 0
-    ) {
+    if (realSteps.length === 0 && !wm.diffSummary && wm.executedTools.length === 0) {
       // 仍可能因 durable signal（如「记住 prefer vitest」）值得写偏好；task_summary 跳过
       return null;
     }
@@ -214,9 +206,7 @@ export class MemoryWriter {
         proposedScope: scope,
         proposedConfidence: 0.6,
         sourceTaskIds: [input.taskId],
-        sourceRefs: [
-          { sourceType: "task_trace", taskId: input.taskId, capturedAt: now },
-        ],
+        sourceRefs: [{ sourceType: "task_trace", taskId: input.taskId, capturedAt: now }],
         evidenceRefs: step.toolCallIds.map((_tcid) => ({
           evidenceType: "tool_result",
           capturedAt: now,
@@ -267,9 +257,7 @@ export class MemoryWriter {
         proposedScope: scope,
         proposedConfidence: 0.5,
         sourceTaskIds: [input.taskId],
-        sourceRefs: [
-          { sourceType: "tool_result", taskId: input.taskId, capturedAt: now },
-        ],
+        sourceRefs: [{ sourceType: "tool_result", taskId: input.taskId, capturedAt: now }],
         evidenceRefs: [
           {
             evidenceType: "tool_result",
@@ -330,9 +318,7 @@ export class MemoryWriter {
       proposedScope: { ...scope, userId: input.userId },
       proposedConfidence: c.confirmed ? 0.85 : 0.5,
       sourceTaskIds: [input.taskId],
-      sourceRefs: [
-        { sourceType: "user_explicit", taskId: input.taskId, capturedAt: now },
-      ],
+      sourceRefs: [{ sourceType: "user_explicit", taskId: input.taskId, capturedAt: now }],
       evidenceRefs: [
         {
           evidenceType: "user_message",
@@ -364,9 +350,7 @@ export class MemoryWriter {
     const goal = input.workingMemory.goal ?? "";
     const explicit = extractExplicitRememberText(goal);
     const fallback = extractCleanMemoryQuery(goal).trim();
-    const raw =
-      explicit ??
-      (fallback && hasDurableMemorySignal(fallback) ? fallback : null);
+    const raw = explicit ?? (fallback && hasDurableMemorySignal(fallback) ? fallback : null);
     if (!raw || raw.length < 4 || raw.length > 500) return null;
 
     const key = `goal_${hashShort(raw)}`;
@@ -393,9 +377,7 @@ export class MemoryWriter {
       proposedScope: { ...scope, userId: input.userId },
       proposedConfidence: 0.75,
       sourceTaskIds: [input.taskId],
-      sourceRefs: [
-        { sourceType: "user_explicit", taskId: input.taskId, capturedAt: now },
-      ],
+      sourceRefs: [{ sourceType: "user_explicit", taskId: input.taskId, capturedAt: now }],
       evidenceRefs: [
         {
           evidenceType: "user_message",

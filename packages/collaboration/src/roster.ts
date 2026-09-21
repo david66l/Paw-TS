@@ -12,26 +12,16 @@ export const COLLABORATION_CAPABILITIES_V1 = [
   "integration",
 ] as const;
 
-export type CollaborationCapabilityV1 =
-  (typeof COLLABORATION_CAPABILITIES_V1)[number];
+export type CollaborationCapabilityV1 = (typeof COLLABORATION_CAPABILITIES_V1)[number];
 
-export const COLLABORATION_ROLES_V1 = [
-  "investigator",
-  "reviewer",
-  "verifier",
-] as const;
+export const COLLABORATION_ROLES_V1 = ["investigator", "reviewer", "verifier"] as const;
 
 export type CollaborationRoleV1 = (typeof COLLABORATION_ROLES_V1)[number];
 export type CollaborationChildPolicyV1 = "read_only" | "read_write";
 
-export const COLLABORATION_EFFECT_PROFILES_V1 = [
-  "inspect",
-  "execute",
-  "mutate",
-] as const;
+export const COLLABORATION_EFFECT_PROFILES_V1 = ["inspect", "execute", "mutate"] as const;
 
-export type CollaborationEffectProfileV1 =
-  (typeof COLLABORATION_EFFECT_PROFILES_V1)[number];
+export type CollaborationEffectProfileV1 = (typeof COLLABORATION_EFFECT_PROFILES_V1)[number];
 
 export interface CollaborationAgentSpecV1 {
   readonly id: string;
@@ -65,18 +55,16 @@ export interface CollaborationRosterV1 {
   readonly agents: readonly CollaborationAgentSpecV1[];
 }
 
-export const DEFAULT_COLLABORATION_ROLE_V1: CollaborationRoleV1 =
-  "investigator";
+export const DEFAULT_COLLABORATION_ROLE_V1: CollaborationRoleV1 = "investigator";
 
-const ROLE_PROMPTS_V1: Readonly<Record<CollaborationRoleV1, string>> =
-  Object.freeze({
-    investigator:
-      "Trace the relevant implementation and return concrete code evidence, likely causes, and unresolved questions.",
-    reviewer:
-      "Challenge the proposed approach for correctness, regressions, hidden assumptions, and missing tests. Lead with actionable findings.",
-    verifier:
-      "Inspect verification code and available results. Separate what the evidence proves, disproves, and leaves inconclusive.",
-  });
+const ROLE_PROMPTS_V1: Readonly<Record<CollaborationRoleV1, string>> = Object.freeze({
+  investigator:
+    "Trace the relevant implementation and return concrete code evidence, likely causes, and unresolved questions.",
+  reviewer:
+    "Challenge the proposed approach for correctness, regressions, hidden assumptions, and missing tests. Lead with actionable findings.",
+  verifier:
+    "Inspect verification code and available results. Separate what the evidence proves, disproves, and leaves inconclusive.",
+});
 
 const READ_TOOLS = Object.freeze([
   "workspace.read_file",
@@ -115,11 +103,7 @@ export const DEFAULT_COLLABORATION_ROSTER_V1 = createCollaborationRosterV1(
         ? "Report each verification command, exit code, timeout state, and end with VERDICT: PASS, VERDICT: FAIL, or VERDICT: PARTIAL."
         : "Return a concise evidence-based summary.",
     capabilities:
-      role === "investigator"
-        ? ["investigation"]
-        : role === "reviewer"
-          ? ["review"]
-          : ["testing"],
+      role === "investigator" ? ["investigation"] : role === "reviewer" ? ["review"] : ["testing"],
     tools: role === "verifier" ? EXECUTION_TOOLS : READ_TOOLS,
     effect: role === "verifier" ? "execute" : "inspect",
     canSpawn: false,
@@ -183,16 +167,12 @@ export function resolveCollaborationAgentForCapabilityV1(
     throw new Error(`Unknown collaboration agent: ${agentId.trim()}`);
   }
   if (!selected.capabilities.includes(capability)) {
-    throw new Error(
-      `Collaboration agent ${selected.id} does not provide ${capability}`,
-    );
+    throw new Error(`Collaboration agent ${selected.id} does not provide ${capability}`);
   }
   return selected;
 }
 
-export function collaborationAgentSpecHashV1(
-  agent: CollaborationAgentSpecV1,
-): string {
+export function collaborationAgentSpecHashV1(agent: CollaborationAgentSpecV1): string {
   return hash(JSON.stringify(freezeAgentSpec(agent)));
 }
 
@@ -202,9 +182,7 @@ export function collaborationAgentEffectV1(
   return agent.effect;
 }
 
-export function parseCollaborationAgentSpecV1(
-  input: unknown,
-): CollaborationAgentSpecV1 {
+export function parseCollaborationAgentSpecV1(input: unknown): CollaborationAgentSpecV1 {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Collaboration AgentSpec is missing");
   }
@@ -228,12 +206,9 @@ export function parseCollaborationAgentSpecV1(
     record.capabilities.length === 0 ||
     !record.capabilities.every(isCollaborationCapabilityV1) ||
     (record.tools !== "inherit" &&
-      (!Array.isArray(record.tools) ||
-        !record.tools.every((tool) => typeof tool === "string"))) ||
-    (record.childPolicy !== "read_only" &&
-      record.childPolicy !== "read_write") ||
-    (record.effect !== undefined &&
-      !isCollaborationEffectProfileV1(record.effect)) ||
+      (!Array.isArray(record.tools) || !record.tools.every((tool) => typeof tool === "string"))) ||
+    (record.childPolicy !== "read_only" && record.childPolicy !== "read_write") ||
+    (record.effect !== undefined && !isCollaborationEffectProfileV1(record.effect)) ||
     typeof record.canSpawn !== "boolean" ||
     typeof record.maxSteps !== "number"
   ) {
@@ -257,18 +232,12 @@ export function parseCollaborationAgentSpecV1(
   });
 }
 
-export function isCollaborationRoleV1(
-  value: unknown,
-): value is CollaborationRoleV1 {
+export function isCollaborationRoleV1(value: unknown): value is CollaborationRoleV1 {
   return COLLABORATION_ROLES_V1.some((role) => role === value);
 }
 
-export function isCollaborationCapabilityV1(
-  value: unknown,
-): value is CollaborationCapabilityV1 {
-  return COLLABORATION_CAPABILITIES_V1.some(
-    (capability) => capability === value,
-  );
+export function isCollaborationCapabilityV1(value: unknown): value is CollaborationCapabilityV1 {
+  return COLLABORATION_CAPABILITIES_V1.some((capability) => capability === value);
 }
 
 export function isCollaborationEffectProfileV1(
@@ -285,12 +254,9 @@ export function collaborationAgentIdV1(role: CollaborationRoleV1): string {
   return role;
 }
 
-function freezeAgentSpec(
-  input: CollaborationAgentSpecInputV1,
-): CollaborationAgentSpecV1 {
+function freezeAgentSpec(input: CollaborationAgentSpecInputV1): CollaborationAgentSpecV1 {
   const effect = resolveEffectProfile(input);
-  const childPolicy: CollaborationChildPolicyV1 =
-    effect === "mutate" ? "read_write" : "read_only";
+  const childPolicy: CollaborationChildPolicyV1 = effect === "mutate" ? "read_write" : "read_only";
   if (
     !input ||
     typeof input !== "object" ||
@@ -313,11 +279,7 @@ function freezeAgentSpec(
   const tools =
     input.tools === "inherit"
       ? "inherit"
-      : Object.freeze(
-          [...new Set(input.tools.map((tool) => tool.trim()))]
-            .filter(Boolean)
-            .sort(),
-        );
+      : Object.freeze([...new Set(input.tools.map((tool) => tool.trim()))].filter(Boolean).sort());
   const capabilities = Object.freeze([...new Set(input.capabilities)].sort());
   return Object.freeze({
     id: input.id,
@@ -335,22 +297,14 @@ function freezeAgentSpec(
   });
 }
 
-function resolveEffectProfile(
-  input: CollaborationAgentSpecInputV1,
-): CollaborationEffectProfileV1 {
+function resolveEffectProfile(input: CollaborationAgentSpecInputV1): CollaborationEffectProfileV1 {
   if (input.effect !== undefined) {
     if (!isCollaborationEffectProfileV1(input.effect)) {
       throw new Error("Collaboration AgentSpec effect is invalid");
     }
-    const compatiblePolicy =
-      input.effect === "mutate" ? "read_write" : "read_only";
-    if (
-      input.childPolicy !== undefined &&
-      input.childPolicy !== compatiblePolicy
-    ) {
-      throw new Error(
-        "Collaboration AgentSpec effect conflicts with childPolicy",
-      );
+    const compatiblePolicy = input.effect === "mutate" ? "read_write" : "read_only";
+    if (input.childPolicy !== undefined && input.childPolicy !== compatiblePolicy) {
+      throw new Error("Collaboration AgentSpec effect conflicts with childPolicy");
     }
     return input.effect;
   }

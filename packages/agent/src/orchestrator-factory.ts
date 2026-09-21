@@ -17,10 +17,7 @@ import {
   type McpServerConfig,
   type ShellSandboxConfig,
 } from "@paw/harness";
-import {
-  createDeepSeekFlashModel,
-  createDefaultLanguageModel,
-} from "@paw/models";
+import { createDeepSeekFlashModel, createDefaultLanguageModel } from "@paw/models";
 import type { LanguageModel } from "@paw/models";
 import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
 import { WorkspaceWatcher } from "@paw/workspace";
@@ -34,18 +31,9 @@ import {
 } from "./agents/index.js";
 import { createAutonomyProfile } from "./autonomy/profile.js";
 import { ModelCandidateReviewer } from "./candidate-review.js";
-import {
-  type CollaborationMode,
-  resolveCollaborationMode,
-} from "./collaboration-mode.js";
-import type {
-  ToolEffectPolicy,
-  ToolExecutionPolicy,
-} from "./execution-policy.js";
-import {
-  type LifecycleBudget,
-  resolveLifecycleBudget,
-} from "./lifecycle/budget.js";
+import { type CollaborationMode, resolveCollaborationMode } from "./collaboration-mode.js";
+import type { ToolEffectPolicy, ToolExecutionPolicy } from "./execution-policy.js";
+import { type LifecycleBudget, resolveLifecycleBudget } from "./lifecycle/budget.js";
 import type { VerificationPolicy } from "./lifecycle/verification-gate.js";
 import {
   type LoopKernelVersion,
@@ -134,14 +122,9 @@ export interface RunOrchestrator {
   readonly collaborationMode: CollaborationMode;
 }
 
-function loadWorkspaceSettings(
-  workspaceRoot: string,
-): Record<string, unknown> | undefined {
+function loadWorkspaceSettings(workspaceRoot: string): Record<string, unknown> | undefined {
   try {
-    return loadPawSettingsLocal(defaultSettingsPath(workspaceRoot)) as Record<
-      string,
-      unknown
-    >;
+    return loadPawSettingsLocal(defaultSettingsPath(workspaceRoot)) as Record<string, unknown>;
   } catch {
     return undefined;
   }
@@ -154,10 +137,7 @@ function loadMcpServers(
   try {
     const s =
       settings ??
-      (loadPawSettingsLocal(defaultSettingsPath(workspaceRoot)) as Record<
-        string,
-        unknown
-      >);
+      (loadPawSettingsLocal(defaultSettingsPath(workspaceRoot)) as Record<string, unknown>);
     const mcpServers = s.mcp_servers as unknown[] | undefined;
     if (mcpServers && mcpServers.length > 0) {
       return mcpServers as readonly McpServerConfig[];
@@ -168,12 +148,9 @@ function loadMcpServers(
   return undefined;
 }
 
-export function createRunOrchestrator(
-  opts: RunOrchestratorOptions,
-): RunOrchestrator {
+export function createRunOrchestrator(opts: RunOrchestratorOptions): RunOrchestrator {
   const { workspaceRoot } = opts;
-  const loopKernelVersion =
-    opts.loopKernelVersion ?? resolveLoopKernelVersion();
+  const loopKernelVersion = opts.loopKernelVersion ?? resolveLoopKernelVersion();
 
   const settings = loadWorkspaceSettings(workspaceRoot);
   const collab = resolveCollaborationMode({
@@ -207,8 +184,7 @@ export function createRunOrchestrator(
    * 这里用 Promise 链强制排队，一次只问一个。
    */
   let approvalChain: Promise<void> = Promise.resolve();
-  const rawResolveApproval =
-    opts.resolveToolApproval ?? autonomy.resolveToolApproval;
+  const rawResolveApproval = opts.resolveToolApproval ?? autonomy.resolveToolApproval;
   const resolveToolApproval = rawResolveApproval
     ? (input: ToolApprovalInput): Promise<boolean> => {
         const p = approvalChain.then(() => rawResolveApproval(input));
@@ -237,18 +213,14 @@ export function createRunOrchestrator(
   // Agent 注册表（种子 + 用户定义）—— orchestrated 需要；coding 也 ensure 以便日后 /team
   const agentRegistry = loadAgentRegistry(workspaceRoot);
   const rootId = collab.rootAgentId;
-  const rootSpec = rootId
-    ? (agentRegistry.get(rootId) ?? agentRegistry.getRoot())
-    : undefined;
+  const rootSpec = rootId ? (agentRegistry.get(rootId) ?? agentRegistry.getRoot()) : undefined;
 
   const mainModel =
     opts.mainModel ??
     (rootSpec && opts.workspaceRoot
-      ? (resolveModelForSpec(rootSpec, workspaceRoot) ??
-        createDefaultLanguageModel(workspaceRoot))
+      ? (resolveModelForSpec(rootSpec, workspaceRoot) ?? createDefaultLanguageModel(workspaceRoot))
       : createDefaultLanguageModel(workspaceRoot));
-  const subAgentModel =
-    opts.subAgentModel ?? createDeepSeekFlashModel(workspaceRoot) ?? mainModel;
+  const subAgentModel = opts.subAgentModel ?? createDeepSeekFlashModel(workspaceRoot) ?? mainModel;
 
   const runtimeStateRoot = opts.runtimeStateRoot ?? workspaceRoot;
   const sessionStore = new FileSystemSessionStore({
@@ -283,14 +255,10 @@ export function createRunOrchestrator(
         })
       : undefined;
   const loopV2SemanticReviewModel =
-    loopKernelVersion === "v2" && mainModel.runtimeProfile
-      ? subAgentModel
-      : undefined;
+    loopKernelVersion === "v2" && mainModel.runtimeProfile ? subAgentModel : undefined;
   // 对抗式验证探针与语义评审同一接入位：v2 且有子代理模型才启用。
   const loopV2VerificationProbeModel =
-    loopKernelVersion === "v2" && mainModel.runtimeProfile
-      ? subAgentModel
-      : undefined;
+    loopKernelVersion === "v2" && mainModel.runtimeProfile ? subAgentModel : undefined;
 
   const createAgent = (input: {
     readonly id: string;
@@ -372,25 +340,19 @@ export function createRunOrchestrator(
     planSnapshotMaxItems,
     memoryExtraction:
       opts.memoryExtraction ??
-      (collab.mode === "coding"
-        ? "background"
-        : (rootSpec?.memoryExtraction ?? "background")),
+      (collab.mode === "coding" ? "background" : (rootSpec?.memoryExtraction ?? "background")),
     onEvent: opts.onEvent,
     loopKernelVersion,
     onLoopV2ShadowReport: opts.onLoopV2ShadowReport,
     allowedTools,
-    agentCatalogText: collab.injectRoster
-      ? agentRegistry.catalogText()
-      : undefined,
+    agentCatalogText: collab.injectRoster ? agentRegistry.catalogText() : undefined,
     agentIdentityText: identityText,
     createAgent: collab.canSpawn ? createAgent : undefined,
   });
 
   const rootMaxSteps =
     opts.budget?.maxSteps ??
-    (collab.mode === "coding"
-      ? budget.maxSteps
-      : (rootSpec?.maxSteps ?? budget.maxSteps));
+    (collab.mode === "coding" ? budget.maxSteps : (rootSpec?.maxSteps ?? budget.maxSteps));
 
   return {
     orch,

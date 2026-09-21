@@ -2,11 +2,7 @@
  * GovernanceDecision DAO
  */
 import { getSql, parseJson } from "../connection.js";
-import type {
-  GovernanceAction,
-  GovernanceDecision,
-  GovernanceDecisionStatus,
-} from "../types.js";
+import type { GovernanceAction, GovernanceDecision, GovernanceDecisionStatus } from "../types.js";
 
 function rowToDecision(row: Record<string, unknown>): GovernanceDecision {
   return {
@@ -16,18 +12,13 @@ function rowToDecision(row: Record<string, unknown>): GovernanceDecision {
     decision: row.decision as GovernanceAction,
     reasons: parseJson(row.reasons) as GovernanceDecision["reasons"],
     resultingMemoryId: row.resulting_memory_id as string | undefined,
-    resultingStatus:
-      row.resulting_status as GovernanceDecision["resultingStatus"],
+    resultingStatus: row.resulting_status as GovernanceDecision["resultingStatus"],
     adjustedType: row.adjusted_type as GovernanceDecision["adjustedType"],
     adjustedScope:
-      (parseJson(row.adjusted_scope) as GovernanceDecision["adjustedScope"]) ??
-      undefined,
+      (parseJson(row.adjusted_scope) as GovernanceDecision["adjustedScope"]) ?? undefined,
     adjustedConfidence: row.adjusted_confidence as number | undefined,
-    adjustedPayload:
-      (parseJson(row.adjusted_payload) as Record<string, unknown>) ?? undefined,
-    requiredActions: parseJson(
-      row.required_actions,
-    ) as GovernanceDecision["requiredActions"],
+    adjustedPayload: (parseJson(row.adjusted_payload) as Record<string, unknown>) ?? undefined,
+    requiredActions: parseJson(row.required_actions) as GovernanceDecision["requiredActions"],
     policyVersion: row.policy_version as string,
     decidedBy: parseJson(row.decided_by) as GovernanceDecision["decidedBy"],
     status: row.status as GovernanceDecisionStatus,
@@ -66,13 +57,8 @@ export const governanceDecisionDao = {
 
   async findById(id: string): Promise<GovernanceDecision | null> {
     const sql = getSql();
-    const rows = await sql.unsafe(
-      "SELECT * FROM governance_decisions WHERE id = $1",
-      [id],
-    );
-    return rows.length > 0
-      ? rowToDecision(rows[0] as Record<string, unknown>)
-      : null;
+    const rows = await sql.unsafe("SELECT * FROM governance_decisions WHERE id = $1", [id]);
+    return rows.length > 0 ? rowToDecision(rows[0] as Record<string, unknown>) : null;
   },
 
   async findByCandidate(candidateId: string): Promise<GovernanceDecision[]> {
@@ -106,9 +92,7 @@ export const governanceDecisionDao = {
         opts?.executedAt ?? new Date().toISOString(),
       ],
     );
-    return rows.length > 0
-      ? rowToDecision(rows[0] as Record<string, unknown>)
-      : null;
+    return rows.length > 0 ? rowToDecision(rows[0] as Record<string, unknown>) : null;
   },
 
   async isExecuted(id: string): Promise<boolean> {

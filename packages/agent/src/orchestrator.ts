@@ -199,14 +199,8 @@ import {
 } from "@paw/memory";
 import { loadMemoryConfigSync } from "@paw/memory/longterm";
 import type { CandidateReviewer } from "./candidate-review.js";
-import {
-  CapabilityExposureShadowV1,
-  capabilityPhaseToolsV1,
-} from "./capability-exposure.js";
-import {
-  type CapabilitySetV1,
-  resolveCapabilitySetV1,
-} from "./capability-set.js";
+import { CapabilityExposureShadowV1, capabilityPhaseToolsV1 } from "./capability-exposure.js";
+import { type CapabilitySetV1, resolveCapabilitySetV1 } from "./capability-set.js";
 import {
   buildChildSystemPrompt,
   buildChildTaskMessage,
@@ -228,14 +222,8 @@ import {
   parseWaitingUserInteractionV1,
   prepareInteractionResumeV1,
 } from "./durable-interaction.js";
-import type {
-  ToolEffectPolicy,
-  ToolExecutionPolicy,
-} from "./execution-policy.js";
-import {
-  decideCompletion,
-  decideIncomplete,
-} from "./lifecycle/completion-policy.js";
+import type { ToolEffectPolicy, ToolExecutionPolicy } from "./execution-policy.js";
+import { decideCompletion, decideIncomplete } from "./lifecycle/completion-policy.js";
 import {
   type ProgressBaselineV1,
   computeProgressBaselineV1,
@@ -249,10 +237,7 @@ import {
 } from "./lifecycle/verification-gate.js";
 import type { TestMapV1 } from "./loop-v2/test-map.js";
 import { buildTestMapV1, findImpactedTests } from "./loop-v2/test-map.js";
-import {
-  preFlightTestInfrastructure,
-  verifyImpactedTests,
-} from "./loop-v2/test-warden.js";
+import { preFlightTestInfrastructure, verifyImpactedTests } from "./loop-v2/test-warden.js";
 import { ManagedJobControllerV1 } from "./managed-job-controller.js";
 import {
   type MemoryHintCheckpointV1,
@@ -272,10 +257,7 @@ import {
   annotateVerificationFailureRecords,
   commitToolExecutionResult,
 } from "./orchestrator/tool-runner.js";
-import {
-  type PayloadDeduper,
-  createPayloadDeduper,
-} from "./orchestrator/truncate-payload.js";
+import { type PayloadDeduper, createPayloadDeduper } from "./orchestrator/truncate-payload.js";
 
 /**
  * 约束生命周期：任务转向触发信号（仅决定"该问 LLM 调和了"，
@@ -314,9 +296,7 @@ const CONSTRAINT_SYSTEM_INJECTED_PREFIXES = [
   "Note:",
 ];
 
-function loopV2LegacyTerminalFromRunResult(
-  result: RunResult,
-): LoopV2LegacyTerminalV1 {
+function loopV2LegacyTerminalFromRunResult(result: RunResult): LoopV2LegacyTerminalV1 {
   if (
     result.status !== "completed" &&
     result.status !== "incomplete" &&
@@ -362,18 +342,14 @@ function isSameRevisionCandidateExtension(
 ): boolean {
   if (candidateReport.reportHash === restoredReport.reportHash) return true;
   if (
-    candidateReport.state.currentMutationRevision !==
-    restoredReport.state.currentMutationRevision
+    candidateReport.state.currentMutationRevision !== restoredReport.state.currentMutationRevision
   )
     return false;
   const candidateEvents = candidateReport.projectedEvents;
   const restoredEvents = restoredReport.projectedEvents;
   if (restoredEvents.length < candidateEvents.length) return false;
   for (let index = 0; index < candidateEvents.length; index += 1) {
-    if (
-      canonicalJson(candidateEvents[index]) !==
-      canonicalJson(restoredEvents[index])
-    ) {
+    if (canonicalJson(candidateEvents[index]) !== canonicalJson(restoredEvents[index])) {
       return false;
     }
   }
@@ -383,10 +359,8 @@ function isSameRevisionCandidateExtension(
     if (envelope.event.type !== "candidate.proposed") return true;
     return (
       candidateIdentity !== undefined &&
-      envelope.event.candidate.mutationRevision ===
-        candidateIdentity.mutationRevision &&
-      envelope.event.candidate.candidateInputHash ===
-        candidateIdentity.candidateInputHash
+      envelope.event.candidate.mutationRevision === candidateIdentity.mutationRevision &&
+      envelope.event.candidate.candidateInputHash === candidateIdentity.candidateInputHash
     );
   });
 }
@@ -396,12 +370,7 @@ import {
   applyLoopGuidanceReceiptV1,
   deriveLoopGuidanceCandidatesV1,
 } from "./lifecycle/loop-guidance.js";
-import type {
-  PhaseContext,
-  SharedContext,
-  TurnFlags,
-  TurnState,
-} from "./orchestrator/types.js";
+import type { PhaseContext, SharedContext, TurnFlags, TurnState } from "./orchestrator/types.js";
 import {
   type ParseDiagnosis,
   diagnoseParseFailure,
@@ -409,20 +378,11 @@ import {
   parseAgentActionFromModelText,
   parseAgentActionsFromModelText,
 } from "./parse-agent-action.js";
-import {
-  CircuitBreaker,
-  CircuitBreakerOpenError,
-} from "./resilience/circuit-breaker.js";
+import { CircuitBreaker, CircuitBreakerOpenError } from "./resilience/circuit-breaker.js";
 import { resolveMaxSteps } from "./resolve-max-steps.js";
 import { resolveShellSandboxConfig } from "./resolve-shell-sandbox.js";
-import {
-  RunStatusTelemetryV1,
-  formatStatusSnapshotV1,
-} from "./status-snapshot.js";
-import {
-  TaskStateManager,
-  formatTaskProgressForContext,
-} from "./task-state.js";
+import { RunStatusTelemetryV1, formatStatusSnapshotV1 } from "./status-snapshot.js";
+import { TaskStateManager, formatTaskProgressForContext } from "./task-state.js";
 
 // ═════════════════════════════════════════════════════════════
 // 公开接口
@@ -558,9 +518,7 @@ export interface AgentOrchestratorOptions {
   /** Terminal v2-shadow diagnostics. Observer failures never affect the run. */
   readonly onLoopV2ShadowReport?: (report: LoopV2ShadowReport) => void;
   /** Strict derived candidate facts for explicit v2; callback failures are diagnostic-only. */
-  readonly onLoopV2CandidateAssessment?: (
-    assessment: LoopV2LiveCandidateAssessmentV1,
-  ) => void;
+  readonly onLoopV2CandidateAssessment?: (assessment: LoopV2LiveCandidateAssessmentV1) => void;
 }
 
 /**
@@ -592,8 +550,7 @@ function normalizeNativeControlAction(
     return { type: "final_answer", summary };
   }
   if (kind === "ask_user" || kind === "askuser") {
-    const question =
-      typeof payload.question === "string" ? payload.question : "";
+    const question = typeof payload.question === "string" ? payload.question : "";
     if (!question) return null;
     const ctx =
       payload.context && typeof payload.context === "object"
@@ -715,9 +672,7 @@ export class AgentOrchestrator {
   private _memoryTaskId: string | null = null;
   private _memoryContextSection = "";
   private _memoryLatestHint: MemoryHintCheckpointV1 | undefined;
-  private _coldResumeMemoryContext:
-    | { readonly task: string; readonly state: string }
-    | undefined;
+  private _coldResumeMemoryContext: { readonly task: string; readonly state: string } | undefined;
   private _lastDynamicMemoryGoal = "";
   /** 多轮会话：本 run 结束时跳过 completeTask */
   private _deferMemoryComplete = false;
@@ -773,8 +728,7 @@ export class AgentOrchestrator {
     this.candidateReviewer = opts?.candidateReviewer;
     this.loopV2SemanticReviewModel = opts?.loopV2SemanticReviewModel;
     this.loopV2VerificationProbeModel = opts?.loopV2VerificationProbeModel;
-    this.loopKernelVersion =
-      opts?.loopKernelVersion ?? resolveLoopKernelVersion();
+    this.loopKernelVersion = opts?.loopKernelVersion ?? resolveLoopKernelVersion();
     this.onLoopV2ShadowReport = opts?.onLoopV2ShadowReport;
     this.onLoopV2CandidateAssessment = opts?.onLoopV2CandidateAssessment;
     this.fileLock = opts?.fileLock;
@@ -796,14 +750,10 @@ export class AgentOrchestrator {
     this.sharedContext = opts?.sharedContext;
     this.auxiliaryModel = opts?.auxiliaryModel;
     // 重试等待函数：默认用 setTimeout，测试时可注入 fake timer
-    this.retrySleep =
-      opts?.retrySleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.retrySleep = opts?.retrySleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.modelRequestTimeoutMs = Math.max(
       1,
-      Math.floor(
-        opts?.modelRequestTimeoutMs ??
-          AgentOrchestrator.DEFAULT_MODEL_TIMEOUT_MS,
-      ),
+      Math.floor(opts?.modelRequestTimeoutMs ?? AgentOrchestrator.DEFAULT_MODEL_TIMEOUT_MS),
     );
     this.memoryExtraction = opts?.memoryExtraction ?? "background";
     void this.memoryExtraction; // kept for API compat; writes go through Runtime
@@ -829,9 +779,7 @@ export class AgentOrchestrator {
   }
 
   /** Most recent strict candidate projection for explicit v2. */
-  getLastLoopV2CandidateAssessment():
-    | LoopV2LiveCandidateAssessmentV1
-    | undefined {
+  getLastLoopV2CandidateAssessment(): LoopV2LiveCandidateAssessmentV1 | undefined {
     return this._lastLoopV2CandidateAssessment;
   }
 
@@ -854,16 +802,12 @@ export class AgentOrchestrator {
     }
     const loaded = await Promise.resolve(this.appStateStore.load(input.runId));
     if (!loaded) {
-      throw new Error(
-        `Cannot submit reply: run "${input.runId}" was not found`,
-      );
+      throw new Error(`Cannot submit reply: run "${input.runId}" was not found`);
     }
     const before = loaded.interactionInbox?.length ?? 0;
     const updated = appendUserReplyV1(loaded, input);
     await Promise.resolve(this.appStateStore.save(updated));
-    const event = updated.interactionInbox?.find(
-      (item) => item.requestId === input.requestId,
-    );
+    const event = updated.interactionInbox?.find((item) => item.requestId === input.requestId);
     if (!event) throw new Error("Submitted reply was not persisted");
     return {
       replyId: event.replyId,
@@ -933,9 +877,7 @@ export class AgentOrchestrator {
       if (leftover.length > 0) {
         // ponytail: 只清不读，恢复文件的存在本身就是"上次崩了"的信号
         await Promise.all(
-          leftover.map((f) =>
-            fsp.unlink(path.join(streamsDir, f)).catch(() => {}),
-          ),
+          leftover.map((f) => fsp.unlink(path.join(streamsDir, f)).catch(() => {})),
         );
       }
     } catch {
@@ -965,9 +907,7 @@ export class AgentOrchestrator {
       maxSteps: resumeState.maxSteps,
       abortSignal: opts.abortSignal,
       resumeFromState: resumeState,
-      ...(resumeState.memoryTaskId
-        ? { resumeMemoryTaskId: resumeState.memoryTaskId }
-        : {}),
+      ...(resumeState.memoryTaskId ? { resumeMemoryTaskId: resumeState.memoryTaskId } : {}),
     });
   }
 
@@ -1094,8 +1034,9 @@ export class AgentOrchestrator {
       // Fresh run only: resume has already restored the exact durable plan and
       // revision in initializeRun. Re-bootstrap here would overwrite it.
       if (!spec.resumeFromState?.plan) {
-        const { extractPlanStepsFromGoal, planItemsToEventSnapshot } =
-          await import("./plan-bootstrap.js");
+        const { extractPlanStepsFromGoal, planItemsToEventSnapshot } = await import(
+          "./plan-bootstrap.js"
+        );
         const goalForPlan = extractCleanMemoryQuery(spec.goal) || spec.goal;
         const stepTexts = extractPlanStepsFromGoal(goalForPlan);
         if (stepTexts.length >= 2) {
@@ -1154,13 +1095,9 @@ export class AgentOrchestrator {
         if (this.loopKernelVersion === "v2") {
           const stall = evaluateInvestigationStallV1({
             state: taskState.snapshot(),
-            baseline:
-              progressBaseline ??
-              computeProgressBaselineV1(taskState.snapshot(), turn),
+            baseline: progressBaseline ?? computeProgressBaselineV1(taskState.snapshot(), turn),
             turn,
-            canDelegate: capabilitySet.executableToolNames.includes(
-              "workspace.run_agent",
-            ),
+            canDelegate: capabilitySet.executableToolNames.includes("workspace.run_agent"),
           });
           progressBaseline = stall.baseline;
           if (stall.message) {
@@ -1177,9 +1114,7 @@ export class AgentOrchestrator {
               const wardenResult = verifyImpactedTests({
                 workspaceRoot,
                 changedFiles: changed,
-                ...(this.shellSandbox
-                  ? { shellSandbox: this.shellSandbox }
-                  : {}),
+                ...(this.shellSandbox ? { shellSandbox: this.shellSandbox } : {}),
                 testMap: testWardenMap,
               });
               testWardenControl = {
@@ -1210,19 +1145,14 @@ export class AgentOrchestrator {
         // boundary before status/context/completion can observe the run.
         // 后台 shell 结算同样内联 untrusted 退出码标注，保持 journal、
         // job.settled 事件与模型可见消息一致。
-        const jobSettlements = managedJobs
-          .takeSettlements()
-          .map((settlement) => ({
-            ...settlement,
-            result: annotateVerificationFailureRecords(
-              settlement.call,
-              annotateUntrustedShellExitSummary(
-                settlement.call,
-                settlement.result,
-              ),
-              taskState.snapshot().filesChanged,
-            ),
-          }));
+        const jobSettlements = managedJobs.takeSettlements().map((settlement) => ({
+          ...settlement,
+          result: annotateVerificationFailureRecords(
+            settlement.call,
+            annotateUntrustedShellExitSummary(settlement.call, settlement.result),
+            taskState.snapshot().filesChanged,
+          ),
+        }));
         if (jobSettlements.length > 0) {
           for (const [sourceIndex, settlement] of jobSettlements.entries()) {
             commitToolExecutionResult(
@@ -1280,9 +1210,7 @@ export class AgentOrchestrator {
             jobSettlements.map((settlement) => settlement.result),
             0,
           );
-          managedJobs.acknowledgeSettlements(
-            jobSettlements.map((settlement) => settlement.jobId),
-          );
+          managedJobs.acknowledgeSettlements(jobSettlements.map((settlement) => settlement.jobId));
           this.saveState(
             runId,
             spec.goal,
@@ -1354,10 +1282,7 @@ export class AgentOrchestrator {
         if (checkpointControl) {
           flags = {
             ...flags,
-            pendingControl: selectEphemeralControlV1([
-              flags.pendingControl,
-              checkpointControl,
-            ]),
+            pendingControl: selectEphemeralControlV1([flags.pendingControl, checkpointControl]),
           };
           activeTurnFlags = flags;
           activeTurnCursor = turn;
@@ -1400,28 +1325,16 @@ export class AgentOrchestrator {
           checkpointSeq,
           specGoal: spec.goal,
           shellSandbox,
-          ...(this._payloadDeduper
-            ? { payloadDeduper: this._payloadDeduper }
-            : {}),
-          ...(init.artifactRegistry
-            ? { artifactRegistry: init.artifactRegistry }
-            : {}),
-          ...(this._memoryRuntime
-            ? { memoryRuntime: this._memoryRuntime }
-            : {}),
+          ...(this._payloadDeduper ? { payloadDeduper: this._payloadDeduper } : {}),
+          ...(init.artifactRegistry ? { artifactRegistry: init.artifactRegistry } : {}),
+          ...(this._memoryRuntime ? { memoryRuntime: this._memoryRuntime } : {}),
           ...(this._memoryTaskId ? { memoryTaskId: this._memoryTaskId } : {}),
-          ...(this.verificationPolicy
-            ? { verificationPolicy: this.verificationPolicy }
-            : {}),
-          ...(this.candidateReviewer
-            ? { candidateReviewer: this.candidateReviewer }
-            : {}),
+          ...(this.verificationPolicy ? { verificationPolicy: this.verificationPolicy } : {}),
+          ...(this.candidateReviewer ? { candidateReviewer: this.candidateReviewer } : {}),
           ...(this.loopKernelVersion === "v2"
             ? {
-                getLoopV2CandidateAssessment: () =>
-                  this._lastLoopV2CandidateAssessment,
-                getLoopV2ReadinessProgressKey: () =>
-                  this._lastLoopV2ReadinessProgressKey,
+                getLoopV2CandidateAssessment: () => this._lastLoopV2CandidateAssessment,
+                getLoopV2ReadinessProgressKey: () => this._lastLoopV2ReadinessProgressKey,
                 getLoopV2ReadinessVerificationRecords: () =>
                   this._lastLoopV2ReadinessVerificationRecords,
                 ...(init.getLoopV2ControlReduction
@@ -1434,9 +1347,7 @@ export class AgentOrchestrator {
           ...(init.reviewLoopV2Candidate
             ? { reviewLoopV2Candidate: init.reviewLoopV2Candidate }
             : {}),
-          ...(init.probeLoopV2Candidate
-            ? { probeLoopV2Candidate: init.probeLoopV2Candidate }
-            : {}),
+          ...(init.probeLoopV2Candidate ? { probeLoopV2Candidate: init.probeLoopV2Candidate } : {}),
           captureLoopV2Facts: init.captureLoopV2Facts,
         };
 
@@ -1483,8 +1394,7 @@ export class AgentOrchestrator {
             activeTurnFlags = flags;
           }
           // 保存断点续跑状态
-          const appStatus =
-            terminalStatus === "aborted" ? ("failed" as const) : terminalStatus;
+          const appStatus = terminalStatus === "aborted" ? ("failed" as const) : terminalStatus;
           this.saveState(
             runId,
             spec.goal,
@@ -1502,9 +1412,7 @@ export class AgentOrchestrator {
                 },
             flags,
           );
-          const { runResultFromDecision } = await import(
-            "./lifecycle/task-lifecycle.js"
-          );
+          const { runResultFromDecision } = await import("./lifecycle/task-lifecycle.js");
           const runResult = runResultFromDecision(runId, state.decision);
 
           if (!waitingUser) persistLoopV2Terminal(runResult);
@@ -1537,13 +1445,9 @@ export class AgentOrchestrator {
             try {
               const writeResult = await this._memoryRuntime.completeTask({
                 taskId: this._memoryTaskId,
-                status:
-                  runResult.status === "completed" ? "completed" : "failed",
+                status: runResult.status === "completed" ? "completed" : "failed",
                 finalMessage: runResult.message,
-                outcome: memoryOutcomeFromDecision(
-                  state.decision,
-                  taskState.snapshot(),
-                ),
+                outcome: memoryOutcomeFromDecision(state.decision, taskState.snapshot()),
               });
               emit({
                 type: "memory.extracted",
@@ -1569,8 +1473,7 @@ export class AgentOrchestrator {
           : undefined;
       const softMessage = openRepair
         ? `${formatRepairObligationV1(openRepair)}\nThe run exhausted its model-turn budget before satisfying this obligation.`
-        : lastAssistant?.content.trim() ||
-          "internal: model loop exhausted without return";
+        : lastAssistant?.content.trim() || "internal: model loop exhausted without return";
       const { evaluateBudgetExhaustion, runResultFromDecision } = await import(
         "./lifecycle/task-lifecycle.js"
       );
@@ -1601,11 +1504,7 @@ export class AgentOrchestrator {
         message: runResult.message,
       });
       emitRunMetrics?.();
-      if (
-        this._memoryRuntime &&
-        this._memoryTaskId &&
-        !this._deferMemoryComplete
-      ) {
+      if (this._memoryRuntime && this._memoryTaskId && !this._deferMemoryComplete) {
         try {
           const writeResult = await this._memoryRuntime.completeTask({
             taskId: this._memoryTaskId,
@@ -1627,27 +1526,16 @@ export class AgentOrchestrator {
     } catch (e) {
       // 异常安全：即使初始化未完成（init 为 undefined），也返回合理的错误
       const aborted = e instanceof Error && e.name === "AbortError";
-      const message =
-        e instanceof Error ? (aborted ? "Run aborted." : e.message) : String(e);
+      const message = e instanceof Error ? (aborted ? "Run aborted." : e.message) : String(e);
       const status = aborted ? "aborted" : "failed";
       if (init) {
-        const {
-          runId,
-          workspaceRoot,
-          maxSteps,
-          startTurn,
-          ctxMgr,
-          planner,
-          taskState,
-          emit,
-        } = init;
+        const { runId, workspaceRoot, maxSteps, startTurn, ctxMgr, planner, taskState, emit } =
+          init;
         this.saveState(
           runId,
           spec.goal,
           workspaceRoot,
-          activeTurnCursor ??
-            activeTurnFlags?.providerTerminal?.lastTurn ??
-            startTurn,
+          activeTurnCursor ?? activeTurnFlags?.providerTerminal?.lastTurn ?? startTurn,
           maxSteps,
           ctxMgr,
           planner,
@@ -1664,9 +1552,7 @@ export class AgentOrchestrator {
           taskState: taskState.snapshot(),
           hasEverUsedTools: taskState.snapshot().commandsRun.length > 0,
         });
-        const { runResultFromDecision } = await import(
-          "./lifecycle/task-lifecycle.js"
-        );
+        const { runResultFromDecision } = await import("./lifecycle/task-lifecycle.js");
         const runResult = runResultFromDecision(runId, decision);
         persistLoopV2Terminal?.(runResult);
         if (!aborted) {
@@ -1674,20 +1560,13 @@ export class AgentOrchestrator {
         }
         emit({ type: "run.completed", status, message });
         emitRunMetrics?.();
-        if (
-          this._memoryRuntime &&
-          this._memoryTaskId &&
-          !this._deferMemoryComplete
-        ) {
+        if (this._memoryRuntime && this._memoryTaskId && !this._deferMemoryComplete) {
           try {
             const writeResult = await this._memoryRuntime.completeTask({
               taskId: this._memoryTaskId,
               status: "failed",
               finalMessage: runResult.message,
-              outcome: memoryOutcomeFromDecision(
-                decision,
-                taskState.snapshot(),
-              ),
+              outcome: memoryOutcomeFromDecision(decision, taskState.snapshot()),
             });
             emit({
               type: "memory.extracted",
@@ -1737,8 +1616,7 @@ export class AgentOrchestrator {
     const staleFiles = (this.watcher?.takeExternallyModified() ?? []).filter(
       (f) =>
         ![...AgentOrchestrator.STALE_IGNORE_DIRS].some(
-          (ign) =>
-            f.includes(`/${ign}/`) || f.startsWith(`${ign}/`) || f === ign,
+          (ign) => f.includes(`/${ign}/`) || f.startsWith(`${ign}/`) || f === ign,
         ),
     );
     if (staleFiles.length === 0) return;
@@ -1840,9 +1718,7 @@ export class AgentOrchestrator {
     let toolCalls: AgentToolCallAction[];
     let reasoningText: string;
     let nativeErrors: NativeToolError[] | undefined;
-    let nativeTurnCalls:
-      | readonly import("@paw/core").NativeToolTurnCallV1[]
-      | undefined;
+    let nativeTurnCalls: readonly import("@paw/core").NativeToolTurnCallV1[] | undefined;
 
     // 原生控制动作（从 native tool-call 桥接的控制动作）——提升到
     // turn 级作用域，native 处理和 action 分发都可以访问
@@ -1862,8 +1738,7 @@ export class AgentOrchestrator {
           call,
         })),
         ...(invokeNativeErrors ?? []).map((error, fallbackIndex) => ({
-          sourceIndex:
-            error.sourceIndex ?? (nativeToolCalls?.length ?? 0) + fallbackIndex,
+          sourceIndex: error.sourceIndex ?? (nativeToolCalls?.length ?? 0) + fallbackIndex,
           error,
         })),
       ].sort((left, right) => left.sourceIndex - right.sourceIndex);
@@ -1872,8 +1747,7 @@ export class AgentOrchestrator {
           ? {
               callId: entry.call.id,
               providerName: entry.call.name,
-              rawArguments:
-                entry.call.rawArguments ?? JSON.stringify(entry.call.arguments),
+              rawArguments: entry.call.rawArguments ?? JSON.stringify(entry.call.arguments),
             }
           : {
               callId: entry.error.id,
@@ -1884,9 +1758,7 @@ export class AgentOrchestrator {
       const uniqueIds = new Set(rawTurnCalls.map((call) => call.callId));
       const nativeIdentityValid =
         rawTurnCalls.every(
-          (call) =>
-            call.callId.trim().length > 0 &&
-            call.providerName.trim().length > 0,
+          (call) => call.callId.trim().length > 0 && call.providerName.trim().length > 0,
         ) && uniqueIds.size === rawTurnCalls.length;
       if (nativeIdentityValid) {
         nativeTurnCalls = rawTurnCalls;
@@ -1926,10 +1798,7 @@ export class AgentOrchestrator {
           // 归一化为控制动作。真实轨迹（django-15098 msysowi8）
           // 模型连续 17 次尝试 action-final_answer 均被拒绝，
           // 浪费 ~30 回合导致超时。
-          const nativeControl = normalizeNativeControlAction(
-            originalName,
-            tc.arguments,
-          );
+          const nativeControl = normalizeNativeControlAction(originalName, tc.arguments);
           if (nativeControl) {
             nativeControlActions.push(nativeControl);
             continue;
@@ -1993,22 +1862,16 @@ export class AgentOrchestrator {
 
     // 如果没有提取到工具调用，尝试解析单个 action（可能是 final/ask_user/abort）
     const parsedSingleAction =
-      toolCalls.length === 0
-        ? parseAgentActionFromModelText(text, { knownTools })
-        : null;
+      toolCalls.length === 0 ? parseAgentActionFromModelText(text, { knownTools }) : null;
     // 原生控制动作桥接优先：native tool-call 中的 final_answer 等
     // 比文本解析更可靠（模型明确选择了控制动作名称）
     const nativeControlAction =
-      nativeControlActions.length > 0
-        ? (nativeControlActions[0] ?? null)
-        : null;
+      nativeControlActions.length > 0 ? (nativeControlActions[0] ?? null) : null;
     const singleAction =
       nativeControlAction ??
       (parsedSingleAction &&
       parsedSingleAction.type !== "tool_call" &&
-      ctx.capabilitySet.modelActions.includes(
-        `action.${parsedSingleAction.type}`,
-      )
+      ctx.capabilitySet.modelActions.includes(`action.${parsedSingleAction.type}`)
         ? parsedSingleAction
         : null);
 
@@ -2039,9 +1902,7 @@ export class AgentOrchestrator {
       nativeControlAction,
       reasoningText,
       diagnosis,
-      ...(nativeAssistantContent !== undefined
-        ? { nativeAssistantContent }
-        : {}),
+      ...(nativeAssistantContent !== undefined ? { nativeAssistantContent } : {}),
       ...(model.runtimeProfile?.protocol === "openai-compatible" &&
       nativeTurnCalls &&
       nativeTurnCalls.length > 0
@@ -2176,21 +2037,14 @@ export class AgentOrchestrator {
         role: "user",
         content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}`,
       };
-      const newMessages = projectCompactedHistoryV1(
-        messages,
-        boundaries,
-        summaryMsg,
-      );
+      const newMessages = projectCompactedHistoryV1(messages, boundaries, summaryMsg);
       const newHistory = newMessages.filter((m) => m.role !== "system");
       const afterHistoryTokens = ctxMgr.estimator.countMessages(newHistory);
 
       // 检查压缩收益：节省需在 20-80% 区间
       // <20%：历史已紧凑（良性）→ 低收益退避，不累计熔断
       // >80%：摘要丢失过多（质量故障）→ 累计熔断
-      const savingsRatio = compressionSavingsRatio(
-        historyTokensBeforeCompact,
-        afterHistoryTokens,
-      );
+      const savingsRatio = compressionSavingsRatio(historyTokensBeforeCompact, afterHistoryTokens);
       if (
         savingsRatio < MIN_COMPRESSION_SAVINGS_RATIO ||
         savingsRatio > MAX_COMPRESSION_SAVINGS_RATIO
@@ -2283,8 +2137,7 @@ export class AgentOrchestrator {
       // P2.7 行为闭环：记录压缩时已读文件/已跑命令快照，
       // 之后 5 轮内重复获取 → 摘要质量低信号
       const snap = ctx.taskState.snapshot();
-      this._qualityWindowTurn =
-        ctx.turn + AgentOrchestrator.COMPACTION_QUALITY_WINDOW_TURNS;
+      this._qualityWindowTurn = ctx.turn + AgentOrchestrator.COMPACTION_QUALITY_WINDOW_TURNS;
       this._qualityCompactTurn = ctx.turn;
       this._qualityFiles = new Set(snap.filesRead);
       this._qualityCommands = new Set(snap.commandsRun.map((c) => c.command));
@@ -2344,12 +2197,7 @@ export class AgentOrchestrator {
         existing ? sessionMemoryStore.toMarkdown(existing) : null,
       );
 
-      const { summary, sessionMemory } = await runCompressionAgent(
-        auxModel,
-        prompt,
-        runId,
-        signal,
-      );
+      const { summary, sessionMemory } = await runCompressionAgent(auxModel, prompt, runId, signal);
 
       const quality = validateCompressionSummary(summary, {
         originalMessages: middleMessages,
@@ -2369,11 +2217,7 @@ export class AgentOrchestrator {
         role: "user",
         content: `${CONTEXT_SUMMARY_PREFIX}\n${summary}${remainingWork}`,
       };
-      const newMessages = projectCompactedHistoryV1(
-        messages,
-        boundaries,
-        summaryMsg,
-      );
+      const newMessages = projectCompactedHistoryV1(messages, boundaries, summaryMsg);
       const afterTokens = ctxMgr.estimator.countMessages(
         newMessages.filter((m) => m.role !== "system"),
       );
@@ -2527,9 +2371,7 @@ export class AgentOrchestrator {
       hostState: hostStateForRequest,
       ...(control ? { control } : {}),
     });
-    const requestProjectionTokens = ctxMgr.estimator.countMessages(
-      requestProjectionMessages,
-    );
+    const requestProjectionTokens = ctxMgr.estimator.countMessages(requestProjectionMessages);
 
     // 步骤 1：报告自上轮以来被外部修改的文件
     this.maybeReportStaleFiles(ctx);
@@ -2541,9 +2383,7 @@ export class AgentOrchestrator {
     const pruneResult = ctxMgr.prune({
       toolResultsDir: getToolResultsDir(workspaceRoot, runId),
       keepRecentTools: DEFAULT_KEEP_RECENT_TOOLS,
-      ...(ctx.artifactRegistry
-        ? { artifactRegistry: ctx.artifactRegistry }
-        : {}),
+      ...(ctx.artifactRegistry ? { artifactRegistry: ctx.artifactRegistry } : {}),
     });
     if (pruneResult.pruned) {
       emit({
@@ -2556,9 +2396,7 @@ export class AgentOrchestrator {
     // 计算上下文预算快照（system / tools / history 各用了多少 token）
     // P5.2 成本记账：用累计 cache 命中率微调压缩阈值（保护宝贵前缀）
     const cacheHitRate =
-      this._promptTokensAcc > 0
-        ? this._cachedPromptTokensAcc / this._promptTokensAcc
-        : 0;
+      this._promptTokensAcc > 0 ? this._cachedPromptTokensAcc / this._promptTokensAcc : 0;
     const budgetSnapshot = AgentOrchestrator.measureBudget(
       ctxMgr,
       toolDefs,
@@ -2569,38 +2407,27 @@ export class AgentOrchestrator {
       budgetSnapshot,
       requestProjectionTokens,
     );
-    ctxMgr.setHistoryTokenBudget(
-      requestBudgetSnapshot.allocation.historyBudget,
-    );
+    ctxMgr.setHistoryTokenBudget(requestBudgetSnapshot.allocation.historyBudget);
     this.emitContextBudget(emit, contextWindow, requestBudgetSnapshot);
     // P4.3 逐块账本 dashboard（VISTA）：块粒度 id/token/轮龄/状态
     this.emitContextBlocks(ctx, budgetSnapshot);
 
     // 步骤 3：L2 自动压缩（history pool 超过阈值时触发）
-    await this.maybeCompactHistory(
-      ctx,
-      compactor,
-      sessionMemoryStore,
-      requestBudgetSnapshot,
-    );
+    await this.maybeCompactHistory(ctx, compactor, sessionMemoryStore, requestBudgetSnapshot);
 
     // P5.1 侧信道触发：monitor 采样（10% + 5 步冷却 + 预算软启动），
     // 命中 subtask_end / low_density / critical_issue → 强制压缩（跳过阈值）
     const historyBudget = requestBudgetSnapshot.allocation.historyBudget;
     const remainingRatio =
-      historyBudget > 0
-        ? 1 - requestBudgetSnapshot.historyUsed / historyBudget
-        : 1;
+      historyBudget > 0 ? 1 - requestBudgetSnapshot.historyUsed / historyBudget : 1;
     const historyUsageRatio =
       historyBudget > 0 ? requestBudgetSnapshot.historyUsed / historyBudget : 0;
     if (this.monitor.shouldEvaluate(ctx.turn, remainingRatio)) {
       const decision = evaluateTrigger(ctx.ctxMgr.buildMessages());
       const budgetCritical = decision.reason === "budget_critical";
       const enoughHistoryToBenefit =
-        historyUsageRatio >=
-        AgentOrchestrator.MONITOR_COMPACT_MIN_HISTORY_RATIO;
-      const shouldForceCompact =
-        decision.triggered && (budgetCritical || enoughHistoryToBenefit);
+        historyUsageRatio >= AgentOrchestrator.MONITOR_COMPACT_MIN_HISTORY_RATIO;
+      const shouldForceCompact = decision.triggered && (budgetCritical || enoughHistoryToBenefit);
       this.monitor.noteEvaluated(shouldForceCompact);
       if (shouldForceCompact && !compactor.isDisabled) {
         emit({
@@ -2638,8 +2465,7 @@ export class AgentOrchestrator {
             currentUserRequest: extractCleanMemoryQuery(specGoal) || specGoal,
             limit: 5,
           });
-          this._memoryContextSection =
-            section.promptSection?.slice(0, 6000) ?? "";
+          this._memoryContextSection = section.promptSection?.slice(0, 6000) ?? "";
           if (section.promptSection) {
             emit({
               type: "memory.turn.inject",
@@ -2682,18 +2508,15 @@ export class AgentOrchestrator {
       maxSteps,
       historyUsed: postCompactBudgetSnapshot.historyUsed,
       historyBudget: provisionalRequestBudget.allocation.historyBudget,
-      ...(ctx.verificationPolicy
-        ? { verificationPolicy: ctx.verificationPolicy }
-        : {}),
+      ...(ctx.verificationPolicy ? { verificationPolicy: ctx.verificationPolicy } : {}),
     });
     const requestControl = selectEphemeralControlV1([
       control,
       ...guidanceCandidates.map((candidate) => candidate.control),
     ]);
-    const selectedGuidance: LoopGuidanceCandidateV1 | undefined =
-      guidanceCandidates.find(
-        (candidate) => candidate.control === requestControl,
-      );
+    const selectedGuidance: LoopGuidanceCandidateV1 | undefined = guidanceCandidates.find(
+      (candidate) => candidate.control === requestControl,
+    );
     const finalRequestProjectionTokens = ctxMgr.estimator.countMessages(
       assembleModelContextV1({
         durable: { messages: [] },
@@ -2705,13 +2528,8 @@ export class AgentOrchestrator {
       postCompactBudgetSnapshot,
       finalRequestProjectionTokens,
     );
-    ctxMgr.setHistoryTokenBudget(
-      requestBudgetSnapshot.allocation.historyBudget,
-    );
-    if (
-      ctxMgr.historyEstimatedTokens >
-      requestBudgetSnapshot.allocation.historyBudget
-    ) {
+    ctxMgr.setHistoryTokenBudget(requestBudgetSnapshot.allocation.historyBudget);
+    if (ctxMgr.historyEstimatedTokens > requestBudgetSnapshot.allocation.historyBudget) {
       ctxMgr.truncateNow();
     }
     this.emitContextBudget(emit, contextWindow, requestBudgetSnapshot);
@@ -2786,15 +2604,9 @@ export class AgentOrchestrator {
 
     let dispatchedAction = singleAction;
     // 原生控制动作已通过 singleAction 传递（nativeControlAction 优先合并）
-    const unmarkedFlags = consumeSelectedPendingControlV1(
-      flags,
-      requestControl,
-    );
+    const unmarkedFlags = consumeSelectedPendingControlV1(flags, requestControl);
     const flagsAfterControl = selectedGuidance
-      ? applyLoopGuidanceReceiptV1(
-          unmarkedFlags as TurnFlags,
-          selectedGuidance.receipt,
-        )
+      ? applyLoopGuidanceReceiptV1(unmarkedFlags as TurnFlags, selectedGuidance.receipt)
       : (unmarkedFlags as TurnFlags);
     if (selectedGuidance?.receipt.kind === "context_guard") {
       emit({
@@ -2807,9 +2619,7 @@ export class AgentOrchestrator {
     let dispatchedFlags: TurnFlags = flagsAfterControl;
     const controlAction = nativeToolErrors?.length
       ? ("native_tool_errors" as const)
-      : singleAction &&
-          singleAction.type !== "final_answer" &&
-          singleAction.type !== "tool_call"
+      : singleAction && singleAction.type !== "final_answer" && singleAction.type !== "tool_call"
         ? singleAction.type
         : diagnosis.kind !== "ok"
           ? ("parse_recovery" as const)
@@ -2820,8 +2630,7 @@ export class AgentOrchestrator {
       toolCalls.length === 0 &&
       controlAction === undefined &&
       singleAction?.type !== "final_answer" &&
-      (normalizedFinishReason === undefined ||
-        normalizedFinishReason === "stop")
+      (normalizedFinishReason === undefined || normalizedFinishReason === "stop")
     ) {
       emit({
         type: "provider.turn_stopped",
@@ -2912,9 +2721,7 @@ export class AgentOrchestrator {
           reduction.effects.length !== 1 ||
           reduction.effects[0]?.type !== "call_model"
         ) {
-          throw new Error(
-            "Loop v2 provider turn boundary is missing its reducer decision",
-          );
+          throw new Error("Loop v2 provider turn boundary is missing its reducer decision");
         }
         dispatchedFlags = {
           ...dispatchedFlags,
@@ -3133,24 +2940,15 @@ export class AgentOrchestrator {
     const newMessages = userMessages.slice(this._lastConstraintScanCount);
     // 多轮会话：goal 变更（用户新请求）也是意图变化候选
     const goalChanged = ctx.specGoal !== ctx.taskState.snapshot().goal;
-    const candidates =
-      newMessages.length > 0 ? newMessages : goalChanged ? [ctx.specGoal] : [];
-    const taskPivot = candidates.some((m) =>
-      CONSTRAINT_TASK_PIVOT_PATTERN.test(m.trim()),
-    );
+    const candidates = newMessages.length > 0 ? newMessages : goalChanged ? [ctx.specGoal] : [];
+    const taskPivot = candidates.some((m) => CONSTRAINT_TASK_PIVOT_PATTERN.test(m.trim()));
     // 15 轮强制：仅当已有约束需要过期判定，且不在初始轮（init 刚提取，无过期可言）
     const forced =
-      existing.length > 0 &&
-      ctx.turn > 0 &&
-      ctx.turn - this._lastConstraintReconcileTurn > 15;
+      existing.length > 0 && ctx.turn > 0 && ctx.turn - this._lastConstraintReconcileTurn > 15;
     // 最小回复过滤（纯长度/结构规则，无词表）："继续"“ok”这类不值得调和
-    const meaningfulNew = candidates.filter(
-      (m) => m.length >= 10 || /[,.。:：/\\]/.test(m),
-    );
+    const meaningfulNew = candidates.filter((m) => m.length >= 10 || /[,.。:：/\\]/.test(m));
     const shouldReconcile =
-      taskPivot ||
-      forced ||
-      (meaningfulNew.length > 0 && this._constraintReconcileCooldown <= 0);
+      taskPivot || forced || (meaningfulNew.length > 0 && this._constraintReconcileCooldown <= 0);
 
     this._lastConstraintScanCount = userMessages.length;
     if (!shouldReconcile) return;
@@ -3189,11 +2987,7 @@ export class AgentOrchestrator {
     })
       .filter((message) => message.role === "user")
       .map((message) => message.content);
-    const status = ctx.statusTelemetry.snapshot(
-      ctx.turn,
-      ctx.maxSteps,
-      taskSnap,
-    );
+    const status = ctx.statusTelemetry.snapshot(ctx.turn, ctx.maxSteps, taskSnap);
     const plan = ctx.planner.plan;
     const planSnapshot = plan
       ? planToSnapshotPayload(
@@ -3205,34 +2999,24 @@ export class AgentOrchestrator {
       : undefined;
     const parallelismAvailable = Boolean(
       planSnapshot &&
-        planSnapshot.items.filter((item) => item.status === "pending").length >
-          1 &&
+        planSnapshot.items.filter((item) => item.status === "pending").length > 1 &&
         ctx.capabilitySet.executableToolNames.includes("workspace.run_agent"),
     );
     const relevantMemory = this.buildRelevantMemoryProjection();
     return {
-      ...(taskSnap.nextStep
-        ? { taskBrief: { currentObjective: taskSnap.nextStep } }
-        : {}),
+      ...(taskSnap.nextStep ? { taskBrief: { currentObjective: taskSnap.nextStep } } : {}),
       constraints: activeConstraints
         .filter(
           (constraint) =>
-            !visibleDurableUserMessages.some((content) =>
-              content.includes(constraint.text),
-            ),
+            !visibleDurableUserMessages.some((content) => content.includes(constraint.text)),
         )
-        .map(
-          (constraint) =>
-            `${constraint.text} (stated at turn ${constraint.sourceTurn})`,
-        ),
+        .map((constraint) => `${constraint.text} (stated at turn ${constraint.sourceTurn})`),
       taskProgress: formatTaskProgressForContext(taskSnap),
       ...(planSnapshot
         ? {
             planSnapshot: {
               json: JSON.stringify(planSnapshot),
-              ...(parallelismAvailable
-                ? { parallelismAvailable: true as const }
-                : {}),
+              ...(parallelismAvailable ? { parallelismAvailable: true as const } : {}),
             },
           }
         : {}),
@@ -3251,13 +3035,9 @@ export class AgentOrchestrator {
    */
   private buildRelevantMemoryProjection(): string | undefined {
     return renderRelevantMemoryV1({
-      ...(this._memoryContextSection
-        ? { primary: this._memoryContextSection }
-        : {}),
+      ...(this._memoryContextSection ? { primary: this._memoryContextSection } : {}),
       ...(this._memoryLatestHint ? { latestHint: this._memoryLatestHint } : {}),
-      ...(this._coldResumeMemoryContext
-        ? { coldResume: this._coldResumeMemoryContext }
-        : {}),
+      ...(this._coldResumeMemoryContext ? { coldResume: this._coldResumeMemoryContext } : {}),
     });
   }
 
@@ -3287,10 +3067,7 @@ export class AgentOrchestrator {
       readonly mimeType?: string;
     }[];
   } {
-    const { strippedText, attachments, notFound } = resolveMentions(
-      workspaceRoot,
-      text,
-    );
+    const { strippedText, attachments, notFound } = resolveMentions(workspaceRoot, text);
     if (attachments.length === 0) return { content: text, notFound };
     const imageAttachments = attachments.filter((a) => a.type === "image");
     const fileAttachments = attachments.filter((a) => a.type === "file");
@@ -3338,14 +3115,8 @@ export class AgentOrchestrator {
     // 清理 goal 中的历史会话前缀，只保留当前请求文本
     const cleanGoal =
       goal
-        .replace(
-          /^\[Context from previous session\][\s\S]*?\[Current user request\]\n/s,
-          "",
-        )
-        .replace(
-          /^\[Previous work session\][\s\S]*?\[Current user request\]\n/s,
-          "",
-        )
+        .replace(/^\[Context from previous session\][\s\S]*?\[Current user request\]\n/s, "")
+        .replace(/^\[Previous work session\][\s\S]*?\[Current user request\]\n/s, "")
         .trim() || goal.trim();
     const plan = planner.plan;
     const loopControl = checkpointLoopControlV1(turnFlags);
@@ -3356,25 +3127,17 @@ export class AgentOrchestrator {
       turn,
       maxSteps,
       messages: stripLegacyContextProjectionsV1(ctxMgr.buildMessages()),
-      ...(plan
-        ? { plan: { revision: plan.revision, items: plan.items as unknown[] } }
-        : {}),
+      ...(plan ? { plan: { revision: plan.revision, items: plan.items as unknown[] } } : {}),
       ...(this.todoStore ? { todos: this.todoStore.items } : {}),
       taskState: taskState.snapshot(),
       ...(this._memoryTaskId ? { memoryTaskId: this._memoryTaskId } : {}),
       ...(this._memoryLatestHint ? { memoryHint: this._memoryLatestHint } : {}),
-      ...(this._interactionState
-        ? { interaction: this._interactionState }
-        : {}),
-      ...(this._interactionInbox.length > 0
-        ? { interactionInbox: this._interactionInbox }
-        : {}),
+      ...(this._interactionState ? { interaction: this._interactionState } : {}),
+      ...(this._interactionInbox.length > 0 ? { interactionInbox: this._interactionInbox } : {}),
       ...(this._executionEnvironment
         ? { executionEnvironment: this._executionEnvironment.snapshot() }
         : {}),
-      ...(this._managedJobs
-        ? { managedJobs: this._managedJobs.projection() }
-        : {}),
+      ...(this._managedJobs ? { managedJobs: this._managedJobs.projection() } : {}),
       ...(loopControl ? { loopControl } : {}),
       ...(outcome ? { outcome } : {}),
       savedAt: Date.now(),
@@ -3388,36 +3151,24 @@ export class AgentOrchestrator {
    * 使用场景：invokeModel() 中，当模型输出被截断时，会发起一次续写调用，
    * 两次调用的 token 需要合并统计。
    */
-  private mergeUsage(
-    a?: ModelTokenUsage,
-    b?: ModelTokenUsage,
-  ): ModelTokenUsage | undefined {
+  private mergeUsage(a?: ModelTokenUsage, b?: ModelTokenUsage): ModelTokenUsage | undefined {
     if (!a && !b) return undefined;
     const pt = a?.promptTokens !== undefined || b?.promptTokens !== undefined;
-    const ct =
-      a?.completionTokens !== undefined || b?.completionTokens !== undefined;
+    const ct = a?.completionTokens !== undefined || b?.completionTokens !== undefined;
     const tt = a?.totalTokens !== undefined || b?.totalTokens !== undefined;
-    const cpt =
-      a?.cachedPromptTokens !== undefined ||
-      b?.cachedPromptTokens !== undefined;
+    const cpt = a?.cachedPromptTokens !== undefined || b?.cachedPromptTokens !== undefined;
     if (!pt && !ct && !tt && !cpt) return undefined;
     return {
-      ...(pt
-        ? { promptTokens: (a?.promptTokens ?? 0) + (b?.promptTokens ?? 0) }
-        : {}),
+      ...(pt ? { promptTokens: (a?.promptTokens ?? 0) + (b?.promptTokens ?? 0) } : {}),
       ...(ct
         ? {
-            completionTokens:
-              (a?.completionTokens ?? 0) + (b?.completionTokens ?? 0),
+            completionTokens: (a?.completionTokens ?? 0) + (b?.completionTokens ?? 0),
           }
         : {}),
-      ...(tt
-        ? { totalTokens: (a?.totalTokens ?? 0) + (b?.totalTokens ?? 0) }
-        : {}),
+      ...(tt ? { totalTokens: (a?.totalTokens ?? 0) + (b?.totalTokens ?? 0) } : {}),
       ...(cpt
         ? {
-            cachedPromptTokens:
-              (a?.cachedPromptTokens ?? 0) + (b?.cachedPromptTokens ?? 0),
+            cachedPromptTokens: (a?.cachedPromptTokens ?? 0) + (b?.cachedPromptTokens ?? 0),
           }
         : {}),
     };
@@ -3435,10 +3186,7 @@ export class AgentOrchestrator {
    *
    * 这是兼容性层——不同模型/不同版本可能输出不同的工具调用格式。
    */
-  private static normalizeToolCalls(
-    text: string,
-    nameMap?: Map<string, string>,
-  ): string {
+  private static normalizeToolCalls(text: string, nameMap?: Map<string, string>): string {
     let out = text
       // 移除 <overview> 标签（部分模型的元输出）
       .replace(/<overview>[\s\S]*?<\/overview>/gi, "")
@@ -3457,8 +3205,7 @@ export class AgentOrchestrator {
       (_, json) => `\n${json.trim()}\n`,
     );
     // 标准化 <tool>/<args> XML 标签
-    const toolXmlRegex =
-      /<tool>([^<]+)<\/tool>\s*(?:<args>(\{[\s\S]*?\})<\/args>)?/gi;
+    const toolXmlRegex = /<tool>([^<]+)<\/tool>\s*(?:<args>(\{[\s\S]*?\})<\/args>)?/gi;
     out = out.replace(toolXmlRegex, (_m, name, argsJson) => {
       let args: unknown = {};
       if (argsJson) {
@@ -3471,10 +3218,7 @@ export class AgentOrchestrator {
       return `\n${JSON.stringify({ tool: name.trim(), args })}\n`;
     });
     // 剥离 markdown 代码块标记
-    out = out.replace(
-      /```json\s*(\{[\s\S]*?\})\s*```/g,
-      (_, json) => `\n${json.trim()}\n`,
-    );
+    out = out.replace(/```json\s*(\{[\s\S]*?\})\s*```/g, (_, json) => `\n${json.trim()}\n`);
     return out.trim();
   }
 
@@ -3528,9 +3272,7 @@ export class AgentOrchestrator {
       );
     }, this.modelRequestTimeoutMs);
     const timeout = timeoutController.signal;
-    const combinedSignal = signal
-      ? AbortSignal.any([signal, timeout])
-      : timeout;
+    const combinedSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
     const streamFn = model.completeStream;
     const modelOpts = {
       signal: combinedSignal,
@@ -3539,8 +3281,7 @@ export class AgentOrchestrator {
 
     // Qwen3 通过 vLLM ≤0.22 不发出 tool_use 流式 chunk — 强制使用非流式
     const isQwen =
-      model.label.toLowerCase().includes("qwen") ||
-      model.label.toLowerCase().includes("/qwen");
+      model.label.toLowerCase().includes("qwen") || model.label.toLowerCase().includes("/qwen");
     const useStreaming = typeof streamFn === "function" && !isQwen;
 
     try {
@@ -3675,42 +3416,30 @@ export class AgentOrchestrator {
         const finalExtracted = extractThinkBlocks(acc);
         const finalText = finalExtracted.text || acc;
         const assistantExtracted = extractThinkBlocks(assistantContentAcc);
-        const nativeAssistantContent =
-          assistantExtracted.text || assistantContentAcc;
+        const nativeAssistantContent = assistantExtracted.text || assistantContentAcc;
         const finalThinking =
-          [thinkingAcc, finalExtracted.thinking].filter(Boolean).join("\n\n") ||
-          undefined;
+          [thinkingAcc, finalExtracted.thinking].filter(Boolean).join("\n\n") || undefined;
 
         // 标准化工具调用格式
-        const normalized = AgentOrchestrator.normalizeToolCalls(
-          finalText,
-          toolNameMap,
-        );
+        const normalized = AgentOrchestrator.normalizeToolCalls(finalText, toolNameMap);
         return {
           text: normalized,
           rawText: acc,
           thinking: finalThinking,
-          ...(reasoningPassbackAcc
-            ? { reasoningPassback: reasoningPassbackAcc }
-            : {}),
+          ...(reasoningPassbackAcc ? { reasoningPassback: reasoningPassbackAcc } : {}),
           usage,
           finishReason,
           ...(nativeToolCalls.length > 0 || malformedToolErrors.length > 0
             ? { nativeAssistantContent }
             : {}),
           ...(nativeToolCalls.length > 0 ? { nativeToolCalls } : {}),
-          ...(malformedToolErrors.length > 0
-            ? { nativeToolErrors: malformedToolErrors }
-            : {}),
+          ...(malformedToolErrors.length > 0 ? { nativeToolErrors: malformedToolErrors } : {}),
         };
       }
 
       // ═══ 非流式调用 ═══
       const result = await model.complete(messages, modelOpts);
-      const normalizedResult = AgentOrchestrator.normalizeToolCalls(
-        result.text,
-        toolNameMap,
-      );
+      const normalizedResult = AgentOrchestrator.normalizeToolCalls(result.text, toolNameMap);
       emit({ type: "model.chunk", text: normalizedResult });
 
       if (result.usage) {
@@ -3792,22 +3521,13 @@ export class AgentOrchestrator {
     nativeAssistantContent?: string;
   }> {
     // 第一次调用（带熔断和重试）
-    const result = await this.callModelWithRetry(
-      model,
-      messages,
-      signal,
-      emit,
-      tools,
-      toolNameMap,
-    );
+    const result = await this.callModelWithRetry(model, messages, signal, emit, tools, toolNameMap);
 
     const hasNativeProtocolState =
-      (result.nativeToolCalls?.length ?? 0) > 0 ||
-      (result.nativeToolErrors?.length ?? 0) > 0;
+      (result.nativeToolCalls?.length ?? 0) > 0 || (result.nativeToolErrors?.length ?? 0) > 0;
     if (
       autoContinueTruncation &&
-      (result.finishReason === "length" ||
-        result.finishReason === "max_tokens") &&
+      (result.finishReason === "length" || result.finishReason === "max_tokens") &&
       hasNativeProtocolState
     ) {
       emit({ type: "model.truncated", finishReason: result.finishReason });
@@ -3858,8 +3578,7 @@ export class AgentOrchestrator {
           toolNameMap,
         );
         const auditThinking =
-          [result.thinking, continued.thinking].filter(Boolean).join("") ||
-          undefined;
+          [result.thinking, continued.thinking].filter(Boolean).join("") || undefined;
         const auditUsage = this.mergeUsage(result.usage, continued.usage);
         emit({
           type: "model.done",
@@ -3874,14 +3593,10 @@ export class AgentOrchestrator {
 
       // 合并两次调用的结果
       const combinedRawText = result.rawText + continued.rawText;
-      const combinedText = AgentOrchestrator.normalizeToolCalls(
-        combinedRawText,
-        toolNameMap,
-      );
+      const combinedText = AgentOrchestrator.normalizeToolCalls(combinedRawText, toolNameMap);
       const combinedUsage = this.mergeUsage(result.usage, continued.usage);
       const combinedThinking =
-        [result.thinking, continued.thinking].filter(Boolean).join("") ||
-        undefined;
+        [result.thinking, continued.thinking].filter(Boolean).join("") || undefined;
       const combinedReasoningPassback = continued.reasoningPassback;
       const combinedNativeAssistantContent =
         [result.nativeAssistantContent, continued.nativeAssistantContent]
@@ -3901,14 +3616,9 @@ export class AgentOrchestrator {
           ? { reasoningPassback: combinedReasoningPassback }
           : {}),
         usage: combinedUsage,
-        ...(continued.finishReason !== undefined
-          ? { finishReason: continued.finishReason }
-          : {}),
+        ...(continued.finishReason !== undefined ? { finishReason: continued.finishReason } : {}),
         // 合并 tool calls：第一次调用可能在截断前已完成部分工具调用
-        nativeToolCalls: [
-          ...(result.nativeToolCalls ?? []),
-          ...(continued.nativeToolCalls ?? []),
-        ],
+        nativeToolCalls: [...(result.nativeToolCalls ?? []), ...(continued.nativeToolCalls ?? [])],
         ...(combinedNativeAssistantContent !== undefined
           ? { nativeAssistantContent: combinedNativeAssistantContent }
           : {}),
@@ -3950,10 +3660,7 @@ export class AgentOrchestrator {
   }
 
   /** 发送熔断器状态变更事件 */
-  private emitCircuitBreakerEvent(
-    breaker: CircuitBreaker,
-    emit: (event: RunEvent) => void,
-  ): void {
+  private emitCircuitBreakerEvent(breaker: CircuitBreaker, emit: (event: RunEvent) => void): void {
     const snap = breaker.snapshot();
     if (snap.state === "open") {
       emit({
@@ -4007,14 +3714,7 @@ export class AgentOrchestrator {
     breaker.guard();
 
     try {
-      const result = await this.invokeModelOnce(
-        model,
-        messages,
-        signal,
-        emit,
-        tools,
-        toolNameMap,
-      );
+      const result = await this.invokeModelOnce(model, messages, signal, emit, tools, toolNameMap);
       // 成功 → 记录到熔断器（可能从半开→关闭）
       const prevState = breaker.snapshot().state;
       breaker.recordSuccess();
@@ -4112,14 +3812,10 @@ export class AgentOrchestrator {
     artifactRegistry: ArtifactRegistry;
     emit: (event: RunEvent) => void;
     captureLoopV2Facts: boolean;
-    getLoopV2ControlReduction?: NonNullable<
-      PhaseContext["getLoopV2ControlReduction"]
-    >;
+    getLoopV2ControlReduction?: NonNullable<PhaseContext["getLoopV2ControlReduction"]>;
     reviewLoopV2Candidate?: NonNullable<PhaseContext["reviewLoopV2Candidate"]>;
     probeLoopV2Candidate?: NonNullable<PhaseContext["probeLoopV2Candidate"]>;
-    runStableCandidateCheckpoint?: () => Promise<
-      EphemeralControlV1 | undefined
-    >;
+    runStableCandidateCheckpoint?: () => Promise<EphemeralControlV1 | undefined>;
     persistLoopV2Terminal?: (result: RunResult) => void;
     emitRunMetrics: () => void;
     seq: { n: number };
@@ -4127,12 +3823,8 @@ export class AgentOrchestrator {
     shellSandbox: import("@paw/harness").ShellSandboxConfig;
   }> {
     const runId = spec.runId;
-    this._interactionState = parseWaitingUserInteractionV1(
-      spec.resumeFromState?.interaction,
-    );
-    this._interactionInbox = parseInteractionInboxV1(
-      spec.resumeFromState?.interactionInbox,
-    );
+    this._interactionState = parseWaitingUserInteractionV1(spec.resumeFromState?.interaction);
+    this._interactionInbox = parseInteractionInboxV1(spec.resumeFromState?.interactionInbox);
     // P4.3/P4.4 每 run 重置：块账本/预算事件去重、压缩提交序号
     this._lastBlocksKey = null;
     this._lastBudgetKey = null;
@@ -4150,20 +3842,15 @@ export class AgentOrchestrator {
     const maxSteps = resolveMaxSteps(workspaceRoot, spec.maxSteps);
     const durableSessionStore =
       this.sessionStore ??
-      (this.loopKernelVersion === "v2"
-        ? new FileSystemSessionStore({ workspaceRoot })
-        : undefined);
+      (this.loopKernelVersion === "v2" ? new FileSystemSessionStore({ workspaceRoot }) : undefined);
     const loopV2LiveReviewRuntime =
       this.loopKernelVersion === "v2"
         ? new LoopV2LiveReviewRuntimeV1({
             workspaceRoot,
             runId,
-            ...(this.loopV2SemanticReviewModel
-              ? { model: this.loopV2SemanticReviewModel }
-              : {}),
+            ...(this.loopV2SemanticReviewModel ? { model: this.loopV2SemanticReviewModel } : {}),
             ...(spec.abortSignal ? { signal: spec.abortSignal } : {}),
-            onUsage: (modelLabel, usage) =>
-              this.costTracker?.record(modelLabel, usage),
+            onUsage: (modelLabel, usage) => this.costTracker?.record(modelLabel, usage),
           })
         : undefined;
 
@@ -4180,26 +3867,15 @@ export class AgentOrchestrator {
       // Restarting either counter at zero creates duplicate event identities
       // and can overwrite rollback snapshots from the pre-crash trajectory.
       try {
-        if (
-          this.loopKernelVersion === "v2" &&
-          !durableSessionStore?.loadRunStrict
-        ) {
-          throw new Error(
-            "Loop v2 requires a SessionStore with strict journal loading",
-          );
+        if (this.loopKernelVersion === "v2" && !durableSessionStore?.loadRunStrict) {
+          throw new Error("Loop v2 requires a SessionStore with strict journal loading");
         }
         persistedRunEvents =
           (this.loopKernelVersion === "v2"
             ? durableSessionStore?.loadRunStrict(runId)
             : durableSessionStore?.loadRun(runId)) ?? [];
-        seq.n = persistedRunEvents.reduce(
-          (max, envelope) => Math.max(max, envelope.seq),
-          0,
-        );
-        if (
-          this.loopKernelVersion === "v2" &&
-          persistedRunEvents.length === 0
-        ) {
+        seq.n = persistedRunEvents.reduce((max, envelope) => Math.max(max, envelope.seq), 0);
+        if (this.loopKernelVersion === "v2" && persistedRunEvents.length === 0) {
           throw new Error("Loop v2 durable session journal is missing");
         }
       } catch (error) {
@@ -4217,30 +3893,17 @@ export class AgentOrchestrator {
         // even when old rollback metadata is unreadable.
       }
     }
-    if (
-      this.loopKernelVersion === "v2-shadow" ||
-      this.loopKernelVersion === "v2"
-    ) {
+    if (this.loopKernelVersion === "v2-shadow" || this.loopKernelVersion === "v2") {
       const liveArtifactPath = loopV2LiveArtifactPath(workspaceRoot, runId);
-      const projectionCheckpointPath = loopV2ProjectionCheckpointPath(
-        workspaceRoot,
-        runId,
-      );
+      const projectionCheckpointPath = loopV2ProjectionCheckpointPath(workspaceRoot, runId);
       if (this.loopKernelVersion === "v2" && spec.resumeFromState) {
         const candidateArtifact = fs.existsSync(liveArtifactPath)
-          ? parseLoopV2LiveCandidateArtifactV1(
-              fs.readFileSync(liveArtifactPath, "utf8"),
-            )
+          ? parseLoopV2LiveCandidateArtifactV1(fs.readFileSync(liveArtifactPath, "utf8"))
           : undefined;
         const projectionCheckpoint = fs.existsSync(projectionCheckpointPath)
-          ? parseLoopV2ProjectionCheckpointV1(
-              fs.readFileSync(projectionCheckpointPath, "utf8"),
-            )
+          ? parseLoopV2ProjectionCheckpointV1(fs.readFileSync(projectionCheckpointPath, "utf8"))
           : undefined;
-        const reports = [
-          candidateArtifact?.report,
-          projectionCheckpoint?.report,
-        ].filter(
+        const reports = [candidateArtifact?.report, projectionCheckpoint?.report].filter(
           (report): report is LoopV2ShadowReport => report !== undefined,
         );
         for (const report of reports) {
@@ -4258,12 +3921,9 @@ export class AgentOrchestrator {
           projectionCheckpoint &&
           candidateArtifact.report.sourceThroughSeq ===
             projectionCheckpoint.report.sourceThroughSeq &&
-          candidateArtifact.report.reportHash !==
-            projectionCheckpoint.report.reportHash
+          candidateArtifact.report.reportHash !== projectionCheckpoint.report.reportHash
         ) {
-          throw new Error(
-            "Loop v2 resume artifacts conflict at the same source seq",
-          );
+          throw new Error("Loop v2 resume artifacts conflict at the same source seq");
         }
         const restoredReport = reports.sort(
           (left, right) => right.sourceThroughSeq - left.sourceThroughSeq,
@@ -4291,10 +3951,7 @@ export class AgentOrchestrator {
         if (
           restoredReport &&
           candidateArtifact &&
-          isSameRevisionCandidateExtension(
-            candidateArtifact.report,
-            restoredReport,
-          )
+          isSameRevisionCandidateExtension(candidateArtifact.report, restoredReport)
         ) {
           this._lastLoopV2CandidateAssessment = candidateArtifact.assessment;
           loopV2LiveReviewRuntime?.restoreCandidate(candidateArtifact);
@@ -4322,20 +3979,10 @@ export class AgentOrchestrator {
 
     const persistLoopV2ProjectionCheckpoint = () => {
       if (!loopV2Projection || this.loopKernelVersion !== "v2") return;
-      const checkpoint = buildLoopV2ProjectionCheckpointV1(
-        loopV2Projection.snapshot(),
-      );
-      const checkpointPath = loopV2ProjectionCheckpointPath(
-        workspaceRoot,
-        runId,
-      );
-      atomicWrite(
-        checkpointPath,
-        serializeLoopV2ProjectionCheckpointV1(checkpoint),
-      );
-      parseLoopV2ProjectionCheckpointV1(
-        fs.readFileSync(checkpointPath, "utf8"),
-      );
+      const checkpoint = buildLoopV2ProjectionCheckpointV1(loopV2Projection.snapshot());
+      const checkpointPath = loopV2ProjectionCheckpointPath(workspaceRoot, runId);
+      atomicWrite(checkpointPath, serializeLoopV2ProjectionCheckpointV1(checkpoint));
+      parseLoopV2ProjectionCheckpointV1(fs.readFileSync(checkpointPath, "utf8"));
     };
 
     const persistCurrentLoopV2Candidate = () => {
@@ -4343,21 +3990,14 @@ export class AgentOrchestrator {
         throw new Error("Loop v2 live candidate runtime was not initialized");
       }
       const report = loopV2Projection.snapshot();
-      this._lastLoopV2ReadinessProgressKey = loopV2ReadinessProgressKeyV1(
-        report.state,
-      );
-      this._lastLoopV2ReadinessVerificationRecords = Object.values(
-        report.state.verification,
-      )
+      this._lastLoopV2ReadinessProgressKey = loopV2ReadinessProgressKeyV1(report.state);
+      this._lastLoopV2ReadinessVerificationRecords = Object.values(report.state.verification)
         .filter(
-          (verification) =>
-            verification.mutationRevision ===
-            report.state.currentMutationRevision,
+          (verification) => verification.mutationRevision === report.state.currentMutationRevision,
         )
         .sort((left, right) => left.id.localeCompare(right.id));
       const requireProductMutation =
-        this.verificationPolicy?.requireMutation ??
-        goalRequiresMutation(spec.goal);
+        this.verificationPolicy?.requireMutation ?? goalRequiresMutation(spec.goal);
       const trustedSkipAllowed = goalAllowsSkipVerification(spec.goal);
       const requiresVerification =
         requireProductMutation || report.state.currentMutationRevision > 0;
@@ -4400,8 +4040,7 @@ export class AgentOrchestrator {
         metrics.modelLatencyMs += Date.now() - modelCallStartTime;
         if (event.usage) {
           metrics.totalTokens +=
-            (event.usage.promptTokens ?? 0) +
-            (event.usage.completionTokens ?? 0);
+            (event.usage.promptTokens ?? 0) + (event.usage.completionTokens ?? 0);
         }
       }
       if (event.type === "model.truncated") {
@@ -4426,8 +4065,7 @@ export class AgentOrchestrator {
         ts: Date.now(),
         event,
       };
-      const liveOnly =
-        event.type === "model.chunk" || event.type === "model.thinking";
+      const liveOnly = event.type === "model.chunk" || event.type === "model.thinking";
       // Streaming chunk events contain the full accumulated text, not a delta.
       // Persisting every token therefore grows a session quadratically (a
       // modest long reasoning turn produced a 188 MB JSONL file). The final
@@ -4445,10 +4083,7 @@ export class AgentOrchestrator {
       if (loopV2Projection && !liveOnly) {
         try {
           observeLoopV2DurableEnvelopeV1(loopV2Projection, envelope);
-          if (
-            event.type === "tool.result" &&
-            event.decisionCommit !== undefined
-          ) {
+          if (event.type === "tool.result" && event.decisionCommit !== undefined) {
             persistLoopV2ProjectionCheckpoint();
           }
           if (
@@ -4460,10 +4095,7 @@ export class AgentOrchestrator {
           ) {
             persistLoopV2ProjectionCheckpoint();
           }
-          if (
-            this.loopKernelVersion === "v2" &&
-            event.type === "candidate.checkpoint"
-          ) {
+          if (this.loopKernelVersion === "v2" && event.type === "candidate.checkpoint") {
             persistCurrentLoopV2Candidate();
           }
           if (
@@ -4478,14 +4110,10 @@ export class AgentOrchestrator {
             if (!requestedReadiness) {
               if (
                 !reduction?.effects.some(
-                  (effect) =>
-                    effect.type === "call_model" &&
-                    effect.reason === "repair_required",
+                  (effect) => effect.type === "call_model" && effect.reason === "repair_required",
                 )
               ) {
-                throw new Error(
-                  "Loop v2 candidate submission is missing its reducer decision",
-                );
+                throw new Error("Loop v2 candidate submission is missing its reducer decision");
               }
               return;
             }
@@ -4531,15 +4159,11 @@ export class AgentOrchestrator {
       : undefined;
 
     const reviewLoopV2Candidate = loopV2LiveReviewRuntime?.canReview
-      ? async (
-          stage: "checkpoint" | "final_submission" = "final_submission",
-        ) => {
+      ? async (stage: "checkpoint" | "final_submission" = "final_submission") => {
           const result = await loopV2LiveReviewRuntime.reviewCandidate();
           const assessment = this._lastLoopV2CandidateAssessment;
           if (!assessment) {
-            throw new Error(
-              "Loop v2 semantic review completed without a candidate assessment",
-            );
+            throw new Error("Loop v2 semantic review completed without a candidate assessment");
           }
 
           const summary = result.review.findings.length
@@ -4558,13 +4182,9 @@ export class AgentOrchestrator {
             mutationRevision: result.review.mutationRevision,
             reviewKey: result.reviewKey,
             verdict: result.review.verdict,
-            verificationProbe: this.loopV2VerificationProbeModel
-              ? "required"
-              : "not_required",
+            verificationProbe: this.loopV2VerificationProbeModel ? "required" : "not_required",
             externalVerification:
-              assessment.policy.verificationAuthority === "external"
-                ? "pending"
-                : "not_configured",
+              assessment.policy.verificationAuthority === "external" ? "pending" : "not_configured",
             summary,
             modelCalls: result.modelCalls,
             stage,
@@ -4586,33 +4206,19 @@ export class AgentOrchestrator {
     emit({ type: "run.started", goal: spec.goal });
 
     // ── 模型选择 ──
-    const model =
-      this.overrideModel ?? createDefaultLanguageModel(workspaceRoot);
+    const model = this.overrideModel ?? createDefaultLanguageModel(workspaceRoot);
     // P1.4 估算统一：按模型 label 选 tokenizer，包一层 usage 回填校准
-    this._calibratedEstimator = new CalibratedEstimator(
-      resolveEstimatorForModel(model.label),
-    );
+    this._calibratedEstimator = new CalibratedEstimator(resolveEstimatorForModel(model.label));
     // o200k 编码首次加载 ~20s：后台预热，避免首次估算卡住
     const modelLabel = model.label.toLowerCase();
-    if (
-      /\b(qwen|glm|minimax|yi|kimi|moonshot|ernie|baichuan)(?![a-z])/.test(
-        modelLabel,
-      )
-    ) {
+    if (/\b(qwen|glm|minimax|yi|kimi|moonshot|ernie|baichuan)(?![a-z])/.test(modelLabel)) {
       prewarmEncoding("o200k_base");
     }
     const ctxMgr =
-      this.contextManager ??
-      new ContextManager({ estimator: this._calibratedEstimator });
+      this.contextManager ?? new ContextManager({ estimator: this._calibratedEstimator });
     const planner = new TaskPlanner();
-    const taskState = new TaskStateManager(
-      spec.goal,
-      spec.resumeFromState?.taskState,
-    );
-    taskState.registerAcceptanceCriteria(
-      spec.initialAcceptanceCriteria ?? [],
-      0,
-    );
+    const taskState = new TaskStateManager(spec.goal, spec.resumeFromState?.taskState);
+    taskState.registerAcceptanceCriteria(spec.initialAcceptanceCriteria ?? [], 0);
     this._contextPackageCode = [];
     let startTurn = 0;
     const sessionMemoryStore = new SessionMemoryStore({ workspaceRoot });
@@ -4625,28 +4231,17 @@ export class AgentOrchestrator {
     // at-most-once 持久化，失败走修复反馈，不拥有终局。
     const probeLoopV2Candidate =
       this.loopKernelVersion === "v2" && this.loopV2VerificationProbeModel
-        ? async (
-            stage: "checkpoint" | "final_submission" = "final_submission",
-          ) => {
+        ? async (stage: "checkpoint" | "final_submission" = "final_submission") => {
             const assessment = this._lastLoopV2CandidateAssessment;
             if (!assessment) {
-              throw new Error(
-                "Loop v2 verification probe requires a candidate assessment",
-              );
+              throw new Error("Loop v2 verification probe requires a candidate assessment");
             }
-            const diffShell = runShellInWorkspace(
-              workspaceRoot,
-              "git --no-pager diff HEAD",
-              {
-                timeoutMs: 30_000,
-                ...(this.shellSandbox
-                  ? { shellSandbox: this.shellSandbox }
-                  : {}),
-                skipApprovalGate: true,
-              },
-            );
-            const diff =
-              typeof diffShell.stdout === "string" ? diffShell.stdout : "";
+            const diffShell = runShellInWorkspace(workspaceRoot, "git --no-pager diff HEAD", {
+              timeoutMs: 30_000,
+              ...(this.shellSandbox ? { shellSandbox: this.shellSandbox } : {}),
+              skipApprovalGate: true,
+            });
+            const diff = typeof diffShell.stdout === "string" ? diffShell.stdout : "";
             // Layer 3：探针地图增强——受影响测试清单喂入对抗探针
             // （闭包内就地构建；文件扫描 <1s，与主循环的实例独立）
             const changedFilesForProbe = taskState.snapshot().filesChanged;
@@ -4658,13 +4253,12 @@ export class AgentOrchestrator {
             const projectedVerification = Object.values(
               loopV2Projection?.snapshot().state.verification ?? {},
             );
-            const impactedForProbe =
-              collectVerificationProbeRepositoryTargetsV1({
-                staticImpactedTests: staticImpactedForProbe,
-                verificationRecords: projectedVerification,
-                hostAcceptanceCriteria: spec.initialAcceptanceCriteria,
-                mutationRevision: assessment.mutationRevision,
-              });
+            const impactedForProbe = collectVerificationProbeRepositoryTargetsV1({
+              staticImpactedTests: staticImpactedForProbe,
+              verificationRecords: projectedVerification,
+              hostAcceptanceCriteria: spec.initialAcceptanceCriteria,
+              mutationRevision: assessment.mutationRevision,
+            });
             const result = await runVerificationProbeOnceV2({
               model: this.loopV2VerificationProbeModel!,
               runId,
@@ -4672,17 +4266,13 @@ export class AgentOrchestrator {
               goal: spec.goal,
               diff,
               changedFiles: changedFilesForProbe,
-              ...(impactedForProbe.length > 0
-                ? { impactedTests: impactedForProbe }
-                : {}),
+              ...(impactedForProbe.length > 0 ? { impactedTests: impactedForProbe } : {}),
               candidateInputHash: assessment.candidateInputHash,
               mutationRevision: assessment.mutationRevision,
-              verificationAuthority:
-                assessment.policy.verificationAuthority ?? "local",
+              verificationAuthority: assessment.policy.verificationAuthority ?? "local",
               ...(this.shellSandbox ? { shellSandbox: this.shellSandbox } : {}),
               ...(spec.abortSignal ? { signal: spec.abortSignal } : {}),
-              onUsage: (modelLabel, usage) =>
-                this.costTracker?.record(modelLabel, usage),
+              onUsage: (modelLabel, usage) => this.costTracker?.record(modelLabel, usage),
             });
             const summary = result.probes.length
               ? result.probes
@@ -4694,8 +4284,7 @@ export class AgentOrchestrator {
                   .slice(0, 4_000)
               : (result.note ?? "no probes");
             const semanticReviewKey =
-              loopV2Projection?.snapshot().controlState?.semanticReview
-                ?.reviewKey;
+              loopV2Projection?.snapshot().controlState?.semanticReview?.reviewKey;
             emit({
               type: "candidate.probe",
               candidateId: assessment.candidateId,
@@ -4754,10 +4343,8 @@ export class AgentOrchestrator {
               !isStableCandidateCheckpointEligibleV1({
                 mutationRevision: revision,
                 diffInspectedRevision: taskSnapshot.diffInspectedRevision,
-                managedJobsBlockCompletion:
-                  managedJobs.readiness().blocksCompletion,
-                reviewAlreadyAttempted:
-                  stableReviewAttemptedRevisions.has(revision),
+                managedJobsBlockCompletion: managedJobs.readiness().blocksCompletion,
+                reviewAlreadyAttempted: stableReviewAttemptedRevisions.has(revision),
                 verification: Object.values(report.state.verification),
               })
             )
@@ -4804,10 +4391,7 @@ export class AgentOrchestrator {
 
     // ── MCP 连接 ──
     // MCP（Model Context Protocol）允许模型通过标准协议访问外部工具和数据源
-    const mcp =
-      this.mcpServers && this.mcpServers.length > 0
-        ? new McpClientManager()
-        : undefined;
+    const mcp = this.mcpServers && this.mcpServers.length > 0 ? new McpClientManager() : undefined;
     let mcpConnectedCount = 0;
     if (mcp) {
       for (const cfg of this.mcpServers!) {
@@ -4821,18 +4405,13 @@ export class AgentOrchestrator {
       }
     }
 
-    const shellSandbox =
-      this.shellSandbox ?? resolveShellSandboxConfig(workspaceRoot);
+    const shellSandbox = this.shellSandbox ?? resolveShellSandboxConfig(workspaceRoot);
     const managedJobs = new ManagedJobControllerV1({
       ownerId: runId,
       workspaceRoot,
       shellSandbox,
-      ...(this.toolExecutionPolicy
-        ? { toolExecutionPolicy: this.toolExecutionPolicy }
-        : {}),
-      ...(this.toolEffectPolicy
-        ? { toolEffectPolicy: this.toolEffectPolicy }
-        : {}),
+      ...(this.toolExecutionPolicy ? { toolExecutionPolicy: this.toolExecutionPolicy } : {}),
+      ...(this.toolEffectPolicy ? { toolEffectPolicy: this.toolEffectPolicy } : {}),
       ...(spec.resumeFromState?.managedJobs !== undefined
         ? { resumeProjection: spec.resumeFromState.managedJobs }
         : {}),
@@ -4864,9 +4443,7 @@ export class AgentOrchestrator {
       toolNameMap,
       configuredTools: this.allowedTools ?? null,
       availableMcpToolNames:
-        mcp
-          ?.listTools()
-          .map((tool) => `mcp:${tool.serverName}/${tool.toolName}`) ?? [],
+        mcp?.listTools().map((tool) => `mcp:${tool.serverName}/${tool.toolName}`) ?? [],
     });
     const toolDefs = capabilitySet.modelToolDefinitions;
     const capabilityExposure = new CapabilityExposureShadowV1({
@@ -4881,10 +4458,7 @@ export class AgentOrchestrator {
       modelActions: capabilitySet.modelActions,
       executableTools: capabilitySet.executableToolNames,
       internalToolCount: capabilitySet.internalToolNames.length,
-      ...capabilityExposure.snapshot(
-        spec.goal,
-        capabilityPhaseToolsV1(taskState.snapshot()),
-      ),
+      ...capabilityExposure.snapshot(spec.goal, capabilityPhaseToolsV1(taskState.snapshot())),
     });
 
     const contextWindow = model.capabilities?.contextWindow ?? 128_000;
@@ -4917,10 +4491,7 @@ export class AgentOrchestrator {
           (m) => m.role !== "system",
         );
         const firstMessage = history[0];
-        if (
-          firstMessage?.role !== "user" ||
-          !isChildTaskMessageV1(firstMessage.content)
-        ) {
+        if (firstMessage?.role !== "user" || !isChildTaskMessageV1(firstMessage.content)) {
           // Legacy child checkpoints stored delegated context only in system.
           // Recreate the protected task envelope before restoring history.
           history = [{ role: "user", content: taskMessage }, ...history];
@@ -4932,11 +4503,7 @@ export class AgentOrchestrator {
         ctxMgr.addUser(taskMessage);
       }
 
-      const initBudget = AgentOrchestrator.measureBudget(
-        ctxMgr,
-        toolDefs,
-        contextWindow,
-      );
+      const initBudget = AgentOrchestrator.measureBudget(ctxMgr, toolDefs, contextWindow);
       ctxMgr.setHistoryTokenBudget(initBudget.allocation.historyBudget);
       this.emitContextBudget(emit, contextWindow, initBudget);
 
@@ -4974,9 +4541,7 @@ export class AgentOrchestrator {
 
     // Skills 目录文本
     const skillsText =
-      this.skillRegistry.list().length > 0
-        ? this.skillRegistry.catalogText()
-        : undefined;
+      this.skillRegistry.list().length > 0 ? this.skillRegistry.catalogText() : undefined;
     // Todo 列表文本
     const todosText =
       this.todoStore && this.todoStore.items.length > 0
@@ -4987,10 +4552,7 @@ export class AgentOrchestrator {
     const projectMemory = loadProjectMemory(workspaceRoot);
 
     // 从项目记忆中提取 Skills 并注册
-    for (const skill of skillsFromProjectMemory(
-      projectMemory.committed,
-      projectMemory.local,
-    )) {
+    for (const skill of skillsFromProjectMemory(projectMemory.committed, projectMemory.local)) {
       if (!this.skillRegistry.has(skill.id)) {
         this.skillRegistry.register(skill);
       }
@@ -4999,8 +4561,7 @@ export class AgentOrchestrator {
     // ── 记忆 Runtime（唯一在线路径）──
     // clean：当前用户请求；aware：当前请求 + 多轮 history 中的路径/偏好信号
     const cleanMemoryQuery = extractCleanMemoryQuery(spec.goal);
-    const retrievalQuery =
-      buildConversationAwareQuery(spec.goal) || cleanMemoryQuery || spec.goal;
+    const retrievalQuery = buildConversationAwareQuery(spec.goal) || cleanMemoryQuery || spec.goal;
     let selectedForEvent: {
       id: string;
       title: string;
@@ -5064,16 +4625,12 @@ export class AgentOrchestrator {
             runId,
             goal: cleanMemoryQuery || spec.goal,
             title: (cleanMemoryQuery || spec.goal).slice(0, 120),
-            ...(spec.resumeMemoryTaskId
-              ? { resumeTaskId: spec.resumeMemoryTaskId }
-              : {}),
+            ...(spec.resumeMemoryTaskId ? { resumeTaskId: spec.resumeMemoryTaskId } : {}),
           });
           this._memoryTaskId = begun.taskId;
           this._lastDynamicMemoryGoal = spec.goal;
           if (this._conversationId && begun.taskId) {
-            const { bindConversationMemoryTask } = await import(
-              "./conversation-memory-bind.js"
-            );
+            const { bindConversationMemoryTask } = await import("./conversation-memory-bind.js");
             bindConversationMemoryTask(this._conversationId, begun.taskId);
           }
           // 续任务时刷新 WM goal 为当前请求摘要（不含整段 history）
@@ -5095,8 +4652,7 @@ export class AgentOrchestrator {
             currentUserRequest: cleanMemoryQuery || spec.goal,
             limit: 8,
           });
-          this._memoryContextSection =
-            section.promptSection?.slice(0, 6000) ?? "";
+          this._memoryContextSection = section.promptSection?.slice(0, 6000) ?? "";
           selectedForEvent = section.items.map((item) => ({
             id: item.id,
             title: item.title,
@@ -5141,8 +4697,7 @@ export class AgentOrchestrator {
         if (git.behind) parts.push(`behind ${git.behind}`);
         if (git.staged?.length) parts.push(`${git.staged.length} staged`);
         if (git.modified?.length) parts.push(`${git.modified.length} modified`);
-        if (git.untracked?.length)
-          parts.push(`${git.untracked.length} untracked`);
+        if (git.untracked?.length) parts.push(`${git.untracked.length} untracked`);
         if (parts.length > 1) gitStatusLine = parts.join(", ");
       }
     } catch {
@@ -5191,12 +4746,8 @@ export class AgentOrchestrator {
     );
     // 狸花身份 + Agent 花名册挂在 system 尾部（预算后追加，保持调度可见）
     const agentExtras = [
-      this.agentIdentityText
-        ? `\n\n# Agent identity\n${this.agentIdentityText.trim()}`
-        : "",
-      this.agentCatalogText
-        ? `\n\n# Agent roster\n${this.agentCatalogText.trim()}`
-        : "",
+      this.agentIdentityText ? `\n\n# Agent identity\n${this.agentIdentityText.trim()}` : "",
+      this.agentCatalogText ? `\n\n# Agent roster\n${this.agentCatalogText.trim()}` : "",
     ]
       .filter(Boolean)
       .join("");
@@ -5207,20 +4758,13 @@ export class AgentOrchestrator {
       emit({
         type: "context.budget.trimmed",
         sections: promptBuild.trimmed.map((t) => t.section),
-        freedTokens: promptBuild.trimmed.reduce(
-          (sum, t) => sum + t.freedTokens,
-          0,
-        ),
+        freedTokens: promptBuild.trimmed.reduce((sum, t) => sum + t.freedTokens, 0),
       });
     }
 
     // ── 断点恢复 or 全新启动 ──
     const mentionedPaths = extractAtMentions(spec.goal);
-    this._contextPackageCode = selectCodeContext(
-      workspaceRoot,
-      spec.goal,
-      mentionedPaths,
-    );
+    this._contextPackageCode = selectCodeContext(workspaceRoot, spec.goal, mentionedPaths);
     if (spec.resumeFromState) {
       // 断点恢复：重建 system prompt，恢复历史消息和计划
       const s = spec.resumeFromState;
@@ -5230,9 +4774,9 @@ export class AgentOrchestrator {
       const restoredMemoryHint = parseMemoryHintCheckpointV1(s.memoryHint);
       this._memoryLatestHint = restoredMemoryHint ?? legacyMemory.latestHint;
       this._coldResumeMemoryContext = legacyMemory.coldResume;
-      const history = stripLegacyContextProjectionsV1(
-        legacyMemory.messages,
-      ).filter((m) => m.role !== "system");
+      const history = stripLegacyContextProjectionsV1(legacyMemory.messages).filter(
+        (m) => m.role !== "system",
+      );
 
       if (history.length > 0) {
         // Step 1: 先不做硬截断——把完整历史放进去
@@ -5259,14 +4803,9 @@ export class AgentOrchestrator {
         const historyTokensAfterPrune = ctxMgr.historyEstimatedTokens;
         const resumeCompactThreshold = Math.max(
           0,
-          computeCompactThreshold(
-            allocateContextBudget(contextWindow).historyBudget,
-          ) - 10_000,
+          computeCompactThreshold(allocateContextBudget(contextWindow).historyBudget) - 10_000,
         );
-        if (
-          this.auxiliaryModel &&
-          historyTokensAfterPrune > resumeCompactThreshold
-        ) {
+        if (this.auxiliaryModel && historyTokensAfterPrune > resumeCompactThreshold) {
           await this.compactHistoryOnResume(
             ctxMgr,
             compactor,
@@ -5284,11 +4823,7 @@ export class AgentOrchestrator {
 
       if (s.plan) {
         try {
-          planner.restorePlan(
-            runId,
-            s.plan.items as readonly PlanItem[],
-            s.plan.revision,
-          );
+          planner.restorePlan(runId, s.plan.items as readonly PlanItem[], s.plan.revision);
           taskState.setPlan(s.plan.items);
         } catch {
           /* ignore plan restore errors */
@@ -5309,15 +4844,11 @@ export class AgentOrchestrator {
       // 全新启动
       ctxMgr.setSystem(systemContent);
       // 解析 @mention（文件引用、图片引用）
-      const goalMentions = AgentOrchestrator.resolveUserMentions(
-        workspaceRoot,
-        spec.goal,
-      );
+      const goalMentions = AgentOrchestrator.resolveUserMentions(workspaceRoot, spec.goal);
       // 自动上下文发现：根据 goal 中的关键词和文件路径搜索相关代码上下文
       const autoCtx = discoverContext(workspaceRoot, spec.goal, mentionedPaths);
       let userContent = goalMentions.content;
-      if (autoCtx.content)
-        userContent = `${autoCtx.content}\n\n${goalMentions.content}`;
+      if (autoCtx.content) userContent = `${autoCtx.content}\n\n${goalMentions.content}`;
       ctxMgr.addUser(userContent, goalMentions.imageAttachments);
     }
 
@@ -5325,16 +4856,10 @@ export class AgentOrchestrator {
     // 只有 init 之后追加的用户消息才触发 LLM 调和
     this._lastConstraintScanCount = ctxMgr
       .buildMessages()
-      .filter(
-        (m) => m.role === "user" && !isToolResultMessage(m.content),
-      ).length;
+      .filter((m) => m.role === "user" && !isToolResultMessage(m.content)).length;
 
     // 计算初始上下文预算
-    const initBudget = AgentOrchestrator.measureBudget(
-      ctxMgr,
-      toolDefs,
-      contextWindow,
-    );
+    const initBudget = AgentOrchestrator.measureBudget(ctxMgr, toolDefs, contextWindow);
     ctxMgr.setHistoryTokenBudget(initBudget.allocation.historyBudget);
     this.emitContextBudget(emit, contextWindow, initBudget);
 
@@ -5398,10 +4923,7 @@ export class AgentOrchestrator {
     const snapshot = measureContextBudget({
       contextWindow,
       systemTokens: ctxMgr.systemEstimatedTokens,
-      toolsTokens: AgentOrchestrator.estimateToolTokens(
-        toolDefs,
-        ctxMgr.estimator,
-      ),
+      toolsTokens: AgentOrchestrator.estimateToolTokens(toolDefs, ctxMgr.estimator),
       historyTokens: ctxMgr.historyEstimatedTokens,
     });
     // P5.2 成本记账软指导：缓存命中率高 → 前缀宝贵 → 放宽压缩阈值
@@ -5409,10 +4931,7 @@ export class AgentOrchestrator {
     if (cacheHitRate > 0) {
       return {
         ...snapshot,
-        compactThreshold: costAdjustedCompactThreshold(
-          snapshot.compactThreshold,
-          cacheHitRate,
-        ),
+        compactThreshold: costAdjustedCompactThreshold(snapshot.compactThreshold, cacheHitRate),
       };
     }
     return snapshot;
@@ -5425,24 +4944,16 @@ export class AgentOrchestrator {
   ): ContextBudgetSnapshot {
     const reserved = Math.max(0, Math.ceil(projectionTokens));
     if (reserved === 0) return snapshot;
-    const historyBudget = Math.max(
-      0,
-      snapshot.allocation.historyBudget - reserved,
-    );
+    const historyBudget = Math.max(0, snapshot.allocation.historyBudget - reserved);
     const originalBaseThreshold = Math.max(
       0,
       computeCompactThreshold(snapshot.allocation.historyBudget) - 10_000,
     );
     const adjustedFactor =
-      originalBaseThreshold > 0
-        ? snapshot.compactThreshold / originalBaseThreshold
-        : 1;
+      originalBaseThreshold > 0 ? snapshot.compactThreshold / originalBaseThreshold : 1;
     const compactThreshold = Math.max(
       0,
-      Math.floor(
-        Math.max(0, computeCompactThreshold(historyBudget) - 10_000) *
-          adjustedFactor,
-      ),
+      Math.floor(Math.max(0, computeCompactThreshold(historyBudget) - 10_000) * adjustedFactor),
     );
     return {
       ...snapshot,
@@ -5457,20 +4968,11 @@ export class AgentOrchestrator {
    * 块 = system / 摘要 / pinned / 工具结果 / 对话回合，附 token、轮龄、状态。
    * 与 context.budget 同源（同一 ctxMgr），保证 dashboard 数字 = 记账数字。
    */
-  private emitContextBlocks(
-    ctx: PhaseContext,
-    _snapshot: ContextBudgetSnapshot,
-  ): void {
+  private emitContextBlocks(ctx: PhaseContext, _snapshot: ContextBudgetSnapshot): void {
     const messages = ctx.ctxMgr.buildMessages();
     const blocks: {
       readonly id: string;
-      readonly type:
-        | "system"
-        | "summary"
-        | "pinned"
-        | "tool"
-        | "conversation"
-        | "recall";
+      readonly type: "system" | "summary" | "pinned" | "tool" | "conversation" | "recall";
       readonly tokens: number;
       readonly ageTurns: number;
       readonly status: "pinned" | "visible" | "archived";
@@ -5499,10 +5001,7 @@ export class AgentOrchestrator {
         type = "tool";
         status = "archived";
         id = `T${++counter.tool}`;
-      } else if (
-        isProtectedUserConstraint(msg) ||
-        msg.content.startsWith(CONTEXT_PACKAGE_PREFIX)
-      ) {
+      } else if (isProtectedUserConstraint(msg) || msg.content.startsWith(CONTEXT_PACKAGE_PREFIX)) {
         type = "pinned";
         status = "pinned";
         id = `P${++counter.pinned}`;
@@ -5652,10 +5151,7 @@ function isRetryable(classification: ErrorClassification): boolean {
  * 多个并发请求同时失败后，如果都在同一个时间点重试，
  * 可能导致服务端再次过载。随机抖动让重试分散在不同的时间点。
  */
-function computeRetryDelay(
-  attempt: number,
-  classification: ErrorClassification,
-): number {
+function computeRetryDelay(attempt: number, classification: ErrorClassification): number {
   const jitter = 0.5 + Math.random() * 0.5; // 0.5x – 1.0x 随机因子
 
   if (classification.type === "rate_limit") {
@@ -5708,8 +5204,5 @@ function buildMemoryLlmOptions(
  * 背景蒸馏/改写会吞掉测试模型的预设响应序列，且跨进程残留事件会污染后续测试。
  */
 function isRealAdapterModel(model: LanguageModel): boolean {
-  return (
-    model instanceof OpenAICompatibleModel ||
-    model instanceof AnthropicCompatibleModel
-  );
+  return model instanceof OpenAICompatibleModel || model instanceof AnthropicCompatibleModel;
 }

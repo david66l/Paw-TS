@@ -63,9 +63,7 @@ export function lockFile(filePath: string): () => void {
         if (isPidAlive(Number(holder))) {
           // 锁被活进程持有 → 自旋等待（最多 5s）
           if (Date.now() - started > 5_000) {
-            throw new Error(
-              `File lock timeout: ${filePath} held by PID ${holder}`,
-            );
+            throw new Error(`File lock timeout: ${filePath} held by PID ${holder}`);
           }
           // 自旋 10ms
           const start = Date.now();
@@ -80,12 +78,9 @@ export function lockFile(filePath: string): () => void {
         } catch {
           // 另一个进程抢先清理了
         }
-        continue;
       } catch (e) {
-        if (e instanceof Error && e.message.startsWith("File lock timeout"))
-          throw e;
-        // 读取锁文件失败 → 重试
-        continue;
+        if (e instanceof Error && e.message.startsWith("File lock timeout")) throw e;
+        // 读取锁文件失败 → 重试（本轮循环到此结束）
       }
     }
   }
@@ -210,10 +205,7 @@ export function readWithHash(filePath: string): {
  *
  * @returns true = 未漂移，安全写入；false = 已漂移，已创建 .bak 备份
  */
-export function checkDrift(
-  filePath: string,
-  expectedHash: string,
-): DriftCheckResult {
+export function checkDrift(filePath: string, expectedHash: string): DriftCheckResult {
   const current = readWithHash(filePath);
   if (!current) {
     // 文件不存在 → 首次写入，无漂移
@@ -238,11 +230,7 @@ export function checkDrift(
  * 一站式写入，对标 hermes 的完整写入安全链。
  * 如果漂移，返回 false（调用方应重新加载内容后重试）。
  */
-export function safeWrite(
-  filePath: string,
-  content: string,
-  expectedHash?: string,
-): boolean {
+export function safeWrite(filePath: string, content: string, expectedHash?: string): boolean {
   const unlock = lockFile(filePath);
   try {
     if (expectedHash !== undefined) {

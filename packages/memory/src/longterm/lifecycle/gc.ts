@@ -106,8 +106,7 @@ export async function collectGarbage(opts: GcOptions = {}): Promise<GcReport> {
     for (const d of dead) {
       await appendFile(
         path,
-        JSON.stringify({ archivedAt: new Date().toISOString(), ...d.entry }) +
-          "\n",
+        JSON.stringify({ archivedAt: new Date().toISOString(), ...d.entry }) + "\n",
         "utf-8",
       );
     }
@@ -161,8 +160,5 @@ export async function queryArchive(
   `;
   if (rows.length === 0) return null;
   const raw = (rows[0] as { entry: unknown }).entry;
-  return (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<
-    string,
-    unknown
-  >;
+  return (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<string, unknown>;
 }

@@ -31,10 +31,7 @@ describe("anchor-aware aspect state lineage", () => {
       asOf: mar,
     });
 
-    expect(projection.lineageClaimIds).toEqual([
-      "detail-current",
-      "detail-old",
-    ]);
+    expect(projection.lineageClaimIds).toEqual(["detail-current", "detail-old"]);
     expect(projection.currentClaimIds).toEqual(["detail-current"]);
     expect(projection.historicalClaimIds).toEqual(["detail-old"]);
     expect(projection.currentClaimIds).not.toContain("tone-current");
@@ -77,11 +74,7 @@ describe("anchor-aware aspect state lineage", () => {
       anchorClaimIds: ["detail-alias"],
       asOf: mar,
     });
-    expect(projection.currentClaimIds).toEqual([
-      "detail-current",
-      "detail-alias",
-      "detail-travel",
-    ]);
+    expect(projection.currentClaimIds).toEqual(["detail-current", "detail-alias", "detail-travel"]);
   });
 
   test("uses an explicitly supporting event to locate one lineage without merging another", () => {
@@ -176,11 +169,7 @@ function claim(id: string, validFrom: string) {
   });
 }
 
-function membership(
-  claimId: string,
-  aspectId: string,
-  role: "state" | "event",
-) {
+function membership(claimId: string, aspectId: string, role: "state" | "event") {
   return createMemoryClaimAspectMembershipV1({
     scope,
     claimId,

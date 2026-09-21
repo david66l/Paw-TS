@@ -14,12 +14,7 @@ import { getSql } from "../../connection.js";
 import { governanceDecisionDao } from "../../dao/governanceDecision.js";
 import { memoryCandidateDao } from "../../dao/memoryCandidate.js";
 import { memoryItemDao } from "../../dao/memoryItem.js";
-import type {
-  GovernanceDecision,
-  MemoryItem,
-  MemoryStatus,
-  ScopeDescriptor,
-} from "../../types.js";
+import type { GovernanceDecision, MemoryItem, MemoryStatus, ScopeDescriptor } from "../../types.js";
 import {
   MEMORY_EMBEDDING_DIMENSIONS,
   NGramEmbeddingService,
@@ -80,9 +75,7 @@ export class MemoryStore {
   /**
    * 创建新 memory_item。
    */
-  private async handleCreate(
-    decision: GovernanceDecision,
-  ): Promise<ExecuteResult> {
+  private async handleCreate(decision: GovernanceDecision): Promise<ExecuteResult> {
     const candidate = await memoryCandidateDao.findById(decision.candidateId);
     if (!candidate) return { success: false, reason: "Candidate not found" };
 
@@ -93,20 +86,16 @@ export class MemoryStore {
       id: memoryId,
       schemaVersion: 1,
       type: decision.adjustedType ?? candidate.proposedType,
-      subjectKey:
-        candidate.proposedSubjectKey ?? `${candidate.proposedType}:${memoryId}`,
+      subjectKey: candidate.proposedSubjectKey ?? `${candidate.proposedType}:${memoryId}`,
       subjectKeyVersion: candidate.subjectKeyVersion,
       title: candidate.proposedTitle,
       summary: candidate.proposedSummary,
       status: (decision.resultingStatus as MemoryStatus) ?? "active",
       scope:
-        (decision.adjustedScope as ScopeDescriptor) ??
-        (candidate.proposedScope as ScopeDescriptor),
+        (decision.adjustedScope as ScopeDescriptor) ?? (candidate.proposedScope as ScopeDescriptor),
       confidence: decision.adjustedConfidence ?? candidate.proposedConfidence,
       verificationStatus: "unverified",
-      payload:
-        (decision.adjustedPayload as Record<string, unknown>) ??
-        candidate.proposedPayload,
+      payload: (decision.adjustedPayload as Record<string, unknown>) ?? candidate.proposedPayload,
       tags: [],
       relatedFiles: [],
       relatedSymbols: [],
@@ -154,21 +143,14 @@ export class MemoryStore {
   /**
    * 更新已有 memory_item。
    */
-  private async handleUpdate(
-    decision: GovernanceDecision,
-  ): Promise<ExecuteResult> {
+  private async handleUpdate(decision: GovernanceDecision): Promise<ExecuteResult> {
     const targetId = decision.targetMemoryId;
-    if (!targetId)
-      return { success: false, reason: "Missing targetMemoryId for update" };
+    if (!targetId) return { success: false, reason: "Missing targetMemoryId for update" };
 
     const existing = await memoryItemDao.findById(targetId);
-    if (!existing)
-      return { success: false, reason: `Memory ${targetId} not found` };
+    if (!existing) return { success: false, reason: `Memory ${targetId} not found` };
 
-    if (
-      decision.expectedVersion !== undefined &&
-      existing.version !== decision.expectedVersion
-    ) {
+    if (decision.expectedVersion !== undefined && existing.version !== decision.expectedVersion) {
       return {
         success: false,
         reason: `Version conflict: expected ${decision.expectedVersion}, actual ${existing.version}`,
@@ -178,20 +160,12 @@ export class MemoryStore {
     const patch: Parameters<typeof memoryItemDao.update>[2] = {};
     if (decision.adjustedPayload)
       patch.payload = decision.adjustedPayload as Record<string, unknown>;
-    if (decision.adjustedConfidence !== undefined)
-      patch.confidence = decision.adjustedConfidence;
-    if (decision.resultingStatus)
-      patch.status = decision.resultingStatus as MemoryStatus;
-    if (decision.adjustedScope)
-      patch.scope = decision.adjustedScope as ScopeDescriptor;
+    if (decision.adjustedConfidence !== undefined) patch.confidence = decision.adjustedConfidence;
+    if (decision.resultingStatus) patch.status = decision.resultingStatus as MemoryStatus;
+    if (decision.adjustedScope) patch.scope = decision.adjustedScope as ScopeDescriptor;
 
-    const updated = await memoryItemDao.update(
-      targetId,
-      existing.version,
-      patch,
-    );
-    if (!updated)
-      return { success: false, reason: "Update failed (version conflict)" };
+    const updated = await memoryItemDao.update(targetId, existing.version, patch);
+    if (!updated) return { success: false, reason: "Update failed (version conflict)" };
 
     await governanceDecisionDao.execute(decision.id, targetId, {
       resultingStatus: updated.status,
@@ -205,31 +179,23 @@ export class MemoryStore {
    * 合并候选到已有 memory_item。
    * MVP: 简单追加 evidence + 更新 confidence。
    */
-  private async handleMerge(
-    decision: GovernanceDecision,
-  ): Promise<ExecuteResult> {
+  private async handleMerge(decision: GovernanceDecision): Promise<ExecuteResult> {
     const targetId = decision.targetMemoryId;
-    if (!targetId)
-      return { success: false, reason: "Missing targetMemoryId for merge" };
+    if (!targetId) return { success: false, reason: "Missing targetMemoryId for merge" };
 
     const existing = await memoryItemDao.findById(targetId);
-    if (!existing)
-      return { success: false, reason: `Memory ${targetId} not found` };
+    if (!existing) return { success: false, reason: `Memory ${targetId} not found` };
 
     // 简单合并策略：平均置信度
-    const newConfidence =
-      (existing.confidence + (decision.adjustedConfidence ?? 0.5)) / 2;
+    const newConfidence = (existing.confidence + (decision.adjustedConfidence ?? 0.5)) / 2;
 
     const updated = await memoryItemDao.update(targetId, existing.version, {
       confidence: newConfidence,
       verificationStatus:
-        existing.verificationStatus === "verified"
-          ? "verified"
-          : "partially_verified",
+        existing.verificationStatus === "verified" ? "verified" : "partially_verified",
     });
 
-    if (!updated)
-      return { success: false, reason: "Merge failed (version conflict)" };
+    if (!updated) return { success: false, reason: "Merge failed (version conflict)" };
 
     await governanceDecisionDao.execute(decision.id, targetId, {
       resultingStatus: updated.status,

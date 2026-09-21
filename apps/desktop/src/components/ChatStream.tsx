@@ -12,15 +12,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import {
-  type KeyboardEvent,
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatModelTextForUi } from "../agent/formatModelText";
 import type {
   FileChangeItem,
@@ -51,11 +43,7 @@ function displayAssistantText(raw: string): string {
   return cleaned ?? "";
 }
 
-import {
-  type DesktopAttachment,
-  MAX_ATTACHMENTS,
-  readDesktopFile,
-} from "../agent/attachments";
+import { type DesktopAttachment, MAX_ATTACHMENTS, readDesktopFile } from "../agent/attachments";
 
 export type ChatStreamProps = {
   readonly context: ContextSnapshot | null;
@@ -89,11 +77,7 @@ export type ChatStreamProps = {
   readonly onAbort: () => void;
   readonly onClear: () => void;
   readonly pendingApprovals: readonly PendingApprovalItem[];
-  readonly onResolveApproval: (
-    approvalId: string,
-    approved: boolean,
-    always: boolean,
-  ) => void;
+  readonly onResolveApproval: (approvalId: string, approved: boolean, always: boolean) => void;
   readonly pendingAsk: PendingAskItem | null;
   readonly onAnswerAsk: (answer: string) => void;
   /** 最近一次失败的任务目标（errorBar 重试）；null = 无可重试 */
@@ -237,10 +221,7 @@ const MessageRow = memo(function MessageRow({
   if (m.role === "system") {
     return (
       <div className={styles.rowSystem}>
-        <div
-          className={styles.systemChip}
-          data-multiline={m.content.includes("\n") || undefined}
-        >
+        <div className={styles.systemChip} data-multiline={m.content.includes("\n") || undefined}>
           {m.content}
         </div>
       </div>
@@ -251,11 +232,7 @@ const MessageRow = memo(function MessageRow({
       <div className={styles.rowUser}>
         <div className={styles.msgRow}>
           <Avatar kind="user" />
-          <GlassPanel
-            variant="strong"
-            padding="md"
-            className={styles.bubbleUser}
-          >
+          <GlassPanel variant="strong" padding="md" className={styles.bubbleUser}>
             <div className={styles.roleRow}>
               <span className={styles.role}>You</span>
               {m.inputState ? (
@@ -294,17 +271,12 @@ const MessageRow = memo(function MessageRow({
             ) : null}
           </div>
           {m.thinking ? (
-            <ThinkingBlock
-              text={m.thinking}
-              streaming={m.streaming && !m.content}
-            />
+            <ThinkingBlock text={m.thinking} streaming={m.streaming && !m.content} />
           ) : null}
           {body ? (
             <Markdown text={body} className={styles.body} />
           ) : m.streaming ? (
-            <div className={styles.bodyPlaceholder}>
-              {m.thinking ? "等待回答…" : "…"}
-            </div>
+            <div className={styles.bodyPlaceholder}>{m.thinking ? "等待回答…" : "…"}</div>
           ) : null}
         </div>
         {body && !m.streaming ? <RowActions text={body} /> : null}
@@ -359,16 +331,9 @@ const ExecutionCard = memo(function ExecutionCard({
           className={`${styles.execDot} ${running ? styles.execDotRun : activity.status === "failed" ? styles.execDotFail : styles.execDotDone}`}
         />
         <span className={styles.execTitle}>
-          子任务 ·{" "}
-          {running
-            ? "运行中"
-            : activity.status === "failed"
-              ? "部分未完成"
-              : "已完成"}
+          子任务 · {running ? "运行中" : activity.status === "failed" ? "部分未完成" : "已完成"}
         </span>
-        <span className={styles.execMeta}>
-          {activity.agents.length} 个 Agent
-        </span>
+        <span className={styles.execMeta}>{activity.agents.length} 个 Agent</span>
         <button
           type="button"
           className={styles.execViewBtn}
@@ -491,9 +456,7 @@ export function ChatStream({
         throw new Error("本条消息附件总大小超过 6 MB。");
       setAttachments((current) => [...current, ...added]);
     } catch (error) {
-      setAttachmentError(
-        String(error instanceof Error ? error.message : error),
-      );
+      setAttachmentError(String(error instanceof Error ? error.message : error));
     } finally {
       setReadingFiles(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -510,10 +473,7 @@ export function ChatStream({
     setDraft(text);
     inputRef.current?.focus();
   }, []);
-  const byId = useMemo(
-    () => Object.fromEntries(activities.map((a) => [a.id, a])),
-    [activities],
-  );
+  const byId = useMemo(() => Object.fromEntries(activities.map((a) => [a.id, a])), [activities]);
   const batchById = useMemo(
     () => Object.fromEntries(toolBatches.map((b) => [b.id, b])),
     [toolBatches],
@@ -534,20 +494,13 @@ export function ChatStream({
 
   const submit = async () => {
     const t = draft.trim();
-    if (
-      (!t && !attachments.length) ||
-      readingFiles ||
-      !hostReady ||
-      submittingRef.current
-    )
-      return;
+    if ((!t && !attachments.length) || readingFiles || !hostReady || submittingRef.current) return;
     submittingRef.current = true;
     setSubmitting(true);
     try {
       const accepted = await onSend(t, attachments);
       if (accepted !== false) setAttachments([]);
-      if (accepted !== false)
-        setDraft((current) => (current.trim() === t ? "" : current));
+      if (accepted !== false) setDraft((current) => (current.trim() === t ? "" : current));
       stickBottomRef.current = true;
     } finally {
       submittingRef.current = false;
@@ -592,18 +545,12 @@ export function ChatStream({
         </div>
       </header>
 
-      <div
-        ref={streamRef}
-        className={`${styles.stream} selectable`}
-        onScroll={onStreamScroll}
-      >
+      <div ref={streamRef} className={`${styles.stream} selectable`} onScroll={onStreamScroll}>
         {messages.length === 0 ? (
           <div className={styles.empty}>
             <PawMark size={90} className={styles.heroMark} />
             <h1 className={styles.emptyTitle}>让想法往前一步。</h1>
-            <p className={styles.emptyBody}>
-              从一个问题、一个想法，或一项具体的修改开始。
-            </p>
+            <p className={styles.emptyBody}>从一个问题、一个想法，或一项具体的修改开始。</p>
             <div className={styles.suggestions}>
               {[
                 {
@@ -655,11 +602,7 @@ export function ChatStream({
                   onCancelChild={onCancelChild}
                   onRetryChild={onRetryChild}
                   hostReady={hostReady}
-                  canRetryChild={[
-                    "running",
-                    "completed",
-                    "await_user",
-                  ].includes(status)}
+                  canRetryChild={["running", "completed", "await_user"].includes(status)}
                 />
               );
             }
@@ -673,20 +616,10 @@ export function ChatStream({
               );
             }
             if (m.role === "changes") {
-              return (
-                <ChangedFilesCard
-                  key={m.id}
-                  changes={fileChanges}
-                  fallback={m.content}
-                />
-              );
+              return <ChangedFilesCard key={m.id} changes={fileChanges} fallback={m.content} />;
             }
             return (
-              <MessageRow
-                key={m.id}
-                m={m}
-                onEdit={isRunning ? undefined : handleEditMessage}
-              />
+              <MessageRow key={m.id} m={m} onEdit={isRunning ? undefined : handleEditMessage} />
             );
           })
         )}
@@ -742,20 +675,14 @@ export function ChatStream({
           <div className={styles.attachmentTray}>
             {attachments.map((a) => (
               <span key={a.id} className={styles.attachmentChip}>
-                {a.type === "image" ? (
-                  <img src={a.content} alt={a.name} />
-                ) : (
-                  <FileText size={16} />
-                )}{" "}
+                {a.type === "image" ? <img src={a.content} alt={a.name} /> : <FileText size={16} />}{" "}
                 {a.name}
                 <button
                   type="button"
                   disabled={submitting}
                   aria-label={`移除附件 ${a.name}`}
                   onClick={() =>
-                    setAttachments((items) =>
-                      items.filter((item) => item.id !== a.id),
-                    )
+                    setAttachments((items) => items.filter((item) => item.id !== a.id))
                   }
                 >
                   <X size={14} />
@@ -802,11 +729,7 @@ export function ChatStream({
               <Paperclip size={18} />
             </button>
             <div className={styles.actions}>
-              <ContextMeter
-                context={context}
-                busy={isRunning}
-                onCompress={onCompressContext}
-              />
+              <ContextMeter context={context} busy={isRunning} onCompress={onCompressContext} />
               <select
                 className={styles.modelSelect}
                 aria-label="模型"
@@ -815,9 +738,7 @@ export function ChatStream({
                 onChange={(event) => onProviderChange(event.target.value)}
               >
                 {!modelPresets.some((p) => p.id === provider) && (
-                  <option value={provider ?? ""}>
-                    {modelLabel || "选择模型"}
-                  </option>
+                  <option value={provider ?? ""}>{modelLabel || "选择模型"}</option>
                 )}
                 {modelPresets.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -828,11 +749,7 @@ export function ChatStream({
               <button
                 type="button"
                 className={styles.sendBtn}
-                onClick={
-                  isRunning && !draft.trim() && !attachments.length
-                    ? onAbort
-                    : submit
-                }
+                onClick={isRunning && !draft.trim() && !attachments.length ? onAbort : submit}
                 disabled={
                   !hostReady ||
                   submitting ||

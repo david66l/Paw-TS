@@ -15,12 +15,7 @@ import {
 export const PAW_NEXT_MEMORY_RETRIEVAL_CACHE_POLICY_VERSION_V1 =
   "paw.memory-retrieval-cache.v2:storage-namespace" as const;
 
-export type MemoryRetrievalCacheEventTypeV1 =
-  | "hit"
-  | "miss"
-  | "store"
-  | "expired"
-  | "bypass";
+export type MemoryRetrievalCacheEventTypeV1 = "hit" | "miss" | "store" | "expired" | "bypass";
 
 export interface MemoryRetrievalCacheEventV1 {
   readonly schemaVersion: "paw.memory-retrieval-cache-event.v1";
@@ -270,10 +265,7 @@ function buildCacheKey(
     queryTextHash: hashCanonicalJsonV1(query.text as unknown as JsonValue),
     searchPlanHash: hashCanonicalJsonV1(
       (query.searchTexts ??
-        createMemorySearchTextsV1(
-          undefined,
-          query.text,
-        )) as unknown as JsonValue,
+        createMemorySearchTextsV1(undefined, query.text)) as unknown as JsonValue,
     ),
     searchPlanVersion: PAW_MEMORY_SEARCH_PLAN_VERSION_V2,
     inputContentHash: query.inputContentHash,
@@ -318,9 +310,7 @@ function emit(
         scopeFingerprint: input.scopeFingerprint,
         durationMs: input.durationMs,
         ...(input.cacheKey ? { cacheKey: input.cacheKey } : {}),
-        ...(input.cardCount === undefined
-          ? {}
-          : { cardCount: input.cardCount }),
+        ...(input.cardCount === undefined ? {} : { cardCount: input.cardCount }),
         ...(input.ageMs === undefined ? {} : { ageMs: input.ageMs }),
         ...(input.reasonCode ? { reasonCode: input.reasonCode } : {}),
       }),

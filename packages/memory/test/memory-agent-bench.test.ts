@@ -28,17 +28,11 @@ describe("normalizeAnswer / scorePrediction", () => {
   test("去冠词标点后 substring / exact", () => {
     expect(normalizeAnswer("The Bun Run Build!")).toBe("bun run build");
     expect(
-      scorePrediction(
-        "用 bun run build 即可",
-        ["bun run build"],
-        "substring_exact_match",
-      ),
+      scorePrediction("用 bun run build 即可", ["bun run build"], "substring_exact_match"),
     ).toBe(true);
     expect(scorePrediction("label: 43", ["43"], "exact_match")).toBe(false);
     expect(scorePrediction("43", ["43"], "exact_match")).toBe(true);
-    expect(
-      scorePrediction("不知道", ["bun test"], "substring_exact_match"),
-    ).toBe(false);
+    expect(scorePrediction("不知道", ["bun test"], "substring_exact_match")).toBe(false);
   });
 });
 
@@ -71,9 +65,7 @@ describe("BUILTIN_CODING_FIXTURES", () => {
       expect(s.qa.length).toBeGreaterThan(0);
     }
     const sf = BUILTIN_CODING_FIXTURES.find((s) => s.dimension === "SF")!;
-    expect(sf.qa.some((q) => q.sfMode === "current" && q.oldFactNeedle)).toBe(
-      true,
-    );
+    expect(sf.qa.some((q) => q.sfMode === "current" && q.oldFactNeedle)).toBe(true);
     expect(sf.qa.some((q) => q.sfMode === "historical")).toBe(true);
   });
 });
@@ -130,9 +122,7 @@ describe("normalizeMabRecord / loadMabSamplesFromFile", () => {
         ]),
       );
       expect(loadMabSamplesFromFile(arr)).toHaveLength(2);
-      expect(
-        filterMabSamples(loadMabSamplesFromFile(arr), { dimensions: ["AR"] }),
-      ).toHaveLength(1);
+      expect(filterMabSamples(loadMabSamplesFromFile(arr), { dimensions: ["AR"] })).toHaveLength(1);
 
       const wrapped = join(dir, "w.json");
       writeFileSync(
@@ -345,12 +335,8 @@ describe("summarizeMab / sfSuppressionRate / render", () => {
 
 describe("computePairedStats / binomialSignTestP / HF cache", () => {
   test("配对与符号检验", async () => {
-    const {
-      computePairedStats,
-      binomialSignTestP,
-      loadOrFetchMabHf,
-      loadMabSamplesFromHfCache,
-    } = await import("../src/longterm/eval/memory-agent-bench.js");
+    const { computePairedStats, binomialSignTestP, loadOrFetchMabHf, loadMabSamplesFromHfCache } =
+      await import("../src/longterm/eval/memory-agent-bench.js");
     expect(binomialSignTestP(3, 0)).toBeCloseTo(0.125, 5);
     expect(binomialSignTestP(0, 0)).toBeNull();
 
@@ -399,16 +385,10 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
     expect(paired).toMatchObject({ wins: 1, losses: 1, ties: 0, nPairs: 2 });
     expect(paired.winRateAmongDecisive).toBe(0.5);
 
-    const {
-      loadMabSamplesFromParquetDir,
-      subsampleChunks,
-      subsampleChunksForQuery,
-    } = await import("../src/longterm/eval/memory-agent-bench.js");
-    expect(subsampleChunks(["a", "b", "c", "d", "e"], 3)).toEqual([
-      "a",
-      "c",
-      "e",
-    ]);
+    const { loadMabSamplesFromParquetDir, subsampleChunks, subsampleChunksForQuery } = await import(
+      "../src/longterm/eval/memory-agent-bench.js"
+    );
+    expect(subsampleChunks(["a", "b", "c", "d", "e"], 3)).toEqual(["a", "c", "e"]);
 
     const corpus = [
       "noise about weather and traffic reports forever",
@@ -417,9 +397,7 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
       "orchid-42 appears again near the vault door latch",
       "random filler about sports scores and movies",
     ];
-    const picked = subsampleChunksForQuery(corpus, 3, [
-      "What is the vault password orchid?",
-    ]);
+    const picked = subsampleChunksForQuery(corpus, 3, ["What is the vault password orchid?"]);
     expect(picked.some((c) => c.includes("orchid-42"))).toBe(true);
     expect(picked.length).toBeLessThanOrEqual(3);
 
@@ -464,9 +442,7 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
       });
       expect(loaded.samples.length).toBeGreaterThanOrEqual(1);
       expect(loaded.bySplit.Accurate_Retrieval).toBe(1);
-      expect(
-        loaded.warnings.some((w) => w.includes("Conflict_Resolution")),
-      ).toBe(true);
+      expect(loaded.warnings.some((w) => w.includes("Conflict_Resolution"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -475,13 +451,11 @@ describe("computePairedStats / binomialSignTestP / HF cache", () => {
 
 describe("shouldInvalidateForSf / injectionForSfMode", () => {
   test("纯旧失效；含新答案保留；current 只用活跃文本", async () => {
-    const { shouldInvalidateForSf, injectionForSfMode } = await import("../src/longterm/eval/memory-agent-bench.js");
-    expect(shouldInvalidateForSf("2023 用 jest", "jest", ["vitest"])).toBe(
-      true,
+    const { shouldInvalidateForSf, injectionForSfMode } = await import(
+      "../src/longterm/eval/memory-agent-bench.js"
     );
-    expect(
-      shouldInvalidateForSf("迁移到 vitest，jest 已移除", "jest", ["vitest"]),
-    ).toBe(false);
+    expect(shouldInvalidateForSf("2023 用 jest", "jest", ["vitest"])).toBe(true);
+    expect(shouldInvalidateForSf("迁移到 vitest，jest 已移除", "jest", ["vitest"])).toBe(false);
     expect(shouldInvalidateForSf("只用 bun", "jest", ["vitest"])).toBe(false);
 
     const shaped = injectionForSfMode(

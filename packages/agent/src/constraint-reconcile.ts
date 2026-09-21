@@ -55,8 +55,7 @@ export function buildConstraintReconcilePrompt(opts: {
   const newLines =
     opts.newUserMessages.length > 0
       ? opts.newUserMessages.map(
-          (m, i) =>
-            `${opts.currentTurn - opts.newUserMessages.length + 1 + i}: ${m}`,
+          (m, i) => `${opts.currentTurn - opts.newUserMessages.length + 1 + i}: ${m}`,
         )
       : [
           "(no new user messages — this is a periodic check: drop constraints that have become stale)",
@@ -99,10 +98,7 @@ function toIndexArray(v: unknown): number[] {
 function toAddArray(v: unknown): { text: string }[] {
   if (!Array.isArray(v)) return [];
   return v
-    .filter(
-      (x): x is Record<string, unknown> =>
-        !!x && typeof x === "object" && !Array.isArray(x),
-    )
+    .filter((x): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x))
     .map((x) => ({ text: typeof x.text === "string" ? x.text.trim() : "" }))
     .filter((a) => a.text.length > 0);
 }
@@ -175,9 +171,7 @@ export async function runConstraintReconcile(opts: {
   const drop = toIndexArray(parsed.drop);
   const add = toAddArray(parsed.add);
   // 防御：keep/drop 下标越界过滤；同一下标不能既 keep 又 drop（drop 优先）
-  const validKeep = keep.filter(
-    (i) => i < opts.existing.length && !drop.includes(i),
-  );
+  const validKeep = keep.filter((i) => i < opts.existing.length && !drop.includes(i));
   return {
     keep: validKeep,
     drop: drop.filter((i) => i < opts.existing.length),

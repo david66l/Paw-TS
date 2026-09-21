@@ -14,20 +14,15 @@ import {
 import { deriveMemoryAspectLinkStatementHashV1 } from "./aspect-linker.js";
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
-import {
-  type PawNextMemoryScopeV1,
-  memoryScopeFingerprintV1,
-} from "./profile.js";
+import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
 export const PAW_MEMORY_ASPECT_EDGE_LINKER_VERSION_V1 =
   "paw.memory-aspect-edge-linker.json.v1:edge-only" as const;
 export const PAW_MEMORY_ASPECT_EDGE_CANDIDATE_BUILDER_VERSION_V1 =
   "paw.memory-aspect-edge-candidates.v1:exact-state-scope" as const;
 export const PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_TARGETS_V1 = 12 as const;
-export const PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_STATEMENT_CHARS_V1 =
-  1_024 as const;
-export const PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_PROMPT_CHARS_V1 =
-  24_000 as const;
+export const PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_STATEMENT_CHARS_V1 = 1_024 as const;
+export const PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_PROMPT_CHARS_V1 = 24_000 as const;
 export const PAW_MEMORY_ASPECT_EDGE_LINKER_MIN_CONFIDENCE_V1 = 0.85 as const;
 
 const EDGE_TYPES = [
@@ -97,10 +92,7 @@ export type MemoryAspectEdgeLinkerSettlementV1 =
   | "deferred_invalid_proposal"
   | "deferred_model_failure";
 
-export type MemoryAspectEdgeDecisionDispositionV1 =
-  | "edge"
-  | "no_edge"
-  | "defer";
+export type MemoryAspectEdgeDecisionDispositionV1 = "edge" | "no_edge" | "defer";
 
 export interface MemoryAspectEdgeDecisionReceiptV1 {
   readonly targetClaimId: string;
@@ -162,24 +154,15 @@ export function buildMemoryAspectEdgeCandidatesV1(
   const maxTargetsPerPacket =
     input.maxTargetsPerPacket ?? PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_TARGETS_V1;
   const catalog = new Map(input.catalog.map((item) => [item.claimId, item]));
-  const claims = new Map(
-    input.snapshot.claims.map((claim) => [claim.id, claim]),
-  );
-  const termWeights = inverseDocumentWeights(
-    input.catalog.map((item) => terms(item.statement)),
-  );
+  const claims = new Map(input.snapshot.claims.map((claim) => [claim.id, claim]));
+  const termWeights = inverseDocumentWeights(input.catalog.map((item) => terms(item.statement)));
   const activeAspectIds = new Set(
     input.snapshot.aspects
       .filter((aspect) => aspect.status === "active")
       .map((aspect) => aspect.id),
   );
-  const memberships = activeMemberships(
-    input.snapshot,
-    input.observedAt,
-  ).filter(
-    (membership) =>
-      activeAspectIds.has(membership.aspectId) &&
-      catalog.has(membership.claimId),
+  const memberships = activeMemberships(input.snapshot, input.observedAt).filter(
+    (membership) => activeAspectIds.has(membership.aspectId) && catalog.has(membership.claimId),
   );
   const roles = new Map<string, Set<MemoryAspectClaimRoleV1>>();
   const groups = new Map<string, MemoryClaimAspectMembershipV1[]>();
@@ -214,9 +197,7 @@ export function buildMemoryAspectEdgeCandidatesV1(
     const first = group[0];
     if (first === undefined) continue;
     const uniqueClaimIds = [...new Set(group.map((item) => item.claimId))];
-    const ordered = uniqueClaimIds
-      .map((claimId) => required(claims, claimId))
-      .sort(compareClaims);
+    const ordered = uniqueClaimIds.map((claimId) => required(claims, claimId)).sort(compareClaims);
     for (let sourceIndex = 1; sourceIndex < ordered.length; sourceIndex += 1) {
       const sourceClaim = ordered[sourceIndex];
       if (sourceClaim === undefined) continue;
@@ -242,12 +223,7 @@ export function buildMemoryAspectEdgeCandidatesV1(
           return {
             claim: target,
             evidence: required(catalog, target.id),
-            allowedProposals: allowedProposals(
-              sourceClaim.id,
-              target.id,
-              sourceRoles,
-              targetRoles,
-            ),
+            allowedProposals: allowedProposals(sourceClaim.id, target.id, sourceRoles, targetRoles),
             lexicalScore: lexicalOverlap(
               sourceEvidence.statement,
               required(catalog, target.id).statement,
@@ -260,18 +236,11 @@ export function buildMemoryAspectEdgeCandidatesV1(
         .sort(
           (left, right) =>
             right.lexicalScore - left.lexicalScore ||
-            Date.parse(right.claim.validFrom) -
-              Date.parse(left.claim.validFrom) ||
+            Date.parse(right.claim.validFrom) - Date.parse(left.claim.validFrom) ||
             left.claim.id.localeCompare(right.claim.id),
         );
-      truncatedTargetCount += Math.max(
-        0,
-        rankedTargets.length - maxTargetsPerPacket,
-      );
-      const selectedTargets = selectRankedTargets(
-        rankedTargets,
-        maxTargetsPerPacket,
-      );
+      truncatedTargetCount += Math.max(0, rankedTargets.length - maxTargetsPerPacket);
+      const selectedTargets = selectRankedTargets(rankedTargets, maxTargetsPerPacket);
       const targets = selectedTargets.map((target) =>
         Object.freeze({
           ...target.evidence,
@@ -296,10 +265,7 @@ export function buildMemoryAspectEdgeCandidatesV1(
   packets.sort(
     (left, right) =>
       left.aspectId.localeCompare(right.aspectId) ||
-      compareClaims(
-        required(claims, left.source.claimId),
-        required(claims, right.source.claimId),
-      ),
+      compareClaims(required(claims, left.source.claimId), required(claims, right.source.claimId)),
   );
   const promptChars = packets.map((packet) => {
     const request = buildMemoryAspectEdgeLinkerRequestV1(packet);
@@ -309,10 +275,7 @@ export function buildMemoryAspectEdgeCandidatesV1(
     eligibleMembershipCount: memberships.length,
     sourceScopeCount: groups.size,
     packetCount: packets.length,
-    targetCount: packets.reduce(
-      (sum, packet) => sum + packet.targets.length,
-      0,
-    ),
+    targetCount: packets.reduce((sum, packet) => sum + packet.targets.length, 0),
     truncatedTargetCount,
     promptChars: promptChars.reduce((sum, value) => sum + value, 0),
     maxPromptChars: Math.max(0, ...promptChars),
@@ -363,10 +326,7 @@ export function createJsonMemoryAspectEdgeLinkerV1(
   const now = input.now ?? Date.now;
   return Object.freeze({
     linkerVersion: PAW_MEMORY_ASPECT_EDGE_LINKER_VERSION_V1,
-    async link(
-      linkingInput: MemoryAspectEdgeLinkingInputV1,
-      signal: AbortSignal,
-    ) {
+    async link(linkingInput: MemoryAspectEdgeLinkingInputV1, signal: AbortSignal) {
       const startedAt = now();
       let modelCallCount: 0 | 1 = 0;
       try {
@@ -379,8 +339,7 @@ export function createJsonMemoryAspectEdgeLinkerV1(
           }),
           { signal },
         );
-        if (signal.aborted || response.status === "cancelled")
-          throw abortError();
+        if (signal.aborted || response.status === "cancelled") throw abortError();
         let result: MemoryAspectEdgeLinkingV1;
         let reasonCode: string | undefined;
         if (response.status !== "completed") {
@@ -388,10 +347,7 @@ export function createJsonMemoryAspectEdgeLinkerV1(
           result = deferred(linkingInput, "deferred_model_failure");
         } else {
           try {
-            result = parseMemoryAspectEdgeLinkingV1(
-              response.text,
-              linkingInput,
-            );
+            result = parseMemoryAspectEdgeLinkingV1(response.text, linkingInput);
           } catch (error) {
             if (isAbort(error)) throw error;
             reasonCode = stableReason(error);
@@ -430,9 +386,7 @@ export function createJsonMemoryAspectEdgeLinkerV1(
   });
 }
 
-export type MemoryAspectEdgeLinkerPromptModeV1 =
-  | "primary"
-  | "relation_adjudication";
+export type MemoryAspectEdgeLinkerPromptModeV1 = "primary" | "relation_adjudication";
 
 export function buildMemoryAspectEdgeLinkerRequestV1(
   input: MemoryAspectEdgeLinkingInputV1,
@@ -440,14 +394,9 @@ export function buildMemoryAspectEdgeLinkerRequestV1(
 ): Readonly<{ system: string; user: string }> {
   validateLinkingInput(input);
   const mode = options.mode ?? "primary";
-  const claims = new Map(
-    input.snapshot.claims.map((claim) => [claim.id, claim]),
-  );
-  const aspect = input.snapshot.aspects.find(
-    (item) => item.id === input.aspectId,
-  );
-  if (aspect === undefined)
-    throw namedError("MemoryAspectEdgeLinkerAspectUnknown");
+  const claims = new Map(input.snapshot.claims.map((claim) => [claim.id, claim]));
+  const aspect = input.snapshot.aspects.find((item) => item.id === input.aspectId);
+  if (aspect === undefined) throw namedError("MemoryAspectEdgeLinkerAspectUnknown");
   const evidence = [input.source, ...input.targets]
     .map((item) => {
       const claim = required(claims, item.claimId);
@@ -491,10 +440,7 @@ export function buildMemoryAspectEdgeLinkerRequestV1(
       allowedProposals: target.allowedProposals,
     })),
   });
-  if (
-    system.length + user.length >
-    PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_PROMPT_CHARS_V1
-  ) {
+  if (system.length + user.length > PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_PROMPT_CHARS_V1) {
     throw namedError("MemoryAspectEdgeLinkerPromptBudgetExceeded");
   }
   return Object.freeze({ system, user });
@@ -512,33 +458,24 @@ export function parseMemoryAspectEdgeLinkingV1(
   input: MemoryAspectEdgeLinkingInputV1,
 ): MemoryAspectEdgeLinkingV1 {
   validateLinkingInput(input);
-  const root = exactRecord(
-    jsonObject(text),
-    "MemoryAspectEdgeLinkerResponseInvalid",
-    ["decisions"],
-  );
-  const rawDecisions = arrayValue(
-    root.decisions,
-    "MemoryAspectEdgeLinkerDecisionsInvalid",
-  );
+  const root = exactRecord(jsonObject(text), "MemoryAspectEdgeLinkerResponseInvalid", [
+    "decisions",
+  ]);
+  const rawDecisions = arrayValue(root.decisions, "MemoryAspectEdgeLinkerDecisionsInvalid");
   if (rawDecisions.length !== input.targets.length) {
     throw namedError("MemoryAspectEdgeLinkerDecisionPartitionInvalid");
   }
-  const targets = new Map(
-    input.targets.map((target) => [target.claimId, target]),
-  );
+  const targets = new Map(input.targets.map((target) => [target.claimId, target]));
   const seenTargets = new Set<string>();
-  const claims = new Map(
-    input.snapshot.claims.map((claim) => [claim.id, claim]),
-  );
+  const claims = new Map(input.snapshot.claims.map((claim) => [claim.id, claim]));
   const edges: MemoryEvidenceEdgeV1[] = [];
   const decisions: MemoryAspectEdgeDecisionReceiptV1[] = [];
   for (const value of rawDecisions) {
-    const decision = exactRecord(
-      value,
-      "MemoryAspectEdgeLinkerDecisionInvalid",
-      ["targetClaimId", "disposition", "edge"],
-    );
+    const decision = exactRecord(value, "MemoryAspectEdgeLinkerDecisionInvalid", [
+      "targetClaimId",
+      "disposition",
+      "edge",
+    ]);
     const targetClaimId = boundedString(
       decision.targetClaimId,
       512,
@@ -557,21 +494,14 @@ export function parseMemoryAspectEdgeLinkingV1(
       decisions.push(Object.freeze({ targetClaimId, disposition }));
       continue;
     }
-    const raw = exactRecord(
-      decision.edge,
-      "MemoryAspectEdgeLinkerEdgeInvalid",
-      ["fromClaimId", "toClaimId", "edgeType", "confidence"],
-    );
-    const fromClaimId = boundedString(
-      raw.fromClaimId,
-      512,
-      "MemoryAspectEdgeLinkerSourceInvalid",
-    );
-    const toClaimId = boundedString(
-      raw.toClaimId,
-      512,
-      "MemoryAspectEdgeLinkerTargetInvalid",
-    );
+    const raw = exactRecord(decision.edge, "MemoryAspectEdgeLinkerEdgeInvalid", [
+      "fromClaimId",
+      "toClaimId",
+      "edgeType",
+      "confidence",
+    ]);
+    const fromClaimId = boundedString(raw.fromClaimId, 512, "MemoryAspectEdgeLinkerSourceInvalid");
+    const toClaimId = boundedString(raw.toClaimId, 512, "MemoryAspectEdgeLinkerTargetInvalid");
     const otherClaimId =
       fromClaimId === input.source.claimId
         ? toClaimId
@@ -607,17 +537,11 @@ export function parseMemoryAspectEdgeLinkingV1(
       },
       confidence,
       evidenceRefs: stableUnion(fromClaim.evidenceRefs, toClaim.evidenceRefs),
-      effectiveFrom: maxIso(
-        input.observedAt,
-        fromClaim.validFrom,
-        toClaim.validFrom,
-      ),
+      effectiveFrom: maxIso(input.observedAt, fromClaim.validFrom, toClaim.validFrom),
       createdAt: input.observedAt,
     });
     edges.push(edge);
-    decisions.push(
-      Object.freeze({ targetClaimId, disposition, edgeId: edge.id }),
-    );
+    decisions.push(Object.freeze({ targetClaimId, disposition, edgeId: edge.id }));
   }
   if (seenTargets.size !== input.targets.length) {
     throw namedError("MemoryAspectEdgeLinkerDecisionPartitionInvalid");
@@ -631,9 +555,7 @@ export function parseMemoryAspectEdgeLinkingV1(
     input,
     "settled",
     Object.freeze(
-      decisions.sort((left, right) =>
-        left.targetClaimId.localeCompare(right.targetClaimId),
-      ),
+      decisions.sort((left, right) => left.targetClaimId.localeCompare(right.targetClaimId)),
     ),
     Object.freeze(edges.sort(compareById)),
   );
@@ -665,12 +587,9 @@ export function reconcileMemoryAspectEdgeLinkingsV1(
     linkings.flatMap((linking) => linking.edges.map((edge) => edge.id)),
   );
   const admittedEdgeIds =
-    options.admittedEdgeIds === undefined
-      ? allProposedEdgeIds
-      : new Set(options.admittedEdgeIds);
+    options.admittedEdgeIds === undefined ? allProposedEdgeIds : new Set(options.admittedEdgeIds);
   if (
-    admittedEdgeIds.size !==
-      (options.admittedEdgeIds?.length ?? admittedEdgeIds.size) ||
+    admittedEdgeIds.size !== (options.admittedEdgeIds?.length ?? admittedEdgeIds.size) ||
     [...admittedEdgeIds].some((edgeId) => !allProposedEdgeIds.has(edgeId))
   ) {
     throw namedError("MemoryAspectEdgeReconciliationAdmissionInvalid");
@@ -718,16 +637,12 @@ export function reconcileMemoryAspectEdgeLinkingsV1(
     sourceGraphRevision: snapshot.revision,
     reconciliationRevision: hashCanonicalJsonV1(body as JsonValue),
     snapshot: committed,
-    acceptedLinkingRevisions: Object.freeze(
-      accepted.map((item) => item.linkingRevision),
-    ),
+    acceptedLinkingRevisions: Object.freeze(accepted.map((item) => item.linkingRevision)),
     rejected: Object.freeze(rejected.map((item) => Object.freeze(item))),
   });
 }
 
-function validateBuilderInput(
-  input: MemoryAspectEdgeCandidateBuilderInputV1,
-): void {
+function validateBuilderInput(input: MemoryAspectEdgeCandidateBuilderInputV1): void {
   measureMemoryAspectGraphV1(input.snapshot);
   if (
     input.snapshot.scopeFingerprint !== memoryScopeFingerprintV1(input.scope) ||
@@ -735,8 +650,7 @@ function validateBuilderInput(
     (input.maxTargetsPerPacket !== undefined &&
       (!Number.isSafeInteger(input.maxTargetsPerPacket) ||
         input.maxTargetsPerPacket < 1 ||
-        input.maxTargetsPerPacket >
-          PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_TARGETS_V1))
+        input.maxTargetsPerPacket > PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_TARGETS_V1))
   ) {
     throw namedError("MemoryAspectEdgeCandidateBuilderInputInvalid");
   }
@@ -747,8 +661,7 @@ function validateBuilderInput(
       !graphClaimIds.has(item.claimId) ||
       seen.has(item.claimId) ||
       safeStatement(item.statement) !== item.statement ||
-      deriveMemoryAspectLinkStatementHashV1(item.statement) !==
-        item.statementHash
+      deriveMemoryAspectLinkStatementHashV1(item.statement) !== item.statementHash
     ) {
       throw namedError("MemoryAspectEdgeCandidateBuilderCatalogInvalid");
     }
@@ -763,8 +676,7 @@ function validateLinkingInput(input: MemoryAspectEdgeLinkingInputV1): void {
     canonicalIso(input.observedAt) !== input.observedAt ||
     input.targets.length < 1 ||
     input.targets.length > PAW_MEMORY_ASPECT_EDGE_LINKER_MAX_TARGETS_V1 ||
-    input.snapshot.aspects.find((aspect) => aspect.id === input.aspectId)
-      ?.status !== "active"
+    input.snapshot.aspects.find((aspect) => aspect.id === input.aspectId)?.status !== "active"
   ) {
     throw namedError("MemoryAspectEdgeLinkerInputInvalid");
   }
@@ -774,8 +686,7 @@ function validateLinkingInput(input: MemoryAspectEdgeLinkingInputV1): void {
     if (
       seen.has(item.claimId) ||
       safeStatement(item.statement) !== item.statement ||
-      deriveMemoryAspectLinkStatementHashV1(item.statement) !==
-        item.statementHash ||
+      deriveMemoryAspectLinkStatementHashV1(item.statement) !== item.statementHash ||
       !input.snapshot.claims.some((claim) => claim.id === item.claimId)
     ) {
       throw namedError("MemoryAspectEdgeLinkerEvidenceInvalid");
@@ -791,17 +702,13 @@ function validateLinkingInput(input: MemoryAspectEdgeLinkingInputV1): void {
       membership.contextKey !== input.contextKey
     )
       continue;
-    const values =
-      roles.get(membership.claimId) ?? new Set<MemoryAspectClaimRoleV1>();
+    const values = roles.get(membership.claimId) ?? new Set<MemoryAspectClaimRoleV1>();
     values.add(membership.role);
     roles.set(membership.claimId, values);
   }
   const sourceRoles = roles.get(input.source.claimId);
-  if (sourceRoles === undefined)
-    throw namedError("MemoryAspectEdgeLinkerSourceMembershipMissing");
-  const claims = new Map(
-    input.snapshot.claims.map((claim) => [claim.id, claim]),
-  );
+  if (sourceRoles === undefined) throw namedError("MemoryAspectEdgeLinkerSourceMembershipMissing");
+  const claims = new Map(input.snapshot.claims.map((claim) => [claim.id, claim]));
   const sourceClaim = required(claims, input.source.claimId);
   const activePairs = new Set(
     activeEdges(input.snapshot, input.observedAt).flatMap((edge) => {
@@ -905,8 +812,7 @@ function validateLinking(linking: MemoryAspectEdgeLinkingV1): void {
   };
   if (
     linking.linkerVersion !== PAW_MEMORY_ASPECT_EDGE_LINKER_VERSION_V1 ||
-    linking.linkingRevision !==
-      hashCanonicalJsonV1(body as unknown as JsonValue) ||
+    linking.linkingRevision !== hashCanonicalJsonV1(body as unknown as JsonValue) ||
     (linking.settlement !== "settled" &&
       (linking.edges.length !== 0 || linking.decisions.length !== 0)) ||
     (linking.settlement !== "settled" &&
@@ -926,15 +832,13 @@ function activeMemberships(
     snapshot.lifecycleEvents
       .filter(
         (event) =>
-          event.targetKind === "membership" &&
-          Date.parse(event.occurredAt) <= Date.parse(asOf),
+          event.targetKind === "membership" && Date.parse(event.occurredAt) <= Date.parse(asOf),
       )
       .map((event) => event.targetId),
   );
   return snapshot.memberships.filter(
     (membership) =>
-      Date.parse(membership.createdAt) <= Date.parse(asOf) &&
-      !retracted.has(membership.id),
+      Date.parse(membership.createdAt) <= Date.parse(asOf) && !retracted.has(membership.id),
   );
 }
 
@@ -945,15 +849,12 @@ function activeEdges(
   const retracted = new Set(
     snapshot.lifecycleEvents
       .filter(
-        (event) =>
-          event.targetKind === "edge" &&
-          Date.parse(event.occurredAt) <= Date.parse(asOf),
+        (event) => event.targetKind === "edge" && Date.parse(event.occurredAt) <= Date.parse(asOf),
       )
       .map((event) => event.targetId),
   );
   return snapshot.edges.filter(
-    (edge) =>
-      Date.parse(edge.createdAt) <= Date.parse(asOf) && !retracted.has(edge.id),
+    (edge) => Date.parse(edge.createdAt) <= Date.parse(asOf) && !retracted.has(edge.id),
   );
 }
 
@@ -963,10 +864,8 @@ function allowedProposals(
   sourceRoles: ReadonlySet<MemoryAspectClaimRoleV1> | undefined,
   targetRoles: ReadonlySet<MemoryAspectClaimRoleV1> | undefined,
 ): readonly MemoryAspectEdgeAllowedProposalV1[] {
-  if (sourceRoles === undefined || targetRoles === undefined)
-    return Object.freeze([]);
-  const stateCompatible =
-    hasStateRole(sourceRoles) && hasStateRole(targetRoles);
+  if (sourceRoles === undefined || targetRoles === undefined) return Object.freeze([]);
+  const stateCompatible = hasStateRole(sourceRoles) && hasStateRole(targetRoles);
   const proposals: MemoryAspectEdgeAllowedProposalV1[] = [];
   if (stateCompatible) {
     proposals.push(
@@ -1029,9 +928,7 @@ function hasStateRole(roles: ReadonlySet<MemoryAspectClaimRoleV1>): boolean {
   return roles.has("state") || roles.has("fact");
 }
 
-function hasQualifierRole(
-  roles: ReadonlySet<MemoryAspectClaimRoleV1>,
-): boolean {
+function hasQualifierRole(roles: ReadonlySet<MemoryAspectClaimRoleV1>): boolean {
   return roles.has("fact") || roles.has("condition");
 }
 
@@ -1056,9 +953,7 @@ function selectRankedTargets<
     4,
   );
   for (const roleClass of ["state", "event", "causal"] as const) {
-    const item = ranked.find(
-      (candidate) => roleClassFor(candidate.targetRoles) === roleClass,
-    );
+    const item = ranked.find((candidate) => roleClassFor(candidate.targetRoles) === roleClass);
     if (item !== undefined) selected.set(item.claim.id, item);
   }
   for (const item of ranked) {
@@ -1071,8 +966,7 @@ function selectRankedTargets<
       .sort(
         (left, right) =>
           right.lexicalScore - left.lexicalScore ||
-          Date.parse(right.claim.validFrom) -
-            Date.parse(left.claim.validFrom) ||
+          Date.parse(right.claim.validFrom) - Date.parse(left.claim.validFrom) ||
           left.claim.id.localeCompare(right.claim.id),
       ),
   );
@@ -1088,11 +982,7 @@ function roleClassFor(
   return "other";
 }
 
-function lexicalOverlap(
-  left: string,
-  right: string,
-  weights: ReadonlyMap<string, number>,
-): number {
+function lexicalOverlap(left: string, right: string, weights: ReadonlyMap<string, number>): number {
   const leftTerms = terms(left);
   const rightTerms = terms(right);
   let overlap = 0;
@@ -1105,9 +995,7 @@ function lexicalOverlap(
 function terms(value: string): ReadonlySet<string> {
   const normalized = value.normalize("NFKC").toLocaleLowerCase();
   const result = new Set(
-    (normalized.match(/[\p{L}\p{N}]{2,}/gu) ?? []).filter(
-      (term) => !ENGLISH_STOP_WORDS.has(term),
-    ),
+    (normalized.match(/[\p{L}\p{N}]{2,}/gu) ?? []).filter((term) => !ENGLISH_STOP_WORDS.has(term)),
   );
   for (const match of normalized.matchAll(/[\p{Script=Han}]+/gu)) {
     const chars = [...match[0]];
@@ -1150,9 +1038,7 @@ function edgePairKey(
 }
 
 function unorderedPairKey(left: string, right: string): string {
-  return left.localeCompare(right) <= 0
-    ? `${left}\n${right}`
-    : `${right}\n${left}`;
+  return left.localeCompare(right) <= 0 ? `${left}\n${right}` : `${right}\n${left}`;
 }
 
 function sameAllowedProposals(
@@ -1196,10 +1082,7 @@ function maxIso(...values: readonly string[]): string {
   );
 }
 
-function stableUnion(
-  left: readonly string[],
-  right: readonly string[],
-): readonly string[] {
+function stableUnion(left: readonly string[], right: readonly string[]): readonly string[] {
   return Object.freeze([...new Set([...left, ...right])].sort());
 }
 
@@ -1228,9 +1111,7 @@ function confidenceValue(value: unknown): number {
   return value;
 }
 
-function decisionDispositionValue(
-  value: unknown,
-): MemoryAspectEdgeDecisionDispositionV1 {
+function decisionDispositionValue(value: unknown): MemoryAspectEdgeDecisionDispositionV1 {
   if (value !== "edge" && value !== "no_edge" && value !== "defer") {
     throw namedError("MemoryAspectEdgeLinkerDispositionInvalid");
   }
@@ -1251,9 +1132,7 @@ function jsonObject(text: string): Record<string, unknown> {
   } catch {
     throw namedError("MemoryAspectEdgeLinkerJsonInvalid");
   }
-  return exactRecord(parsed, "MemoryAspectEdgeLinkerResponseInvalid", [
-    "decisions",
-  ]);
+  return exactRecord(parsed, "MemoryAspectEdgeLinkerResponseInvalid", ["decisions"]);
 }
 
 function exactRecord(
@@ -1288,34 +1167,23 @@ function boundedString(value: unknown, max: number, errorName: string): string {
   return value;
 }
 
-function sameStrings(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  );
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function canonicalIso(value: string): string {
   const parsed = new Date(value);
-  if (!Number.isFinite(parsed.getTime()))
-    throw namedError("MemoryAspectEdgeLinkerTimeInvalid");
+  if (!Number.isFinite(parsed.getTime())) throw namedError("MemoryAspectEdgeLinkerTimeInvalid");
   return parsed.toISOString();
 }
 
 function required<T>(map: ReadonlyMap<string, T>, id: string): T {
   const value = map.get(id);
-  if (value === undefined)
-    throw namedError("MemoryAspectEdgeLinkerClaimUnknown");
+  if (value === undefined) throw namedError("MemoryAspectEdgeLinkerClaimUnknown");
   return value;
 }
 
-function compareById(
-  left: Readonly<{ id: string }>,
-  right: Readonly<{ id: string }>,
-): number {
+function compareById(left: Readonly<{ id: string }>, right: Readonly<{ id: string }>): number {
   return left.id.localeCompare(right.id);
 }
 
@@ -1353,9 +1221,7 @@ function stableCode(value: string): string {
 }
 
 function stableReason(error: unknown): string {
-  return stableCode(
-    error instanceof Error ? error.name || error.message : "Unknown",
-  );
+  return stableCode(error instanceof Error ? error.name || error.message : "Unknown");
 }
 
 function abortError(): Error {

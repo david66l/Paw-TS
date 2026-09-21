@@ -12,11 +12,7 @@ import {
 export type VerificationDecision =
   | {
       readonly ok: true;
-      readonly mode:
-        | "no_mutation"
-        | "tests_passed"
-        | "skipped"
-        | "external_pending";
+      readonly mode: "no_mutation" | "tests_passed" | "skipped" | "external_pending";
       readonly skipVerifyReason?: string;
     }
   | {
@@ -79,24 +75,16 @@ export function checkVerification(
 
   const currentRevision = state.mutationRevision ?? 0;
   const diagnostics = state.postEditDiagnostics;
-  if (
-    diagnostics?.mutationRevision === currentRevision &&
-    diagnostics.status === "issues"
-  ) {
+  if (diagnostics?.mutationRevision === currentRevision && diagnostics.status === "issues") {
     const first = diagnostics.files
-      .flatMap((file) =>
-        file.issues.map((message) => `${file.path}: ${message}`),
-      )
+      .flatMap((file) => file.issues.map((message) => `${file.path}: ${message}`))
       .at(0);
     return {
       ok: false,
       nudge: `The current edit introduced ${diagnostics.issueCount} syntax diagnostic error(s)${first ? ` (${first})` : ""}. Fix the syntax error before final_answer. This immediate diagnostic is not a substitute for the required test verification.`,
     };
   }
-  if (
-    opts?.skipVerifyReason?.trim() &&
-    goalAllowsSkipVerification(state.goal)
-  ) {
+  if (opts?.skipVerifyReason?.trim() && goalAllowsSkipVerification(state.goal)) {
     return {
       ok: true,
       mode: "skipped",
@@ -111,11 +99,7 @@ export function checkVerification(
     return { ok: true, mode: "tests_passed" };
   }
 
-  if (
-    latest &&
-    verificationOutcome(latest) === "passed" &&
-    latestRevision < currentRevision
-  ) {
+  if (latest && verificationOutcome(latest) === "passed" && latestRevision < currentRevision) {
     return {
       ok: false,
       nudge: `The last passing verification predates the latest file change (verified revision ${latestRevision}, current revision ${currentRevision}). Re-run the relevant verification after the final edit before final_answer.`,
@@ -143,10 +127,7 @@ export function checkVerification(
             : "The local verification failed for a recoverable command-invocation reason. Run one materially simpler direct command from the same test-runner family before final_answer; remove display-only pipes, redirections, wrappers, or invalid options.",
       };
     }
-    if (
-      opts?.policy?.authority === "external" &&
-      latestRevision === currentRevision
-    ) {
+    if (opts?.policy?.authority === "external" && latestRevision === currentRevision) {
       if ((state.diffInspectedRevision ?? 0) !== currentRevision) {
         return {
           ok: false,

@@ -60,10 +60,7 @@ const MEMORY_EVIDENCE_MEASUREMENT_TERMS = new Set([
  * this scorer prevents a later but unrelated turn from becoming a state
  * winner merely because it shares a source document with the true evidence.
  */
-export function memoryEvidenceSupportScoreV1(
-  requirement: string,
-  content: string,
-): number {
+export function memoryEvidenceSupportScoreV1(requirement: string, content: string): number {
   const terms = [...conversationTerms(requirement)].filter(
     (term) => !MEMORY_EVIDENCE_SUPPORT_STOP_WORDS.has(term),
   );
@@ -98,10 +95,7 @@ export function focusedConversationExcerpt(
       if (index < 0) break;
       const start = Math.max(
         0,
-        Math.min(
-          content.length - maxChars,
-          index - Math.min(160, Math.floor(maxChars / 3)),
-        ),
+        Math.min(content.length - maxChars, index - Math.min(160, Math.floor(maxChars / 3))),
       );
       starts.add(start);
       anchorStarts.add(start);
@@ -152,19 +146,11 @@ export function projectMemoryEvidenceExcerptV1(
   }
   const normalizedQuery = query.normalize("NFKC").toLocaleLowerCase();
   const anchors = memoryEvidenceOrdinalAnchorsV1(normalizedQuery);
-  return focusedConversationExcerpt(
-    content,
-    conversationTerms(normalizedQuery),
-    maxChars,
-    anchors,
-  );
+  return focusedConversationExcerpt(content, conversationTerms(normalizedQuery), maxChars, anchors);
 }
 
 /** Return a deterministic score only when source text contains the requested ordinal. */
-export function memoryEvidenceOrdinalAnchorScoreV1(
-  content: string,
-  query: string,
-): number {
+export function memoryEvidenceOrdinalAnchorScoreV1(content: string, query: string): number {
   const normalized = content.normalize("NFKC").toLocaleLowerCase();
   return memoryEvidenceOrdinalAnchorsV1(query).reduce(
     (score, anchor) => score + (normalized.includes(anchor) ? 1 : 0),
@@ -175,9 +161,7 @@ export function memoryEvidenceOrdinalAnchorScoreV1(
 function memoryEvidenceOrdinalAnchorsV1(query: string): readonly string[] {
   const normalizedQuery = query.normalize("NFKC").toLocaleLowerCase();
   const anchors = new Set<string>();
-  for (const match of normalizedQuery.matchAll(
-    /\b(\d{1,4})(?:st|nd|rd|th)\b/gu,
-  )) {
+  for (const match of normalizedQuery.matchAll(/\b(\d{1,4})(?:st|nd|rd|th)\b/gu)) {
     const value = match[1];
     if (!value) continue;
     anchors.add(`${value}.`);

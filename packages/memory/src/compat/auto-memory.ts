@@ -27,26 +27,10 @@
  * 5. **双向链接**: `linked_memories` 字段支持记忆之间的双向引用，构建知识图谱
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
-import {
-  atomicWrite,
-  checkDrift,
-  lockFile,
-  readWithHash,
-  scanForThreats,
-} from "@paw/core";
-import {
-  parseYamlFrontmatter,
-  splitFrontmatter,
-  stringifyYamlFrontmatter,
-} from "@paw/core";
+import { atomicWrite, checkDrift, lockFile, readWithHash, scanForThreats } from "@paw/core";
+import { parseYamlFrontmatter, splitFrontmatter, stringifyYamlFrontmatter } from "@paw/core";
 import { memoryDir } from "@paw/core";
 import {
   type MemoryKind,
@@ -54,10 +38,7 @@ import {
   isMemoryKind,
   isMemoryStatus,
 } from "../shared/memory-types.js";
-import {
-  archiveExpiredEntries,
-  rebuildArchiveIndex,
-} from "./memory-archive.js";
+import { archiveExpiredEntries, rebuildArchiveIndex } from "./memory-archive.js";
 
 /** 记忆优先级：high（核心/重要）、mid（默认）、low（临时/次要） */
 export type MemoryPriority = "high" | "mid" | "low";
@@ -139,8 +120,7 @@ export class AutoMemoryStore {
   list(): AutoMemoryEntry[] {
     if (!existsSync(this.memoryDir)) return [];
     // 判断是否为主索引或分片文件：MEMORY.md 或 MEMORY-1.md, MEMORY-2.md 等
-    const isShardFile = (f: string): boolean =>
-      f === "MEMORY.md" || /^MEMORY-\d+\.md$/.test(f);
+    const isShardFile = (f: string): boolean => f === "MEMORY.md" || /^MEMORY-\d+\.md$/.test(f);
     return readdirSync(this.memoryDir)
       .filter((f) => f.endsWith(".md") && !isShardFile(f))
       .map((f) => this.load(path.basename(f, ".md")))
@@ -176,12 +156,10 @@ export class AutoMemoryStore {
       const updatedAt = fm.updatedAt ? Number(fm.updatedAt) : undefined;
       // v1 兼容：读取 embedding_v1 字段
       const embedding = fm.embedding_v1?.trim() || undefined;
-      const priority =
-        fm.priority && isValidPriority(fm.priority) ? fm.priority : undefined;
+      const priority = fm.priority && isValidPriority(fm.priority) ? fm.priority : undefined;
       const kind = fm.kind && isMemoryKind(fm.kind) ? fm.kind : undefined;
       const confidence = fm.confidence ? Number(fm.confidence) : undefined;
-      const status =
-        fm.status && isMemoryStatus(fm.status) ? fm.status : undefined;
+      const status = fm.status && isMemoryStatus(fm.status) ? fm.status : undefined;
       const tags = parseCsvList(fm.tags);
       const relatedFiles = parseCsvList(fm.relatedFiles);
       const errorSignatures = parseCsvList(fm.error_signatures);
@@ -198,12 +176,8 @@ export class AutoMemoryStore {
         type,
         content: content ?? "",
         // 条件展开：只在值有效时才包含，避免 undefined 字段污染
-        ...(createdAt !== undefined && !Number.isNaN(createdAt)
-          ? { createdAt }
-          : {}),
-        ...(updatedAt !== undefined && !Number.isNaN(updatedAt)
-          ? { updatedAt }
-          : {}),
+        ...(createdAt !== undefined && !Number.isNaN(createdAt) ? { createdAt } : {}),
+        ...(updatedAt !== undefined && !Number.isNaN(updatedAt) ? { updatedAt } : {}),
         ...(embedding ? { embedding } : {}),
         ...(priority ? { priority } : {}),
         ...(kind ? { kind } : {}),
@@ -261,12 +235,10 @@ export class AutoMemoryStore {
     if (entry.embedding) fm.embedding_v1 = entry.embedding;
     if (entry.priority) fm.priority = entry.priority;
     if (entry.kind) fm.kind = entry.kind;
-    if (isValidConfidence(entry.confidence))
-      fm.confidence = String(entry.confidence);
+    if (isValidConfidence(entry.confidence)) fm.confidence = String(entry.confidence);
     if (entry.status) fm.status = entry.status;
     // 数组字段转为逗号分隔的字符串
-    if (entry.evidence && entry.evidence.length > 0)
-      fm.evidence = entry.evidence.join(", ");
+    if (entry.evidence && entry.evidence.length > 0) fm.evidence = entry.evidence.join(", ");
     if (entry.tags && entry.tags.length > 0) fm.tags = entry.tags.join(", ");
     if (entry.relatedFiles && entry.relatedFiles.length > 0)
       fm.relatedFiles = entry.relatedFiles.join(", ");
@@ -274,14 +246,11 @@ export class AutoMemoryStore {
       fm.error_signatures = entry.error_signatures.join(", ");
     if (entry.tools_used && entry.tools_used.length > 0)
       fm.tools_used = entry.tools_used.join(", ");
-    if (entry.valid_until !== undefined)
-      fm.valid_until = String(entry.valid_until);
+    if (entry.valid_until !== undefined) fm.valid_until = String(entry.valid_until);
     if (entry.gitCommit) fm.gitCommit = entry.gitCommit;
     if (entry.branch) fm.branch = entry.branch;
-    if (entry.symbols && entry.symbols.length > 0)
-      fm.symbols = entry.symbols.join(", ");
-    if (entry.tests && entry.tests.length > 0)
-      fm.tests = entry.tests.join(", ");
+    if (entry.symbols && entry.symbols.length > 0) fm.symbols = entry.symbols.join(", ");
+    if (entry.tests && entry.tests.length > 0) fm.tests = entry.tests.join(", ");
     if (entry.supersedes && entry.supersedes.length > 0)
       fm.supersedes = entry.supersedes.join(", ");
     if (entry.linked_memories && entry.linked_memories.length > 0)
@@ -415,14 +384,10 @@ export class AutoMemoryStore {
 
     // 策略3: 会话派生条目的内容签名匹配
     // 匹配格式: sess-{8位hex会话前缀}-{类别(dec/err)}-{12位hex内容哈希}
-    const sessMatch = entry.name.match(
-      /^(sess-[a-f0-9]{8})-(dec|err)-([a-f0-9]{12})$/,
-    );
+    const sessMatch = entry.name.match(/^(sess-[a-f0-9]{8})-(dec|err)-([a-f0-9]{12})$/);
     if (sessMatch) {
       const [, sessionPrefix, category, contentHash] = sessMatch;
-      const namePattern = new RegExp(
-        `^sess-${sessionPrefix}-${category}-${contentHash}$`,
-      );
+      const namePattern = new RegExp(`^sess-${sessionPrefix}-${category}-${contentHash}$`);
       for (const e of this.list()) {
         if (namePattern.test(e.name)) return e;
       }
@@ -460,9 +425,7 @@ export class AutoMemoryStore {
     const unlock = lockFile(indexPath);
     try {
       const entries = this.list();
-      const shardCount = Math.ceil(
-        entries.length / AutoMemoryStore.MAX_SHARD_SIZE,
-      );
+      const shardCount = Math.ceil(entries.length / AutoMemoryStore.MAX_SHARD_SIZE);
 
       // 第二步：写入每个分片文件（无锁——分片只在 buildIndex 内写入）
       for (let i = 0; i < shardCount; i++) {
@@ -476,15 +439,11 @@ export class AutoMemoryStore {
           "| Name | Type | Priority | Description |",
           "|------|------|----------|-------------|",
           ...slice.map(
-            (e) =>
-              `| ${e.name} | ${e.type} | ${e.priority ?? "mid"} | ${e.description} |`,
+            (e) => `| ${e.name} | ${e.type} | ${e.priority ?? "mid"} | ${e.description} |`,
           ),
           "",
         ];
-        atomicWrite(
-          path.join(this.memoryDir, `MEMORY-${i + 1}.md`),
-          shardLines.join("\n"),
-        );
+        atomicWrite(path.join(this.memoryDir, `MEMORY-${i + 1}.md`), shardLines.join("\n"));
       }
 
       // 第三步：清理多余分片
@@ -496,10 +455,7 @@ export class AutoMemoryStore {
         "",
         `${entries.length} entries across ${shardCount} shard(s)`,
         "",
-        ...Array.from(
-          { length: shardCount },
-          (_, i) => `- [Shard ${i + 1}](MEMORY-${i + 1}.md)`,
-        ),
+        ...Array.from({ length: shardCount }, (_, i) => `- [Shard ${i + 1}](MEMORY-${i + 1}.md)`),
         "",
       ];
       const newContent = masterLines.join("\n");
@@ -603,8 +559,7 @@ export class AutoMemoryStore {
    * @returns 被归档的条目数量
    */
   archiveExpired(maxAgeDays = 90): number {
-    return archiveExpiredEntries(this.list(), this.memoryDir, maxAgeDays)
-      .archivedNames.length;
+    return archiveExpiredEntries(this.list(), this.memoryDir, maxAgeDays).archivedNames.length;
   }
 }
 
@@ -625,9 +580,7 @@ function parseCsvList(value: string | undefined): string[] | undefined {
 
 /** 类型守卫：验证字符串是否为合法的记忆类型 */
 function isValidType(t: string): t is AutoMemoryEntry["type"] {
-  return (
-    t === "user" || t === "feedback" || t === "project" || t === "reference"
-  );
+  return t === "user" || t === "feedback" || t === "project" || t === "reference";
 }
 
 /** 类型守卫：验证字符串是否为合法的优先级值 */
@@ -636,7 +589,5 @@ function isValidPriority(p: string): p is MemoryPriority {
 }
 
 function isValidConfidence(value: number | undefined): value is number {
-  return (
-    value !== undefined && Number.isFinite(value) && value >= 0 && value <= 1
-  );
+  return value !== undefined && Number.isFinite(value) && value >= 0 && value <= 1;
 }

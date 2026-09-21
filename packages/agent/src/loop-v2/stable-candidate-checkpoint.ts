@@ -24,7 +24,6 @@ export function isStableCandidateCheckpointEligibleV1(input: {
   }
   return input.verification.some(
     (verification) =>
-      verification.mutationRevision === input.mutationRevision &&
-      verification.authoritative,
+      verification.mutationRevision === input.mutationRevision && verification.authoritative,
   );
 }

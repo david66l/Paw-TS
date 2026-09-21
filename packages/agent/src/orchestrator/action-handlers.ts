@@ -33,15 +33,9 @@ import type {
 } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { TaskPlanner } from "@paw/store";
-import {
-  candidateReviewInput,
-  candidateSummaryFingerprint,
-} from "../candidate-review.js";
+import { candidateReviewInput, candidateSummaryFingerprint } from "../candidate-review.js";
 import { createWaitingUserInteractionV1 } from "../durable-interaction.js";
-import type {
-  ToolEffectPolicy,
-  ToolExecutionPolicy,
-} from "../execution-policy.js";
+import type { ToolEffectPolicy, ToolExecutionPolicy } from "../execution-policy.js";
 import {
   EMPTY_CODING_PHASE_STATE,
   advanceCodingPhase,
@@ -51,10 +45,7 @@ import {
   isCodingVerificationCall,
 } from "../lifecycle/coding-phase.js";
 import { isControlPlaneToolResult } from "../lifecycle/control-plane.js";
-import {
-  convergenceToolBlockReason,
-  isEditRecoveryRead,
-} from "../lifecycle/convergence.js";
+import { convergenceToolBlockReason, isEditRecoveryRead } from "../lifecycle/convergence.js";
 import { advanceRepeatToolReminder } from "../lifecycle/repeat-tool-reminder.js";
 import {
   type AcceptanceGateDecision,
@@ -83,10 +74,7 @@ import {
 } from "../loop-v2/index.js";
 import { checkMeaAuditGate, resolveMeaAuditorConfig } from "../mea/index.js";
 import type { ParseDiagnosis } from "../parse-agent-action.js";
-import {
-  markPlanItemsCompleted,
-  planItemsToEventSnapshot,
-} from "../plan-bootstrap.js";
+import { markPlanItemsCompleted, planItemsToEventSnapshot } from "../plan-bootstrap.js";
 import { parseChildPolicy } from "./agent-args.js";
 import type { AgentGroup } from "./agent-group.js";
 import { isSubAgentCall } from "./constants.js";
@@ -125,10 +113,7 @@ interface ActionHandlerContext {
   readonly planSnapshotMaxItems?: number;
   /** 保存断点续跑状态的函数 */
   readonly saveStateFn: (flagsOverride?: TurnFlags) => void;
-  readonly saveWaitingStateFn?: (
-    state: WaitingUserInteractionV1,
-    flagsOverride: TurnFlags,
-  ) => void;
+  readonly saveWaitingStateFn?: (state: WaitingUserInteractionV1, flagsOverride: TurnFlags) => void;
   readonly consumeWaitingStateFn?: (
     state: WaitingUserInteractionV1,
     reply: string,
@@ -171,11 +156,7 @@ export interface NativeToolError {
   readonly name: string;
   readonly raw: string;
   readonly sourceIndex?: number;
-  readonly reason?:
-    | "malformed_arguments"
-    | "invalid_call_id"
-    | "unknown_tool"
-    | "batch_rejected";
+  readonly reason?: "malformed_arguments" | "invalid_call_id" | "unknown_tool" | "batch_rejected";
 }
 
 /** 解析阶段的反馈信息：文本通道诊断 + 原生通道失败调用 */
@@ -236,10 +217,7 @@ export async function handleAction(
 
   // V2 owns the complete model-ordered batch. Child calls are scheduler items,
   // so a sibling grep/edit cannot be silently dropped by the legacy split.
-  if (
-    toolCalls.length > 0 &&
-    (ctx.loopKernelVersion === "v2" || feedback?.nativeToolTurn)
-  ) {
+  if (toolCalls.length > 0 && (ctx.loopKernelVersion === "v2" || feedback?.nativeToolTurn)) {
     return handleToolCalls(
       toolCalls,
       ctx,
@@ -253,14 +231,7 @@ export async function handleAction(
 
   // 子 Agent 调用（批量模式）
   if (subAgentCalls.length > 0) {
-    return handleRunAgent(
-      subAgentCalls,
-      ctx,
-      recoveredFlags,
-      text,
-      thinking,
-      opts,
-    );
+    return handleRunAgent(subAgentCalls, ctx, recoveredFlags, text, thinking, opts);
   }
 
   // 普通工具调用
@@ -279,50 +250,22 @@ export async function handleAction(
   // 没有工具调用 → 处理结构化 action
   const action = actions[0] ?? null;
   if (!action) {
-    return handleNoAction(
-      ctx,
-      flags,
-      text,
-      thinking,
-      opts,
-      feedback?.diagnosis,
-    );
+    return handleNoAction(ctx, flags, text, thinking, opts, feedback?.diagnosis);
   }
 
   ctx.emit({ type: "agent.action", action });
 
   switch (action.type) {
     case "final_answer":
-      return await handleFinalAnswer(
-        action,
-        ctx,
-        recoveredFlags,
-        text,
-        thinking,
-        opts,
-      );
+      return await handleFinalAnswer(action, ctx, recoveredFlags, text, thinking, opts);
     case "abort":
       return handleAbort(action, ctx, recoveredFlags);
     case "ask_user":
       return handleAskUser(action, ctx, recoveredFlags, text, thinking, opts);
     case "plan_update":
-      return handlePlanUpdate(
-        action,
-        ctx,
-        recoveredFlags,
-        text,
-        thinking,
-        opts,
-      );
+      return handlePlanUpdate(action, ctx, recoveredFlags, text, thinking, opts);
     case "acceptance_update":
-      return handleAcceptanceUpdate(
-        action,
-        ctx,
-        recoveredFlags,
-        text,
-        thinking,
-        opts,
-      );
+      return handleAcceptanceUpdate(action, ctx, recoveredFlags, text, thinking, opts);
     default:
       // 未知 action 类型 → 回退到无 action 处理
       return handleNoAction(ctx, flags, text, thinking, opts);
@@ -552,9 +495,7 @@ function handleNativeToolErrors(
   if (
     nativeToolTurn &&
     nativeToolTurn.calls.length === results.length &&
-    nativeToolTurn.calls.every(
-      (call, index) => call.callId === errors[index]?.id,
-    )
+    nativeToolTurn.calls.every((call, index) => call.callId === errors[index]?.id)
   ) {
     const pairedResults = results.map((result, index) => {
       const call = nativeToolTurn.calls[index];
@@ -623,11 +564,8 @@ async function handleFinalAnswer(
   const plan = opts.planner.plan;
   // 仅当计划被模型/applyUpdate 推进过（revision>0）才因 pending plan 而 nudge。
   // goal bootstrap 的 plan  revision 仍为 0，避免「右栏兜底计划」卡住 final_answer。
-  const hasPendingPlan =
-    !!plan && !plan.allComplete && plan.items.length > 0 && plan.revision > 0;
-  const hasPendingTodos = opts.todoStore?.items.some(
-    (t) => t.status !== "done",
-  );
+  const hasPendingPlan = !!plan && !plan.allComplete && plan.items.length > 0 && plan.revision > 0;
+  const hasPendingTodos = opts.todoStore?.items.some((t) => t.status !== "done");
   const authority = resolveLoopAuthorityPolicyV1(ctx.loopKernelVersion);
   const planningCanVeto = authority.planning === "legacy_completion_veto";
   const noRoomForAnotherTurn = ctx.turn + 1 >= ctx.maxSteps;
@@ -704,8 +642,7 @@ async function handleFinalAnswer(
           (i as Record<string, unknown>).status !== "completed" &&
           (i as Record<string, unknown>).status !== "skipped",
       ).length ?? 0;
-    const pendingTodoCount =
-      opts.todoStore?.items.filter((t) => t.status !== "done").length ?? 0;
+    const pendingTodoCount = opts.todoStore?.items.filter((t) => t.status !== "done").length ?? 0;
     const pending = [
       pendingPlanCount > 0 ? `${pendingPlanCount} plan item(s)` : null,
       pendingTodoCount > 0 ? `${pendingTodoCount} todo(s)` : null,
@@ -731,11 +668,8 @@ async function handleFinalAnswer(
 
   if (planningCanVeto && (hasPendingPlan || hasPendingTodos)) {
     const pendingPlanCount =
-      plan?.items.filter(
-        (i) => i.status !== "completed" && i.status !== "skipped",
-      ).length ?? 0;
-    const pendingTodoCount =
-      opts.todoStore?.items.filter((t) => t.status !== "done").length ?? 0;
+      plan?.items.filter((i) => i.status !== "completed" && i.status !== "skipped").length ?? 0;
+    const pendingTodoCount = opts.todoStore?.items.filter((t) => t.status !== "done").length ?? 0;
     const decision = decideIncomplete({
       reason: "pending_work",
       message: `The model declared completion with unfinished work (${pendingPlanCount} plan item(s), ${pendingTodoCount} todo(s)). Update their status with plan_update/todo_write or report an honest blocker.`,
@@ -777,8 +711,7 @@ async function handleFinalAnswer(
     }
     const readinessGate = evaluateLoopV2ReadinessGateV1({
       assessment,
-      progressKey:
-        ctx.getLoopV2ReadinessProgressKey?.() ?? assessment.candidateInputHash,
+      progressKey: ctx.getLoopV2ReadinessProgressKey?.() ?? assessment.candidateInputHash,
       verificationRecords: ctx.getLoopV2ReadinessVerificationRecords?.(),
       priorKey: flags.loopV2ReadinessFeedbackKey,
       priorNudges: flags.loopV2ReadinessNudges,
@@ -803,9 +736,7 @@ async function handleFinalAnswer(
               ? "required"
               : "not_required",
           externalVerification:
-            assessment.policy.verificationAuthority === "external"
-              ? "pending"
-              : "not_configured",
+            assessment.policy.verificationAuthority === "external" ? "pending" : "not_configured",
         },
       });
     } else if (readinessGate.requirement) {
@@ -898,11 +829,7 @@ async function handleFinalAnswer(
   // MEA 独立审计：验证门通过后、语义评审前，由只读审计员核对环境。
   // off 模式在此处零开销（resolve 后直接放行，不发起任何子 Agent）。
   const meaResolved = resolveMeaAuditorConfig(opts.meaAuditor);
-  if (
-    meaResolved.mode !== "off" &&
-    opts.subAgentLauncher &&
-    opts.meaParentRunId
-  ) {
+  if (meaResolved.mode !== "off" && opts.subAgentLauncher && opts.meaParentRunId) {
     const meaResult = await checkMeaAuditGate({
       launcher: opts.subAgentLauncher,
       config: opts.meaAuditor,
@@ -1021,9 +948,7 @@ function projectLoopV2ReducerTerminalToLegacyDecision(
   reduction: ControlReductionV1 | undefined,
   ctx: PhaseContext,
 ): CompletionDecision {
-  const terminal = reduction?.effects.find(
-    (effect) => effect.type === "commit_terminal",
-  );
+  const terminal = reduction?.effects.find((effect) => effect.type === "commit_terminal");
   if (
     !terminal ||
     reduction?.state.candidate?.id !== assessment.candidateId ||
@@ -1032,15 +957,12 @@ function projectLoopV2ReducerTerminalToLegacyDecision(
     (reduction.state.candidateRequirements?.verificationProbe === "required" &&
       !reduction.state.verificationProbe)
   ) {
-    throw new Error(
-      "Loop v2 completion is missing a reducer-owned certified terminal",
-    );
+    throw new Error("Loop v2 completion is missing a reducer-owned certified terminal");
   }
   return {
     status: "completed",
     outcome:
-      terminal.status === "completed" &&
-      assessment.readiness.localVerification === "passed"
+      terminal.status === "completed" && assessment.readiness.localVerification === "passed"
         ? "verified"
         : "model_declared",
     reason: terminal.reason,
@@ -1063,22 +985,15 @@ function enforceControlCandidateDecision(
   );
   if (requestsReadiness) return undefined;
   if (!reduction) {
-    throw new Error(
-      "Loop v2 final_answer is missing a reducer candidate decision",
-    );
+    throw new Error("Loop v2 final_answer is missing a reducer candidate decision");
   }
   const repairRequired = reduction.effects.some(
-    (effect) =>
-      effect.type === "call_model" && effect.reason === "repair_required",
+    (effect) => effect.type === "call_model" && effect.reason === "repair_required",
   );
   if (!repairRequired || !reduction.state.openRepairObligation) {
-    throw new Error(
-      "Loop v2 final_answer is missing a valid reducer candidate decision",
-    );
+    throw new Error("Loop v2 final_answer is missing a valid reducer candidate decision");
   }
-  const message = formatRepairObligationV1(
-    reduction.state.openRepairObligation,
-  );
+  const message = formatRepairObligationV1(reduction.state.openRepairObligation);
   if (noRoomForAnotherTurn) {
     return {
       state: {
@@ -1113,9 +1028,7 @@ async function checkLoopV2SemanticReviewGate(
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn">,
   noRoomForAnotherTurn: boolean,
-): Promise<
-  { readonly state: TurnState; readonly flags: TurnFlags } | undefined
-> {
+): Promise<{ readonly state: TurnState; readonly flags: TurnFlags } | undefined> {
   if (!ctx.reviewLoopV2Candidate) return undefined;
   const revision = ctx.taskState.snapshot().mutationRevision ?? 0;
   if (revision === 0) return undefined;
@@ -1162,9 +1075,7 @@ async function checkLoopV2VerificationProbeGate(
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn">,
   noRoomForAnotherTurn: boolean,
-): Promise<
-  { readonly state: TurnState; readonly flags: TurnFlags } | undefined
-> {
+): Promise<{ readonly state: TurnState; readonly flags: TurnFlags } | undefined> {
   if (!ctx.probeLoopV2Candidate) return undefined;
   const revision = ctx.taskState.snapshot().mutationRevision ?? 0;
   if (revision === 0) return undefined;
@@ -1225,9 +1136,7 @@ async function checkCandidateReviewGate(
   thinking: string | undefined,
   opts: Pick<ActionHandlerContext, "saveStateFn">,
   noRoomForAnotherTurn: boolean,
-): Promise<
-  { readonly state: TurnState; readonly flags: TurnFlags } | undefined
-> {
+): Promise<{ readonly state: TurnState; readonly flags: TurnFlags } | undefined> {
   const reviewer = ctx.candidateReviewer;
   const state = ctx.taskState.snapshot();
   const revision = state.mutationRevision ?? 0;
@@ -1235,14 +1144,10 @@ async function checkCandidateReviewGate(
 
   const summaryFingerprint = candidateSummaryFingerprint(summary);
   const recorded =
-    state.candidateReview?.mutationRevision === revision
-      ? state.candidateReview
-      : undefined;
+    state.candidateReview?.mutationRevision === revision ? state.candidateReview : undefined;
 
   let review =
-    recorded &&
-    (recorded.verdict !== "pass" ||
-      recorded.summaryFingerprint === summaryFingerprint)
+    recorded && (recorded.verdict !== "pass" || recorded.summaryFingerprint === summaryFingerprint)
       ? recorded
       : undefined;
   if (!review) {
@@ -1319,8 +1224,7 @@ async function checkCandidateReviewGate(
   const reportIssue = review.verdict === "pass" && reportGrounding !== "pass";
   const previousNudges =
     flags.candidateReviewRevision === revision &&
-    (!reportIssue ||
-      flags.candidateReviewSummaryFingerprint === summaryFingerprint)
+    (!reportIssue || flags.candidateReviewSummaryFingerprint === summaryFingerprint)
       ? (flags.candidateReviewNudges ?? 0)
       : 0;
   const maxNudges = reportIssue ? 2 : review.verdict === "fail" ? 2 : 1;
@@ -1336,9 +1240,7 @@ async function checkCandidateReviewGate(
       ...flags,
       candidateReviewRevision: revision,
       candidateReviewNudges: previousNudges + 1,
-      ...(reportIssue
-        ? { candidateReviewSummaryFingerprint: summaryFingerprint }
-        : {}),
+      ...(reportIssue ? { candidateReviewSummaryFingerprint: summaryFingerprint } : {}),
       pendingControl: {
         kind: "completion_gate",
         gate: "candidate_review",
@@ -1471,10 +1373,7 @@ async function handleAskUser(
   thinking: string | undefined,
   opts: Pick<
     ActionHandlerContext,
-    | "resolveAskUser"
-    | "saveStateFn"
-    | "saveWaitingStateFn"
-    | "consumeWaitingStateFn"
+    "resolveAskUser" | "saveStateFn" | "saveWaitingStateFn" | "consumeWaitingStateFn"
   >,
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const nextFlags: TurnFlags = {
@@ -1558,10 +1457,7 @@ async function handlePlanUpdate(
   flags: TurnFlags,
   text: string,
   thinking: string | undefined,
-  opts: Pick<
-    ActionHandlerContext,
-    "planner" | "saveStateFn" | "memoryRuntime" | "memoryTaskId"
-  >,
+  opts: Pick<ActionHandlerContext, "planner" | "saveStateFn" | "memoryRuntime" | "memoryTaskId">,
 ): Promise<{ readonly state: TurnState; readonly flags: TurnFlags }> {
   const nextFlags: TurnFlags = {
     ...flags,
@@ -1573,11 +1469,7 @@ async function handlePlanUpdate(
   const parsedItems = planItemsFromUnknown(action.newItems);
 
   try {
-    opts.planner.applyUpdate(
-      parsedItems,
-      action.deprecatedItems,
-      action.reason,
-    );
+    opts.planner.applyUpdate(parsedItems, action.deprecatedItems, action.reason);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const decision = decideFailed({
@@ -1735,8 +1627,7 @@ async function handleToolCalls(
     return reason;
   });
   const phaseBlockReasons = calls.map(
-    (_, index) =>
-      convergenceBlockReasons[index] ?? codingPhaseBlockReasons[index],
+    (_, index) => convergenceBlockReasons[index] ?? codingPhaseBlockReasons[index],
   );
   const blockedResult = (index: number): ToolRunResult | undefined => {
     const blockReason = phaseBlockReasons[index];
@@ -1744,9 +1635,7 @@ async function handleToolCalls(
     return {
       ok: false,
       payload: {
-        code: convergenceBlockReasons[index]
-          ? "E_LOOP_POLICY"
-          : "E_CODING_PHASE",
+        code: convergenceBlockReasons[index] ? "E_LOOP_POLICY" : "E_CODING_PHASE",
         message: blockReason,
       },
       summary: blockReason,
@@ -1762,9 +1651,8 @@ async function handleToolCalls(
     subAgentLauncher: opts.subAgentLauncher,
     todoStore: opts.todoStore,
     acceptanceLedger: {
-      apply: (
-        input: Parameters<typeof ctx.taskState.applyAcceptanceUpdate>[0],
-      ) => ctx.taskState.applyAcceptanceUpdate(input, ctx.turn),
+      apply: (input: Parameters<typeof ctx.taskState.applyAcceptanceUpdate>[0]) =>
+        ctx.taskState.applyAcceptanceUpdate(input, ctx.turn),
     },
     skillRegistry: opts.skillRegistry,
     watcher: opts.watcher,
@@ -1802,96 +1690,84 @@ async function handleToolCalls(
   let mutationCaptures: Array<LoopV2ShadowMutationCapture | undefined>;
   const commitsOwnedByScheduler = ctx.loopKernelVersion === "v2";
   if (commitsOwnedByScheduler) {
-    const batch = await executeToolCallsV2(
-      calls,
-      toolExecutionContext,
-      approvalContext,
-      {
-        preSettledResults: calls.map((_, index) => blockedResult(index)),
-        async dispatchOverride(call, sourceIndex) {
-          if (!isSubAgentCall(call)) return undefined;
-          const args =
-            call.args &&
-            typeof call.args === "object" &&
-            !Array.isArray(call.args)
-              ? (call.args as Record<string, unknown>)
-              : undefined;
-          const effectPolicyApplies = opts.toolEffectPolicy
-            ? (opts.toolEffectPolicy.appliesTo?.({
-                tool: call.tool,
-                args: call.args,
-                workspaceRoot: ctx.workspaceRoot,
-              }) ?? true)
-            : false;
-          const approvalApplies = toolNeedsApprovalGate(
-            call.tool,
-            args,
-            opts.approvalPolicy,
-            Boolean(opts.resolveToolApproval),
-          );
-          // Trusted policy/effect/approval stays owned by the established
-          // single-call runner. The harness launcher still preserves this
-          // scheduler slot; AgentGroup is used only when no gate is bypassed.
-          if (
-            opts.toolExecutionPolicy ||
-            effectPolicyApplies ||
-            approvalApplies
-          ) {
-            return undefined;
-          }
-          if (!opts.agentGroup) {
-            return {
-              result: {
-                ok: false,
-                summary: "run_agent: sub-agent launcher not configured",
-                payload: { error: "sub-agent launcher not configured" },
-              },
-              mutationCapture: createLoopV2NoMutationCapture(),
-            };
-          }
-          ctx.emit({ type: "phase", name: "waiting_children" });
-          const summarizer = new DefaultContextSummarizer();
-          const childResults = await opts.agentGroup.launchAll(
-            [call],
-            (childCall) => summarizer.summarizeForCall(ctx.ctxMgr, childCall),
-            ctx.signal,
-            [sourceIndex],
-          );
-          ctx.emit({ type: "phase", name: "merging_results" });
-          const child = childResults[0];
-          if (!child) {
-            throw new Error(`Missing child result at source ${sourceIndex}`);
-          }
-          const readWrite =
-            (parseChildPolicy(args) ?? "read_only") === "read_write";
+    const batch = await executeToolCallsV2(calls, toolExecutionContext, approvalContext, {
+      preSettledResults: calls.map((_, index) => blockedResult(index)),
+      async dispatchOverride(call, sourceIndex) {
+        if (!isSubAgentCall(call)) return undefined;
+        const args =
+          call.args && typeof call.args === "object" && !Array.isArray(call.args)
+            ? (call.args as Record<string, unknown>)
+            : undefined;
+        const effectPolicyApplies = opts.toolEffectPolicy
+          ? (opts.toolEffectPolicy.appliesTo?.({
+              tool: call.tool,
+              args: call.args,
+              workspaceRoot: ctx.workspaceRoot,
+            }) ?? true)
+          : false;
+        const approvalApplies = toolNeedsApprovalGate(
+          call.tool,
+          args,
+          opts.approvalPolicy,
+          Boolean(opts.resolveToolApproval),
+        );
+        // Trusted policy/effect/approval stays owned by the established
+        // single-call runner. The harness launcher still preserves this
+        // scheduler slot; AgentGroup is used only when no gate is bypassed.
+        if (opts.toolExecutionPolicy || effectPolicyApplies || approvalApplies) {
+          return undefined;
+        }
+        if (!opts.agentGroup) {
           return {
             result: {
-              ok: child.status === "completed",
-              summary: child.summary,
-              payload: {
-                status: child.status,
-                findings: child.findings,
-                changedFiles: child.changedFiles,
-                testsRun: child.testsRun,
-                errors: child.errors,
-              },
+              ok: false,
+              summary: "run_agent: sub-agent launcher not configured",
+              payload: { error: "sub-agent launcher not configured" },
             },
-            mutationCapture: readWrite
-              ? {
-                  status: "gap",
-                  reason: "unbounded_mutation_surface",
-                }
-              : createLoopV2NoMutationCapture(),
+            mutationCapture: createLoopV2NoMutationCapture(),
           };
-        },
-        commit(call, result, mutationCapture, sourceIndex) {
-          commitToolExecutionResult(call, result, sourceIndex, ctx, {
-            concurrentMutation: false,
-            ...(mutationCapture ? { mutationCapture } : {}),
-          });
-        },
+        }
+        ctx.emit({ type: "phase", name: "waiting_children" });
+        const summarizer = new DefaultContextSummarizer();
+        const childResults = await opts.agentGroup.launchAll(
+          [call],
+          (childCall) => summarizer.summarizeForCall(ctx.ctxMgr, childCall),
+          ctx.signal,
+          [sourceIndex],
+        );
+        ctx.emit({ type: "phase", name: "merging_results" });
+        const child = childResults[0];
+        if (!child) {
+          throw new Error(`Missing child result at source ${sourceIndex}`);
+        }
+        const readWrite = (parseChildPolicy(args) ?? "read_only") === "read_write";
+        return {
+          result: {
+            ok: child.status === "completed",
+            summary: child.summary,
+            payload: {
+              status: child.status,
+              findings: child.findings,
+              changedFiles: child.changedFiles,
+              testsRun: child.testsRun,
+              errors: child.errors,
+            },
+          },
+          mutationCapture: readWrite
+            ? {
+                status: "gap",
+                reason: "unbounded_mutation_surface",
+              }
+            : createLoopV2NoMutationCapture(),
+        };
       },
-    );
+      commit(call, result, mutationCapture, sourceIndex) {
+        commitToolExecutionResult(call, result, sourceIndex, ctx, {
+          concurrentMutation: false,
+          ...(mutationCapture ? { mutationCapture } : {}),
+        });
+      },
+    });
     results = [...batch.results];
     mutationCaptures = [...batch.mutationCaptures];
   } else {
@@ -1907,14 +1783,11 @@ async function handleToolCalls(
     results = calls.map((_, index) => {
       const blocked = blockedResult(index);
       if (blocked) {
-        mutationCaptures.push(
-          ctx.captureLoopV2Facts ? createLoopV2NoMutationCapture() : undefined,
-        );
+        mutationCaptures.push(ctx.captureLoopV2Facts ? createLoopV2NoMutationCapture() : undefined);
         return blocked;
       }
       const result = allowedResults[allowedIndex];
-      if (!result)
-        throw new Error(`Missing allowed tool result ${allowedIndex}`);
+      if (!result) throw new Error(`Missing allowed tool result ${allowedIndex}`);
       mutationCaptures.push(allowedBatch.mutationCaptures[allowedIndex]);
       allowedIndex += 1;
       return result;
@@ -1944,11 +1817,7 @@ async function handleToolCalls(
     for (let i = 0; i < calls.length; i++) {
       const call = calls[i]!;
       const tr = results[i]!;
-      if (
-        call.tool === "workspace.acceptance_update" ||
-        isControlPlaneToolResult(tr)
-      )
-        continue;
+      if (call.tool === "workspace.acceptance_update" || isControlPlaneToolResult(tr)) continue;
       const injected = await runtime
         .onToolResult({
           taskId: memTaskId,
@@ -1962,9 +1831,7 @@ async function handleToolCalls(
         .catch(() => undefined);
       if (injected?.injected) injections.push(injected.injected);
     }
-    opts.publishMemoryHint?.(
-      injections.length > 0 ? injections.join("\n\n") : undefined,
-    );
+    opts.publishMemoryHint?.(injections.length > 0 ? injections.join("\n\n") : undefined);
   }
 
   // 将工具结果注入上下文（assistant 消息 + tool results）
@@ -2006,27 +1873,19 @@ async function handleToolCalls(
     : undefined;
   const repeatTool = advanceRepeatToolReminder(flags.repeatTool, calls);
   const toolGuidance = selectToolGuidanceV1({
-    ...(final.recoveryMessage
-      ? { recoveryMessage: final.recoveryMessage }
-      : {}),
+    ...(final.recoveryMessage ? { recoveryMessage: final.recoveryMessage } : {}),
     ...(final.idleFuseTripped ? { idleFuseTripped: true } : {}),
-    ...(codingPhase?.nudges.length
-      ? { codingPhaseNudges: codingPhase.nudges }
-      : {}),
-    ...(repeatTool.reminders.length
-      ? { repeatToolReminders: repeatTool.reminders }
-      : {}),
+    ...(codingPhase?.nudges.length ? { codingPhaseNudges: codingPhase.nudges } : {}),
+    ...(repeatTool.reminders.length ? { repeatToolReminders: repeatTool.reminders } : {}),
   });
-  const phaseViolationThisTurn =
-    codingPhaseEnabled && codingPhaseBlockReasons.some(Boolean);
+  const phaseViolationThisTurn = codingPhaseEnabled && codingPhaseBlockReasons.some(Boolean);
   const requiredPhaseActionSucceeded =
     codingPhaseEnabled &&
     calls.some(
       (call, index) =>
         results[index]?.ok === true &&
         (priorCodingPhase.successfulEdits === 0
-          ? (codingPhase?.state.successfulEdits ?? 0) >
-            priorCodingPhase.successfulEdits
+          ? (codingPhase?.state.successfulEdits ?? 0) > priorCodingPhase.successfulEdits
           : isCodingVerificationCall(call)),
     );
   const codingPhaseViolationTurns = codingPhaseEnabled
@@ -2039,16 +1898,11 @@ async function handleToolCalls(
 
   const madeProgress = results.some((result) => result.ok);
   const acceptanceProgress = calls.some(
-    (call, index) =>
-      call.tool === "workspace.acceptance_update" &&
-      results[index]?.ok === true,
+    (call, index) => call.tool === "workspace.acceptance_update" && results[index]?.ok === true,
   );
-  const { pendingControl: priorPendingControl, ...nextFlagsWithoutPending } =
-    nextFlags;
+  const { pendingControl: priorPendingControl, ...nextFlagsWithoutPending } = nextFlags;
   const retainedPendingControl =
-    priorPendingControl?.kind === "tool_guidance"
-      ? undefined
-      : priorPendingControl;
+    priorPendingControl?.kind === "tool_guidance" ? undefined : priorPendingControl;
   const fusedFlags: TurnFlags = {
     ...nextFlagsWithoutPending,
     ...(toolGuidance
@@ -2062,16 +1916,10 @@ async function handleToolCalls(
     // These are consecutive-stall budgets, not lifetime counters. A concrete
     // successful tool result proves the loop moved forward and earns a fresh
     // recovery/finalization window.
-    ...(madeProgress
-      ? { autoContinueNudges: 0, verifyNudges: 0, idleFuseTrips: 0 }
-      : {}),
+    ...(madeProgress ? { autoContinueNudges: 0, verifyNudges: 0, idleFuseTrips: 0 } : {}),
     ...(acceptanceProgress ? { acceptanceNudges: 0 } : {}),
-    ...(final.failureSignatures
-      ? { failureSignatures: final.failureSignatures }
-      : {}),
-    ...(final.idleFuseTripped
-      ? { idleFuseTrips: (flags.idleFuseTrips ?? 0) + 1 }
-      : {}),
+    ...(final.failureSignatures ? { failureSignatures: final.failureSignatures } : {}),
+    ...(final.idleFuseTripped ? { idleFuseTrips: (flags.idleFuseTrips ?? 0) + 1 } : {}),
   };
   const budget = resolveLifecycleBudget();
   const codingHardStop = codingPhaseEnabled && codingPhaseViolationTurns >= 2;
@@ -2079,8 +1927,7 @@ async function handleToolCalls(
     legacyBehaviorGuards &&
     final.idleFuseTripped &&
     (fusedFlags.idleFuseTrips ?? 0) >= budget.idleFuseHardStopTrips;
-  const hasNoNextRequest =
-    codingHardStop || idleHardStop || final.type === "incomplete";
+  const hasNoNextRequest = codingHardStop || idleHardStop || final.type === "incomplete";
   const committedFlags: TurnFlags = hasNoNextRequest
     ? (({ pendingControl: _terminalControl, ...rest }) => rest)(fusedFlags)
     : fusedFlags;

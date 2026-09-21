@@ -21,16 +21,12 @@ import {
   parseRerankOutput,
   resolveInjectStatus,
 } from "../src/longterm/retrieval/triggered.js";
-import type {
-  EpisodicExperience,
-  SemanticFact,
-} from "../src/longterm/store/engine.js";
+import type { EpisodicExperience, SemanticFact } from "../src/longterm/store/engine.js";
 import { deriveEntryId } from "../src/longterm/store/id.js";
 import { PostgresMemoryStoreEngine } from "../src/longterm/store/postgres-engine.js";
 import { addTrialLesson } from "../src/longterm/write/trial.js";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
+process.env.DATABASE_URL ??= "postgresql://postgres@127.0.0.1:54329/paw_memory_test";
 
 const dbOk = await ping();
 const it = dbOk ? test : test.skip;
@@ -41,21 +37,15 @@ const it = dbOk ? test : test.skip;
 
 describe("isActionableError（T2 防误检，§6.2）", () => {
   test("可行动错误触发", () => {
-    expect(isActionableError("error TS2304: Cannot find name 'foo'")).toBe(
-      true,
-    );
-    expect(isActionableError("ModuleResolutionError: Cannot find module")).toBe(
-      true,
-    );
+    expect(isActionableError("error TS2304: Cannot find name 'foo'")).toBe(true);
+    expect(isActionableError("ModuleResolutionError: Cannot find module")).toBe(true);
     expect(isActionableError("3 tests failed")).toBe(true);
     expect(isActionableError("command exited with code 1")).toBe(true);
   });
 
   test("权限拒绝/用户中止不触发", () => {
     expect(isActionableError("rm: permission denied")).toBe(false);
-    expect(
-      isActionableError("Error: EACCES: permission denied, open '/etc/x'"),
-    ).toBe(false);
+    expect(isActionableError("Error: EACCES: permission denied, open '/etc/x'")).toBe(false);
     expect(isActionableError("用户中止了操作")).toBe(false);
     expect(isActionableError("process interrupted by SIGINT")).toBe(false);
   });
@@ -93,32 +83,20 @@ describe("isCoveredByHints（T3 去重，§6.1）", () => {
 
   test("不相关 → 不覆盖", () => {
     expect(
-      isCoveredByHints("database pool defaults to ten connections", [
-        "prefer pnpm workspaces",
-      ]),
+      isCoveredByHints("database pool defaults to ten connections", ["prefer pnpm workspaces"]),
     ).toBe(false);
   });
 });
 
 describe("parseRerankOutput（§6.4 输出契约）", () => {
   test("合法输出", () => {
-    const r = parseRerankOutput(
-      '{"items":[{"seq":2,"why":"相关","label":"applicable"}]}',
-      3,
-    );
+    const r = parseRerankOutput('{"items":[{"seq":2,"why":"相关","label":"applicable"}]}', 3);
     expect(r).toEqual([{ seq: 2, why: "相关", label: "applicable" }]);
   });
 
   test("越界序号/非法 label/非 JSON → null（降级）", () => {
-    expect(
-      parseRerankOutput(
-        '{"items":[{"seq":9,"why":"","label":"applicable"}]}',
-        3,
-      ),
-    ).toBeNull();
-    expect(
-      parseRerankOutput('{"items":[{"seq":1,"why":"","label":"maybe"}]}', 3),
-    ).toBeNull();
+    expect(parseRerankOutput('{"items":[{"seq":9,"why":"","label":"applicable"}]}', 3)).toBeNull();
+    expect(parseRerankOutput('{"items":[{"seq":1,"why":"","label":"maybe"}]}', 3)).toBeNull();
     expect(parseRerankOutput("完全不是 JSON", 3)).toBeNull();
   });
 
@@ -130,10 +108,7 @@ describe("parseRerankOutput（§6.4 输出契约）", () => {
 
 describe("disagreement gate（§6.5）", () => {
   const now = new Date().toISOString();
-  const baseEpisodic = (
-    whenToUse: string,
-    perspective: string,
-  ): EpisodicExperience => ({
+  const baseEpisodic = (whenToUse: string, perspective: string): EpisodicExperience => ({
     id: "",
     kind: "episodic",
     repo: "r",
@@ -158,10 +133,7 @@ describe("disagreement gate（§6.5）", () => {
       "Check exports map first",
     );
     expect(
-      inferApplicabilityLabel(
-        "AmberModuleResolutionError after ESM migration failed",
-        strong,
-      ),
+      inferApplicabilityLabel("AmberModuleResolutionError after ESM migration failed", strong),
     ).toBe("applicable");
 
     const weak = baseEpisodic(
@@ -169,10 +141,7 @@ describe("disagreement gate（§6.5）", () => {
       "Vacuum then retry",
     );
     expect(
-      inferApplicabilityLabel(
-        "AmberModuleResolutionError after ESM migration failed",
-        weak,
-      ),
+      inferApplicabilityLabel("AmberModuleResolutionError after ESM migration failed", weak),
     ).toBe("reference");
   });
 
@@ -182,18 +151,10 @@ describe("disagreement gate（§6.5）", () => {
       "Check exports map first",
     );
     expect(
-      resolveInjectStatus(
-        "AmberModuleResolutionError ESM migration",
-        entry,
-        "reference",
-      ),
+      resolveInjectStatus("AmberModuleResolutionError ESM migration", entry, "reference"),
     ).toBe("reference");
-    expect(resolveInjectStatus("unrelated query", entry, "applicable")).toBe(
-      "verified",
-    );
-    expect(
-      resolveInjectStatus("AmberModuleResolutionError ESM migration", entry),
-    ).toBe("verified");
+    expect(resolveInjectStatus("unrelated query", entry, "applicable")).toBe("verified");
+    expect(resolveInjectStatus("AmberModuleResolutionError ESM migration", entry)).toBe("verified");
   });
 });
 
@@ -256,9 +217,10 @@ function makeSemantic(fact: string): SemanticFact {
 /** 解析 prompt 中正文含 marker 的候选序号 */
 function seqOf(prompt: string, marker: string): number {
   const re = /候选 (\d+):\n([\s\S]*?)(?=\n\n候选 |\n\n*$|$)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(prompt))) {
+  let m: RegExpExecArray | null = re.exec(prompt);
+  while (m !== null) {
     if (m[2]!.includes(marker)) return Number(m[1]);
+    m = re.exec(prompt);
   }
   throw new Error(`marker not found in rerank prompt: ${marker}`);
 }
@@ -333,8 +295,7 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     const r = makeRetriever(); // 无精排：k=1 纪律在触发层
     const pkg = await r.retrieve({
       type: "task_start",
-      taskDescription:
-        "zephyr deployments fail with token mismatch after rotation",
+      taskDescription: "zephyr deployments fail with token mismatch after rotation",
       repo: REPO,
       runId: `${RUN}_t1`,
     });
@@ -349,11 +310,9 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     expect(gates[0]!.detail.applicable).toBe(1);
     expect(gates[0]!.detail.source).toBe("heuristic"); // 无精排
     // RunEvent 发射
-    expect(
-      emitted.some(
-        (e) => e.type === "memory.trigger" && e.triggerType === "task_start",
-      ),
-    ).toBe(true);
+    expect(emitted.some((e) => e.type === "memory.trigger" && e.triggerType === "task_start")).toBe(
+      true,
+    );
     expect(emitted.some((e) => e.type === "memory.inject")).toBe(true);
     // 账本 freq+1
     expect((await engine.ledger(targetId))!.freq).toBe(1);
@@ -465,8 +424,7 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
 
     const pkg = await makeRetriever().retrieve({
       type: "action_failed",
-      errorOutput:
-        "Error: 调用 legacy API 失败\n    at callLegacy (client.ts:1:1)",
+      errorOutput: "Error: 调用 legacy API 失败\n    at callLegacy (client.ts:1:1)",
       lastActionSummary: "run_tests 提交前检查 (exit 1)",
       repo: REPO,
       runId: `${RUN}_neg`,
@@ -476,9 +434,7 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
   });
 
   it("§6.8-5 过期条目 T1/T2/T3 不可见，T4 可见且带失效标注", async () => {
-    const s = makeSemantic(
-      "Topaz scheduler requires manual lease renewal every hour",
-    );
+    const s = makeSemantic("Topaz scheduler requires manual lease renewal every hour");
     await engine.put(s);
     const id = deriveEntryId(s);
     createdIds.push(id);
@@ -488,8 +444,7 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     // T2 不可见
     const pkgT2 = await makeRetriever().retrieve({
       type: "action_failed",
-      errorOutput:
-        "SchedulerError: topaz lease expired\n    at renew (topaz.ts:2:2)",
+      errorOutput: "SchedulerError: topaz lease expired\n    at renew (topaz.ts:2:2)",
       lastActionSummary: "run topaz scheduler (exit 1)",
       repo: REPO,
       runId: `${RUN}_stale_t2`,
@@ -533,8 +488,7 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     // 5 条各 ~600 字符（粗估 150 tokens）的条目，T4 上限 5 条 → 必超 500
     for (let i = 0; i < 5; i++) {
       const s = makeSemantic(
-        `Iodine migration note ${i}: ` +
-          "detailed migration step description. ".repeat(20),
+        `Iodine migration note ${i}: ` + "detailed migration step description. ".repeat(20),
       );
       await engine.put(s);
       createdIds.push(deriveEntryId(s));
@@ -571,8 +525,7 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
     const runId = `${RUN}_rerankfail`;
     const pkg = await makeRetriever(badReranker).retrieve({
       type: "action_failed",
-      errorOutput:
-        "CacheError: peridot invalidation failed\n    at invalidate (peridot.ts:3:3)",
+      errorOutput: "CacheError: peridot invalidation failed\n    at invalidate (peridot.ts:3:3)",
       lastActionSummary: "flush peridot cache (exit 1)",
       repo: REPO,
       runId,
@@ -588,9 +541,7 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
       "ModuleResolutionError cannot find module 时先检查 exports 字段配置",
       `${RUN}_trial_origin`,
     );
-    const s = makeSemantic(
-      "Zircon loader resolves modules through the exports map",
-    );
+    const s = makeSemantic("Zircon loader resolves modules through the exports map");
     await engine.put(s);
     createdIds.push(deriveEntryId(s));
 
@@ -616,9 +567,7 @@ describe("TriggeredRetriever db 集成（§6.8）", () => {
   });
 
   it("T3 与 SessionMemory 去重（§6.1）", async () => {
-    const s = makeSemantic(
-      "the build pipeline uses incremental compilation for speed",
-    );
+    const s = makeSemantic("the build pipeline uses incremental compilation for speed");
     await engine.put(s);
     const id = deriveEntryId(s);
     createdIds.push(id);

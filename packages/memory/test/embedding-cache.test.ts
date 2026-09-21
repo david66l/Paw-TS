@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  EmbeddingCache,
-  resolveEmbeddingConfig,
-} from "../src/shared/embedding-cache.js";
+import { EmbeddingCache, resolveEmbeddingConfig } from "../src/shared/embedding-cache.js";
 
 describe("EmbeddingCache — static methods (no Ollama dependency)", () => {
   describe("cosineSimilarity", () => {
@@ -17,10 +14,7 @@ describe("EmbeddingCache — static methods (no Ollama dependency)", () => {
     });
 
     test("opposite vectors return -1", () => {
-      expect(EmbeddingCache.cosineSimilarity([1, 0], [-1, 0])).toBeCloseTo(
-        -1,
-        5,
-      );
+      expect(EmbeddingCache.cosineSimilarity([1, 0], [-1, 0])).toBeCloseTo(-1, 5);
     });
 
     test("handles unequal-length vectors", () => {
@@ -85,10 +79,7 @@ describe("EmbeddingCache — static methods (no Ollama dependency)", () => {
 
   describe("textSimilarity (pure-TS fallback)", () => {
     test("identical texts return near 1", () => {
-      const sim = EmbeddingCache.textSimilarity(
-        "fix the build script",
-        "fix the build script",
-      );
+      const sim = EmbeddingCache.textSimilarity("fix the build script", "fix the build script");
       expect(sim).toBeCloseTo(1, 1);
     });
 
@@ -105,23 +96,14 @@ describe("EmbeddingCache — static methods (no Ollama dependency)", () => {
     });
 
     test("Chinese + English mixed", () => {
-      const high = EmbeddingCache.textSimilarity(
-        "修复build脚本",
-        "fix the build script",
-      );
+      const high = EmbeddingCache.textSimilarity("修复build脚本", "fix the build script");
       // Should have some overlap via character bigrams
       expect(high).toBeGreaterThan(0);
     });
 
     test("Chinese paraphrases match better than unrelated", () => {
-      const related = EmbeddingCache.textSimilarity(
-        "打包构建流程出错了",
-        "编译部署失败",
-      );
-      const unrelated = EmbeddingCache.textSimilarity(
-        "打包构建流程出错了",
-        "添加用户登录功能",
-      );
+      const related = EmbeddingCache.textSimilarity("打包构建流程出错了", "编译部署失败");
+      const unrelated = EmbeddingCache.textSimilarity("打包构建流程出错了", "添加用户登录功能");
       // Chinese bigrams should capture more overlap for related terms
       expect(related).toBeGreaterThanOrEqual(unrelated);
     });

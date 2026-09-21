@@ -20,10 +20,7 @@
  *   只压缩中间"已经处理过的"部分
  */
 
-import {
-  ApproximateEstimator,
-  type TokenEstimator,
-} from "../token-estimator.js";
+import { ApproximateEstimator, type TokenEstimator } from "../token-estimator.js";
 import { isToolResultMessage } from "../tool-result/format.js";
 import { allocateContextBudget, computeCompactThreshold } from "./budget.js";
 import type { ChatMessage } from "./manager.js";
@@ -38,10 +35,8 @@ import { groupContextTurnsV1 } from "./turns.js";
  * 2. 需求变更/澄清信号（改为/其实/重点是/补充…）
  * 3. 模型关键决策（决定/采用/方案/decided/chose…）
  */
-const REQUIREMENT_CHANGE_PATTERN =
-  /改为|改成|其实|重点是|补充|换一种|重新来|不要|必须|不能|只修改/;
-const KEY_DECISION_PATTERN =
-  /决定|采用|方案|选择|decided|chose|opted|selected|approach/i;
+const REQUIREMENT_CHANGE_PATTERN = /改为|改成|其实|重点是|补充|换一种|重新来|不要|必须|不能|只修改/;
+const KEY_DECISION_PATTERN = /决定|采用|方案|选择|decided|chose|opted|selected|approach/i;
 
 export function isPinnedMessage(msg: ChatMessage): boolean {
   if (isToolResultMessage(msg.content)) return false;
@@ -176,8 +171,7 @@ export class ContextCompactor {
     const allocation = allocateContextBudget(contextWindow);
     const thresholdTokens = Math.max(
       0,
-      computeCompactThreshold(allocation.historyBudget) -
-        this.config.bufferTokens,
+      computeCompactThreshold(allocation.historyBudget) - this.config.bufferTokens,
     );
     return {
       shouldCompact: !this.disabled && currentTokens > thresholdTokens,
@@ -215,11 +209,7 @@ export class ContextCompactor {
       m.role === "system" || isContextAnchorMessage(m);
     let headEnd = 0;
     let headTokens = 0;
-    for (
-      let i = 0;
-      i < Math.min(this.config.protectFirstN, messages.length);
-      i++
-    ) {
+    for (let i = 0; i < Math.min(this.config.protectFirstN, messages.length); i++) {
       const m = messages[i];
       if (!m) break;
       if (headAnchor(m)) {
@@ -233,11 +223,7 @@ export class ContextCompactor {
 
     // v3：tail 比例随上下文长度收缩
     const shrinkRatio =
-      totalTokens <= 16_000
-        ? this.config.tailTokenBudget
-        : totalTokens <= 64_000
-          ? 0.15
-          : 0.1;
+      totalTokens <= 16_000 ? this.config.tailTokenBudget : totalTokens <= 64_000 ? 0.15 : 0.1;
     // tail 绝对保底随上下文缩放（e2e 实测修复：固定 8K/20 条保底在 32k
     // 小窗口下吃掉几乎全部 middle → 压缩永远 savings 不足被拒）。
     // 有效保底 = min(配置值, max(0.4×总历史, 条数保底的实际 token 和))
@@ -258,10 +244,7 @@ export class ContextCompactor {
       this.config.tailMinTokens,
       Math.max(Math.floor(totalTokens * TAIL_FLOOR_RATIO), countFloorTokens),
     );
-    const tailBudget = Math.max(
-      Math.floor(totalTokens * shrinkRatio),
-      tailMinTokensEffective,
-    );
+    const tailBudget = Math.max(Math.floor(totalTokens * shrinkRatio), tailMinTokensEffective);
 
     let tailTokens = 0;
     let tailStart = messages.length;
@@ -292,13 +275,9 @@ export class ContextCompactor {
     }
 
     const turns = groupContextTurnsV1(messages);
-    const headTurn = turns.find(
-      (turn) => headEnd >= turn.start && headEnd < turn.endExclusive,
-    );
+    const headTurn = turns.find((turn) => headEnd >= turn.start && headEnd < turn.endExclusive);
     if (headTurn) headEnd = headTurn.endExclusive - 1;
-    const tailTurn = turns.find(
-      (turn) => tailStart >= turn.start && tailStart < turn.endExclusive,
-    );
+    const tailTurn = turns.find((turn) => tailStart >= turn.start && tailStart < turn.endExclusive);
     if (tailTurn) tailStart = tailTurn.start;
     // Snapping can make head and tail meet inside the same unit. In that case
     // keep the unit in head and start tail at the next unit boundary.
@@ -327,12 +306,7 @@ export class ContextCompactor {
   ): string {
     const historyText = messagesToSummarize
       .map((m) => {
-        const prefix =
-          m.role === "user"
-            ? "User"
-            : m.role === "assistant"
-              ? "Assistant"
-              : "System";
+        const prefix = m.role === "user" ? "User" : m.role === "assistant" ? "Assistant" : "System";
         return `[${prefix}]\n${m.content}`;
       })
       .join("\n\n");
@@ -424,15 +398,11 @@ export const CONTEXT_SUMMARY_PREFIX = "[Context Summary]";
 
 /** 判断消息是否为上下文摘要 */
 export function isContextSummaryMessage(msg: ChatMessage): boolean {
-  return (
-    msg.role === "user" && msg.content.startsWith(`${CONTEXT_SUMMARY_PREFIX}\n`)
-  );
+  return msg.role === "user" && msg.content.startsWith(`${CONTEXT_SUMMARY_PREFIX}\n`);
 }
 
 /** 在插入新的 L2 摘要前移除旧的摘要消息（避免摘要套摘要） */
-export function stripContextSummaryMessages(
-  messages: readonly ChatMessage[],
-): ChatMessage[] {
+export function stripContextSummaryMessages(messages: readonly ChatMessage[]): ChatMessage[] {
   return messages.filter((m) => !isContextSummaryMessage(m));
 }
 
@@ -446,8 +416,7 @@ export function compactionMiddleMessagesV1(
     .slice(boundaries.headEnd + 1, boundaries.tailStart)
     .filter(
       (message, offset) =>
-        !pinned.has(boundaries.headEnd + 1 + offset) &&
-        !isContextSummaryMessage(message),
+        !pinned.has(boundaries.headEnd + 1 + offset) && !isContextSummaryMessage(message),
     );
 }
 

@@ -25,9 +25,7 @@ export function resolveEstimatorForModel(modelLabel: string): TokenEstimator {
   const label = modelLabel.toLowerCase();
   // Qwen / GLM / MiniMax / Yi 等中文系模型：o200k 更接近真实 tokenizer
   // （(?![a-z])：qwen2.5 / qwen3 等带版本后缀的 label 同样命中）
-  if (
-    /\b(qwen|glm|minimax|yi|kimi|moonshot|ernie|baichuan)(?![a-z])/.test(label)
-  ) {
+  if (/\b(qwen|glm|minimax|yi|kimi|moonshot|ernie|baichuan)(?![a-z])/.test(label)) {
     return new TiktokenEstimator("o200k_base");
   }
   // DeepSeek / OpenAI / GPT / o1/o3 / groq：cl100k 事实标准
@@ -89,9 +87,7 @@ export class CalibratedEstimator implements TokenEstimator {
   }
 
   countMessages(messages: readonly ChatMessage[]): number {
-    return Math.ceil(
-      this.base.countMessages(messages) * this.ratio * CONSERVATIVE_BIAS,
-    );
+    return Math.ceil(this.base.countMessages(messages) * this.ratio * CONSERVATIVE_BIAS);
   }
 
   /**

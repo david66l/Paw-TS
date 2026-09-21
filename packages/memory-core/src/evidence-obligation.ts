@@ -77,9 +77,7 @@ export function compileMemoryEvidenceObligationShapeV1(
   });
 }
 
-export function memoryEvidenceQueryHasMultipleObligationsV1(
-  query: string,
-): boolean {
+export function memoryEvidenceQueryHasMultipleObligationsV1(query: string): boolean {
   const value = boundedQuery(query);
   return (
     hasCalculationOperands(value) ||
@@ -114,10 +112,9 @@ export function validateMemoryEvidenceObligationsV1(
 
   const reasonCodes = new Set(shape.reasonCodes);
   if (
-    (reasonCodes.has("comparison_operands") ||
-      reasonCodes.has("calculation_operands")) &&
-    requirements.filter((requirement) => requirement.relation === "comparative")
-      .length < shape.minimumRequirementCount
+    (reasonCodes.has("comparison_operands") || reasonCodes.has("calculation_operands")) &&
+    requirements.filter((requirement) => requirement.relation === "comparative").length <
+      shape.minimumRequirementCount
   ) {
     throw namedError("MemoryEvidenceQueryPlanOperandBindingInvalid");
   }
@@ -125,18 +122,14 @@ export function validateMemoryEvidenceObligationsV1(
     reasonCodes.has("temporal_endpoints") &&
     requirements.filter(
       (requirement) =>
-        requirement.relation === "temporal" ||
-        requirement.relation === "comparative",
+        requirement.relation === "temporal" || requirement.relation === "comparative",
     ).length < 2
   ) {
     throw namedError("MemoryEvidenceQueryPlanTemporalBindingInvalid");
   }
   if (reasonCodes.has("longitudinal_evidence") && requirements.length === 1) {
     const [requirement] = requirements;
-    if (
-      requirement?.coverageMode !== "all" &&
-      requirement?.coverageMode !== "convergent"
-    ) {
+    if (requirement?.coverageMode !== "all" && requirement?.coverageMode !== "convergent") {
       throw namedError("MemoryEvidenceQueryPlanLongitudinalCoverageInvalid");
     }
   }
@@ -165,9 +158,7 @@ function hasCoordinatedQuestionSlots(query: string): boolean {
 function hasExplicitTemporalEndpoints(query: string): boolean {
   return (
     /\bbetween\b.{1,80}\band\b|\bfrom\b.{1,80}\bto\b/iu.test(query) ||
-    /从.{1,48}到.{1,48}(?:多久|多长|差|变化)|(?:之间|前后).{0,32}(?:多久|多长|差多少)/u.test(
-      query,
-    )
+    /从.{1,48}到.{1,48}(?:多久|多长|差|变化)|(?:之间|前后).{0,32}(?:多久|多长|差多少)/u.test(query)
   );
 }
 

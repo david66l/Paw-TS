@@ -1,10 +1,4 @@
-import {
-  FolderOpen,
-  MessageSquare,
-  NotebookText,
-  Settings2,
-  SquarePen,
-} from "lucide-react";
+import { FolderOpen, MessageSquare, NotebookText, Settings2, SquarePen } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import type { ChatSession } from "../agent/sessionTypes";
 import { PawMark } from "./PawMark";
@@ -67,9 +61,7 @@ export const Sidebar = memo(function Sidebar({
   const workspaceName = workspaceLabel(repoRoot);
 
   // 右键菜单：{会话 id, 光标坐标}。任意点击 / Esc / 滚动 / 失焦即关。
-  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(
-    null,
-  );
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   // 删除二次确认：进入菜单后先点「删除对话」再确认
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   useEffect(() => {
@@ -123,16 +115,13 @@ export const Sidebar = memo(function Sidebar({
           <span className={styles.sectionLabel}>最近对话</span>
           <span className={styles.sectionCount}>{list.length}</span>
         </div>
-        <div className={styles.sessionList} role="list">
+        <ul className={styles.sessionList}>
           {list.map((s) => {
             const active = s.id === activeSessionId;
             return (
-              <div
+              <li
                 key={s.id}
-                role="listitem"
-                className={
-                  active ? styles.sessionItemActive : styles.sessionItem
-                }
+                className={active ? styles.sessionItemActive : styles.sessionItem}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setConfirmingDelete(false);
@@ -149,33 +138,21 @@ export const Sidebar = memo(function Sidebar({
                   <MessageSquare size={15} />
                   <span className={styles.sessionTitle}>{s.title}</span>
                   <span className={styles.sessionTime}>
-                    {active && isRunning
-                      ? statusText
-                      : formatRelativeTime(s.updatedAt)}
+                    {active && isRunning ? statusText : formatRelativeTime(s.updatedAt)}
                   </span>
                 </button>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </div>
 
       <div className={styles.footerCards}>
-        <button
-          type="button"
-          className={styles.settingsRow}
-          title="记忆"
-          onClick={onOpenMemory}
-        >
+        <button type="button" className={styles.settingsRow} title="记忆" onClick={onOpenMemory}>
           <NotebookText size={17} />
           <span>记忆</span>
         </button>
-        <button
-          type="button"
-          className={styles.settingsRow}
-          title="设置"
-          onClick={onOpenSettings}
-        >
+        <button type="button" className={styles.settingsRow} title="设置" onClick={onOpenSettings}>
           <Settings2 size={17} />
           <span>设置</span>
         </button>
@@ -193,6 +170,10 @@ export const Sidebar = memo(function Sidebar({
           style={{ top: menu.y, left: menu.x }}
           role="menu"
           onClick={(e) => e.stopPropagation()}
+          // 菜单内的点击/按键不再冒泡到 window 的 close 监听；Esc 除外（仍需关闭菜单）。
+          onKeyDown={(e) => {
+            if (e.key !== "Escape") e.stopPropagation();
+          }}
         >
           {confirmingDelete ? (
             <>

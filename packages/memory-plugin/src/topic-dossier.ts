@@ -18,8 +18,7 @@ export const PAW_MEMORY_TOPIC_DOSSIER_REPAIR_POLICY_VERSION_V1 =
   "paw.memory-topic-dossier-repair-once.v1" as const;
 export const PAW_MEMORY_TOPIC_DOSSIER_PROPOSAL_VERSION_V1 =
   "paw.memory-topic-dossier-proposal.v1" as const;
-export const PAW_MEMORY_TOPIC_DOSSIER_VERSION_V1 =
-  "paw.memory-topic-dossier.v1" as const;
+export const PAW_MEMORY_TOPIC_DOSSIER_VERSION_V1 = "paw.memory-topic-dossier.v1" as const;
 
 export interface MemoryTopicDossierExtractionInputV1 {
   readonly projection: MemoryTopicProjectionV1;
@@ -109,27 +108,20 @@ export function createJsonMemoryTopicDossierExtractorV1(input: {
   if (!input.model || typeof input.model.complete !== "function") {
     throw namedError("MemoryTopicDossierExtractorModelInvalid");
   }
-  const extractorVersion =
-    input.extractorVersion ?? PAW_MEMORY_TOPIC_DOSSIER_EXTRACTOR_VERSION_V1;
+  const extractorVersion = input.extractorVersion ?? PAW_MEMORY_TOPIC_DOSSIER_EXTRACTOR_VERSION_V1;
   if (!extractorVersion.trim()) {
     throw namedError("MemoryTopicDossierExtractorVersionInvalid");
   }
   return Object.freeze({
     extractorVersion,
-    async extract(
-      extraction: MemoryTopicDossierExtractionInputV1,
-      signal: AbortSignal,
-    ) {
+    async extract(extraction: MemoryTopicDossierExtractionInputV1, signal: AbortSignal) {
       if (signal.aborted) throw abortError();
-      const result = await input.model.complete(
-        buildMemoryTopicDossierRequestV1(extraction),
-        { signal },
-      );
+      const result = await input.model.complete(buildMemoryTopicDossierRequestV1(extraction), {
+        signal,
+      });
       if (signal.aborted || result.status === "cancelled") throw abortError();
       if (result.status !== "completed") {
-        throw namedError(
-          `MemoryTopicDossierExtractor_${stableCode(result.errorCode)}`,
-        );
+        throw namedError(`MemoryTopicDossierExtractor_${stableCode(result.errorCode)}`);
       }
       try {
         return parseMemoryTopicDossierProposalV1(result.text, extraction);
@@ -143,9 +135,7 @@ export function createJsonMemoryTopicDossierExtractorV1(input: {
           throw abortError();
         }
         if (repaired.status !== "completed") {
-          throw namedError(
-            `MemoryTopicDossierExtractor_${stableCode(repaired.errorCode)}`,
-          );
+          throw namedError(`MemoryTopicDossierExtractor_${stableCode(repaired.errorCode)}`);
         }
         return parseMemoryTopicDossierProposalV1(repaired.text, extraction);
       }
@@ -209,12 +199,8 @@ export function buildMemoryTopicDossierRequestV1(
       relations: input.projection.snapshot.relationRefs
         .filter(
           (relation) =>
-            catalog.states.some(
-              ({ state }) => state.memoryId === relation.fromMemoryId,
-            ) &&
-            catalog.states.some(
-              ({ state }) => state.memoryId === relation.toMemoryId,
-            ),
+            catalog.states.some(({ state }) => state.memoryId === relation.fromMemoryId) &&
+            catalog.states.some(({ state }) => state.memoryId === relation.toMemoryId),
         )
         .map((relation) => ({
           relationId: relation.relationId,
@@ -234,10 +220,7 @@ export function parseMemoryTopicDossierProposalV1(
   const parsed = jsonObject(text);
   const currentCandidates = new Set(
     catalog.states
-      .filter(
-        ({ state, entry }) =>
-          state.status === "current" && entry.kind !== "vault_ref",
-      )
+      .filter(({ state, entry }) => state.status === "current" && entry.kind !== "vault_ref")
       .map(({ state }) => state.memoryId),
   );
   const currentMemoryIds = selectedIds(
@@ -249,9 +232,7 @@ export function parseMemoryTopicDossierProposalV1(
   if (currentCandidates.size > 0 && currentMemoryIds.length === 0) {
     throw namedError("MemoryTopicDossierCurrentSelectionEmpty");
   }
-  const visibleStateIds = new Set(
-    catalog.states.map(({ state }) => state.memoryId),
-  );
+  const visibleStateIds = new Set(catalog.states.map(({ state }) => state.memoryId));
   const evolutionRelationIds = selectedIds(
     parsed.evolutionRelationIds,
     input.maxEvolutions,
@@ -289,14 +270,9 @@ export function createCompleteMemoryTopicDossierProposalV1(
   input: MemoryTopicDossierExtractionInputV1,
 ): MemoryTopicDossierProposalV1 | undefined {
   const catalog = validateExtractionInput(input);
-  const visibleStateIds = new Set(
-    catalog.states.map(({ state }) => state.memoryId),
-  );
+  const visibleStateIds = new Set(catalog.states.map(({ state }) => state.memoryId));
   const currentMemoryIds = catalog.states
-    .filter(
-      ({ state, entry }) =>
-        state.status === "current" && entry.kind !== "vault_ref",
-    )
+    .filter(({ state, entry }) => state.status === "current" && entry.kind !== "vault_ref")
     .map(({ state }) => state.memoryId)
     .sort();
   const evolutionRelationIds = [
@@ -334,25 +310,17 @@ export function createBoundedMemoryTopicDossierProposalV1(
     input.projection.snapshot.memberships.map((item) => [item.memoryId, item]),
   );
   const states = new Map(
-    catalog.states.map(({ state, entry }) => [
-      state.memoryId,
-      { state, entry },
-    ]),
+    catalog.states.map(({ state, entry }) => [state.memoryId, { state, entry }]),
   );
   const visibleStateIds = new Set(states.keys());
   const currentMemoryIds = [...states.values()]
-    .filter(
-      ({ state, entry }) =>
-        state.status === "current" && entry.kind !== "vault_ref",
-    )
+    .filter(({ state, entry }) => state.status === "current" && entry.kind !== "vault_ref")
     .sort((left, right) => {
       const leftMembership = membership.get(left.state.memoryId);
       const rightMembership = membership.get(right.state.memoryId);
       return (
-        Number(rightMembership?.role === "primary") -
-          Number(leftMembership?.role === "primary") ||
-        (rightMembership?.confidence ?? 0) -
-          (leftMembership?.confidence ?? 0) ||
+        Number(rightMembership?.role === "primary") - Number(leftMembership?.role === "primary") ||
+        (rightMembership?.confidence ?? 0) - (leftMembership?.confidence ?? 0) ||
         right.state.validFrom.localeCompare(left.state.validFrom) ||
         left.state.memoryId.localeCompare(right.state.memoryId)
       );
@@ -368,9 +336,8 @@ export function createBoundedMemoryTopicDossierProposalV1(
     )
     .sort(
       (left, right) =>
-        relationRecency(right, states).localeCompare(
-          relationRecency(left, states),
-        ) || left.relationId.localeCompare(right.relationId),
+        relationRecency(right, states).localeCompare(relationRecency(left, states)) ||
+        left.relationId.localeCompare(right.relationId),
     )
     .slice(0, input.maxEvolutions)
     .map((relation) => relation.relationId);
@@ -386,9 +353,7 @@ export function createBoundedMemoryTopicDossierProposalV1(
       const rightUnresolved = relationUnresolved(right, states);
       return (
         Number(rightUnresolved) - Number(leftUnresolved) ||
-        relationRecency(right, states).localeCompare(
-          relationRecency(left, states),
-        ) ||
+        relationRecency(right, states).localeCompare(relationRecency(left, states)) ||
         left.relationId.localeCompare(right.relationId)
       );
     })
@@ -425,21 +390,12 @@ export function materializeMemoryTopicDossierV1(
     256,
     "MemoryTopicDossierExtractorVersionInvalid",
   );
-  const createdAt = isoTime(
-    input.createdAt,
-    "MemoryTopicDossierCreatedAtInvalid",
-  );
+  const createdAt = isoTime(input.createdAt, "MemoryTopicDossierCreatedAtInvalid");
   const states = new Map(
-    catalog.states.map(({ state, entry }) => [
-      state.memoryId,
-      materializeState(state, entry),
-    ]),
+    catalog.states.map(({ state, entry }) => [state.memoryId, materializeState(state, entry)]),
   );
   const relations = new Map(
-    input.projection.snapshot.relationRefs.map((relation) => [
-      relation.relationId,
-      relation,
-    ]),
+    input.projection.snapshot.relationRefs.map((relation) => [relation.relationId, relation]),
   );
   const currentConclusions = Object.freeze(
     input.proposal.currentMemoryIds
@@ -462,11 +418,7 @@ export function materializeMemoryTopicDossierV1(
         relationId: relation.relationId,
         previous,
         current,
-        evidenceRefs: unionRefs(
-          previous.evidenceRefs,
-          current.evidenceRefs,
-          relation.evidenceRefs,
-        ),
+        evidenceRefs: unionRefs(previous.evidenceRefs, current.evidenceRefs, relation.evidenceRefs),
       });
     }),
   );
@@ -486,21 +438,14 @@ export function materializeMemoryTopicDossierV1(
           left.status === "current" && right.status === "current"
             ? ("unresolved" as const)
             : ("historical" as const),
-        evidenceRefs: unionRefs(
-          left.evidenceRefs,
-          right.evidenceRefs,
-          relation.evidenceRefs,
-        ),
+        evidenceRefs: unionRefs(left.evidenceRefs, right.evidenceRefs, relation.evidenceRefs),
       });
     }),
   );
   const sourceMemoryIds = Object.freeze(
     stableStrings([
       ...currentConclusions.map((state) => state.memoryId),
-      ...evolutions.flatMap((item) => [
-        item.previous.memoryId,
-        item.current.memoryId,
-      ]),
+      ...evolutions.flatMap((item) => [item.previous.memoryId, item.current.memoryId]),
       ...conflicts.flatMap((item) => [item.left.memoryId, item.right.memoryId]),
     ]),
   );
@@ -514,21 +459,12 @@ export function materializeMemoryTopicDossierV1(
   const coverage = Object.freeze({
     currentSelected: currentConclusions.length,
     currentAvailable: catalog.states.filter(
-      ({ state, entry }) =>
-        state.status === "current" && entry.kind !== "vault_ref",
+      ({ state, entry }) => state.status === "current" && entry.kind !== "vault_ref",
     ).length,
     evolutionsSelected: evolutions.length,
-    evolutionsAvailable: relationIds(
-      input.projection,
-      "supersedes",
-      new Set(states.keys()),
-    ).size,
+    evolutionsAvailable: relationIds(input.projection, "supersedes", new Set(states.keys())).size,
     conflictsSelected: conflicts.length,
-    conflictsAvailable: relationIds(
-      input.projection,
-      "contradicts",
-      new Set(states.keys()),
-    ).size,
+    conflictsAvailable: relationIds(input.projection, "contradicts", new Set(states.keys())).size,
   });
   const body = {
     schemaVersion: PAW_MEMORY_TOPIC_DOSSIER_VERSION_V1,
@@ -553,9 +489,7 @@ export function materializeMemoryTopicDossierV1(
   });
 }
 
-export function assertMemoryTopicDossierIntegrityV1(
-  dossier: MemoryTopicDossierV1,
-): void {
+export function assertMemoryTopicDossierIntegrityV1(dossier: MemoryTopicDossierV1): void {
   if (
     dossier.schemaVersion !== PAW_MEMORY_TOPIC_DOSSIER_VERSION_V1 ||
     dossier.policyVersion !== PAW_MEMORY_TOPIC_DOSSIER_POLICY_VERSION_V1
@@ -569,14 +503,8 @@ export function assertMemoryTopicDossierIntegrityV1(
   isoTime(dossier.createdAt, "MemoryTopicDossierCreatedAtInvalid");
   const sourceIds = stableStrings([
     ...dossier.currentConclusions.map((state) => state.memoryId),
-    ...dossier.evolutions.flatMap((item) => [
-      item.previous.memoryId,
-      item.current.memoryId,
-    ]),
-    ...dossier.conflicts.flatMap((item) => [
-      item.left.memoryId,
-      item.right.memoryId,
-    ]),
+    ...dossier.evolutions.flatMap((item) => [item.previous.memoryId, item.current.memoryId]),
+    ...dossier.conflicts.flatMap((item) => [item.left.memoryId, item.right.memoryId]),
   ]);
   const evidenceRefs = stableStrings([
     ...dossier.currentConclusions.flatMap((state) => state.evidenceRefs),
@@ -646,12 +574,7 @@ function validateExtractionInput(input: MemoryTopicDossierExtractionInputV1): {
   }>[];
 } {
   assertMemoryTopicProjectionIntegrityV1(input.projection);
-  boundedInteger(
-    input.maxCurrentConclusions,
-    0,
-    64,
-    "MemoryTopicDossierBudgetInvalid",
-  );
+  boundedInteger(input.maxCurrentConclusions, 0, 64, "MemoryTopicDossierBudgetInvalid");
   boundedInteger(input.maxEvolutions, 0, 64, "MemoryTopicDossierBudgetInvalid");
   boundedInteger(input.maxConflicts, 0, 64, "MemoryTopicDossierBudgetInvalid");
   const entries = new Map<string, MemoryEntry>();
@@ -661,9 +584,7 @@ function validateExtractionInput(input: MemoryTopicDossierExtractionInputV1): {
     }
     entries.set(entry.id, entry);
   }
-  if (
-    input.projection.snapshot.memberMemoryIds.some((id) => !entries.has(id))
-  ) {
+  if (input.projection.snapshot.memberMemoryIds.some((id) => !entries.has(id))) {
     throw namedError("MemoryTopicDossierEntrySetIncomplete");
   }
   const states = input.projection.snapshot.trajectories.flatMap((trajectory) =>
@@ -673,9 +594,7 @@ function validateExtractionInput(input: MemoryTopicDossierExtractionInputV1): {
       return Object.freeze({ state, entry });
     }),
   );
-  if (
-    new Set(states.map(({ state }) => state.memoryId)).size !== states.length
-  ) {
+  if (new Set(states.map(({ state }) => state.memoryId)).size !== states.length) {
     throw namedError("MemoryTopicDossierStateDuplicate");
   }
   return Object.freeze({ states: Object.freeze(states) });
@@ -704,9 +623,7 @@ function renderEntry(entry: MemoryEntry): string {
   if (entry.kind === "profile") return boundedStatement(entry.insight);
   if (entry.kind === "episodic") {
     return boundedStatement(
-      [entry.whenToUse, entry.perspective, ...entry.modification]
-        .filter(Boolean)
-        .join("\n"),
+      [entry.whenToUse, entry.perspective, ...entry.modification].filter(Boolean).join("\n"),
     );
   }
   throw namedError("MemoryTopicDossierVaultStateUnsupported");
@@ -736,10 +653,7 @@ function relationIds(
 
 function relationRecency(
   relation: MemoryTopicRelationRefV1,
-  states: ReadonlyMap<
-    string,
-    Readonly<{ state: MemoryTrajectoryStateV1; entry: MemoryEntry }>
-  >,
+  states: ReadonlyMap<string, Readonly<{ state: MemoryTrajectoryStateV1; entry: MemoryEntry }>>,
 ): string {
   const from = states.get(relation.fromMemoryId)?.state.validFrom ?? "";
   const to = states.get(relation.toMemoryId)?.state.validFrom ?? "";
@@ -748,10 +662,7 @@ function relationRecency(
 
 function relationUnresolved(
   relation: MemoryTopicRelationRefV1,
-  states: ReadonlyMap<
-    string,
-    Readonly<{ state: MemoryTrajectoryStateV1; entry: MemoryEntry }>
-  >,
+  states: ReadonlyMap<string, Readonly<{ state: MemoryTrajectoryStateV1; entry: MemoryEntry }>>,
 ): boolean {
   return (
     states.get(relation.fromMemoryId)?.state.status === "current" &&
@@ -777,16 +688,12 @@ function selectedIds(
   return result.sort();
 }
 
-function unionRefs(
-  ...values: readonly (readonly string[])[]
-): readonly string[] {
+function unionRefs(...values: readonly (readonly string[])[]): readonly string[] {
   return Object.freeze(stableStrings(values.flat()));
 }
 
 function stableStrings(values: readonly string[]): string[] {
-  return [
-    ...new Set(values.map((value) => value.trim()).filter(Boolean)),
-  ].sort();
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
 }
 
 function required<T>(values: ReadonlyMap<string, T>, id: string): T {
@@ -798,8 +705,7 @@ function required<T>(values: ReadonlyMap<string, T>, id: string): T {
 function jsonObject(text: string): Record<string, unknown> {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start)
-    throw namedError("MemoryTopicDossierJsonInvalid");
+  if (start < 0 || end <= start) throw namedError("MemoryTopicDossierJsonInvalid");
   try {
     const value: unknown = JSON.parse(text.slice(start, end + 1));
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -807,22 +713,14 @@ function jsonObject(text: string): Record<string, unknown> {
     }
     return value as Record<string, unknown>;
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.name === "MemoryTopicDossierJsonInvalid"
-    ) {
+    if (error instanceof Error && error.name === "MemoryTopicDossierJsonInvalid") {
       throw error;
     }
     throw namedError("MemoryTopicDossierJsonInvalid");
   }
 }
 
-function boundedInteger(
-  value: number,
-  min: number,
-  max: number,
-  errorName: string,
-): number {
+function boundedInteger(value: number, min: number, max: number, errorName: string): number {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
     throw namedError(errorName);
   }

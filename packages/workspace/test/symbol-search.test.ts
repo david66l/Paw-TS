@@ -72,10 +72,7 @@ type Handler = (req: Request) => Response;`,
 
   test("ignores non-js/ts files", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-sym-"));
-    writeFileSync(
-      path.join(dir, "readme.md"),
-      "# MyProject\nfunction foo() {}",
-    );
+    writeFileSync(path.join(dir, "readme.md"), "# MyProject\nfunction foo() {}");
 
     const r = searchWorkspaceSymbols(dir, "foo");
     expect(r.matches?.length ?? 0).toBe(0);
@@ -84,10 +81,7 @@ type Handler = (req: Request) => Response;`,
   test("ignores dot directories", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "paw-sym-"));
     mkdirSync(path.join(dir, ".hidden"), { recursive: true });
-    writeFileSync(
-      path.join(dir, ".hidden", "secret.ts"),
-      "function hiddenFn() {}",
-    );
+    writeFileSync(path.join(dir, ".hidden", "secret.ts"), "function hiddenFn() {}");
 
     const r = searchWorkspaceSymbols(dir, "hiddenFn");
     expect(r.matches?.length ?? 0).toBe(0);

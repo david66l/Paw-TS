@@ -61,10 +61,7 @@ export function createModelCheckpointSemanticVerifierV1(
       if (prompt.length > policy.maxPromptChars) {
         return unknown("CheckpointSemanticPromptTooLarge");
       }
-      const deadline = createOperationDeadline(
-        callOptions.signal,
-        policy.timeoutMs,
-      );
+      const deadline = createOperationDeadline(callOptions.signal, policy.timeoutMs);
       const signal = deadline.signal;
       try {
         const completion = await deadline.run(() =>
@@ -115,9 +112,7 @@ export function freezeCheckpointSemanticVerifierPolicyV1(
   return Object.freeze({ ...policy });
 }
 
-function parseVerdict(
-  value: string,
-): Awaited<ReturnType<CheckpointSemanticVerifierV1["verify"]>> {
+function parseVerdict(value: string): Awaited<ReturnType<CheckpointSemanticVerifierV1["verify"]>> {
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
     return unknown("CheckpointSemanticInvalidJson");
@@ -178,12 +173,7 @@ function unknown(errorCode: string) {
 }
 
 function stableErrorCode(error: unknown): string {
-  if (
-    error &&
-    typeof error === "object" &&
-    "name" in error &&
-    typeof error.name === "string"
-  ) {
+  if (error && typeof error === "object" && "name" in error && typeof error.name === "string") {
     return `CheckpointSemantic${error.name}`;
   }
   return "CheckpointSemanticUnknownError";
@@ -198,9 +188,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isOneOf<T extends string>(
-  value: unknown,
-  allowed: readonly T[],
-): value is T {
+function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
   return typeof value === "string" && allowed.includes(value as T);
 }

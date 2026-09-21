@@ -8,8 +8,7 @@ import {
   evaluateCompletionReviewTriggersV1,
 } from "./policy.js";
 
-export const COMPLETION_REVIEW_GATE_POLICY_VERSION_V1 =
-  "paw.completion-review-gate.v3" as const;
+export const COMPLETION_REVIEW_GATE_POLICY_VERSION_V1 = "paw.completion-review-gate.v3" as const;
 
 export type CompletionReviewGateDecisionV1 =
   | Readonly<{ action: "allow" }>
@@ -30,17 +29,11 @@ export function evaluateCompletionReviewGateV1(
         ? (["fresh_verification_inconclusive"] as const)
         : [],
   );
-  const policyTriggers = evaluateCompletionReviewTriggersV1(
-    candidate,
-    policy,
-  ).filter(
+  const policyTriggers = evaluateCompletionReviewTriggersV1(candidate, policy).filter(
     (trigger) =>
-      trigger !== "missing_fresh_verification" ||
-      packet.verification.state === "missing",
+      trigger !== "missing_fresh_verification" || packet.verification.state === "missing",
   );
-  const triggers = Object.freeze([
-    ...new Set([...policyTriggers, ...evidenceTriggers]),
-  ]);
+  const triggers = Object.freeze([...new Set([...policyTriggers, ...evidenceTriggers])]);
   return triggers.length === 0
     ? Object.freeze({ action: "allow" as const })
     : Object.freeze({ action: "review" as const, triggers });

@@ -51,9 +51,7 @@ function stripEnvironmentPrefix(tokens: readonly string[]): readonly string[] {
 }
 
 function isPythonExecutable(token: string): boolean {
-  return /^(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?$/i.test(
-    executableName(token),
-  );
+  return /^(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?$/i.test(executableName(token));
 }
 
 function pythonModuleInvocation(
@@ -69,9 +67,7 @@ function pythonModuleInvocation(
     if (token === "-V" || token === "--version") return undefined;
     if (token === "-m") {
       const module = tokens[index + 1];
-      return module
-        ? { module: module.toLowerCase(), args: tokens.slice(index + 2) }
-        : undefined;
+      return module ? { module: module.toLowerCase(), args: tokens.slice(index + 2) } : undefined;
     }
     if (/^-(?:b|E|I|O|OO|P|q|s|S|u|v|x)$/.test(token)) {
       index += 1;
@@ -97,9 +93,7 @@ function isNonExecutionPytestInvocation(args: readonly string[]): boolean {
   });
 }
 
-function pythonScriptFamily(
-  tokens: readonly string[],
-): VerificationCommandFamily | undefined {
+function pythonScriptFamily(tokens: readonly string[]): VerificationCommandFamily | undefined {
   if (!tokens[0] || !isPythonExecutable(tokens[0])) return undefined;
   let index = 1;
   if (/^py(?:\.exe)?$/i.test(executableName(tokens[0]))) {
@@ -114,33 +108,24 @@ function pythonScriptFamily(
   if (/(?:^|\/)bin\/(?:test|doctest)$/.test(normalizedScript)) {
     return "python-runner";
   }
-  if (
-    /^manage\.py$/i.test(name) &&
-    tokens[index + 1]?.toLowerCase() === "test"
-  ) {
+  if (/^manage\.py$/i.test(name) && tokens[index + 1]?.toLowerCase() === "test") {
     return "django";
   }
   return undefined;
 }
 
-function analyzeSegment(
-  rawTokens: readonly string[],
-): VerificationSegmentIntent | undefined {
+function analyzeSegment(rawTokens: readonly string[]): VerificationSegmentIntent | undefined {
   const tokens = stripEnvironmentPrefix(rawTokens);
   const executable = tokens[0] ? executableName(tokens[0]) : "";
   if (!executable) return undefined;
 
   if (/^pytest(?:\.exe)?$/i.test(executable)) {
-    return isNonExecutionPytestInvocation(tokens.slice(1))
-      ? undefined
-      : { family: "pytest" };
+    return isNonExecutionPytestInvocation(tokens.slice(1)) ? undefined : { family: "pytest" };
   }
 
   const module = pythonModuleInvocation(tokens);
   if (module?.module === "pytest") {
-    return isNonExecutionPytestInvocation(module.args)
-      ? undefined
-      : { family: "pytest" };
+    return isNonExecutionPytestInvocation(module.args) ? undefined : { family: "pytest" };
   }
   if (module?.module === "unittest") return { family: "unittest" };
   if (module?.module === "django" && module.args[0]?.toLowerCase() === "test") {
@@ -159,9 +144,7 @@ function analyzeSegment(
     if (first === "test") return { family: "javascript" };
     if (
       first === "run" &&
-      /^(?:test|check|build|lint|typecheck|e2e|verify)(?::[\w-]+)?$/i.test(
-        second ?? "",
-      )
+      /^(?:test|check|build|lint|typecheck|e2e|verify)(?::[\w-]+)?$/i.test(second ?? "")
     ) {
       return { family: "javascript" };
     }
@@ -169,10 +152,7 @@ function analyzeSegment(
   if (/^(?:vitest|jest)(?:\.exe|\.cmd)?$/i.test(executable)) {
     return { family: "javascript" };
   }
-  if (
-    /^npx(?:\.exe|\.cmd)?$/i.test(executable) &&
-    /^(?:vitest|jest)$/i.test(tokens[1] ?? "")
-  ) {
+  if (/^npx(?:\.exe|\.cmd)?$/i.test(executable) && /^(?:vitest|jest)$/i.test(tokens[1] ?? "")) {
     return { family: "javascript" };
   }
   if (/^node(?:\.exe)?$/i.test(executable)) {
@@ -189,9 +169,7 @@ function analyzeSegment(
 }
 
 /** Analyze whether a shell command actually intends to execute assertions. */
-export function analyzeVerificationCommand(
-  command: string,
-): VerificationCommandIntent | undefined {
+export function analyzeVerificationCommand(command: string): VerificationCommandIntent | undefined {
   const invocation = analyzeVerificationInvocation(command);
   return invocation
     ? {
@@ -201,9 +179,7 @@ export function analyzeVerificationCommand(
     : undefined;
 }
 
-export function analyzeVerificationInvocation(
-  command: string,
-): VerificationInvocation | undefined {
+export function analyzeVerificationInvocation(command: string): VerificationInvocation | undefined {
   const trimmed = command.trim();
   if (!trimmed) return undefined;
   if (/\b(?:pip3?|uv|npm|pnpm|yarn|bun)\s+(?:install|add|i)\b/i.test(trimmed)) {
@@ -226,9 +202,7 @@ export function analyzeVerificationInvocation(
   return undefined;
 }
 
-export function verificationCommandFamily(
-  command: string,
-): VerificationCommandFamily | undefined {
+export function verificationCommandFamily(command: string): VerificationCommandFamily | undefined {
   return analyzeVerificationCommand(command)?.family;
 }
 

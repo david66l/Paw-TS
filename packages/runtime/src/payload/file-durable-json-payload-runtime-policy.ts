@@ -37,10 +37,8 @@ export function freezeFileDurableJsonPayloadRuntimePolicyV1(
   }
   const codec = freezeCodec(value.codec);
   if (
-    value.locationBindingVersion !==
-      CANONICAL_DURABLE_JSON_PAYLOAD_BINDING_VERSION_V1 ||
-    value.locationAwareSessionVersion !==
-      LOCATION_AWARE_PAYLOAD_SESSION_VERSION_V1 ||
+    value.locationBindingVersion !== CANONICAL_DURABLE_JSON_PAYLOAD_BINDING_VERSION_V1 ||
+    value.locationAwareSessionVersion !== LOCATION_AWARE_PAYLOAD_SESSION_VERSION_V1 ||
     value.materializerVersion !== LOCATION_AWARE_PAYLOAD_MATERIALIZER_VERSION_V1
   ) {
     throw new Error("File durable JSON payload runtime version is invalid");

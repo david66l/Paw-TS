@@ -1,13 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
-import {
-  parseMeaAuditReportV1,
-  renderMeaAuditProtocolV1,
-} from "../src/mea/audit-report.js";
-import {
-  checkMeaAuditGate,
-  resolveMeaAuditorConfig,
-} from "../src/mea/auditor-gate.js";
+import { parseMeaAuditReportV1, renderMeaAuditProtocolV1 } from "../src/mea/audit-report.js";
+import { checkMeaAuditGate, resolveMeaAuditorConfig } from "../src/mea/auditor-gate.js";
 import { runMeaAuditor } from "../src/mea/auditor.js";
 import { TaskStateManager } from "../src/task-state.js";
 
@@ -77,9 +71,7 @@ describe("mea audit report parsing", () => {
   });
 
   test("missing enums degrade conservatively to incomplete+suspect", () => {
-    const { ok, report } = parseMeaAuditReportV1(
-      '```json\n{"completion":"complete"}\n```',
-    );
+    const { ok, report } = parseMeaAuditReportV1('```json\n{"completion":"complete"}\n```');
     expect(ok).toBe(false);
     expect(report.completion).toBe("incomplete");
     expect(report.integrity).toBe("suspect");
@@ -241,13 +233,10 @@ describe("resolveMeaAuditorConfig", () => {
   });
   test("env fallback accepted only for known modes", () => {
     expect(resolveMeaAuditorConfig(undefined, {}).mode).toBe("off");
-    expect(
-      resolveMeaAuditorConfig(undefined, { PAW_AGENT_MEA_AUDITOR: "enforce" })
-        .mode,
-    ).toBe("enforce");
-    expect(
-      resolveMeaAuditorConfig(undefined, { PAW_AGENT_MEA_AUDITOR: "yes" }).mode,
-    ).toBe("off");
+    expect(resolveMeaAuditorConfig(undefined, { PAW_AGENT_MEA_AUDITOR: "enforce" }).mode).toBe(
+      "enforce",
+    );
+    expect(resolveMeaAuditorConfig(undefined, { PAW_AGENT_MEA_AUDITOR: "yes" }).mode).toBe("off");
   });
 });
 
@@ -257,15 +246,11 @@ describe("MEA state records: hard transition rule", () => {
       "../src/mea/state-records.js"
     );
     const manager = new TaskStateManager("g");
-    manager.applyMeaExecutorClaims([
-      { kind: "artifact", text: "修复了 src/index.ts" },
-    ]);
+    manager.applyMeaExecutorClaims([{ kind: "artifact", text: "修复了 src/index.ts" }]);
     let snapshot = manager.snapshot();
     expect(snapshot.meaRecords?.[0]?.status).toBe("untrusted");
     // 再来一份同样的声明（模拟执行者重复声明）依然是 untrusted
-    manager.applyMeaExecutorClaims([
-      { kind: "artifact", text: "修复了 src/index.ts" },
-    ]);
+    manager.applyMeaExecutorClaims([{ kind: "artifact", text: "修复了 src/index.ts" }]);
     snapshot = manager.snapshot();
     expect(snapshot.meaRecords?.[0]?.status).toBe("untrusted");
     void meaRecordsFromExecutorClaims;
@@ -275,9 +260,7 @@ describe("MEA state records: hard transition rule", () => {
   test("audit facts land as completed with audit evidence and upgrade claims", async () => {
     const manager = new TaskStateManager("g");
     manager.applyMeaExecutorClaims([{ kind: "fact", text: "测试全部通过" }]);
-    const report = (
-      await import("../src/mea/audit-report.js")
-    ).parseMeaAuditReportV1(
+    const report = (await import("../src/mea/audit-report.js")).parseMeaAuditReportV1(
       '```json\n{"completion":"complete","integrity":"clean","unmetCriteria":[],"verifiedFacts":[{"statement":"测试全部通过","evidence":{"commands":["bun test"]}}],"summary":"ok"}\n```',
     ).report;
     manager.applyMeaAuditReport(report);
