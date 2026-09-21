@@ -1,7 +1,7 @@
 /**
  * MemoryItem DAO
  */
-import { getSql, parseJson } from "../connection.js";
+import { getSql, parseJson, textArrayLiteral } from "../connection.js";
 import type { MemoryItemRow } from "../rows.js";
 import type { MemoryItem, MemoryStatus, MemoryType, ScopeDescriptor } from "../types.js";
 
@@ -113,8 +113,8 @@ export const memoryItemDao = {
       ) VALUES (
         ${item.id}, ${item.schemaVersion}, ${item.type}, ${item.subjectKey}, ${item.subjectKeyVersion},
         ${item.title}, ${item.summary}, ${item.status}, ${sql.json(item.scope as any)}, ${item.confidence},
-        ${item.verificationStatus}, ${sql.json(item.payload as any)}, ${sql.array(item.tags ?? [])},
-        ${sql.array(item.relatedFiles ?? [])}, ${sql.array(item.relatedSymbols ?? [])}, ${sql.array(item.relatedTestRunIds ?? [])},
+        ${item.verificationStatus}, ${sql.json(item.payload as any)}, ${textArrayLiteral(item.tags ?? [])}::text[],
+        ${textArrayLiteral(item.relatedFiles ?? [])}::text[], ${textArrayLiteral(item.relatedSymbols ?? [])}::text[], ${textArrayLiteral(item.relatedTestRunIds ?? [])}::text[],
         ${item.sensitivity}, ${item.version}, ${sql.json(item.createdBy as any)}, ${sql.json(item.updatedBy as any)},
         ${item.createdAt}, ${item.updatedAt}
       )
@@ -238,7 +238,7 @@ export const memoryItemDao = {
         confidence = ${patch.confidence ?? sql`confidence`},
         verification_status = ${patch.verificationStatus ?? sql`verification_status`},
         payload = ${patch.payload !== undefined ? sql.json(patch.payload as any) : sql`payload`},
-        tags = ${patch.tags !== undefined ? sql.array(patch.tags) : sql`tags`},
+        tags = ${patch.tags !== undefined ? sql`${textArrayLiteral(patch.tags)}::text[]` : sql`tags`},
         scope = ${patch.scope !== undefined ? sql.json(patch.scope as any) : sql`scope`},
         updated_at = now(),
         version = version + 1

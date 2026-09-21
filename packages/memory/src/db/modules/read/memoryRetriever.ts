@@ -6,7 +6,7 @@
  */
 
 import { tokenizeForMemoryScore } from "../../../shared/memory-quality.js";
-import { getSql } from "../../connection.js";
+import { getSql, textArrayLiteral } from "../../connection.js";
 import { memoryItemDao } from "../../dao/memoryItem.js";
 import type { MemoryItem, MemoryStatus, MemoryType } from "../../types.js";
 import {
@@ -113,7 +113,7 @@ export class MemoryRetriever {
       const ids = keywordScored.map((ks) => ks.memory.id);
       if (ids.length > 0) {
         const embeddings = await sql`
-          SELECT memory_id, embedding FROM memory_embeddings WHERE memory_id = ANY(${sql.array(ids)})
+          SELECT memory_id, embedding FROM memory_embeddings WHERE memory_id = ANY(${textArrayLiteral(ids)}::text[])
         `;
         const vecMap = new Map<string, number[]>();
         for (const r of embeddings as unknown as {

@@ -1,7 +1,7 @@
 /**
  * MemoryCandidate DAO
  */
-import { getSql, parseJson } from "../connection.js";
+import { getSql, parseJson, textArrayLiteral } from "../connection.js";
 import type { MemoryCandidateRow } from "../rows.js";
 import type { CandidateStatus, MemoryCandidate, MemoryType } from "../types.js";
 
@@ -58,9 +58,9 @@ export const memoryCandidateDao = {
         ${c.id}, ${c.schemaVersion}, ${c.status}, ${c.proposedType}, ${c.proposedSubjectKey ?? null},
         ${c.subjectKeyVersion}, ${c.proposedTitle}, ${c.proposedSummary},
         ${sql.json(c.proposedPayload as any)}, ${sql.json(c.proposedScope as any)},
-        ${c.proposedConfidence}, ${sql.array(c.sourceTaskIds ?? [])},
+        ${c.proposedConfidence}, ${textArrayLiteral(c.sourceTaskIds ?? [])}::text[],
         ${sql.json(c.sourceRefs as any)}, ${sql.json(c.evidenceRefs as any)},
-        ${sql.array(c.possibleDuplicateIds ?? [])}, ${sql.array(c.possibleConflictIds ?? [])},
+        ${textArrayLiteral(c.possibleDuplicateIds ?? [])}::text[], ${textArrayLiteral(c.possibleConflictIds ?? [])}::text[],
         ${c.riskLevel}, ${c.reviewRequired}, ${sql.json(c.generatedBy as any)},
         ${c.generationReason}, ${c.sensitivity}, ${c.createdAt}, ${c.updatedAt},
         ${c.expiresAt ?? null}

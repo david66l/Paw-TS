@@ -1366,3 +1366,43 @@ src/db/dao/governanceDecision.ts(37,26): error TS2339: Property 'expected_versio
 **这个 DAO 与另外两个不同的地方**：9 个可空列，且 INSERT 把可省略字段写成 `?? null`，所以"调用方没传"在库里就是 `NULL`。而 `memoryStore.ts:153`（`expectedVersion`）、`:163` 与 `governanceExecutor.ts:184`（`adjustedConfidence`）用的是 `!== undefined` 判断 —— 旧映射把 `NULL` 断言成 `| undefined` 时，这些判断会把"没值"当成"有值"。现在映射统一 `?? undefined`，判断才名副其实。时间列同样：`executed_at`/`decided_at`/`created_at` 到手是 `Date`，类型声明是 `string`，改为显式 `toISOString()`。
 
 **这一轮真正的产出其实是方法**：同一个改动，用单跑对照得到"引入回归"的结论并回退，用清库 + 比较集合得到"中性"的结论。§11.26 已经把方法写下来了，本轮是它的第一次应用，而它推翻了自己上一轮的结论。
+
+### 11.28 #28/§M7：冷连接数组参数 bug —— 复现、修复、并证明修复有效
+
+**§M7 的核心指控成立，而且比报告说的更严重：它不是"间歇性"的。**
+
+报告说 `sql.array` 在冷连接上会因序列化器未初始化而报错，`connection.ts:49-55` 记录了这个坑并给出 `textArrayLiteral` 作为解法 —— 而那个解法**零调用点**。我自己数过：`db/` 里 `sql.array` **9 处**，`textArrayLiteral` 全仓**只有定义处**（`connection.ts:54/56`）。
+
+**复现（新进程 + 新建客户端 + 第一条查询）：**
+
+```
+SELECT ${sql.array(["a","b"])}::text[]   ->  malformed array literal: "a,b"
+同一连接上的第二次调用                     ->  OK
+SELECT ${textArrayLiteral(["a","b"])}::text[]  ->  OK
+```
+
+连跑 3 个新客户端，**每一次第一条都失败** —— 所以这是"每个新连接的第一条数组参数查询必失败"，不是概率事件。测试里看不到，是因为跑测试时连接早被前面的查询预热了。
+
+**端到端证据（全新进程里第一条数据库操作就是真实 DAO 插入）：**
+
+| 版本 | 结果 |
+|---|---|
+| `sql.array(item.tags ?? [])` | **FAILED** —— `column "tags" is of type text[] but expression is of type text` |
+| `${textArrayLiteral(item.tags ?? [])}::text[]` | **OK** —— `tags=["alpha","beta"]`、`relatedFiles=["a.ts"]` 原样回读 |
+
+也就是说：**任何进程只要第一条数据库操作是记忆写入，此前都会失败**。这不是理论风险。
+
+**修复**：`db/` 里 9 处 `sql.array(...)` 全部改成 `${textArrayLiteral(...)}::text[]`，涉及 4 个文件（`memoryItem.ts` ×5、`memoryCandidate.ts` ×3、`memoryRetriever.ts` ×1、`selfEvolvingLoop.ts` ×4，共 12 个替换点）。改之前**逐列核对过类型**：`memory_items`/`memory_candidates`/`evolution_candidates` 的数组列与 `memory_embeddings.memory_id` 都是 `text[]`，所以 `::text[]` 是对的（`jsonb` 列仍走 `sql.json`，没有动）。
+
+**回归测试**：新增 `packages/memory/test/cold-connection-array.test.ts`（7 例）。除"冷连接第一条查询能传数组"之外，还包括 `textArrayLiteral` 自身的转义（先反斜杠后引号、空数组、含引号/反斜杠/逗号/中文的值），以及**两条钉住"这个辅助函数为何存在"的测试**：冷连接上 `sql.array` 必须失败、预热后必须成功。后两条断言的是驱动行为而非我们的代码 —— 将来升级 postgres.js 若修掉该缺陷，它们会红，那时就可以去掉强制用法；在那之前，它们防止有人"顺手统一回 `sql.array`"。
+
+**验收对照（清库 + 比较失败集合，§11.26 的方法）：**
+
+| 侧 | pass / fail | 失败集合 |
+|---|---|---|
+| 修复前（清库） | 1011 / 3 | readonly CLI、memory-mechanism fixtures、Memory Evaluator |
+| 修复后（清库） | **1018 / 3** | **同上，逐条同名** |
+
+pass 增加 7 = 本轮新增的 7 例；失败集合一条不差。**修复未引入任何回归。**
+
+**§M7 未完成的部分**：`connection.ts:39` 的 `j()`（全仓无调用者）没删；`workingMemoryDao`/`taskSessionDao`/`governanceDecisionDao` 仍用位置参数 `sql.unsafe` 而非 tagged template（`memoryItemDao`/`memoryCandidateDao` 已经是 tagged template，但前两者不是）；`workingMemory.ts:40` 的 `JSON.stringify(wm)` 仍是另一种 JSONB 序列化写法。
