@@ -1503,3 +1503,46 @@ return { ok: false, payload: { error: "missing skill_id" }, summary: "run_skill:
 **其余用例**覆盖：省略 `skill_id` 由声明式 schema 拦下（`definitions.ts:651` 要求 `["skill_id"]`，报 `E_SCHEMA_INVALID`）、空串落到处理器、无注册表时拒绝而不是假装成功、未知技能报出找不到的 id、成功时 `payload.skillId` + 摘要 + **通过 `newMessages` 注入渲染后的提示词**（断言形状而非渲染细节）。
 
 **§D9 剩余**：`browser_check`、`web_fetch`、`web_search`、`todo_write`、`notebook_edit`、`workspace.lsp` 仍未覆盖（`run_skill` 与 `create_agent` 已完成）。
+
+### 11.32 更正我自己上一轮的说法：`error_code` 不喂 journal，而且 §R4 那一条已经修好了
+
+上一轮我在 `run-skill.test.ts` 的注释里写"§R4 说 `errorCode` 对崩溃恢复是承重的，所以这是一处值得收敛的不一致"。**这个因果链是错的**，本轮把它查清楚并改掉了注释。
+
+**实测：`payload` 上有两个不同的键，喂给两条不同的路。**
+
+| 键 | 谁写 | 谁读 | 影响面 |
+|---|---|---|---|
+| `payload.code` | 执行器（`agent-loop-tool-executor.ts:342` `E_TOOL_EXECUTOR_BOUNDARY`、`:418` `E_TOOL_RESULT_INVALID`）与 `tool-runner` 的守卫 | `runtime/src/tools/observation.ts:65-70` 的 `evidenceErrorCode` → `canonicalErrorCode` → journal `errorCode` | **崩溃恢复** |
+| `payload.error_code` | `toolErrorResult`（`tool-support.ts:115-126` → `makeToolError`） | 面向模型的协议（`core/src/errors.ts:64`）；内部**只有一个**消费者：`completion-review/src/evidence-projector.ts:255` 判 `E_RETRY` | 模型看到的分类信息 |
+
+所以：**把 `handlers/agents.ts` 收敛到 `toolErrorResult` 会补上 `error_code`，但不会给 journal 任何东西** —— journal 读的是 `code`。
+
+**并且 §R4 的那一条已经修好了。** §R4 说"执行器真正附上的语义 code 根本到不了 journal，因为 `observation.ts:75` 对所有 `status:'unknown'` 硬编码 `E_TOOL_UNKNOWN`，从不读 `evidence.payload.code`"。当前代码是：
+
+```ts
+case "unknown":
+  // 执行器的 code 此前根本到不了 journal：这里对所有 unknown 硬编码，
+  // 于是崩溃恢复看到的分类永远是 E_TOOL_UNKNOWN。
+  return evidenceErrorCode(settlement.evidence) ?? "E_TOOL_UNKNOWN";
+```
+
+`:86-87` 的注释本身就是"此前"的墓志铭 —— 现在优先读 `evidence.payload.code`，并且 `runtime/test/tool-observation.test.ts:100-127` 已经把这个行为钉住（断言 `errorCode` 等于 `E_TOOL_EXECUTOR_BOUNDARY` / `E_TOOL_RESULT_INVALID`）。**§R4 的这一句是过期信息**（与 §11.22 记的 §R7(b) 同型：报告的某个前提已经被后续修复消化掉了）。
+
+**顺带量到的一个更大范围的事实**：registry 的处理器层里两种错误约定**几乎平分**，不是 `agents.ts` 一处的疏漏。
+
+| handler | `toolErrorResult(...)` | 裸 `ok: false` |
+|---|---|---|
+| `files.ts` | 21 | 3 |
+| `jobs.ts` | 15 | 0 |
+| `task.ts` | 6 | 2 |
+| `shell-web.ts` | 2 | 6 |
+| `agents.ts` | **0** | 9 |
+| `memory.ts` | **0** | 14 |
+| `lsp.ts` | 0 | 6 |
+| `mcp.ts` | 0 | 5 |
+| `git.ts` | 0 | 3 |
+| **合计** | **44** | **48** |
+
+**收敛这件事该怎么排优先级（本轮结论，供后续轮次直接采用）**：它的收益是"模型能看到语义 code"，不是崩溃恢复，因此**不是** high；而且 48 处一次改完会同时改动多条 payload 形状，需要逐条确认消费者（desktop 会读工具结果）。建议**按 handler 分批**，从模型最依赖分类信息的那些开始（`agents.ts` 的委派失败首当其冲），每批配用例。
+
+**本轮没有功能性改动落地** —— 只有 `run-skill.test.ts` 里那段注释的更正，以及这一节。

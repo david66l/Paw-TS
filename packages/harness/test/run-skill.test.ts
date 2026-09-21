@@ -52,9 +52,15 @@ describe("workspace.run_skill", () => {
   /**
    * 与文件类工具**不一致**的一点：`handleRunSkill` 的错误分支返回裸 payload，
    * **没有 `error_code`**，摘要也没有 `E_*` 前缀（`handlers/agents.ts:162-168`），
-   * 而 `handlers/files.ts` 走的是 `toolErrorResult`，两者都有。
-   * 这条测试把这个现状钉下来；§R4 说 `errorCode` 对崩溃恢复是承重的，
-   * 所以这是一处值得收敛的不一致，而不是"无所谓"。
+   * 而 `handlers/files.ts` 走 `toolErrorResult`，两者都有。
+   *
+   * 影响范围要说准（§11.32 实测）：`payload.error_code` 是**面向模型**的错误协议
+   * （`core/src/errors.ts:64`），内部只有**一个**消费者 ——
+   * `completion-review/src/evidence-projector.ts:255` 判 `E_RETRY`。
+   * 它**不喂** journal 的 `errorCode`：那条路读的是 `payload.code`
+   * （`runtime/src/tools/observation.ts:65-70`，已被
+   * `runtime/test/tool-observation.test.ts:100-127` 钉住）。
+   * 所以这条不一致影响的是模型看到的分类信息，不是崩溃恢复。
    */
   test("an empty skill_id reaches the handler: no error_code, bare summary", async () => {
     const r = await executeTool(WORKSPACE, "workspace.run_skill", { skill_id: "" });
