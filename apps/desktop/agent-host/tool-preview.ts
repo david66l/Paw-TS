@@ -34,13 +34,17 @@ function sanitize(value: unknown, depth: number): unknown {
 }
 
 /**
- * 一行摘要：优先取最有定位价值的字段（路径 / 命令 / 查询 / 目标）。
+ * 一行摘要：优先取最有定位价值的字段（路径 / 模式 / 命令 / 查询 / 目标）。
  * 无匹配字段时返回空串（调用方不渲染摘要行）。
+ *
+ * `pattern` 必须在这里：`workspace.glob` / `workspace.grep` / `workspace.search`
+ * 的参数只有 `pattern`，而此前它不在列表里 —— 于是**审批卡完全不显示这次要搜
+ * 什么**，审批人看到的是一行空摘要。渲染侧的 `toolCards.ts` 用的是同一组键。
  */
 export function summarizeToolArgs(_tool: string, args: unknown): string {
   if (args === null || typeof args !== "object") return "";
   const o = args as Record<string, unknown>;
-  for (const key of ["path", "file", "command", "query", "goal", "url"]) {
+  for (const key of ["path", "pattern", "file", "command", "query", "goal", "url"]) {
     const v = o[key];
     if (typeof v === "string" && v.trim()) return truncate(v.trim(), MAX_SUMMARY);
   }

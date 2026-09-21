@@ -19,6 +19,15 @@ describe("summarizeToolArgs", () => {
     expect(s).toContain("截断");
     expect(summarizeToolArgs("workspace.read_file", { offset: 1 })).toBe("");
   });
+
+  test("只带 pattern 的检索类调用也要显示搜索内容", () => {
+    // glob / grep / search 的参数只有 pattern。此前它不在键列表里，审批卡拿到的
+    // 是空摘要 —— 审批人看不到模型要搜什么。
+    for (const tool of ["workspace.glob", "workspace.grep", "workspace.search"]) {
+      expect(summarizeToolArgs(tool, { pattern: "src/**/*.ts" })).not.toBe("");
+    }
+    expect(summarizeToolArgs("workspace.grep", { pattern: "TODO", path: "src" })).toBe("src");
+  });
 });
 
 describe("previewToolArgs", () => {
