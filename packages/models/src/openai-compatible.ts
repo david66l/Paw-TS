@@ -564,31 +564,40 @@ export class OpenAICompatibleModel implements LanguageModel {
           if (part.finishReason !== undefined) {
             lastFinishReason = part.finishReason;
           }
-          for (const delta of part.toolCallDeltas ?? []) {
-            let entry = toolCallAcc.get(delta.index);
-            if (!entry) {
-              entry = { id: "", name: "", arguments: "", invalid: false };
-              toolCallAcc.set(delta.index, entry);
-            }
-            entry.invalid ||= delta.invalid === true;
-            if (delta.id) {
-              if (entry.id && entry.id !== delta.id) {
-                throw new Error(
-                  `OpenAI-compatible conflicting tool call id at index ${delta.index}`,
-                );
+          // 与上面三个分支同一守卫：终结标记不携带工具增量。
+          //
+          // 循环内那条路径用 `continue` 短路了 [DONE]，这里改为逐个分支重测，而
+          // 唯独漏了这个循环 —— 于是一份落在尾部 flush 里的 [DONE] 仍会把工具片段
+          // 累加进去，「是否见到 [DONE]」与「工具调用是否完整」就取决于同一份载荷
+          // 落在哪个缓冲区。
+          if (!part.isDoneMarker)
+            for (const delta of part.toolCallDeltas ?? []) {
+              let entry = toolCallAcc.get(delta.index);
+              if (!entry) {
+                entry = { id: "", name: "", arguments: "", invalid: false };
+                toolCallAcc.set(delta.index, entry);
               }
-              entry.id = delta.id;
-            }
-            if (delta.functionName) {
-              if (entry.name && entry.name !== delta.functionName) {
-                throw new Error(`OpenAI-compatible conflicting tool name at index ${delta.index}`);
+              entry.invalid ||= delta.invalid === true;
+              if (delta.id) {
+                if (entry.id && entry.id !== delta.id) {
+                  throw new Error(
+                    `OpenAI-compatible conflicting tool call id at index ${delta.index}`,
+                  );
+                }
+                entry.id = delta.id;
               }
-              entry.name = delta.functionName;
+              if (delta.functionName) {
+                if (entry.name && entry.name !== delta.functionName) {
+                  throw new Error(
+                    `OpenAI-compatible conflicting tool name at index ${delta.index}`,
+                  );
+                }
+                entry.name = delta.functionName;
+              }
+              if (delta.functionArguments) {
+                entry.arguments += delta.functionArguments;
+              }
             }
-            if (delta.functionArguments) {
-              entry.arguments += delta.functionArguments;
-            }
-          }
         }
       }
     } finally {
