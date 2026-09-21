@@ -8,22 +8,47 @@ function api() {
   return window.pawDesktop;
 }
 
-function waitForRequestId<T extends { requestId: string }>(
+/**
+ * 等待某个 requestId 的一次性回包。
+ *
+ * 原实现同时埋了三个坑，而且互相掩盖：
+ *  1. 超时回调引用了下方的 `const off`。若 `subscribe` 抛异常，那次赋值永远不会
+ *     发生，20 秒后定时器触发时求值 `off` 会得到 TDZ `ReferenceError` —— 而且是在
+ *     定时器回调里抛出，没有人接得住。
+ *  2. `subscribe` 抛异常时定时器没有被清掉，promise 也永远不 settle，调用方挂死。
+ *  3. 若 `subscribe` 先同步回调、再返回取消函数，回调里的 `off()` 同样是 undefined，
+ *     那次订阅就漏了。
+ *
+ * 因此这里改为：先声明句柄、用 `settle` 收敛全部出口、拿到句柄后补一次释放。
+ */
+export function waitForRequestId<T extends { requestId: string }>(
   requestId: string,
   subscribe: (cb: (payload: T) => void) => () => void,
   timeoutMs = 20_000,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      off();
-      reject(new Error("请求超时"));
-    }, timeoutMs);
-    const off = subscribe((payload) => {
-      if (payload.requestId !== requestId) return;
+    let off: (() => void) | undefined;
+    let done = false;
+    const settle = (finish: () => void) => {
+      if (done) return;
+      done = true;
       clearTimeout(timer);
-      off();
-      resolve(payload);
-    });
+      off?.();
+      off = undefined;
+      finish();
+    };
+    const timer = setTimeout(() => settle(() => reject(new Error("请求超时"))), timeoutMs);
+    try {
+      const unsubscribe = subscribe((payload) => {
+        if (payload.requestId !== requestId) return;
+        settle(() => resolve(payload));
+      });
+      off = unsubscribe;
+      // 回调可能在 subscribe 返回之前就 settle 了，那次订阅要补释放
+      if (done) unsubscribe();
+    } catch (error) {
+      settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+    }
   });
 }
 
