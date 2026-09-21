@@ -851,8 +851,3 @@ function shaShort(text: string): string {
   }
   return Math.abs(h).toString(36);
 }
-
-/** 工厂：创建 MemoryRuntime */
-export async function createMemoryRuntime(opts: MemoryRuntimeOptions): Promise<MemoryRuntime> {
-  return new MemoryRuntimeImpl(opts);
-}

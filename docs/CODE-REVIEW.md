@@ -1406,3 +1406,47 @@ SELECT ${textArrayLiteral(["a","b"])}::text[]  ->  OK
 pass 增加 7 = 本轮新增的 7 例；失败集合一条不差。**修复未引入任何回归。**
 
 **§M7 未完成的部分**：`connection.ts:39` 的 `j()`（全仓无调用者）没删；`workingMemoryDao`/`taskSessionDao`/`governanceDecisionDao` 仍用位置参数 `sql.unsafe` 而非 tagged template（`memoryItemDao`/`memoryCandidateDao` 已经是 tagged template，但前两者不是）；`workingMemory.ts:40` 的 `JSON.stringify(wm)` 仍是另一种 JSONB 序列化写法。
+
+### 11.29 §M5 的死重复工厂已删；§M6/§M7 有三处描述需要更正
+
+**已删：`runtime/memory-runtime.ts` 里那个不可达的 `createMemoryRuntime`（4 行）。**
+
+§M5 说它是"第二个、不可达的同名函数"。核实方式是查所有导入：`createMemoryRuntime` 全仓 19 处引用，全部经 `runtime/index.ts:15` 或 `@paw/memory`；而 `runtime/index.ts` 从 `./memory-runtime.js` **只导入 `MemoryRuntimeImpl`**（`:7`、`:21`），没有 `export *`，也没有任何文件直接导入 `runtime/memory-runtime.js`。所以那个导出确实无人引用。
+
+**而且它不只是重复 —— 它语义不同**：活的那个按 `opts.runtime` / `PAW_MEMORY_RUNTIME` 在 v1/v2 之间选择，死的那句是
+
+```ts
+export async function createMemoryRuntime(opts: MemoryRuntimeOptions): Promise<MemoryRuntime> {
+  return new MemoryRuntimeImpl(opts);   // 无条件 v1
+}
+```
+
+也就是说，谁若被 IDE 自动导入引到 `memory-runtime.js`，会**静默拿到 v1 行为并绕过 v2 默认值** —— 这正是 §M5 说的"两个同名导出保证迟早有人改错那个死代码"，而且后果比改错更重。
+
+**验收**：`packages/memory` 清库后 **1018 pass / 3 fail**（与删除前逐条同名）；依赖它的 `packages/agent/test/memory-v2-cutover.test.ts` **4 pass / 0 fail**。
+
+**更正一：§M7 说 `connection.ts:39` 的 `j()` "全仓无调用者" —— 不成立。** `packages/memory/test/migrate-v1-to-v2.test.ts:12` 明确 `import { closeSql, getSql, j } from "../src/db/connection.js"`，并在 `:44` 调用 `payload: j({...})`。照报告删掉它会**直接弄坏那个测试**。（我第一遍用一条 `Select-String` 带 `**` 的 glob 查过，那个 glob 不递归 —— 这正是 §11.20 记过的同一个坑；这次用 `grep` 工具复核才看到真实命中。）
+
+**更正二：§M6 的收敛目标不存在。** 它写"短哈希收敛到 `memory/src/shared/hash.ts` 的 `shortHash(text)`"，但 `packages/memory/src/shared/` 下只有 `memory-types.ts`、`memory-record.ts`、`embedding-cache.ts`、`memory-query.ts`、`memory-quality.ts` —— **没有 `hash.ts`**。（`shortHash` 的命中全在 `benchmarks/amb/*` 各自的本地副本里。）
+
+**更正三（这条有数据影响，最要紧）：§M6 的"短哈希收敛"是一个会改变持久化标识的改动，不是改名。** 在**同一个文件** `memory-runtime.ts` 里就有两个变体：
+
+| 函数 | 位置 | 归一化 | 用途 |
+|---|---|---|---|
+| `hashShort` | `:822` | `(h >>> 0).toString(36)` | `:712` 拼 `enrich:…` 的 subjectKey |
+| `shaShort` | `:847` | `Math.abs(h).toString(36)` | `:593` 拼 `manual:…` 的 subjectKey |
+
+（另有第三份在 `db/modules/write/memoryWriter.ts:412`，同样是 `h >>> 0`。）
+
+`Math.abs(h)` 与 `(h >>> 0)` 对**负的 `h`** 给出完全不同的字符串（`h=-5`：前者 `"5"`，后者 `"4294967291"` 的 base36）。而这类哈希约有一半输入为负 —— 所以把 `shaShort` 收敛成 `h >>> 0`，会让**近一半** subjectKey 变化；subjectKey 是持久化的，并且 `findBySubjectKey` 拿它查库，于是既有行的查找会失配。**要做就得配迁移或双查，光"统一一下"是不行的。**
+
+**顺带实测到一个真实缺陷，以及一次失败的修法（留给下一轮）**：`workingMemoryDao.create` 把 `JSON.stringify(wm)` 作为位置参数写进 `state`（jsonb）列，落库结果是**被双重编码的 jsonb 字符串**：
+
+```
+jsonb_typeof(state) = string          <- 不是 object
+state->>'goal'      = NULL            <- SQL 层取字段取不到
+```
+
+读路径靠 `parseJson`（它同时兼容字符串与对象）把值再 parse 一次，所以这个 DAO 自己读写是通的 —— **属于潜伏缺陷**：任何 `state->>'field'` 查询、GIN 索引或外部工具看到的都是字符串。
+
+我试图用 `${JSON.stringify(wm)}::jsonb` 修它（类型干净、不需要 `as any`），**实测无效**：仍然 `jsonb_typeof=string`。原因是 postgres.js 会识别参数目标是 jsonb 并对 JS 字符串再编码一次，所以显式 `::jsonb` 挡不住双重编码。真正的修法是 `sql.json(wm)`（让驱动只编码一次），但它要求 `JSONValue`，而 `WorkingMemory`/`ActorRef` 是 interface，缺索引签名 —— 现有代码的通行做法是 `sql.json(item.scope as any)`，代价是 3 处新的 `as any`（lint warning）。**本轮已回退这次尝试**（`workingMemory.ts` 与 HEAD 逐字节相同，已用 blob 哈希核对），把结论留在这里而不是塞进一个我不确定能验证的改动。
