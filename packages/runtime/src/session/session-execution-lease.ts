@@ -76,6 +76,15 @@ export interface LinearizeJournalBatchInputV1 {
   readonly artifactContentHash: string;
 }
 
+/**
+ * Outcome of a journal batch commit.
+ *
+ * Recoverable conditions only: `conflict` means another writer moved the head,
+ * `lost` means this lease no longer holds the fence. Integrity violations are not
+ * representable here — they throw instead, so a caller that handles these three
+ * statuses cannot accidentally treat a corrupted journal as a retry. See
+ * `linearizeTransition` for the full contract.
+ */
 export type LinearizeJournalBatchResultV1 =
   | Readonly<{
       status: "committed" | "already_committed";
@@ -734,6 +743,22 @@ class FileLease implements FileSessionExecutionLeaseV1 {
     }
   }
 
+  /**
+   * Commit one journal batch, retrying while the fencing token is still ours.
+   *
+   * Two failure channels are deliberate, and the split is the contract:
+   *
+   * - **Returned status** covers conditions a correct caller is expected to meet
+   *   in normal operation — a stale `expectedHead` races another writer
+   *   (`conflict`), the lease has expired or been taken over (`lost`). Both are
+   *   recoverable: the caller reconciles the head or fails the session closed.
+   * - **Thrown errors** cover integrity violations that must never be papered
+   *   over — an unreadable authority file, or a `commitId` reused with different
+   *   content, which breaks the content-addressing invariant the journal relies
+   *   on. These fail the commit loudly rather than being retried.
+   *
+   * @throws when the journal authority or the caller's commit identity is invalid.
+   */
   private async linearizeTransition(
     input: LinearizeJournalBatchInputV1,
   ): Promise<LinearizeJournalBatchResultV1> {

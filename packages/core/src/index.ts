@@ -481,3 +481,15 @@ export {
 export * from "./shell-command.js";
 export { projectWorkspaceEffect } from "./workspace-effect.js";
 export { createOperationDeadline } from "./operation-deadline.js";
+
+// ============================================================
+// 规范化 JSON（全仓库唯一的稳定哈希编码）
+// ============================================================
+export {
+  assertCanonicalJsonV1,
+  canonicalJsonStringifyV1,
+  hashCanonicalJsonV1,
+  hashTextV1,
+  immutableCanonicalJsonCloneV1,
+  type JsonValue,
+} from "./canonical-json.js";

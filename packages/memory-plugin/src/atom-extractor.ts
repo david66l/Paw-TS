@@ -1,6 +1,5 @@
 import { scanForSecrets } from "@paw/memory/longterm";
 import {
-  type JsonValue,
   MEMORY_ATOM_PROPOSAL_SCHEMA_VERSION_V1,
   type MemoryAtomActionV1,
   type MemoryAtomKindV1,
@@ -294,11 +293,11 @@ function freezeAtom(
     writeId: context.input.writeId,
     index,
     body,
-  } as unknown as JsonValue);
+  });
   const content = Object.freeze({ ...body, atomId });
   return Object.freeze({
     ...content,
-    contentHash: hashCanonicalJsonV1(content as unknown as JsonValue),
+    contentHash: hashCanonicalJsonV1(content),
   });
 }
 

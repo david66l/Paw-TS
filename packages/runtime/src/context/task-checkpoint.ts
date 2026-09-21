@@ -96,7 +96,7 @@ async function prepareTaskCheckpointFactV1(
     }
   }
 
-  const checkpointValue = immutableCanonicalJsonCloneV1(checkpoint as unknown as JsonValue);
+  const checkpointValue = immutableCanonicalJsonCloneV1(checkpoint);
   parseTaskCheckpointV1(checkpointValue);
   const payload = input.checkpointPayload ?? (await codec.encode(checkpointValue, signal));
   throwIfAborted(signal);
@@ -172,7 +172,7 @@ export async function bindTaskCheckpointSourceV1(
     sourceEntries.map((entry) => ({
       seq: entry.seq,
       fact: entry.fact,
-    })) as unknown as JsonValue,
+    })),
   );
   const sourceInputHash = await codec.hash(sourceValue);
   assertHash(sourceInputHash, "source input");

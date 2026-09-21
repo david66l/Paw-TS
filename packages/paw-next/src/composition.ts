@@ -7129,6 +7129,7 @@ function createProductFactMapper<TRunConfig, TControlState extends LoopControlSt
           errorCode: normalizeCode(settlement.error.name),
         };
       }
+      const timeoutCode = "reason" in settlement ? modelTimeoutCode(settlement.reason) : undefined;
       return {
         type: "model.settled",
         modelCallId: `model-${turn}`,
@@ -7136,14 +7137,7 @@ function createProductFactMapper<TRunConfig, TControlState extends LoopControlSt
         status: settlement.status,
         hasToolCalls: false,
         hasVisibleOutput: false,
-        ...("reason" in settlement &&
-        /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/.test(settlement.reason)
-          ? {
-              errorCode: settlement.reason.match(
-                /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/,
-              )![0],
-            }
-          : {}),
+        ...(timeoutCode === undefined ? {} : { errorCode: timeoutCode }),
       };
     },
     toolCallObserved({ turn, sourceIndex, call }) {
@@ -7357,6 +7351,21 @@ function hashText(value: string): string {
 function normalizeCode(value: string): string {
   const normalized = value.trim().replace(/[^A-Za-z0-9._:@/-]/g, "_");
   return normalized && /^[A-Za-z0-9]/.test(normalized) ? normalized.slice(0, 512) : "E_RUNTIME";
+}
+
+/**
+ * Model-timeout codes travel inside a human-readable settled reason, so the code
+ * has to be read back out of prose. The pattern lives here once: the previous
+ * version inlined it twice, once to decide whether a code applies and once to
+ * capture it, which left the two copies free to drift apart.
+ */
+const MODEL_TIMEOUT_CODE_PATTERN = /Model(?:Request(?:Idle|Wall)|ReasoningWithoutAction)Timeout/;
+
+/** The timeout code named by `reason`, or undefined when it names none. */
+function modelTimeoutCode(reason: unknown): string | undefined {
+  return typeof reason === "string"
+    ? (MODEL_TIMEOUT_CODE_PATTERN.exec(reason)?.[0] ?? undefined)
+    : undefined;
 }
 
 function assertRunInput(options: RunFreshPawNextTaskOptionsV1): void {

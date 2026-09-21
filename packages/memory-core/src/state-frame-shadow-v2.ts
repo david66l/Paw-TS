@@ -120,7 +120,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
       hashCanonicalJsonV1({
         schemaVersion: "paw.memory-locked-source-set.v1",
         lockedSourceIds: Object.freeze([...input.lockedSourceIds]),
-      } as never)
+      })
   ) {
     throw namedError("MemoryStateFrameShadowInputInvalid");
   }
@@ -158,7 +158,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
       const execution = executionByRequirement.get(requirement.requirementId);
       return (
         !execution ||
-        execution.requirementRevision !== hashCanonicalJsonV1(requirement as never) ||
+        execution.requirementRevision !== hashCanonicalJsonV1(requirement) ||
         execution.temporalBindingRevision !== input.temporalConstraints[index]?.bindingRevision
       );
     })
@@ -473,7 +473,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
       bindingRevision: group.bindingRevision ?? null,
       failureCode: group.failureCode ?? null,
     })),
-  } as never);
+  });
   const verificationRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-state-group-verification-settlement.v1",
     selectorSnapshotRevision: input.selectorExecutionSnapshot.snapshotRevision,
@@ -483,7 +483,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
       verificationRevision: group.verificationRevision ?? null,
       failureCode: group.failureCode ?? null,
     })),
-  } as never);
+  });
   const frame = resolveMemoryStateFrameV2({
     slots,
     observations,
@@ -494,7 +494,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
     observations: validatedObservations.map((item) => item.observation),
     sourceLock,
   });
-  if (hashCanonicalJsonV1(frame as never) !== hashCanonicalJsonV1(certifiedFrame as never)) {
+  if (hashCanonicalJsonV1(frame) !== hashCanonicalJsonV1(certifiedFrame)) {
     throw namedError("MemoryStateFrameShadowCertifiedFrameMismatch");
   }
   const executionProgram = compileMemoryEvidenceExecutionProgramV1({
@@ -551,7 +551,7 @@ export async function buildMemoryStateFrameShadowV2(input: {
     frameProgramRevision: frame.programRevision,
     certificateIds: validatedObservations.map((item) => item.certificate.certificateId),
     mechanicalBindingSummaryRevision: mechanicalBindingSummary.summaryRevision,
-  } as never);
+  });
   const completeSlotCount = frame.slots.filter((slot) => slot.status === "complete").length;
   const partialSlotCount = frame.slots.filter((slot) => slot.status === "partial").length;
   const missingSlotCount = frame.slots.filter((slot) => slot.status === "missing").length;

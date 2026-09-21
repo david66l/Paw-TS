@@ -42,7 +42,7 @@ export function createVerifiedCanonicalPayloadEvidenceV1(
   options: CreateVerifiedCanonicalPayloadEvidenceOptionsV1,
 ): VerifiedCanonicalPayloadEvidenceV1 {
   const prefix = immutableCanonicalJsonCloneV1(
-    parseRunJournalPrefixV1(options.fullPrefix) as unknown as JsonValue,
+    parseRunJournalPrefixV1(options.fullPrefix),
   ) as unknown as readonly RunJournalEnvelopeV1[];
   assertVerifiedCanonicalPayloadIndexMatchesV1(options.index, {
     fullPrefix: prefix,
@@ -50,14 +50,14 @@ export function createVerifiedCanonicalPayloadEvidenceV1(
     budget: options.budget,
   });
   const expectedSnapshot = projectCanonicalSessionInputSnapshotV1(prefix);
-  const expectedSnapshotJson = canonicalJsonStringifyV1(expectedSnapshot as unknown as JsonValue);
+  const expectedSnapshotJson = canonicalJsonStringifyV1(expectedSnapshot);
   const requireModelResponse = options.index.requireModelResponse.bind(options.index);
   const requireOccurrence = options.index.requireOccurrence.bind(options.index);
 
   const assertSnapshot = (snapshot: SessionInputSnapshot<InputFactV1>): void => {
     let actual: JsonValue;
     try {
-      actual = immutableCanonicalJsonCloneV1(snapshot as unknown as JsonValue);
+      actual = immutableCanonicalJsonCloneV1(snapshot);
     } catch {
       throw new Error("Verified model response snapshot is invalid");
     }
@@ -99,7 +99,7 @@ export function projectCanonicalSessionInputSnapshotV1(
   prefix: readonly RunJournalEnvelopeV1[],
 ): SessionInputSnapshot<InputFactV1> {
   const canonical = immutableCanonicalJsonCloneV1(
-    parseRunJournalPrefixV1(prefix) as unknown as JsonValue,
+    parseRunJournalPrefixV1(prefix),
   ) as unknown as readonly RunJournalEnvelopeV1[];
   const entries = canonical.flatMap((envelope) =>
     envelope.record.kind === "input_fact"

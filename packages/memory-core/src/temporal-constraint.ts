@@ -67,7 +67,7 @@ export function compileMemoryEvidenceTemporalConstraintV1(input: {
   } as const;
   return Object.freeze({
     ...identity,
-    constraintRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    constraintRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -123,7 +123,7 @@ export function bindMemoryEvidenceTemporalConstraintV1(input: {
   } as const;
   return Object.freeze({
     ...identity,
-    bindingRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    bindingRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -218,7 +218,7 @@ export function compileMemoryEvidenceDurationRequestV1(
           anchorRevision: hashCanonicalJsonV1({
             schemaVersion: "paw.memory-duration-query-anchor.v1",
             queryAnchor,
-          } as unknown as JsonValue),
+          }),
         })
       : Object.freeze({
           kind: "distinct_evidence_pair" as const,
@@ -237,7 +237,7 @@ export function compileMemoryEvidenceDurationRequestV1(
   };
   return Object.freeze({
     ...identity,
-    requestRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    requestRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -282,7 +282,7 @@ export function assertMemoryEvidenceTemporalConstraintIdentityV1(
     constraint.constraintVersion !== PAW_MEMORY_EVIDENCE_TEMPORAL_CONSTRAINT_VERSION_V1 ||
     constraint.compatibilityVersion !== PAW_MEMORY_EVIDENCE_TEMPORAL_COMPATIBILITY_VERSION_V1 ||
     !memoryEvidenceLeafTemporalModeAllowedV1(constraint.queryEnvelopeMode, constraint.mode) ||
-    hashCanonicalJsonV1(identity as unknown as JsonValue) !== constraint.constraintRevision
+    hashCanonicalJsonV1(identity) !== constraint.constraintRevision
   ) {
     throw namedError("MemoryEvidenceTemporalConstraintInvalid");
   }

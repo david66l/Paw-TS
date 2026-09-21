@@ -1,7 +1,7 @@
 import path from "node:path";
 import { projectMutationReceiptV1 } from "./mutation-receipt.js";
 export { MUTATION_RECEIPT_POLICY_V1 } from "./mutation-receipt.js";
-import type { ToolDefinition } from "@paw/core";
+import { type ToolDefinition, canonicalJsonStringifyV1 } from "@paw/core";
 import {
   CONTEXT_RECALL,
   type PayloadRecallRequestV1,
@@ -92,7 +92,7 @@ export function createOutputRecallProjectorV1(input?: {
         const receipt = projectMutationReceiptV1(observation, policy.maxCharsPerRecall);
         if (receipt !== undefined) return receipt;
       }
-      const text = canonicalJsonStringify(observation.value);
+      const text = canonicalJsonStringifyV1(observation.value);
       const preview = projectionPreviewPolicyV1(observation.tool, policy);
       if (
         observation.tool === PROVIDER_TOOL_NAME ||
@@ -181,7 +181,7 @@ export function createDurableOutputRecallServiceV1(
         location: occurrence.location,
         payload: occurrence.payload,
       });
-      const text = canonicalJsonStringify(value);
+      const text = canonicalJsonStringifyV1(value);
       const window = selectWindow(text, parsed.request);
       return Object.freeze({
         ok: true as const,
@@ -537,18 +537,6 @@ function failure(reason: string): {
   readonly reason: string;
 } {
   return { ok: false, reason };
-}
-
-function canonicalJsonStringify(value: JsonValue): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJsonStringify).join(",")}]`;
-  }
-  const record = value as Readonly<Record<string, JsonValue>>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJsonStringify(record[key] as JsonValue)}`)
-    .join(",")}}`;
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

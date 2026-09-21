@@ -1,3 +1,4 @@
+import { canonicalJsonStringifyV1 } from "@paw/core";
 import type {
   ManagedJobSnapshotV1,
   TaskProgressActivityV1,
@@ -194,7 +195,7 @@ export function parseTaskProgressSnapshotV1(
   }
   const items = normalizeTaskProgressItemsV1(record.items, policy);
   const expected = createSnapshot(items, record.revision as number);
-  if (canonicalJson(expected) !== canonicalJson(record)) {
+  if (canonicalJsonStringifyV1(expected) !== canonicalJsonStringifyV1(record)) {
     throw new Error("Task progress snapshot derived fields are invalid");
   }
   return expected;
@@ -244,15 +245,6 @@ function failure(reason: string): {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  return `{${Object.entries(value as Record<string, unknown>)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
-    .join(",")}}`;
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

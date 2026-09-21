@@ -183,10 +183,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
     throw namedError("MemoryPreferenceAdmissionObligationInvalid");
   }
   const expectedOrigin = compileMemoryQueryAnswerOriginV1(query);
-  if (
-    hashCanonicalJsonV1(expectedOrigin as unknown as JsonValue) !==
-    hashCanonicalJsonV1(input.origin as unknown as JsonValue)
-  ) {
+  if (hashCanonicalJsonV1(expectedOrigin) !== hashCanonicalJsonV1(input.origin)) {
     throw namedError("MemoryPreferenceAdmissionOriginInvalid");
   }
   if (
@@ -239,10 +236,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
           ? {}
           : { evidenceTimeUpperBound: temporal.evidenceTimeUpperBound }),
       });
-      if (
-        hashCanonicalJsonV1(expected as unknown as JsonValue) !==
-        hashCanonicalJsonV1(temporal as unknown as JsonValue)
-      ) {
+      if (hashCanonicalJsonV1(expected) !== hashCanonicalJsonV1(temporal)) {
         throw namedError("MemoryPreferenceAdmissionTemporalInvalid");
       }
       return expected;
@@ -396,8 +390,8 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
   );
 
   const queryDigest = hashTextV1(query);
-  const intentRevision = hashCanonicalJsonV1(intent as unknown as JsonValue);
-  const obligationRevision = hashCanonicalJsonV1(obligation as unknown as JsonValue);
+  const intentRevision = hashCanonicalJsonV1(intent);
+  const obligationRevision = hashCanonicalJsonV1(obligation);
   const lockedSourceRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-locked-source-set.v1",
     lockedSourceIds,
@@ -430,9 +424,7 @@ export function compileMemoryPreferenceAdmissionScopeSnapshotV1(input: {
     originRevision: origin.originRevision,
     lockedSourceRevision,
     candidateSetRevision,
-    requirementRevisions: requirements.map((requirement) =>
-      hashCanonicalJsonV1(requirement as unknown as JsonValue),
-    ),
+    requirementRevisions: requirements.map((requirement) => hashCanonicalJsonV1(requirement)),
     temporalBindingRevisions: temporalConstraints.map((temporal) => temporal.bindingRevision),
     slotRevisions: slots.map((slot) => slot.slotRevision),
     sourceLockDigest: sourceLock.sourceLockDigest,
@@ -473,10 +465,7 @@ export function validateMemoryPreferenceAdmissionScopeSnapshotV1(
     candidates: candidate.candidates,
     candidateScopes: candidate.candidateScopes,
   });
-  if (
-    hashCanonicalJsonV1(expected as unknown as JsonValue) !==
-    hashCanonicalJsonV1(candidate as unknown as JsonValue)
-  ) {
+  if (hashCanonicalJsonV1(expected) !== hashCanonicalJsonV1(candidate)) {
     throw namedError("MemoryPreferenceAdmissionScopeBoundaryInvalid");
   }
   return expected;
@@ -609,10 +598,7 @@ export function validateMemoryPreferenceAdmissionSettlementV1(input: {
     ...(verification === undefined ? {} : { verification }),
     validated,
   });
-  if (
-    hashCanonicalJsonV1(expected as unknown as JsonValue) !==
-    hashCanonicalJsonV1(input.settlement as unknown as JsonValue)
-  ) {
+  if (hashCanonicalJsonV1(expected) !== hashCanonicalJsonV1(input.settlement)) {
     throw namedError("MemoryPreferenceAdmissionSettlementInvalid");
   }
   return expected;
@@ -671,7 +657,7 @@ function compileSettlement(input: {
       };
       return Object.freeze({
         ...identity,
-        certificateRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+        certificateRevision: hashCanonicalJsonV1(identity),
       });
     }),
   );

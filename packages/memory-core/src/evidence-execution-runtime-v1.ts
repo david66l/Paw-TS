@@ -327,10 +327,7 @@ export function executeMemoryEvidenceProgramV1(input: {
 }): MemoryEvidenceExecutionResultV1 {
   validateMemoryEvidenceExecutionProgramV1(input.program);
   const { frameRevision, ...resolvedFrameIdentity } = input.frame;
-  if (
-    !frameRevision.trim() ||
-    hashCanonicalJsonV1(resolvedFrameIdentity as never) !== frameRevision
-  ) {
+  if (!frameRevision.trim() || hashCanonicalJsonV1(resolvedFrameIdentity) !== frameRevision) {
     throw namedError("MemoryEvidenceExecutionRuntimeFrameInvalid");
   }
   const readNodes = input.program.nodes.filter((node) => node.operation === "read_requirement");
@@ -374,7 +371,7 @@ export function executeMemoryEvidenceProgramV1(input: {
             hashCanonicalJsonV1({
               schemaVersion: "paw.memory-supporting-evidence-set.v1",
               evidenceRefs: Object.freeze([...(readNode.supportingEvidenceRefs ?? [])].sort()),
-            } as never)
+            })
         );
       }))
   ) {
@@ -443,7 +440,7 @@ export function executeMemoryEvidenceProgramV1(input: {
   };
   return Object.freeze({
     ...identity,
-    executionRevision: hashCanonicalJsonV1(identity as never),
+    executionRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -1318,7 +1315,7 @@ function compilePersonalizationClaimLifecycleCertificatesV1(input: {
     certificates.push(
       Object.freeze({
         ...identity,
-        certificateRevision: hashCanonicalJsonV1(identity as never),
+        certificateRevision: hashCanonicalJsonV1(identity),
       }),
     );
   }
@@ -1392,7 +1389,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
     input.lifecycleCertificates.some((certificate) => {
       const { certificateRevision, ...identity } = certificate;
       return (
-        hashCanonicalJsonV1(identity as never) !== certificateRevision ||
+        hashCanonicalJsonV1(identity) !== certificateRevision ||
         certificate.programRevision !== input.programRevision ||
         certificate.resolvedStateFrameRevision !== input.resolvedStateFrameRevision ||
         certificate.sourceLockDigest !== input.sourceLockDigest ||
@@ -1450,13 +1447,13 @@ function compilePersonalizationCoverageCertificateV1(input: {
   const admittedClaimSetRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-personalization-admitted-claim-set.v1",
     claims,
-  } as never);
+  });
   const lifecycleCertificateSetRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-personalization-lifecycle-certificate-set.v1",
     certificateRevisions: input.lifecycleCertificates.map(
       (certificate) => certificate.certificateRevision,
     ),
-  } as never);
+  });
   const identity = {
     certificateVersion: "paw.memory-personalization-coverage-certificate.v1" as const,
     requestRevision: input.request.requestRevision,
@@ -1490,7 +1487,7 @@ function compilePersonalizationCoverageCertificateV1(input: {
   };
   return Object.freeze({
     ...identity,
-    certificateRevision: hashCanonicalJsonV1(identity as never),
+    certificateRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -1730,7 +1727,7 @@ function compileDurationEndpointCertificateV1(input: {
   const expectedAnchorRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-duration-query-anchor.v1",
     queryAnchor: request.queryAnchor,
-  } as never);
+  });
   if (
     request.endpointContract.kind === "evidence_to_host_anchor" &&
     request.endpointContract.anchorRevision !== expectedAnchorRevision
@@ -1772,7 +1769,7 @@ function compileDurationEndpointCertificateV1(input: {
   };
   return Object.freeze({
     ...identity,
-    certificateRevision: hashCanonicalJsonV1(identity as never),
+    certificateRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -1820,7 +1817,7 @@ function result(
   };
   return Object.freeze({
     ...identity,
-    resultRevision: hashCanonicalJsonV1(identity as never),
+    resultRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -1892,7 +1889,7 @@ function observationValue(
     predicateKind: observation.predicateKind,
     polarity: observation.polarity,
     modality: observation.modality,
-  } as never);
+  });
   const eventIdentity =
     observation.eventTimeInterval &&
     (observation.eventKey?.trim() || observation.durationEndpointRole !== "not_applicable")
@@ -1905,7 +1902,7 @@ function observationValue(
                 typedDurationEndpointRole: observation.durationEndpointRole,
                 eventTimeInterval: observation.eventTimeInterval,
               }),
-        } as never)
+        })
       : undefined;
   const eventIdentityBasis =
     eventIdentity === undefined
@@ -1950,7 +1947,7 @@ function observationValue(
   };
   return Object.freeze({
     kind: "observation",
-    valueId: hashCanonicalJsonV1(identity as never),
+    valueId: hashCanonicalJsonV1(identity),
     ...identity,
   });
 }
@@ -2003,17 +2000,16 @@ function validateExecutionBindingCertificates(
       !validationContext ||
       allCertificateByObservationId.has(item.observation.observationId) ||
       (frameObservation !== undefined &&
-        hashCanonicalJsonV1(frameObservation as never) !==
-          hashCanonicalJsonV1(item.observation as never)) ||
+        hashCanonicalJsonV1(frameObservation) !== hashCanonicalJsonV1(item.observation)) ||
       item.certificate.observationId !== item.observation.observationId ||
       item.certificate.bindingRevision !== item.observation.bindingRevision ||
       !certificateId.trim() ||
-      hashCanonicalJsonV1(certificateIdentity as never) !== certificateId
+      hashCanonicalJsonV1(certificateIdentity) !== certificateId
     ) {
       throw namedError("MemoryEvidenceExecutionRuntimeCertificateInvalid");
     }
     const contextSlotById = new Map(validationContext.slots.map((slot) => [slot.slotId, slot]));
-    const queryRevision = hashCanonicalJsonV1(validationContext.query as never);
+    const queryRevision = hashCanonicalJsonV1(validationContext.query);
     let contextOriginRevision: string;
     try {
       contextOriginRevision = compileMemoryQueryAnswerOriginV1(
@@ -2030,9 +2026,7 @@ function validateExecutionBindingCertificates(
       contextSlotById.size < 1 ||
       [...contextSlotById].some(([slotId, contextSlot]) => {
         const slot = slotById.get(slotId);
-        return (
-          !slot || hashCanonicalJsonV1(contextSlot as never) !== hashCanonicalJsonV1(slot as never)
-        );
+        return !slot || hashCanonicalJsonV1(contextSlot) !== hashCanonicalJsonV1(slot);
       }) ||
       (transactionQueryRevision !== undefined && transactionQueryRevision !== queryRevision)
     ) {
@@ -2060,7 +2054,7 @@ function validateExecutionBindingCertificates(
       ),
       verificationRevision: validationContext.verification.verificationRevision,
     };
-    const usedContextRevision = hashCanonicalJsonV1(usedContextIdentity as never);
+    const usedContextRevision = hashCanonicalJsonV1(usedContextIdentity);
     usedContextIdentities.set(usedContextRevision, usedContextIdentity);
   }
   const frameCertificateByObservationId = new Map<string, MemoryStateBindingCertificateV1>();
@@ -2097,7 +2091,7 @@ function validateExecutionBindingCertificates(
     ),
     frameCertificateIds,
     reducerExcludedCertificateIds,
-  } as never);
+  });
   return Object.freeze({
     certificateByObservationId: frameCertificateByObservationId,
     frameCertificates: Object.freeze(
@@ -2143,7 +2137,7 @@ function dependencyValue(
   };
   return Object.freeze({
     kind: "dependency_record",
-    valueId: hashCanonicalJsonV1(identity as never),
+    valueId: hashCanonicalJsonV1(identity),
     ...identity,
   });
 }
@@ -2180,7 +2174,7 @@ function comparisonValue(
   };
   return Object.freeze({
     kind: "comparison",
-    valueId: hashCanonicalJsonV1(identity as never),
+    valueId: hashCanonicalJsonV1(identity),
     sides,
     ...(relation ? { relation } : {}),
   });
@@ -2220,7 +2214,7 @@ function aggregateValue(
   };
   return Object.freeze({
     kind: "aggregate",
-    valueId: hashCanonicalJsonV1(identity as never),
+    valueId: hashCanonicalJsonV1(identity),
     ...identity,
   });
 }
@@ -2296,7 +2290,7 @@ function exactDurationValue(
   };
   return Object.freeze({
     kind: "temporal_duration",
-    valueId: hashCanonicalJsonV1(identity as never),
+    valueId: hashCanonicalJsonV1(identity),
     ...identity,
   });
 }
@@ -2334,7 +2328,7 @@ function intervalDurationValue(
   };
   return Object.freeze({
     kind: "temporal_duration",
-    valueId: hashCanonicalJsonV1(identity as never),
+    valueId: hashCanonicalJsonV1(identity),
     ...identity,
   });
 }
@@ -2373,7 +2367,7 @@ function preferenceValue(
   };
   return Object.freeze({
     kind: "preference_profile",
-    valueId: hashCanonicalJsonV1(identity as never),
+    valueId: hashCanonicalJsonV1(identity),
     ...identity,
   });
 }
@@ -2404,7 +2398,7 @@ function personalizationValue(
   };
   return Object.freeze({
     kind: "personalization_profile",
-    valueId: hashCanonicalJsonV1(identity as never),
+    valueId: hashCanonicalJsonV1(identity),
     ...identity,
   });
 }
@@ -2563,7 +2557,7 @@ function aggregateMaterializationExactV1(
       hashCanonicalJsonV1({
         schemaVersion: "paw.memory-selected-evidence-set.v1",
         evidenceRefs: Object.freeze([...refs].sort()),
-      } as never)
+      })
     );
   });
 }

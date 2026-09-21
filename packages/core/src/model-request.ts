@@ -1,4 +1,5 @@
-import { type JsonValue, parseTaskCheckpointV1 } from "@paw/protocol";
+import { parseTaskCheckpointV1 } from "@paw/protocol";
+import { canonicalJsonStringifyV1 } from "./canonical-json.js";
 import type { ChatMessage } from "./context/manager.js";
 
 /** Provider-neutral function definition exposed to one model request. */
@@ -153,8 +154,8 @@ function assertContextSection(section: ModelContextSectionV1, ids: Set<string>):
 
 function isCanonicalJson(value: string): boolean {
   try {
-    const parsed = JSON.parse(value) as JsonValue;
-    return canonicalJsonStringify(parsed) === value;
+    const parsed: unknown = JSON.parse(value);
+    return canonicalJsonStringifyV1(parsed) === value;
   } catch {
     return false;
   }
@@ -164,24 +165,10 @@ function isCanonicalTaskCheckpoint(value: string): boolean {
   try {
     const parsed: unknown = JSON.parse(value);
     const checkpoint = parseTaskCheckpointV1(parsed);
-    return canonicalJsonStringify(checkpoint as unknown as JsonValue) === value;
+    return canonicalJsonStringifyV1(checkpoint) === value;
   } catch {
     return false;
   }
-}
-
-function canonicalJsonStringify(value: JsonValue): string {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJsonStringify).join(",")}]`;
-  }
-  const record = value as Readonly<Record<string, JsonValue>>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJsonStringify(record[key] as JsonValue)}`)
-    .join(",")}}`;
 }
 
 function isStableLineToken(value: string): boolean {

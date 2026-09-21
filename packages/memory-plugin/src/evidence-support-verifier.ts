@@ -109,7 +109,7 @@ export function createJsonMemoryEvidenceSupportVerifierV1(input: {
             memoryIds: span.memoryIds,
           })),
           assessments,
-        } as never),
+        }),
         assessments,
       });
     },

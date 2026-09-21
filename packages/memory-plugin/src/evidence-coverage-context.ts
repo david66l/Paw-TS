@@ -1,6 +1,5 @@
 import type { ModelContextSectionV1 } from "@paw/core";
 import {
-  type JsonValue,
   MEMORY_EVIDENCE_COVERAGE_POLICY_VERSION_V1,
   type MemoryEvidenceCoverageSettledFactV1,
 } from "@paw/protocol";
@@ -44,7 +43,7 @@ export function createMemoryEvidenceCoverageSectionV1(
       content: span.content,
       contentHash: span.contentHash,
     })),
-  } as unknown as JsonValue);
+  });
   return Object.freeze({
     schemaVersion: 1,
     kind: "memory_cards",

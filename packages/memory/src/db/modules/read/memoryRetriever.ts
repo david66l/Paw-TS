@@ -89,8 +89,9 @@ export class MemoryRetriever {
     }
 
     // 结构化过滤
+    // 全部请求类型都要下推到 SQL；`types[0]` 会把一次多类型检索悄悄截断成单类型。
     const items = await memoryItemDao.query({
-      type: req.types?.[0],
+      types: req.types,
       status: "active",
       scopeRepoId: req.repositoryId,
       scopeUserId: req.userId,

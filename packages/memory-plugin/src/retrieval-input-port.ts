@@ -8,7 +8,6 @@ import { materializeModelRequestMessagesV1 } from "@paw/core";
 import {
   type DerivedDecisionV1,
   type InputFactV1,
-  type JsonValue,
   MEMORY_RETRIEVAL_POLICY_VERSION_V1,
   type MemoryCardV1,
   type MemoryRetrievalSettledFactV1,
@@ -192,10 +191,10 @@ export function projectCurrentMemoryQueryV1(
     providerVersion: profile.providerVersion,
     policyVersion: MEMORY_RETRIEVAL_POLICY_VERSION_V1,
     scopeFingerprint: memoryScopeFingerprintV1(profile.scope),
-    searchPlanHash: hashCanonicalJsonV1(searchTexts as unknown as JsonValue),
+    searchPlanHash: hashCanonicalJsonV1(searchTexts),
   } as const;
   return Object.freeze({
-    queryId: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    queryId: hashCanonicalJsonV1(identity),
     trigger,
     text: promoted.fact.content,
     searchTexts,
@@ -551,7 +550,7 @@ function freezeProviderCards(
         throw new Error("Memory provider returned an invalid card");
       }
       const { contentHash: _contentHash, ...content } = card;
-      if (hashCanonicalJsonV1(content as unknown as JsonValue) !== card.contentHash) {
+      if (hashCanonicalJsonV1(content) !== card.contentHash) {
         throw new Error("Memory provider returned a card with an invalid content hash");
       }
       ids.add(card.id);

@@ -19,7 +19,7 @@ import {
 } from "@paw/harness";
 import { createDeepSeekFlashModel, createDefaultLanguageModel } from "@paw/models";
 import type { LanguageModel } from "@paw/models";
-import { defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
+import { defaultSettingsPath, loadPawSettingsLocal, mcpServerConfigSchema } from "@paw/settings";
 import { WorkspaceWatcher } from "@paw/workspace";
 import {
   type AgentRegistry,
@@ -130,6 +130,13 @@ function loadWorkspaceSettings(workspaceRoot: string): Record<string, unknown> |
   }
 }
 
+/**
+ * `mcp_servers` comes from a user-edited settings file, so validate it instead of
+ * asserting its shape. The previous cast accepted any non-empty value: a bare
+ * string passed the length check and was then iterated character by character as
+ * though each character were a server definition. An unusable value is treated as
+ * "no MCP servers", matching this function's existing failure behaviour.
+ */
 function loadMcpServers(
   workspaceRoot: string,
   settings?: Record<string, unknown>,
@@ -138,9 +145,9 @@ function loadMcpServers(
     const s =
       settings ??
       (loadPawSettingsLocal(defaultSettingsPath(workspaceRoot)) as Record<string, unknown>);
-    const mcpServers = s.mcp_servers as unknown[] | undefined;
-    if (mcpServers && mcpServers.length > 0) {
-      return mcpServers as readonly McpServerConfig[];
+    const parsed = mcpServerConfigSchema.array().safeParse(s.mcp_servers);
+    if (parsed.success && parsed.data.length > 0) {
+      return parsed.data;
     }
   } catch {
     // ignore

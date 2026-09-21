@@ -1,4 +1,4 @@
-import { type JsonValue, hashCanonicalJsonV1 } from "./canonical.js";
+import { hashCanonicalJsonV1 } from "./canonical.js";
 import type {
   MemoryEvidenceAnswerShapeV3,
   MemoryEvidenceRequirementV3,
@@ -96,6 +96,6 @@ export function routeMemorySourceLocalExecutionV1(input: {
   return Object.freeze({
     routerVersion: PAW_MEMORY_SOURCE_LOCAL_EXECUTION_ROUTER_VERSION_V1,
     ...decision,
-    routeRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    routeRevision: hashCanonicalJsonV1(identity),
   });
 }

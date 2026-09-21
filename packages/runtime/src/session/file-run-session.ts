@@ -5,7 +5,6 @@ import type { Session, SessionInputSnapshot } from "@paw/agent-loop";
 import {
   type DerivedDecisionV1,
   type InputFactV1,
-  type JsonValue,
   RUN_JOURNAL_SCHEMA_VERSION_V1,
   type RunJournalEnvelopeV1,
   assertRunJournalEnvelopeV1,
@@ -703,7 +702,7 @@ export class FileRunSessionV1 implements Session<InputFactV1, DerivedDecisionV1>
     try {
       this.onCommitted?.(
         immutableCanonicalJsonCloneV1(
-          nextPrefix.slice(attempt.startSeq - 1) as unknown as JsonValue,
+          nextPrefix.slice(attempt.startSeq - 1),
         ) as unknown as readonly RunJournalEnvelopeV1[],
       );
     } catch {
@@ -1668,21 +1667,16 @@ function sameHead(left: JournalHeadV1, right: JournalHeadV1): boolean {
 
 function canonicalInputFactClone(fact: InputFactV1): InputFactV1 {
   assertProtocolRecord({ kind: "input_fact", fact });
-  return immutableCanonicalJsonCloneV1(fact as unknown as JsonValue) as InputFactV1;
+  return immutableCanonicalJsonCloneV1(fact) as InputFactV1;
 }
 
 function canonicalDerivedDecisionClone(decision: DerivedDecisionV1): DerivedDecisionV1 {
   assertProtocolRecord({ kind: "derived_decision", decision });
-  return immutableCanonicalJsonCloneV1(
-    decision as unknown as JsonValue,
-  ) as unknown as DerivedDecisionV1;
+  return immutableCanonicalJsonCloneV1(decision) as unknown as DerivedDecisionV1;
 }
 
 function sameDerivedDecision(left: DerivedDecisionV1, right: DerivedDecisionV1): boolean {
-  return (
-    canonicalJsonStringifyV1(left as unknown as JsonValue) ===
-    canonicalJsonStringifyV1(right as unknown as JsonValue)
-  );
+  return canonicalJsonStringifyV1(left) === canonicalJsonStringifyV1(right);
 }
 
 function assertProtocolRecord(record: RunJournalEnvelopeV1["record"]): void {

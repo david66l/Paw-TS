@@ -116,20 +116,20 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       const supportingEvidenceSetRevision = hashCanonicalJsonV1({
         schemaVersion: "paw.memory-supporting-evidence-set.v1",
         evidenceRefs: Object.freeze([...supporting].sort()),
-      } as never);
+      });
       const selectedEvidenceSetRevision = hashCanonicalJsonV1({
         schemaVersion: "paw.memory-selected-evidence-set.v1",
         evidenceRefs: Object.freeze([...coverage.selectedEvidenceRefs].sort()),
-      } as never);
+      });
       const notebookCoverageRevision = hashCanonicalJsonV1({
         schemaVersion: "paw.memory-notebook-coverage-row.v1",
         coverage,
-      } as never);
+      });
       const windowRevision = hashCanonicalJsonV1({
         schemaVersion: "paw.memory-requirement-window.v1",
         requirementId: requirement.requirementId,
         temporalBindingRevision: execution.requirement.temporalBindingRevision,
-      } as never);
+      });
       const identity = {
         requirementId: requirement.requirementId,
         requirementRevision: execution.requirement.requirementRevision,
@@ -147,7 +147,7 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
       };
       return Object.freeze({
         ...identity,
-        proofRevision: hashCanonicalJsonV1(identity as never),
+        proofRevision: hashCanonicalJsonV1(identity),
       });
     }),
   );
@@ -163,7 +163,7 @@ export function compileMemoryEvidenceExecutionCoverageCertificateV1(input: {
   };
   return Object.freeze({
     ...identity,
-    certificateRevision: hashCanonicalJsonV1(identity as never),
+    certificateRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -204,8 +204,8 @@ export function validateMemoryEvidenceExecutionCoverageCertificateV1(
         schemaVersion: "paw.memory-requirement-window.v1",
         requirementId: requirement.requirementId,
         temporalBindingRevision: requirement.temporalBindingRevision,
-      } as never) !== requirement.windowRevision ||
-      hashCanonicalJsonV1(identity as never) !== proofRevision
+      }) !== requirement.windowRevision ||
+      hashCanonicalJsonV1(identity) !== proofRevision
     ) {
       throw namedError("MemoryEvidenceExecutionCoverageCertificateInvalid");
     }
@@ -216,7 +216,7 @@ export function validateMemoryEvidenceExecutionCoverageCertificateV1(
       (certificate.requirements.every((requirement) => requirement.status === "closed")
         ? "closed"
         : "open") ||
-    hashCanonicalJsonV1(identity as never) !== certificateRevision
+    hashCanonicalJsonV1(identity) !== certificateRevision
   ) {
     throw namedError("MemoryEvidenceExecutionCoverageCertificateInvalid");
   }

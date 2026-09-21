@@ -1,6 +1,5 @@
 import type { ModelContextSectionV1 } from "@paw/core";
 import {
-  type JsonValue,
   MEMORY_RETRIEVAL_POLICY_VERSION_V1,
   type MemoryRetrievalSettledFactV1,
 } from "@paw/protocol";
@@ -20,7 +19,7 @@ export function createMemoryContextSectionV1(
     trigger: fact.trigger,
     status: fact.status,
     cards: fact.cards,
-  } as unknown as JsonValue);
+  });
   return Object.freeze({
     schemaVersion: 1,
     kind: "memory_cards",

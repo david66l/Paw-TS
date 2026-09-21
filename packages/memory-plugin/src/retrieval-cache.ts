@@ -1,5 +1,3 @@
-import type { JsonValue } from "@paw/protocol";
-
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import { memoryScopeFingerprintV1 } from "./profile.js";
 import type {
@@ -262,10 +260,9 @@ function buildCacheKey(
     providerVersion,
     storageNamespace,
     revisionToken,
-    queryTextHash: hashCanonicalJsonV1(query.text as unknown as JsonValue),
+    queryTextHash: hashCanonicalJsonV1(query.text),
     searchPlanHash: hashCanonicalJsonV1(
-      (query.searchTexts ??
-        createMemorySearchTextsV1(undefined, query.text)) as unknown as JsonValue,
+      query.searchTexts ?? createMemorySearchTextsV1(undefined, query.text),
     ),
     searchPlanVersion: PAW_MEMORY_SEARCH_PLAN_VERSION_V2,
     inputContentHash: query.inputContentHash,
@@ -273,7 +270,7 @@ function buildCacheKey(
     scopeFingerprint: memoryScopeFingerprintV1(query.scope),
     maxCards: query.maxCards,
     maxInjectedTokens: query.maxInjectedTokens,
-  } as unknown as JsonValue);
+  });
 }
 
 function normalizedStorageNamespace(value: string): string {

@@ -591,7 +591,7 @@ async function materializePacket(
         memoryIds: span.memoryIds,
         contentHash: span.contentHash,
       })),
-    } as unknown as JsonValue),
+    }),
   });
 }
 
@@ -743,7 +743,7 @@ function toolQuery(text: string, profile: PawNextMemoryPluginProfileV1): MemoryP
     scopeFingerprint: memoryScopeFingerprintV1(profile.scope),
     maxCards: 8,
     searchTexts,
-  } as unknown as JsonValue);
+  });
   return Object.freeze({
     queryId,
     trigger: "task_start",

@@ -1,9 +1,4 @@
-import type {
-  DurableJsonPayloadV1,
-  InputAttachmentV1,
-  JsonValue,
-  RunJournalEnvelopeV1,
-} from "@paw/protocol";
+import type { DurableJsonPayloadV1, InputAttachmentV1, RunJournalEnvelopeV1 } from "@paw/protocol";
 import { parseRunJournalPrefixV1 } from "@paw/protocol";
 
 import {
@@ -104,7 +99,7 @@ export function projectCanonicalDurableJsonPayloadBindingsV1(
   ): void => {
     const frozenBinding = freezeBinding(binding);
     if (payload.kind === "artifact_ref") {
-      const key = canonicalJsonStringifyV1(frozenBinding as unknown as JsonValue);
+      const key = canonicalJsonStringifyV1(frozenBinding);
       const existing = artifactBindings.get(payload.artifactRef);
       if (existing !== undefined && existing !== key) {
         throw new Error("Durable JSON payload artifact ref is reused across canonical bindings");
@@ -115,9 +110,7 @@ export function projectCanonicalDurableJsonPayloadBindingsV1(
       Object.freeze({
         location: freezeLocation(location),
         binding: frozenBinding,
-        payload: immutableCanonicalJsonCloneV1(
-          payload as unknown as JsonValue,
-        ) as unknown as DurableJsonPayloadV1,
+        payload: immutableCanonicalJsonCloneV1(payload) as unknown as DurableJsonPayloadV1,
       }),
     );
   };

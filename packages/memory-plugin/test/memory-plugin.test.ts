@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { LoopSafeBoundary, SessionInputSnapshot } from "@paw/agent-loop";
 import { type ModelRequestV1, materializeModelRequestMessagesV1 } from "@paw/core";
 import type { MemoryEntry, MemoryFilter, MemoryStoreEngine } from "@paw/memory/longterm";
-import type { InputFactV1, JsonValue, MemoryCardV1 } from "@paw/protocol";
+import type { InputFactV1, MemoryCardV1 } from "@paw/protocol";
 import { type JournalContextRuntimeV1, createJournalContextV1 } from "@paw/runtime";
 
 import { hashCanonicalJsonV1 } from "../src/canonical.js";
@@ -1819,7 +1819,7 @@ function card(repositoryId: string): MemoryCardV1 {
   });
   return Object.freeze({
     ...content,
-    contentHash: hashCanonicalJsonV1(content as unknown as JsonValue),
+    contentHash: hashCanonicalJsonV1(content),
   });
 }
 

@@ -553,7 +553,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const { executionRevision: _executionRevision, ...withoutRevision } = forgedIdentity;
     const forged = {
       ...withoutRevision,
-      executionRevision: hashCanonicalJsonV1(withoutRevision as never),
+      executionRevision: hashCanonicalJsonV1(withoutRevision),
     };
     expect(project(output, forged)).toEqual({
       status: "rejected",
@@ -863,7 +863,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       ...original,
       certificate: {
         ...withoutId,
-        certificateId: hashCanonicalJsonV1(withoutId as never),
+        certificateId: hashCanonicalJsonV1(withoutId),
       },
     };
     expect(() =>
@@ -924,7 +924,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     };
     const projectedFrame = {
       ...projectedFrameIdentity,
-      frameRevision: hashCanonicalJsonV1(projectedFrameIdentity as never),
+      frameRevision: hashCanonicalJsonV1(projectedFrameIdentity),
     };
     const executeProjected = (validatedObservations: typeof output.validatedObservations) =>
       executeMemoryEvidenceProgramV1({
@@ -972,7 +972,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
       ...omitted,
       certificate: {
         ...withoutId,
-        certificateId: hashCanonicalJsonV1(withoutId as never),
+        certificateId: hashCanonicalJsonV1(withoutId),
       },
     };
     expect(() =>
@@ -1071,7 +1071,7 @@ describe("proof-carrying evidence execution runtime v1", () => {
     const duplicatedIdentity = { ...frameIdentity, slots: duplicatedSlots };
     const duplicatedFrame = {
       ...duplicatedIdentity,
-      frameRevision: hashCanonicalJsonV1(duplicatedIdentity as never),
+      frameRevision: hashCanonicalJsonV1(duplicatedIdentity),
     };
     expect(() =>
       executeMemoryEvidenceProgramV1({

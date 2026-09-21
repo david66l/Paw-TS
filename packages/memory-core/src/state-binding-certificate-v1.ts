@@ -200,10 +200,7 @@ export function compileMemoryStateBindingCertificatesV1(
           modality: observation.modality,
         },
       });
-      if (
-        hashCanonicalJsonV1(rebound as unknown as JsonValue) !==
-        hashCanonicalJsonV1(observation as unknown as JsonValue)
-      ) {
+      if (hashCanonicalJsonV1(rebound) !== hashCanonicalJsonV1(observation)) {
         throw namedError("MemoryStateBindingCertificateObservationInvalid");
       }
       const supportSpan = compileSupportSpan(item.content, observation.valueSpans);
@@ -325,7 +322,7 @@ export function compileMemoryStateBindingCertificatesV1(
       };
       const certificate = Object.freeze({
         ...identity,
-        certificateId: hashCanonicalJsonV1(identity as unknown as JsonValue),
+        certificateId: hashCanonicalJsonV1(identity),
       });
       return Object.freeze({ observation, certificate });
     }),
@@ -339,11 +336,7 @@ export function validateMemoryStateBindingCertificateV1(
   const expected = compileMemoryStateBindingCertificatesV1(input).find(
     (item) => item.observation.observationId === candidate.observation.observationId,
   );
-  if (
-    !expected ||
-    hashCanonicalJsonV1(expected as unknown as JsonValue) !==
-      hashCanonicalJsonV1(candidate as unknown as JsonValue)
-  ) {
+  if (!expected || hashCanonicalJsonV1(expected) !== hashCanonicalJsonV1(candidate)) {
     throw namedError("MemoryStateBindingCertificateBoundaryInvalid");
   }
   return candidate;

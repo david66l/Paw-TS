@@ -187,7 +187,7 @@ export function buildMemoryRequirementFairAcquisitionV1(input: {
   const discoveryRevision = hashCanonicalJsonV1({
     original: discoveryListIdentity(originalLists),
     requirements: requirementLists.map(discoveryListIdentity),
-  } as unknown as JsonValue);
+  });
   const acquisitionIdentity = {
     policyVersion: PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_VERSION_V1,
     policyRevision: PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_REVISION_V1,
@@ -214,7 +214,7 @@ export function buildMemoryRequirementFairAcquisitionV1(input: {
   const report = Object.freeze({
     policyVersion: PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_VERSION_V1,
     policyRevision: PAW_MEMORY_REQUIREMENT_FAIR_ACQUISITION_POLICY_REVISION_V1,
-    acquisitionRevision: hashCanonicalJsonV1(acquisitionIdentity as unknown as JsonValue),
+    acquisitionRevision: hashCanonicalJsonV1(acquisitionIdentity),
     originalLaneMode: input.originalLaneMode,
     ...(originalReservedSourceId === undefined ? {} : { originalReservedSourceId }),
     requirementContributions,

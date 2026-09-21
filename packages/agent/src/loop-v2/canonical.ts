@@ -1,21 +1,16 @@
-import { createHash } from "node:crypto";
+import { canonicalJsonStringifyV1, hashCanonicalJsonV1 } from "@paw/core";
 
+/**
+ * Loop v2 canonical encoding.
+ *
+ * Kept as a named alias because loop v2's artifacts and resume claims hash
+ * through these two names; the implementation is `@paw/core`'s, so a loop v2
+ * hash and a runtime hash of the same value are the same string.
+ */
 export function canonicalJson(value: unknown): string {
-  if (value === null) return "null";
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(",")}]`;
-  }
-  if (typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const fields = Object.keys(record)
-      .filter((key) => record[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
-    return `{${fields.join(",")}}`;
-  }
-  return JSON.stringify(value) ?? String(value);
+  return canonicalJsonStringifyV1(value);
 }
 
 export function sha256Canonical(value: unknown): string {
-  return createHash("sha256").update(canonicalJson(value)).digest("hex");
+  return hashCanonicalJsonV1(value);
 }

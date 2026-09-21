@@ -1,4 +1,4 @@
-import { type JsonValue, hashCanonicalJsonV1 } from "./canonical.js";
+import { hashCanonicalJsonV1 } from "./canonical.js";
 import {
   type MemoryEvidenceNotebookHitV1,
   projectMemoryEvidenceExcerptV1,
@@ -134,7 +134,7 @@ export function createJsonMemoryEvidenceClosureAuditorV1(input: {
           decision: parsed.decision,
           deficiencies: parsed.deficiencies,
           rejectedEvidenceRefs: parsed.rejectedEvidenceRefs,
-        } as unknown as JsonValue),
+        }),
         ...parsed,
       });
     },

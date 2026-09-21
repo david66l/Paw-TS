@@ -105,7 +105,7 @@ export function compileMemoryEvidenceSelectorGroupsV1(input: {
           groupId: hashCanonicalJsonV1({
             policy: PAW_MEMORY_EVIDENCE_SELECTOR_GROUP_POLICY_V1,
             requirementIds,
-          } as never),
+          }),
           requirementIds,
           requirements: frozenRequirements,
         });

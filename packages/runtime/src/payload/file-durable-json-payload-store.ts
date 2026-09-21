@@ -145,7 +145,7 @@ export function createFileDurableJsonPayloadWriterV1(
         valueHash,
         value: canonicalValue,
       }) as unknown as PayloadArtifactEnvelopeV1;
-      const bytes = canonicalJsonStringifyV1(envelope as unknown as JsonValue);
+      const bytes = canonicalJsonStringifyV1(envelope);
       assertArtifactSize(bytes, identity.policy);
       const envelopeHash = hashText(bytes);
       const payload = Object.freeze({
@@ -348,7 +348,7 @@ function readAndVerifyArtifact(
     throw new Error("Durable JSON payload artifact JSON is invalid");
   }
   const envelope = parseEnvelope(parsed);
-  if (canonicalJsonStringifyV1(envelope as unknown as JsonValue) !== raw) {
+  if (canonicalJsonStringifyV1(envelope) !== raw) {
     throw new Error("Durable JSON payload artifact is not canonical JSON");
   }
   if (
@@ -358,8 +358,7 @@ function readAndVerifyArtifact(
     envelope.sessionId !== identity.sessionId ||
     envelope.runId !== identity.runId ||
     envelope.originSeq !== expectedBinding.originSeq ||
-    canonicalJsonStringifyV1(envelope.field as unknown as JsonValue) !==
-      canonicalJsonStringifyV1(expectedBinding.field as unknown as JsonValue)
+    canonicalJsonStringifyV1(envelope.field) !== canonicalJsonStringifyV1(expectedBinding.field)
   ) {
     throw new Error("Durable JSON payload artifact binding mismatch");
   }

@@ -1101,10 +1101,8 @@ export async function resolveEvidencePass(input: {
       schemaVersion: "paw.memory-evidence-support-selection-failed.v1",
       selectorVersion: input.supportSelector.selectorVersion,
       requirementIds: executionRequirements.map((requirement) => requirement.requirementId),
-      candidateScopeRevisions: failedCandidateScopes.map((scope) =>
-        hashCanonicalJsonV1(scope as never),
-      ),
-    } as never);
+      candidateScopeRevisions: failedCandidateScopes.map((scope) => hashCanonicalJsonV1(scope)),
+    });
     selectorExecutionSnapshot = compileMemorySelectorExecutionSnapshotV1({
       query: input.query,
       intent: input.intent,

@@ -541,7 +541,7 @@ export function evaluateMemorySourceLocalLeafEligibilityV2(input: {
     roleConstraint: input.requirement.roleConstraint,
     relation,
     coverageMode,
-    eligibilityRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    eligibilityRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -836,7 +836,7 @@ export function memorySourceLocalEvidenceCacheKeyV1(input: {
     budget: input.request.budget,
     adjacencyPolicyVersion: input.adjacencyPolicyVersion,
     rankerVersion: input.rankerVersion,
-  } as unknown as JsonValue);
+  });
 }
 
 function assertBudget(value: MemorySourceLocalEvidenceBudgetV1): void {

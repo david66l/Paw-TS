@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { SessionInputSnapshot } from "@paw/agent-loop";
 import { projectCompletionReviewToolEvidenceV1 } from "@paw/completion-review";
-import { projectWorkspaceEffect } from "@paw/core";
+import { canonicalJsonStringifyV1, projectWorkspaceEffect } from "@paw/core";
 import type { DurableJsonPayloadV1, InputFactV1, JsonValue } from "@paw/protocol";
 
 export const PROGRESS_ADVISOR_POLICY_VERSION_V1 =
@@ -389,7 +389,7 @@ function consecutiveRepeat(
     const next = createHash("sha256")
       .update(call.tool)
       .update("\0")
-      .update(canonicalJson(call.args))
+      .update(canonicalJsonStringifyV1(call.args))
       .digest("hex");
     count = next === key ? count + 1 : 1;
     key = next;
@@ -466,16 +466,6 @@ function advice(
     message,
     ...(repeatedTool ? { repeatedTool } : {}),
   });
-}
-
-function canonicalJson(value: JsonValue): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const record = value as Readonly<Record<string, JsonValue>>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`)
-    .join(",")}}`;
 }
 
 function stringField(value: JsonValue | undefined, key: string): string | undefined {

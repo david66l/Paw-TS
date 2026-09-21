@@ -339,7 +339,7 @@ function buildProjection(
   };
   return Object.freeze({
     ...identity,
-    packetRevision: hashCanonicalJsonV1(identity as never),
+    packetRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -355,7 +355,7 @@ function validateSourceAndSelector(input: MemoryEvidenceReaderProjectionInputV1)
   }
   const { snapshotRevision, ...snapshotIdentity } = input.selectorSnapshot;
   if (
-    hashCanonicalJsonV1(snapshotIdentity as never) !== snapshotRevision ||
+    hashCanonicalJsonV1(snapshotIdentity) !== snapshotRevision ||
     input.program.selectorSnapshotRevision !== snapshotRevision ||
     input.program.originRevision !== input.selectorSnapshot.originRevision ||
     input.program.lockedSourceRevision !== input.selectorSnapshot.lockedSourceRevision ||
@@ -363,7 +363,7 @@ function validateSourceAndSelector(input: MemoryEvidenceReaderProjectionInputV1)
       hashCanonicalJsonV1({
         schemaVersion: "paw.memory-locked-source-set.v1",
         lockedSourceIds: Object.freeze([...input.lockedSourceIds]),
-      } as never)
+      })
   ) {
     reject("program_mismatch");
   }
@@ -429,7 +429,7 @@ function projectAnswer(
     }
     const { certificateRevision, ...certificateIdentity } = duration.endpointCertificate;
     if (
-      hashCanonicalJsonV1(certificateIdentity as never) !== certificateRevision ||
+      hashCanonicalJsonV1(certificateIdentity) !== certificateRevision ||
       certificateRevision !== duration.endpointCertificateRevision
     ) {
       reject("certificate_scope_invalid");
@@ -508,7 +508,7 @@ function projectPersonalization(
   }
   const { certificateRevision, ...coverageIdentity } = profile.coverageCertificate;
   if (
-    hashCanonicalJsonV1(coverageIdentity as never) !== certificateRevision ||
+    hashCanonicalJsonV1(coverageIdentity) !== certificateRevision ||
     certificateRevision !== profile.coverageCertificateRevision ||
     profile.coverageCertificate.claims.some(
       (claim) =>
@@ -660,7 +660,7 @@ function projectEvidenceGroups(
         temporalBindingRevision: readNode.temporalBindingRevision,
       };
       groups.push({
-        groupKey: hashCanonicalJsonV1(groupIdentity as never),
+        groupKey: hashCanonicalJsonV1(groupIdentity),
         ...groupIdentity,
         values: projectedValues,
       });
@@ -854,7 +854,7 @@ function collectPayloadCertificateIds(
 }
 
 function same(left: unknown, right: unknown): boolean {
-  return hashCanonicalJsonV1(left as never) === hashCanonicalJsonV1(right as never);
+  return hashCanonicalJsonV1(left) === hashCanonicalJsonV1(right);
 }
 
 function reject(reason: MemoryEvidenceReaderProjectionRejectedReasonV1): never {

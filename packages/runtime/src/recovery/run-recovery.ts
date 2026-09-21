@@ -1,7 +1,6 @@
 import type { SessionInputSnapshot, VerifiedModelResponseEvidenceV1 } from "@paw/agent-loop";
 import {
   type InputFactV1,
-  type JsonValue,
   type ModelResponseV1,
   type ModelSettledFactV1,
   type RunJournalEnvelopeV1,
@@ -212,7 +211,7 @@ export async function repairRunRecoveryV1(
   for (;;) {
     throwIfAborted(signal);
     const prefix = immutableCanonicalJsonCloneV1(
-      parseRunJournalPrefixV1(await options.session.readCanonicalPrefix()) as unknown as JsonValue,
+      parseRunJournalPrefixV1(await options.session.readCanonicalPrefix()),
     ) as unknown as readonly RunJournalEnvelopeV1[];
     throwIfAborted(signal);
     const modelResponses = loadModelResponseEvidence
@@ -300,7 +299,7 @@ function requiredTool(tools: ReadonlyMap<string, ToolLifecycle>, callId: string)
 }
 
 function immutableInputFact(fact: InputFactV1): InputFactV1 {
-  return immutableCanonicalJsonCloneV1(fact as unknown as JsonValue) as InputFactV1;
+  return immutableCanonicalJsonCloneV1(fact) as InputFactV1;
 }
 
 function assertNoLifecycleOverlap(

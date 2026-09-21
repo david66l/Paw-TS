@@ -533,7 +533,7 @@ export function createMemoryEvidenceResolverV1(input: {
               programRevision: stateFrameShadow?.frame?.programRevision ?? null,
               sourceLockDigest: stateFrameShadow?.frame?.sourceLockDigest ?? null,
               telemetry: stateFrameTelemetry ?? null,
-            } as unknown as JsonValue);
+            });
       const revisionBody = {
         resolverVersion: PAW_MEMORY_EVIDENCE_RESOLVER_VERSION_V1,
         indexVersion: input.index.indexVersion,
@@ -652,7 +652,7 @@ export function createMemoryEvidenceResolverV1(input: {
         packetSources,
         telemetry: fusion.telemetry,
         notebook,
-        resolutionRevision: hashCanonicalJsonV1(revisionBody as unknown as JsonValue),
+        resolutionRevision: hashCanonicalJsonV1(revisionBody),
       });
     },
   });

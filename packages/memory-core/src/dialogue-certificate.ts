@@ -1,4 +1,4 @@
-import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
+import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryDialoguePredecessorProofV1 } from "./source-local-evidence-locator.js";
 
 export const PAW_MEMORY_DIALOGUE_CERTIFICATE_REGISTRY_VERSION_V1 =
@@ -100,11 +100,11 @@ export function compileMemoryDialogueCertificateRegistryV1(input: {
         };
         return Object.freeze({
           ...identity,
-          certificateRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+          certificateRevision: hashCanonicalJsonV1(identity),
         });
       }),
   );
-  const lockedSourceIdsRevision = hashCanonicalJsonV1(lockedSourceIds as unknown as JsonValue);
+  const lockedSourceIdsRevision = hashCanonicalJsonV1(lockedSourceIds);
   const registryIdentity = {
     registryVersion: PAW_MEMORY_DIALOGUE_CERTIFICATE_REGISTRY_VERSION_V1,
     lockedSourceIdsRevision,
@@ -119,23 +119,21 @@ export function compileMemoryDialogueCertificateRegistryV1(input: {
     originRevision: input.originRevision,
     evidenceTimeUpperBound,
     certificates,
-    registryRevision: hashCanonicalJsonV1(registryIdentity as unknown as JsonValue),
+    registryRevision: hashCanonicalJsonV1(registryIdentity),
   });
 }
 
 export function validateMemoryDialogueCertificateRegistryV1(
   registry: MemoryDialogueCertificateRegistryV1,
 ): void {
-  const lockedSourceIdsRevision = hashCanonicalJsonV1(
-    registry.lockedSourceIds as unknown as JsonValue,
-  );
+  const lockedSourceIdsRevision = hashCanonicalJsonV1(registry.lockedSourceIds);
   const certificates = registry.certificates.map((certificate) => {
     const { certificateRevision, ...identity } = certificate;
     if (
       hashTextV1(certificate.assistant.content) !== certificate.assistant.contentHash ||
       certificate.assistant.turnOrder !== certificate.predecessor.turnOrder + 1 ||
       !registry.lockedSourceIds.includes(certificate.sourceId) ||
-      hashCanonicalJsonV1(identity as unknown as JsonValue) !== certificateRevision
+      hashCanonicalJsonV1(identity) !== certificateRevision
     ) {
       throw namedError("MemoryDialogueCertificateRegistryInvalid");
     }
@@ -158,7 +156,7 @@ export function validateMemoryDialogueCertificateRegistryV1(
         certificate.originRevision !== registry.originRevision ||
         certificate.evidenceTimeUpperBound !== registry.evidenceTimeUpperBound,
     ) ||
-    hashCanonicalJsonV1(registryIdentity as unknown as JsonValue) !== registry.registryRevision
+    hashCanonicalJsonV1(registryIdentity) !== registry.registryRevision
   ) {
     throw namedError("MemoryDialogueCertificateRegistryInvalid");
   }

@@ -3,7 +3,6 @@ import type {
   InputAcceptedFactV1,
   InputAttachmentV1,
   InputFactV1,
-  JsonValue,
   RunJournalEnvelopeV1,
 } from "@paw/protocol";
 import { RUN_JOURNAL_SCHEMA_VERSION_V1, parseRunJournalPrefixV1 } from "@paw/protocol";
@@ -317,7 +316,7 @@ function captureSession(
 
 function detachedPrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
   return immutableCanonicalJsonCloneV1(
-    parseRunJournalPrefixV1(prefix) as unknown as JsonValue,
+    parseRunJournalPrefixV1(prefix),
   ) as unknown as readonly RunJournalEnvelopeV1[];
 }
 

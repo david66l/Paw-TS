@@ -246,9 +246,7 @@ async function settleDistillation(
   let settlement: ContextCheckpointDistillationSettledFactV1;
   if (isCompletedResult(value)) {
     try {
-      const checkpoint = immutableCanonicalJsonCloneV1(
-        parseTaskCheckpointV1(value.checkpoint) as unknown as JsonValue,
-      );
+      const checkpoint = immutableCanonicalJsonCloneV1(parseTaskCheckpointV1(value.checkpoint));
       assertCheckpointSourcesInRange(
         checkpoint as unknown as TaskCheckpointV1,
         sourceFromSeq,

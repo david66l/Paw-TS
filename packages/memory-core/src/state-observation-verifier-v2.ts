@@ -102,7 +102,7 @@ export function validateMemoryStateObservationVerificationBoundaryV2(input: {
     acceptedObservationIds: accepted,
     rejectedObservationIds: rejected,
   });
-  if (hashCanonicalJsonV1(expected as never) !== hashCanonicalJsonV1(input.result as never)) {
+  if (hashCanonicalJsonV1(expected) !== hashCanonicalJsonV1(input.result)) {
     throw namedError("MemoryStateObservationVerificationBoundaryInvalid");
   }
   return input.result;
@@ -342,7 +342,7 @@ function compileVerification(input: {
   };
   return Object.freeze({
     verifierVersion: input.verifierVersion,
-    verificationRevision: hashCanonicalJsonV1(identity as never),
+    verificationRevision: hashCanonicalJsonV1(identity),
     acceptedObservationIds: identity.acceptedObservationIds,
     rejectedObservationIds: identity.rejectedObservationIds,
   });

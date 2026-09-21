@@ -44,7 +44,7 @@ export function projectMemoryPersonaEvidenceV1(
   let chars = 0;
   for (const candidate of [...diverse, ...deferred]) {
     if (selected.length >= input.maxClaims) break;
-    const claimChars = canonicalJsonStringifyV1(candidate.claim as unknown as JsonValue).length;
+    const claimChars = canonicalJsonStringifyV1(candidate.claim).length;
     const nextChars = chars + claimChars;
     if (nextChars > input.maxChars) continue;
     selected.push(candidate);

@@ -1,4 +1,4 @@
-import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
+import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryStateValidatedObservationV1 } from "./state-binding-certificate-v1.js";
 import type {
   MemoryResolvedStateFrameV2,
@@ -179,7 +179,7 @@ export function compileMemoryStateMechanicalBindingProfilesV1(input: {
       };
       return Object.freeze({
         ...identity,
-        profileDigest: hashCanonicalJsonV1(identity as unknown as JsonValue),
+        profileDigest: hashCanonicalJsonV1(identity),
       });
     }),
   );
@@ -224,7 +224,7 @@ export function summarizeMemoryStateMechanicalBindingProfilesV1(
   };
   return Object.freeze({
     ...identity,
-    summaryRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    summaryRevision: hashCanonicalJsonV1(identity),
   });
 }
 

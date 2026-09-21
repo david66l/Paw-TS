@@ -110,7 +110,7 @@ export function validateMemoryStateObservationBindingBoundaryV2(input: {
         },
       });
       if (
-        hashCanonicalJsonV1(rebound as never) !== hashCanonicalJsonV1(observation as never) ||
+        hashCanonicalJsonV1(rebound) !== hashCanonicalJsonV1(observation) ||
         !projected.slotScopes
           .find((scope) => scope.slotId === observation.slotId)
           ?.evidenceRefs.includes(observation.evidenceRef)
@@ -135,7 +135,7 @@ export function validateMemoryStateObservationBindingBoundaryV2(input: {
     sourceLockDigest: projected.sourceLock.sourceLockDigest,
     slotRevisions: projected.slots.map((slot) => slot.slotRevision),
     groups: input.result.groups,
-  } as never);
+  });
   if (input.result.bindingRevision !== expectedRevision) {
     throw namedError("MemoryStateObservationBindingBoundaryInvalid");
   }
@@ -182,7 +182,7 @@ export function createJsonMemoryStateObservationBinderV2(input: {
           sourceLockDigest: projected.sourceLock.sourceLockDigest,
           slotRevisions: projected.slots.map((slot) => slot.slotRevision),
           groups,
-        } as never),
+        }),
         groups,
       });
     },

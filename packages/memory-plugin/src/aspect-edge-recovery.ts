@@ -1,5 +1,3 @@
-import type { JsonValue } from "@paw/protocol";
-
 import {
   type MemoryAspectEdgeLinkingInputV1,
   type MemoryAspectEdgeLinkingV1,
@@ -129,7 +127,7 @@ export function buildMemoryAspectEdgeRecoveryCandidatesV1(
   };
   return Object.freeze({
     ...body,
-    recoveryRevision: hashCanonicalJsonV1(body as unknown as JsonValue),
+    recoveryRevision: hashCanonicalJsonV1(body),
     packets: Object.freeze(selected),
   });
 }

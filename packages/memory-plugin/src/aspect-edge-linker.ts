@@ -790,7 +790,7 @@ function freezeLinking(
   };
   return Object.freeze({
     ...body,
-    linkingRevision: hashCanonicalJsonV1(body as unknown as JsonValue),
+    linkingRevision: hashCanonicalJsonV1(body),
   });
 }
 
@@ -812,7 +812,7 @@ function validateLinking(linking: MemoryAspectEdgeLinkingV1): void {
   };
   if (
     linking.linkerVersion !== PAW_MEMORY_ASPECT_EDGE_LINKER_VERSION_V1 ||
-    linking.linkingRevision !== hashCanonicalJsonV1(body as unknown as JsonValue) ||
+    linking.linkingRevision !== hashCanonicalJsonV1(body) ||
     (linking.settlement !== "settled" &&
       (linking.edges.length !== 0 || linking.decisions.length !== 0)) ||
     (linking.settlement !== "settled" &&

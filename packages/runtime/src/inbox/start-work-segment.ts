@@ -272,9 +272,7 @@ function findAcceptedInput(
 
 function detachedPrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
   const parsed = parseRunJournalPrefixV1(prefix);
-  const clone = immutableCanonicalJsonCloneV1(
-    parsed as never,
-  ) as unknown as readonly RunJournalEnvelopeV1[];
+  const clone = immutableCanonicalJsonCloneV1(parsed) as unknown as readonly RunJournalEnvelopeV1[];
   return parseRunJournalPrefixV1(clone);
 }
 

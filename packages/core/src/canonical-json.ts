@@ -1,39 +1,62 @@
 import { createHash } from "node:crypto";
 
-/** JSON data accepted by stable hashing without importing the Paw runtime. */
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly JsonValue[]
-  | Readonly<{ [key: string]: JsonValue }>;
+import type { JsonValue } from "@paw/protocol";
+
+export type { JsonValue };
 
 /**
- * Canonical JSON for this dependency-free package.
+ * The single canonical JSON encoding used for every stable hash in the
+ * monorepo: object keys sorted by UTF-16 code unit, no insignificant
+ * whitespace, and only values that JSON itself can represent.
  *
- * This is intentionally a standalone copy of `@paw/core`'s
- * `canonical-json.ts`: `@paw/memory-core` ships with an empty dependency list
- * so it can be consumed without the rest of the monorepo. The two encoders must
- * stay byte-identical, and `packages/core/test/canonical-json.conformance.test.ts`
- * fails if they ever drift.
+ * Two properties are load-bearing, because hashes double as identities for
+ * persisted payloads, revision certificates and run journals:
  *
- * Stored revisions were hashed with this encoding, so the rules are frozen:
- * keys sort by UTF-16 code unit (never `localeCompare`), `undefined` in a named
- * field is omitted, and anything JSON cannot represent — a non-finite number, a
- * positional `undefined`, a function, a bigint, a cycle — is rejected rather
- * than coerced, because coercion makes distinct values collide on one hash.
+ * 1. **Byte-stable across hosts.** Key order comes from code-unit comparison,
+ *    never from `localeCompare`, so the same value hashes the same in every
+ *    locale.
+ * 2. **Injective on the values it accepts.** A value that JSON cannot encode
+ *    (a non-finite number, `undefined` in a positional slot, a function, a
+ *    bigint, a cycle) is rejected instead of being silently coerced. Coercion
+ *    is what makes `NaN`, `Infinity` and `null` collide on one hash.
+ *
+ * `undefined` in a *named* field means "absent" and is omitted, matching
+ * `JSON.stringify`. `@paw/memory-core` keeps a deliberately dependency-free
+ * copy of this module; `canonical-json.conformance.test.ts` pins the two
+ * encoders together byte for byte.
  */
 export function canonicalJsonStringifyV1(value: unknown): string {
   return writeCanonicalJson(value, new Set<object>());
 }
 
+/** Lowercase sha256 of the shared canonical JSON encoding. */
 export function hashCanonicalJsonV1(value: unknown): string {
   return hashTextV1(canonicalJsonStringifyV1(value));
 }
 
+/** Lowercase sha256 of raw text, for the non-JSON half of the hash family. */
 export function hashTextV1(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Detached, key-normalized and deeply immutable JSON for untrusted codec/hash
+ * ports. Re-encoding through the canonical form also guarantees that the
+ * returned value shares no references with the input.
+ */
+export function immutableCanonicalJsonCloneV1(value: unknown): JsonValue {
+  return deepFreezeJson(JSON.parse(canonicalJsonStringifyV1(value)) as JsonValue);
+}
+
+/** Throws unless the value can be encoded as canonical JSON. */
+export function assertCanonicalJsonV1(value: unknown, label: string): void {
+  try {
+    canonicalJsonStringifyV1(value);
+  } catch (error) {
+    throw new TypeError(
+      `${label} is not JSON-encodable: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 function writeCanonicalJson(value: unknown, seen: Set<object>): string {
@@ -91,4 +114,12 @@ function writeCanonicalJson(value: unknown, seen: Set<object>): string {
 /** UTF-16 code-unit order, so canonical text never depends on the host locale. */
 function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function deepFreezeJson(value: JsonValue): JsonValue {
+  if (value !== null && typeof value === "object") {
+    for (const item of Object.values(value)) deepFreezeJson(item);
+    Object.freeze(value);
+  }
+  return value;
 }

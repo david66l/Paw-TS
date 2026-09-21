@@ -1,4 +1,4 @@
-import { type JsonValue, hashCanonicalJsonV1 } from "./canonical.js";
+import { hashCanonicalJsonV1 } from "./canonical.js";
 import {
   type MemoryQueryAnswerProvenanceFeaturesV1,
   classifyMemoryEvidenceIntentBoundaryV1,
@@ -94,7 +94,7 @@ export function compileMemoryQueryAnswerOriginV1(query: string): MemoryQueryAnsw
   return Object.freeze({
     ...identity,
     features: Object.freeze({ ...features }),
-    originRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    originRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -133,14 +133,14 @@ export function authorizeMemoryQueryAnswerOriginMaterializationV1(input: {
     originKind: input.origin.originKind,
     originRevision: input.origin.originRevision,
     requirementId: input.requirement.requirementId,
-    requirementRevision: hashCanonicalJsonV1(input.requirement as unknown as JsonValue),
+    requirementRevision: hashCanonicalJsonV1(input.requirement),
     originalRequirementRole: input.requirement.roleConstraint,
     effectiveRequirementRole: input.effectiveRequirementRole,
     mode: input.mode,
   } as const;
   return Object.freeze({
     ...identity,
-    authorizationRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    authorizationRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -244,7 +244,7 @@ function assertMemoryQueryAnswerOriginV1(origin: MemoryQueryAnswerOriginV1): voi
       "explicit_shared",
       "dialogue_artifact_unowned",
     ]).has(origin.originKind) ||
-    hashCanonicalJsonV1(identity as unknown as JsonValue) !== origin.originRevision
+    hashCanonicalJsonV1(identity) !== origin.originRevision
   ) {
     throw namedError("MemoryQueryAnswerOriginInvalid");
   }

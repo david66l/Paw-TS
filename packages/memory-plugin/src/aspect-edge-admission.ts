@@ -1,4 +1,3 @@
-import type { JsonValue } from "@paw/protocol";
 import type { MemoryAspectEdgeEvidenceV1 } from "./aspect-edge-linker.js";
 import type {
   MemoryAspectClaimRoleV1,
@@ -128,7 +127,7 @@ export function evaluateMemoryAspectEdgeAdmissionV1(
   };
   return Object.freeze({
     ...body,
-    admissionRevision: hashCanonicalJsonV1(body as unknown as JsonValue),
+    admissionRevision: hashCanonicalJsonV1(body),
     admittedEdgeIds: Object.freeze(
       decisions.filter((item) => item.disposition === "admit").map((item) => item.edgeId),
     ),

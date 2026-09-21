@@ -196,7 +196,7 @@ export function createToolDrivenMemoryContextV1(
                 projectMemoryResolvedContextToolV1(
                   packet,
                   resolverOptions.maxResolvedChars ?? 8_000,
-                ) as never,
+                ),
               );
               return Object.freeze({
                 schemaVersion: 1 as const,

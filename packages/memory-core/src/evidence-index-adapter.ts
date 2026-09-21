@@ -1,4 +1,4 @@
-import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
+import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryEvidenceKindV2 } from "./evidence-first.js";
 import { evidenceSourceIdV1 as evidenceSourceId } from "./evidence-ref.js";
 import type {
@@ -53,7 +53,7 @@ export function createProductMemoryEvidenceIndexV1<TArchive extends MemoryProduc
           queryHash,
           providerVersion: input.provider.providerVersion,
           scope: input.profile.scope,
-        } as unknown as JsonValue),
+        }),
         trigger: "task_start" as const,
         text: value,
         inputId: `memory-evidence-${queryHash.slice(0, 24)}`,

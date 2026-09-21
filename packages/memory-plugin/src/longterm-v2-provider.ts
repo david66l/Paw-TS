@@ -6,7 +6,7 @@ import {
   type ScoredEntry,
   hybridRecall,
 } from "@paw/memory/longterm";
-import type { JsonValue, MemoryCardV1 } from "@paw/protocol";
+import type { MemoryCardV1 } from "@paw/protocol";
 
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import {
@@ -45,7 +45,7 @@ export function createPawNextMemoryV2PostgresProviderV1(
 
 export function postgresMemoryStorageNamespaceV1(): string {
   const databaseUrl = process.env.DATABASE_URL?.trim() || "postgresql://localhost:5432/paw_memory";
-  return `postgres:${hashCanonicalJsonV1(databaseUrl as unknown as JsonValue)}`;
+  return `postgres:${hashCanonicalJsonV1(databaseUrl)}`;
 }
 
 /** Read-only adapter: it deliberately bypasses legacy hit ledgers and trials. */
@@ -136,7 +136,7 @@ export function memoryEntryToCardV1(
   });
   return Object.freeze({
     ...base,
-    contentHash: hashCanonicalJsonV1(base as unknown as JsonValue),
+    contentHash: hashCanonicalJsonV1(base),
   });
 }
 

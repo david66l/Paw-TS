@@ -29,8 +29,11 @@ export function desktopAttachments(value: unknown): readonly InputAttachmentV1[]
       const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/.exec(
         a.content,
       );
-      if (!match || match[1] !== a.mimeType) throw new Error("图片格式无效。");
-      const bytes = Buffer.from(match[2]!, "base64");
+      const base64 = match?.[2];
+      if (!match || match[1] !== a.mimeType || base64 === undefined) {
+        throw new Error("图片格式无效。");
+      }
+      const bytes = Buffer.from(base64, "base64");
       const valid =
         a.mimeType === "image/png"
           ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))

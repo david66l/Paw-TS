@@ -12,6 +12,7 @@ import type {
   InputFactV1,
   InputPromotedFactV1,
 } from "@paw/protocol";
+import { canonicalJsonStringifyV1 } from "../context/canonical-json.js";
 import { projectLatestWorkSegmentBoundaryV1 } from "../work-segment-boundary.js";
 
 export interface AcceptInputRequestV1 {
@@ -443,7 +444,7 @@ function sameAcceptedInput(left: InputAcceptedFactV1, right: InputAcceptedFactV1
   const { attachments: leftAttachments = [], ...leftBody } = left;
   const { attachments: rightAttachments = [], ...rightBody } = right;
   if (
-    canonicalJson(leftBody) !== canonicalJson(rightBody) ||
+    canonicalJsonStringifyV1(leftBody) !== canonicalJsonStringifyV1(rightBody) ||
     leftAttachments.length !== rightAttachments.length
   )
     return false;
@@ -452,19 +453,20 @@ function sameAcceptedInput(left: InputAcceptedFactV1, right: InputAcceptedFactV1
     const { content, ...metadata } = attachment;
     const { content: otherContent, ...otherMetadata } = other;
     if (
-      canonicalJson(metadata) !== canonicalJson(otherMetadata) ||
+      canonicalJsonStringifyV1(metadata) !== canonicalJsonStringifyV1(otherMetadata) ||
       content.hash !== otherContent.hash
     )
       return false;
     if (content.kind === otherContent.kind)
-      return canonicalJson(content) === canonicalJson(otherContent);
+      return canonicalJsonStringifyV1(content) === canonicalJsonStringifyV1(otherContent);
     // File payload sessions materialize accepted attachments before acknowledging.
     // Compare the retried inline bytes to that committed content hash, never the caller's claimed hash alone.
     const inline = content.kind === "inline" ? content : otherContent;
     return (
       inline.kind === "inline" &&
       typeof inline.value === "string" &&
-      createHash("sha256").update(canonicalJson(inline.value)).digest("hex") === content.hash
+      createHash("sha256").update(canonicalJsonStringifyV1(inline.value)).digest("hex") ===
+        content.hash
     );
   });
 }
@@ -484,20 +486,4 @@ function assertId(value: string, label: string): void {
   if (!value.trim() || value.length > 256 || containsControl) {
     throw new Error(`${label} must be a bounded printable identifier`);
   }
-}
-
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") {
-    const encoded = JSON.stringify(value);
-    if (encoded === undefined) throw new Error("Inbox identity must be JSON-safe");
-    return encoded;
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(",")}]`;
-  }
-  const record = value as Readonly<Record<string, unknown>>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-    .join(",")}}`;
 }

@@ -274,7 +274,7 @@ export function createMemoryWriterControllerV1(
             durationMs: Math.max(0, now() - reconciliationStart),
           });
         }
-        const proposalHash = hashCanonicalJsonV1(atoms as unknown as JsonValue);
+        const proposalHash = hashCanonicalJsonV1(atoms);
         const staged: MemoryCandidateStagedFactV1 = Object.freeze({
           type: "memory.candidate_staged",
           writeId,
@@ -449,7 +449,7 @@ export function projectMemoryWriteSourceV1(
       rangeEntries.map((entry) => ({
         seq: entry.seq,
         fact: entry.fact,
-      })) as unknown as JsonValue,
+      })),
     ),
     items: Object.freeze(boundedItems),
     searchText,

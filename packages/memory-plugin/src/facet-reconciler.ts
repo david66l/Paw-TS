@@ -1,6 +1,4 @@
 import { scanForSecrets } from "@paw/memory/longterm";
-import type { JsonValue } from "@paw/protocol";
-
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import {
   type MemoryFacetMemberRoleV2,
@@ -396,7 +394,7 @@ export function parseMemoryFacetReconciliationV2(
   };
   return Object.freeze({
     reconcilerVersion: PAW_MEMORY_FACET_RECONCILER_VERSION_V2,
-    reconciliationRevision: hashCanonicalJsonV1(body as unknown as JsonValue),
+    reconciliationRevision: hashCanonicalJsonV1(body),
     facets: sortedFacets,
     memberships: sortedMemberships,
     deferredMemoryIds: sortedDeferred,

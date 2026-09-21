@@ -1,6 +1,5 @@
 import type { ModelContextSectionV1 } from "@paw/core";
 import {
-  type JsonValue,
   MEMORY_PERSONA_PROJECTION_POLICY_VERSION_V1,
   type MemoryPersonaProjectionSettledFactV1,
 } from "@paw/protocol";
@@ -19,7 +18,7 @@ export function createMemoryPersonaEvidenceSectionV1(
     projectionKey: fact.projectionKey,
     claims: fact.claims,
     sourceCount: fact.sourceCount,
-  } as unknown as JsonValue);
+  });
   return Object.freeze({
     schemaVersion: 1,
     kind: "memory_cards",

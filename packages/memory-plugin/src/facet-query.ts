@@ -1,5 +1,3 @@
-import type { JsonValue } from "@paw/protocol";
-
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import type { MemoryFacetEvidenceStateV2, MemoryFacetStateProjectionV2 } from "./facet-state.js";
 import type { MemoryWriterModelV1 } from "./model-port.js";
@@ -262,7 +260,7 @@ export function parseMemoryFacetQueryPlanV2(
   };
   return Object.freeze({
     plannerVersion: PAW_MEMORY_FACET_QUERY_PLANNER_VERSION_V2,
-    planRevision: hashCanonicalJsonV1(body as unknown as JsonValue),
+    planRevision: hashCanonicalJsonV1(body),
     snapshotRevision: input.snapshotRevision,
     view,
     facetIds: Object.freeze(facetIds),
@@ -348,7 +346,7 @@ export function selectMemoryFacetQueryEvidenceV2(
     };
     const selection = Object.freeze({
       selectorVersion: PAW_MEMORY_FACET_QUERY_SELECTOR_VERSION_V2,
-      selectionRevision: hashCanonicalJsonV1(body as unknown as JsonValue),
+      selectionRevision: hashCanonicalJsonV1(body),
       planRevision: input.plan.planRevision,
       view: input.plan.view,
       evidence: Object.freeze(evidence),
@@ -662,7 +660,7 @@ function boundedInteger(
 }
 
 function revisionHash(value: string): string {
-  return hashCanonicalJsonV1(value as unknown as JsonValue);
+  return hashCanonicalJsonV1(value);
 }
 
 function stableCode(value: string): string {

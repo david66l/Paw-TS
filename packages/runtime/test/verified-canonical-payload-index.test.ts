@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { canonicalJsonStringifyV1 as canonicalJson } from "@paw/core";
 
 import { afterEach, describe, expect, test } from "bun:test";
 import type { SessionInputSnapshot } from "@paw/agent-loop";
@@ -897,16 +898,6 @@ function envelope(seq: number, record: RunJournalEnvelopeV1["record"]): RunJourn
 
 function hashJson(value: JsonValue): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
-}
-
-function canonicalJson(value: JsonValue): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const record = value as Readonly<Record<string, JsonValue>>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`)
-    .join(",")}}`;
 }
 
 function clone<T>(value: T): T {

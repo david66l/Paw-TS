@@ -1,6 +1,5 @@
 import type { ModelContextSectionV1 } from "@paw/core";
 import {
-  type JsonValue,
   MEMORY_TOPIC_EVIDENCE_POLICY_VERSION_V1,
   type MemoryTopicEvidenceSettledFactV1,
 } from "@paw/protocol";
@@ -19,7 +18,7 @@ export function createMemoryTopicEvidenceSectionsV1(
     scopeFingerprint: fact.scopeFingerprint,
     indexRevision: fact.indexRevision,
     topics: fact.indexEntries,
-  } as unknown as JsonValue);
+  });
   const sections: ModelContextSectionV1[] = [
     Object.freeze({
       schemaVersion: 1,
@@ -38,7 +37,7 @@ export function createMemoryTopicEvidenceSectionsV1(
       queryId: fact.queryId,
       indexRevision: fact.indexRevision,
       states: fact.evidenceStates,
-    } as unknown as JsonValue);
+    });
     sections.push(
       Object.freeze({
         schemaVersion: 1,

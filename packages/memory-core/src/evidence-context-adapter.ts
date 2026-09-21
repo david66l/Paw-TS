@@ -1,4 +1,4 @@
-import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
+import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import {
   type MemoryContextResolverV1,
   type MemoryRawEvidenceSpanV1,
@@ -87,7 +87,7 @@ export function projectEvidenceFirstMemoryContextPacketV1(
         evidenceRefs: source.evidenceRefs,
         evidenceBindings: source.evidenceBindings,
         evidenceUses: source.evidenceUses,
-      } as unknown as JsonValue),
+      }),
     }),
   );
   const memoryIdByEvidenceRef = new Map<string, string>();

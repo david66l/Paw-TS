@@ -207,7 +207,7 @@ export function createMemoryTopicOrganizerControllerV1(
           },
           options.signal,
         );
-        const proposalHash = hashCanonicalJsonV1(proposals as unknown as JsonValue);
+        const proposalHash = hashCanonicalJsonV1(proposals);
         const staged: MemoryTopicCandidateStagedFactV1 = Object.freeze({
           type: "memory.topic_candidate_staged",
           organizationId,

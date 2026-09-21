@@ -932,7 +932,7 @@ function freezeLinking(
   };
   return Object.freeze({
     ...body,
-    linkingRevision: hashCanonicalJsonV1(body as unknown as JsonValue),
+    linkingRevision: hashCanonicalJsonV1(body),
   });
 }
 
@@ -951,7 +951,7 @@ function validateLinking(linking: MemoryAspectLinkingV1): void {
     linking.linkerVersion !== PAW_MEMORY_ASPECT_LINKER_VERSION_V1 ||
     !linking.sourceGraphRevision.trim() ||
     !linking.linkingInputRevision.trim() ||
-    linking.linkingRevision !== hashCanonicalJsonV1(body as unknown as JsonValue) ||
+    linking.linkingRevision !== hashCanonicalJsonV1(body) ||
     ((linking.settlement === "deferred_invalid_proposal" ||
       linking.settlement === "deferred_model_failure") &&
       (linking.aspects.length !== 0 ||

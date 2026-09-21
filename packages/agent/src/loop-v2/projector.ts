@@ -109,8 +109,7 @@ export function projectLoopV2Event(
       };
     }
     case "criterion.upserted": {
-      const changed =
-        sha256Canonical(prior.criteria[event.criterion.id]) !== sha256Canonical(event.criterion);
+      const changed = upsertChanged(prior.criteria[event.criterion.id], event.criterion);
       return {
         state: {
           ...base,
@@ -144,9 +143,7 @@ export function projectLoopV2Event(
       ) {
         throw new Error("Hypothesis sequence references are inconsistent");
       }
-      const changed =
-        sha256Canonical(prior.hypotheses[event.hypothesis.id]) !==
-        sha256Canonical(event.hypothesis);
+      const changed = upsertChanged(prior.hypotheses[event.hypothesis.id], event.hypothesis);
       return {
         state: {
           ...base,
@@ -165,7 +162,7 @@ export function projectLoopV2Event(
       };
     }
     case "risk.upserted": {
-      const changed = sha256Canonical(prior.risks[event.risk.id]) !== sha256Canonical(event.risk);
+      const changed = upsertChanged(prior.risks[event.risk.id], event.risk);
       return {
         state: {
           ...base,
@@ -181,8 +178,7 @@ export function projectLoopV2Event(
       };
     }
     case "invariant.upserted": {
-      const changed =
-        sha256Canonical(prior.invariants[event.invariant.id]) !== sha256Canonical(event.invariant);
+      const changed = upsertChanged(prior.invariants[event.invariant.id], event.invariant);
       return {
         state: {
           ...base,
@@ -195,9 +191,10 @@ export function projectLoopV2Event(
       };
     }
     case "change_surface.upserted": {
-      const changed =
-        sha256Canonical(prior.changeSurface[event.changeSurface.id]) !==
-        sha256Canonical(event.changeSurface);
+      const changed = upsertChanged(
+        prior.changeSurface[event.changeSurface.id],
+        event.changeSurface,
+      );
       return {
         state: {
           ...base,
@@ -210,7 +207,7 @@ export function projectLoopV2Event(
       };
     }
     case "next_action.updated": {
-      const changed = sha256Canonical(prior.nextAction) !== sha256Canonical(event.nextAction);
+      const changed = upsertChanged(prior.nextAction, event.nextAction);
       return {
         state: { ...base, nextAction: event.nextAction },
         delta: changed ? { ...EMPTY_DELTA, meaningful: true } : EMPTY_DELTA,
@@ -258,9 +255,7 @@ export function projectLoopV2Event(
           `Verification references future mutation revision: ${event.verification.mutationRevision}`,
         );
       }
-      const changed =
-        sha256Canonical(prior.verification[event.verification.id]) !==
-        sha256Canonical(event.verification);
+      const changed = upsertChanged(prior.verification[event.verification.id], event.verification);
       return {
         state: {
           ...base,
@@ -287,7 +282,7 @@ export function projectLoopV2Event(
           `Candidate revision ${event.candidate.mutationRevision} does not match current revision ${prior.currentMutationRevision}`,
         );
       }
-      const changed = sha256Canonical(prior.currentCandidate) !== sha256Canonical(event.candidate);
+      const changed = upsertChanged(prior.currentCandidate, event.candidate);
       return {
         state: {
           ...base,
@@ -355,4 +350,19 @@ function assertEnvelopeCanFollow(prior: WorkingDecisionStateV2, envelope: LoopV2
 
 function unique(values: readonly string[]): readonly string[] {
   return [...new Set(values)];
+}
+
+/**
+ * Whether an upsert changes the projection.
+ *
+ * Records live in id-keyed maps, so an update is looked up against a slot that
+ * may not exist yet. Absence is compared directly rather than hashed: canonical
+ * encoding rejects values JSON cannot represent, and the old hash-of-`undefined`
+ * fallback both emitted invalid JSON and let the literal string `"undefined"`
+ * collide with a genuinely absent record.
+ */
+function upsertChanged(prior: unknown, next: unknown): boolean {
+  if (prior === undefined) return next !== undefined;
+  if (next === undefined) return true;
+  return sha256Canonical(prior) !== sha256Canonical(next);
 }

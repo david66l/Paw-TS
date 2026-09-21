@@ -1,6 +1,5 @@
 import type { MemoryEntry } from "@paw/memory/longterm";
 import {
-  type JsonValue,
   MEMORY_TOPIC_EVIDENCE_POLICY_VERSION_V1,
   type MemoryTopicEvidenceStateV1,
   type MemoryTopicIndexEntryV1,
@@ -175,7 +174,7 @@ export function planMemoryTopicEvidenceV1(
     schemaVersion: "paw.memory-topic-index.v1",
     scopeFingerprint,
     entries: indexEntries,
-  } as unknown as JsonValue);
+  });
   return Object.freeze({
     plannerVersion: PAW_MEMORY_TOPIC_EVIDENCE_PLANNER_VERSION_V1,
     scopeFingerprint,

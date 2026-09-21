@@ -318,7 +318,7 @@ async function materializeNewInlineOccurrences(
   signal: AbortSignal,
 ): Promise<readonly RunJournalEnvelopeV1[]> {
   const mutable = JSON.parse(
-    canonicalJsonStringifyV1(candidate as unknown as JsonValue),
+    canonicalJsonStringifyV1(candidate),
   ) as unknown as RunJournalEnvelopeV1[];
   const occurrences = projectCanonicalDurableJsonPayloadBindingsV1(candidate);
   for (const occurrence of occurrences) {
@@ -332,7 +332,7 @@ async function materializeNewInlineOccurrences(
       signal,
     );
     const prepared = immutableCanonicalJsonCloneV1(
-      preparedValue as unknown as JsonValue,
+      preparedValue,
     ) as unknown as DurableJsonPayloadV1;
     assertPreparedArtifactPayload(prepared);
     if (prepared.hash !== occurrence.payload.hash) {
@@ -454,7 +454,7 @@ function cloneFactSynchronously(fact: InputFactV1): InputFactV1 {
       fact,
     }),
   );
-  return immutableCanonicalJsonCloneV1(fact as unknown as JsonValue) as InputFactV1;
+  return immutableCanonicalJsonCloneV1(fact) as InputFactV1;
 }
 
 function cloneDecisionSynchronously(decision: DerivedDecisionV1): DerivedDecisionV1 {
@@ -464,9 +464,7 @@ function cloneDecisionSynchronously(decision: DerivedDecisionV1): DerivedDecisio
       decision,
     }),
   );
-  return immutableCanonicalJsonCloneV1(
-    decision as unknown as JsonValue,
-  ) as unknown as DerivedDecisionV1;
+  return immutableCanonicalJsonCloneV1(decision) as unknown as DerivedDecisionV1;
 }
 
 function captureMaterializer(
@@ -521,9 +519,7 @@ function captureSource(
 }
 
 function freezePrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
-  return immutableCanonicalJsonCloneV1(
-    prefix as unknown as JsonValue,
-  ) as unknown as readonly RunJournalEnvelopeV1[];
+  return immutableCanonicalJsonCloneV1(prefix) as unknown as readonly RunJournalEnvelopeV1[];
 }
 
 function assertExpectedTailSeq(value: number): void {

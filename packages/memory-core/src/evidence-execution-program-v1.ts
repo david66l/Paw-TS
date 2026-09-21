@@ -174,7 +174,7 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
     if (
       !temporal ||
       !execution ||
-      execution.execution.requirementRevision !== hashCanonicalJsonV1(requirement as never) ||
+      execution.execution.requirementRevision !== hashCanonicalJsonV1(requirement) ||
       execution.execution.temporalBindingRevision !== temporal.bindingRevision
     ) {
       throw namedError("MemoryEvidenceExecutionProgramSnapshotInvalid");
@@ -301,7 +301,7 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
     originRevision: input.selectorSnapshot.originRevision,
     lockedSourceRevision: input.selectorSnapshot.lockedSourceRevision,
     obligationKind: obligationShape.obligationKind,
-    obligationRevision: hashCanonicalJsonV1(obligationShape as never),
+    obligationRevision: hashCanonicalJsonV1(obligationShape),
     status,
     rootNodeId: renderNode.nodeId,
     answerNodeId: answerNode.nodeId,
@@ -312,7 +312,7 @@ export function compileMemoryEvidenceExecutionProgramV1(input: {
   };
   return Object.freeze({
     ...identity,
-    programRevision: hashCanonicalJsonV1(identity as never),
+    programRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -321,10 +321,7 @@ export function validateMemoryEvidenceExecutionProgramV1(
   program: MemoryEvidenceExecutionProgramV1,
 ): void {
   const { programRevision, ...programIdentity } = program;
-  if (
-    hashCanonicalJsonV1(programIdentity as never) !== programRevision ||
-    program.nodes.length < 3
-  ) {
+  if (hashCanonicalJsonV1(programIdentity) !== programRevision || program.nodes.length < 3) {
     throw namedError("MemoryEvidenceExecutionProgramInvalid");
   }
   for (const node of program.nodes) {
@@ -335,33 +332,30 @@ export function validateMemoryEvidenceExecutionProgramV1(
             programVersion: PAW_MEMORY_EVIDENCE_EXECUTION_PROGRAM_VERSION_V1,
             operation: node.operation,
             requirementId: node.requirementId,
-          } as never)
+          })
         : hashCanonicalJsonV1({
             programVersion: PAW_MEMORY_EVIDENCE_EXECUTION_PROGRAM_VERSION_V1,
             operation: node.operation,
             operandNodeIds: node.operandNodeIds,
-          } as never);
-    if (
-      expectedNodeId !== node.nodeId ||
-      hashCanonicalJsonV1(nodeIdentity as never) !== nodeRevision
-    ) {
+          });
+    if (expectedNodeId !== node.nodeId || hashCanonicalJsonV1(nodeIdentity) !== nodeRevision) {
       throw namedError("MemoryEvidenceExecutionProgramInvalid");
     }
     if (node.durationRequest) {
       const { requestRevision, ...requestIdentity } = node.durationRequest;
-      if (hashCanonicalJsonV1(requestIdentity as never) !== requestRevision) {
+      if (hashCanonicalJsonV1(requestIdentity) !== requestRevision) {
         throw namedError("MemoryEvidenceExecutionProgramInvalid");
       }
     }
     if (node.aggregateRequest) {
       const { requestRevision, ...requestIdentity } = node.aggregateRequest;
-      if (hashCanonicalJsonV1(requestIdentity as never) !== requestRevision) {
+      if (hashCanonicalJsonV1(requestIdentity) !== requestRevision) {
         throw namedError("MemoryEvidenceExecutionProgramInvalid");
       }
     }
     if (node.personalizationRequest) {
       const { requestRevision, ...requestIdentity } = node.personalizationRequest;
-      if (hashCanonicalJsonV1(requestIdentity as never) !== requestRevision) {
+      if (hashCanonicalJsonV1(requestIdentity) !== requestRevision) {
         throw namedError("MemoryEvidenceExecutionProgramInvalid");
       }
     }
@@ -447,11 +441,11 @@ function compileReadNode(
     programVersion: PAW_MEMORY_EVIDENCE_EXECUTION_PROGRAM_VERSION_V1,
     operation: identity.operation,
     requirementId: requirement.requirementId,
-  } as never);
+  });
   return Object.freeze({
     nodeId,
     ...identity,
-    nodeRevision: hashCanonicalJsonV1({ nodeId, ...identity } as never),
+    nodeRevision: hashCanonicalJsonV1({ nodeId, ...identity }),
   });
 }
 
@@ -501,11 +495,11 @@ function compileDerivedNode(input: {
     programVersion: PAW_MEMORY_EVIDENCE_EXECUTION_PROGRAM_VERSION_V1,
     operation: input.operation,
     operandNodeIds: identity.operandNodeIds,
-  } as never);
+  });
   return Object.freeze({
     nodeId,
     ...identity,
-    nodeRevision: hashCanonicalJsonV1({ nodeId, ...identity } as never),
+    nodeRevision: hashCanonicalJsonV1({ nodeId, ...identity }),
   });
 }
 
@@ -521,11 +515,11 @@ export function compileMemoryEvidencePersonalizationRequestV1(
     scope: "answer_personalization" as const,
     completionBasis: "bounded_context" as const,
     minimumContextObservations: 1 as const,
-    queryRevision: hashCanonicalJsonV1(value as never),
+    queryRevision: hashCanonicalJsonV1(value),
   };
   return Object.freeze({
     ...identity,
-    requestRevision: hashCanonicalJsonV1(identity as never),
+    requestRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -586,11 +580,11 @@ export function compileMemoryEvidenceAggregateRequestV1(
     operator,
     aggregationUnit,
     countBasis,
-    queryRevision: hashCanonicalJsonV1(value as never),
+    queryRevision: hashCanonicalJsonV1(value),
   };
   return Object.freeze({
     ...identity,
-    requestRevision: hashCanonicalJsonV1(identity as never),
+    requestRevision: hashCanonicalJsonV1(identity),
   });
 }
 

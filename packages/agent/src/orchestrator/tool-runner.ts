@@ -1184,6 +1184,14 @@ export function finalizeToolExecutionContext(
   results: ToolRunResult[],
   ctx: ToolExecutionFinalizationContext,
 ): ToolExecutionFinalizationResult {
+  // 这是导出入口，不能假设调用方来自 finalizeToolExecution。结果比调用多时，
+  // 旧实现会用 results 的长度去索引 calls，把越界读成 undefined 后抛出
+  // 难以定位的 TypeError；这里改成一次长度检查，给出明确的错误。
+  if (calls.length !== results.length) {
+    throw new Error(
+      `Tool result batch is inconsistent: ${calls.length} call(s) but ${results.length} result(s)`,
+    );
+  }
   // 步骤 2/3：准备模型可见结果。文本 fallback 保持 assistant + user
   // 消息；完整 OpenAI native batch 则作为一个原子 envelope 持久化。
   // v3 P1 入口闸：注入前做「内容哈希去重 + 分档截断」，
@@ -1192,12 +1200,13 @@ export function finalizeToolExecutionContext(
   // 上下文中只留头尾预览 + [archived id=N] 引用桩，可经 context.recall 取回。
   const archive = ctx.artifactRegistry;
   const modelFacingResults = results.map((tr, i) => {
-    const tool = calls[i]!.tool;
+    const call = calls[i]!;
+    const tool = call.tool;
     const callerText = ctx.text;
     // 模型可见 summary 内联 untrusted 退出码标注（与 journal 事实同一判定）
     const annotated = annotateVerificationFailureRecords(
-      calls[i]!,
-      annotateUntrustedShellExitSummary(calls[i]!, tr),
+      call,
+      annotateUntrustedShellExitSummary(call, tr),
       ctx.taskState?.snapshot().filesChanged ?? [],
     );
     let payload: unknown = tr.payload;

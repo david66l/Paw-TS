@@ -67,20 +67,24 @@ export function formatToolResultEventDetail(tr: ToolRunResult): string | undefin
 
   // 文件列表结果（如 Glob 工具）
   if ("files" in p && Array.isArray((p as { files?: unknown }).files)) {
-    const files = (p as { files: string[] }).files;
+    // `Array.isArray` 只证明它是数组，不证明元素类型：非字符串元素过去会被
+    // join 成 "[object Object]" 之类的噪声，先按类型筛掉。
+    const files = (p as { files: unknown[] }).files.filter(
+      (entry): entry is string => typeof entry === "string",
+    );
     return files.slice(0, MAX_LIST_FILES).join("\n").slice(0, MAX_DETAIL_CHARS);
   }
 
   // 搜索匹配结果（如 Grep 工具）
   if ("matches" in p && Array.isArray((p as { matches?: unknown }).matches)) {
-    const mm = (
-      p as {
-        matches: Array<{ path?: string; line?: number; text?: string }>;
-      }
-    ).matches;
-    const lines = mm.slice(0, 40).map((m) => {
-      const loc = `${m.path ?? "?"}:${m.line ?? "?"}`;
-      const snippet = String(m.text ?? "").slice(0, 200);
+    const mm = (p as { matches: unknown[] }).matches;
+    const lines = mm.slice(0, 40).map((entry) => {
+      // 元素同样未经验证：`null` 元素在旧实现上会直接抛 TypeError。
+      const path = fieldOf(entry, "path");
+      const line = fieldOf(entry, "line");
+      const text = fieldOf(entry, "text");
+      const loc = `${typeof path === "string" ? path : "?"}:${typeof line === "number" ? line : "?"}`;
+      const snippet = String(text ?? "").slice(0, 200);
       return `${loc}: ${snippet}`;
     });
     return lines.join("\n").slice(0, MAX_DETAIL_CHARS);
@@ -99,4 +103,11 @@ export function formatToolResultEventDetail(tr: ToolRunResult): string | undefin
   }
 
   return undefined;
+}
+
+/** 读取一个未经验证的对象元素的字段；非对象元素一律视为缺失。 */
+function fieldOf(value: unknown, key: string): unknown {
+  return value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
 }

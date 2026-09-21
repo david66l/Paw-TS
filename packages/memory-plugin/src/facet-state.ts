@@ -1,6 +1,4 @@
 import type { MemoryEntry } from "@paw/memory/longterm";
-import type { JsonValue } from "@paw/protocol";
-
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import { type PawNextMemoryScopeV1, memoryScopeFingerprintV1 } from "./profile.js";
 
@@ -227,9 +225,7 @@ export function projectMemoryFacetStateV2(
     const facet = assertFacet(input.facet);
     const entries = uniqueEntries(input.entries);
     const memberships = validatedMemberships(facet, input.memberships, entries);
-    membershipRevision = hashCanonicalJsonV1(
-      memberships.map(projectMembership) as unknown as JsonValue,
-    );
+    membershipRevision = hashCanonicalJsonV1(memberships.map(projectMembership));
 
     const historicalIds = new Set<string>();
     const supportingIds = new Set<string>();
@@ -300,7 +296,7 @@ export function projectMemoryFacetStateV2(
       membershipRevision,
       ...frozenBuckets,
     };
-    const projectionRevision = hashCanonicalJsonV1(body as unknown as JsonValue);
+    const projectionRevision = hashCanonicalJsonV1(body);
     const projection = Object.freeze({
       ...body,
       projectionRevision,

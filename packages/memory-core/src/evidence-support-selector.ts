@@ -127,7 +127,7 @@ export function createJsonMemoryEvidenceSupportSelectorV1(input: {
             (candidate: MemoryEvidenceNotebookHitV1) => candidate.evidenceRef,
           ),
           assessments,
-        } as never),
+        }),
         assessments,
       });
     },

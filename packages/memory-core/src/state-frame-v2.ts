@@ -1,4 +1,4 @@
-import { type JsonValue, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
+import { hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryEvidenceAuthorityV2 } from "./evidence-contracts.js";
 import {
   PAW_MEMORY_EVIDENCE_SELECTOR_GROUP_POLICY_V1,
@@ -257,7 +257,7 @@ export function compileMemoryStateSlotsV2(input: {
       const semanticDescriptor = Object.freeze({
         label: descriptorIdentity.label,
         searchText: descriptorIdentity.searchText,
-        descriptorRevision: hashCanonicalJsonV1(descriptorIdentity as unknown as JsonValue),
+        descriptorRevision: hashCanonicalJsonV1(descriptorIdentity),
       });
       const identity = {
         compilerVersion: PAW_MEMORY_STATE_SLOT_COMPILER_VERSION_V2,
@@ -291,7 +291,7 @@ export function compileMemoryStateSlotsV2(input: {
       };
       return Object.freeze({
         ...identity,
-        slotRevision: hashCanonicalJsonV1(identity as unknown as JsonValue),
+        slotRevision: hashCanonicalJsonV1(identity),
       });
     }),
   );
@@ -331,7 +331,7 @@ export function compileMemoryStateSourceLockV2(
   }));
   return Object.freeze({
     items: Object.freeze(frozen),
-    sourceLockDigest: hashCanonicalJsonV1(identity as unknown as JsonValue),
+    sourceLockDigest: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -531,7 +531,7 @@ export function bindMemoryStateObservationV2(input: {
       : { certificateRevision: item.certificateRevision }),
     sourceLockDigest: input.sourceLock.sourceLockDigest,
   };
-  const bindingRevision = hashCanonicalJsonV1(identity as unknown as JsonValue);
+  const bindingRevision = hashCanonicalJsonV1(identity);
   return Object.freeze({
     ...identity,
     observationId: hashCanonicalJsonV1({
@@ -636,7 +636,7 @@ export function resolveMemoryStateFrameV2(input: {
   };
   return Object.freeze({
     ...identity,
-    frameRevision: hashCanonicalJsonV1(identity as never),
+    frameRevision: hashCanonicalJsonV1(identity),
   });
 }
 
@@ -659,12 +659,12 @@ function compileDerivedOperations(
       operandSlotIds: Object.freeze([...operandSlotIds]),
       status: "unsupported" as const,
     };
-    const operationRevision = hashCanonicalJsonV1(identity as unknown as JsonValue);
+    const operationRevision = hashCanonicalJsonV1(identity);
     return Object.freeze({
       operationId: hashCanonicalJsonV1({
         kind,
         operandSlotIds: identity.operandSlotIds,
-      } as unknown as JsonValue),
+      }),
       ...identity,
       operationRevision,
     });
@@ -958,7 +958,7 @@ function assertStateSlot(slot: MemoryStateSlotSpecV2): void {
     !slot.requirementId.trim() ||
     !slot.groupId.trim() ||
     !slot.originRevision.trim() ||
-    hashCanonicalJsonV1(identity as unknown as JsonValue) !== slotRevision
+    hashCanonicalJsonV1(identity) !== slotRevision
   ) {
     throw namedError("MemoryStateSlotIdentityInvalid");
   }

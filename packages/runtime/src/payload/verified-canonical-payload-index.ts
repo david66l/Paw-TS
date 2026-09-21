@@ -134,8 +134,8 @@ export async function buildVerifiedCanonicalPayloadIndexV1(
 
   for (const occurrence of projected) {
     throwIfAborted(options.signal);
-    const bindingKey = canonicalJsonStringifyV1(occurrence.binding as unknown as JsonValue);
-    const payloadKey = canonicalJsonStringifyV1(occurrence.payload as unknown as JsonValue);
+    const bindingKey = canonicalJsonStringifyV1(occurrence.binding);
+    const payloadKey = canonicalJsonStringifyV1(occurrence.payload);
     const earlierPayload = payloadByBinding.get(bindingKey);
     if (earlierPayload !== undefined && earlierPayload !== payloadKey) {
       throw new Error("Canonical durable JSON payload binding has conflicting carriers");
@@ -179,14 +179,14 @@ export async function buildVerifiedCanonicalPayloadIndexV1(
   const byLocation = new Map<string, VerifiedCanonicalPayloadOccurrenceV1>();
   const modelResponses = new Map<string, ModelResponseV1>();
   for (const occurrence of occurrences) {
-    const locationKey = canonicalJsonStringifyV1(occurrence.location as unknown as JsonValue);
+    const locationKey = canonicalJsonStringifyV1(occurrence.location);
     if (byLocation.has(locationKey)) {
       throw new Error("Duplicate canonical durable JSON payload location");
     }
     byLocation.set(locationKey, occurrence);
     if (occurrence.location.kind === "model_response") {
       const response = immutableCanonicalJsonCloneV1(
-        parseModelResponseV1(occurrence.value) as unknown as JsonValue,
+        parseModelResponseV1(occurrence.value),
       ) as unknown as ModelResponseV1;
       const modelKey = modelResponseKey({
         carrierSeq: occurrence.location.carrierSeq,
@@ -380,8 +380,7 @@ function assertModelResponseObservationIdentity(
         item.callId !== call.callId ||
         item.tool !== call.name ||
         item.order !== call.sourceIndex ||
-        canonicalJsonStringifyV1(item.args) !==
-          canonicalJsonStringifyV1(call.args as unknown as JsonValue)
+        canonicalJsonStringifyV1(item.args) !== canonicalJsonStringifyV1(call.args)
       ) {
         throw new Error("Model response/observation identity mismatch");
       }
@@ -457,13 +456,11 @@ function canonicalUtf8ByteLength(value: JsonValue): number {
 }
 
 function digestPrefix(prefix: readonly RunJournalEnvelopeV1[]): string {
-  return createHash("sha256")
-    .update(canonicalJsonStringifyV1(prefix as unknown as JsonValue))
-    .digest("hex");
+  return createHash("sha256").update(canonicalJsonStringifyV1(prefix)).digest("hex");
 }
 
 function locationKey(location: CanonicalDurableJsonPayloadLocationV1): string {
-  return canonicalJsonStringifyV1(location as unknown as JsonValue);
+  return canonicalJsonStringifyV1(location);
 }
 
 function findExactOccurrence(
@@ -473,8 +470,7 @@ function findExactOccurrence(
   const occurrence = byLocation.get(locationKey(lookup.location));
   if (
     !occurrence ||
-    canonicalJsonStringifyV1(occurrence.payload as unknown as JsonValue) !==
-      canonicalJsonStringifyV1(lookup.payload as unknown as JsonValue)
+    canonicalJsonStringifyV1(occurrence.payload) !== canonicalJsonStringifyV1(lookup.payload)
   ) {
     return undefined;
   }
@@ -490,7 +486,7 @@ function modelResponseKey(lookup: VerifiedCanonicalModelResponseLookupV1): strin
     carrierSeq: lookup.carrierSeq,
     modelCallId: lookup.modelCallId,
     payload: lookup.payload,
-  } as unknown as JsonValue);
+  });
 }
 
 function parseBudget(value: VerifiedCanonicalPayloadBudgetV1): VerifiedCanonicalPayloadBudgetV1 {
@@ -533,9 +529,7 @@ function parseCanonicalPayloadIdentity(
 }
 
 function freezePrefix(prefix: readonly RunJournalEnvelopeV1[]): readonly RunJournalEnvelopeV1[] {
-  return immutableCanonicalJsonCloneV1(
-    prefix as unknown as JsonValue,
-  ) as unknown as readonly RunJournalEnvelopeV1[];
+  return immutableCanonicalJsonCloneV1(prefix) as unknown as readonly RunJournalEnvelopeV1[];
 }
 
 function assertPositiveSafeInteger(value: number, label: string): void {

@@ -1,5 +1,3 @@
-import type { JsonValue } from "@paw/protocol";
-
 import {
   type MemoryAspectClaimRoleV1,
   type MemoryAspectGraphSnapshotV1,
@@ -235,7 +233,7 @@ export function projectMemoryAspectStateLineageV1(
     stateScope,
     anchorClaimIds: Object.freeze(anchorClaimIds),
     lineageClaimIds: Object.freeze([...lineageClaimIds].sort()),
-    projectionRevision: hashCanonicalJsonV1(revisionInput as unknown as JsonValue),
+    projectionRevision: hashCanonicalJsonV1(revisionInput),
     currentClaimIds: Object.freeze(currentClaimIds),
     historicalClaimIds: Object.freeze(historicalClaimIds),
     futureClaimIds: Object.freeze(futureClaimIds),

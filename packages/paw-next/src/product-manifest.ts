@@ -1,5 +1,7 @@
-import { createHash } from "node:crypto";
-
+import {
+  hashCanonicalJsonV1 as hashCanonicalJsonV1Core,
+  immutableCanonicalJsonCloneV1,
+} from "@paw/core";
 import type { JsonValue } from "@paw/protocol";
 
 export const PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V1 = "paw.product-manifest.v1";
@@ -89,14 +91,12 @@ export function createPawNextProductManifestV1(
       throw new Error("Invalid Paw Next credential binding hash");
     }
   }
-  return freezeJson(
-    toJsonValue({
-      schemaVersion: PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V1,
-      compositionVersion: PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V1,
-      payloadCodec: PAW_NEXT_INLINE_PAYLOAD_CODEC_V1,
-      ...input,
-    }),
-  ) as unknown as PawNextProductManifestV1;
+  return toFrozenJsonValueV1({
+    schemaVersion: PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V1,
+    compositionVersion: PAW_NEXT_PRODUCT_COMPOSITION_VERSION_V1,
+    payloadCodec: PAW_NEXT_INLINE_PAYLOAD_CODEC_V1,
+    ...input,
+  }) as unknown as PawNextProductManifestV1;
 }
 
 export function hashPawNextProductManifestV1(manifest: PawNextProductManifestV1): string {
@@ -104,57 +104,16 @@ export function hashPawNextProductManifestV1(manifest: PawNextProductManifestV1)
 }
 
 export function hashCanonicalJsonV1(value: unknown): string {
-  return createHash("sha256")
-    .update(canonicalJson(toJsonValue(value)))
-    .digest("hex");
+  return hashCanonicalJsonV1Core(value);
 }
 
+/**
+ * Detached, key-normalized and deeply immutable JSON.
+ *
+ * Normalization is intentional: the returned object carries canonical (sorted)
+ * key order, so re-encoding it is a fixed point and cannot drift from the hash
+ * computed over the same value.
+ */
 export function toFrozenJsonValueV1(value: unknown): JsonValue {
-  return freezeJson(toJsonValue(value));
-}
-
-function freezeJson<T extends JsonValue>(value: T): T {
-  if (value !== null && typeof value === "object") {
-    if (Array.isArray(value)) {
-      for (const item of value) freezeJson(item);
-    } else {
-      for (const item of Object.values(value)) freezeJson(item);
-    }
-    Object.freeze(value);
-  }
-  return value;
-}
-
-function canonicalJson(value: JsonValue): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  return `{${Object.entries(value)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
-    .join(",")}}`;
-}
-
-function toJsonValue(value: unknown, seen = new Set<object>()): JsonValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error("Value is not valid JSON");
-    return value;
-  }
-  if (typeof value !== "object") throw new Error("Value is not valid JSON");
-  if (seen.has(value)) throw new Error("Value contains a JSON cycle");
-  seen.add(value);
-  try {
-    if (Array.isArray(value)) {
-      return value.map((item) => toJsonValue(item, seen));
-    }
-    const output: Record<string, JsonValue> = {};
-    for (const [key, item] of Object.entries(value)) {
-      if (item !== undefined) output[key] = toJsonValue(item, seen);
-    }
-    return output;
-  } finally {
-    seen.delete(value);
-  }
+  return immutableCanonicalJsonCloneV1(value);
 }

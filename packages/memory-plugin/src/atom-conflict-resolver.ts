@@ -1,4 +1,4 @@
-import type { JsonValue, MemoryAtomActionV1, MemoryAtomProposalV1 } from "@paw/protocol";
+import type { MemoryAtomActionV1, MemoryAtomProposalV1 } from "@paw/protocol";
 
 import type { MemoryConflictCandidateV1 } from "./atom-extractor.js";
 import type { MemoryAtomWriterStoreV1 } from "./atom-store.js";
@@ -101,7 +101,7 @@ export function createJsonMemoryAtomConflictResolverV1(input: {
           atoms: resolution.atoms.map(projectAtom),
           pools: resolution.pools,
           decisions,
-        } as unknown as JsonValue),
+        }),
         decisions,
       });
     },
@@ -313,7 +313,7 @@ function applyDecision(
   });
   return Object.freeze({
     ...content,
-    contentHash: hashCanonicalJsonV1(content as unknown as JsonValue),
+    contentHash: hashCanonicalJsonV1(content),
   });
 }
 

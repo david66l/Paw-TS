@@ -206,13 +206,13 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
           : undefined;
         return Object.freeze({
           requirementId,
-          requirementRevision: hashCanonicalJsonV1(requirement as never),
+          requirementRevision: hashCanonicalJsonV1(requirement),
           temporalBindingRevision: temporal.bindingRevision,
           candidateScopeRevision: hashCanonicalJsonV1({
             schemaVersion: "paw.memory-selector-candidate-scope.v1",
             requirementId,
             evidenceRefs: Object.freeze([...scope.evidenceRefs]),
-          } as never),
+          }),
           status,
           ...(resolvedRole === undefined ? {} : { resolvedRole }),
           ...(assessment === undefined ? {} : { assessment }),
@@ -228,7 +228,7 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
     };
     return Object.freeze({
       ...identity,
-      groupRevision: hashCanonicalJsonV1(identity as never),
+      groupRevision: hashCanonicalJsonV1(identity),
     });
   });
   if (seenRequirements.size !== input.requirements.length) {
@@ -240,18 +240,18 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
     queryRevision: hashCanonicalJsonV1(input.query),
     intent: input.intent,
     requirements: input.requirements,
-  } as never);
+  });
   const groupPolicyRevision = hashCanonicalJsonV1({
     policyVersion: PAW_MEMORY_EVIDENCE_SELECTOR_GROUP_POLICY_V1,
     groups: groups.map((group) => ({
       groupId: group.groupId,
       requirementIds: group.requirementIds,
     })),
-  } as never);
+  });
   const lockedSourceRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-locked-source-set.v1",
     lockedSourceIds: Object.freeze([...input.lockedSourceIds]),
-  } as never);
+  });
   const postAuthorityAssessmentRevision = hashCanonicalJsonV1({
     schemaVersion: "paw.memory-post-authority-assessments.v1",
     groups: groups.map((group) => ({
@@ -261,7 +261,7 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
         requirement.assessment ? [requirement.assessment] : [],
       ),
     })),
-  } as never);
+  });
   const identity = {
     policyVersion: PAW_MEMORY_SELECTOR_EXECUTION_SNAPSHOT_POLICY_V1,
     planRevision,
@@ -277,7 +277,7 @@ export function compileMemorySelectorExecutionSnapshotV1(input: {
   };
   return Object.freeze({
     ...identity,
-    snapshotRevision: hashCanonicalJsonV1(identity as never),
+    snapshotRevision: hashCanonicalJsonV1(identity),
   });
 }
 

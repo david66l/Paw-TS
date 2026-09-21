@@ -28,7 +28,9 @@ export {
   type PawSettingsLocal,
   pawSettingsLocalSchema,
   modelConfigSchema,
+  mcpServerConfigSchema,
   type ModelConfig,
+  type McpServerConfigSettings,
 } from "./schema.js";
 // 凭据解析与脱敏
 export {

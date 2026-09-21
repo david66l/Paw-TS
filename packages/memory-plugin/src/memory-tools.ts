@@ -4,7 +4,6 @@ import type { ToolBatchOptions, ToolExecutor, ToolSettlement } from "@paw/agent-
 import type { ToolDefinition } from "@paw/core";
 import type { ToolRunResult } from "@paw/harness";
 import type { MemoryEntry } from "@paw/memory/longterm";
-import type { JsonValue } from "@paw/protocol";
 import {
   type RuntimeToolCallV1,
   type RuntimeToolPluginEntryV1,
@@ -340,7 +339,7 @@ export function createPawNextMemoryToolExecutorV1(
       args: validated.args,
       providerVersion: input.profile.providerVersion,
       scopeFingerprint,
-    } as unknown as JsonValue);
+    });
     const cached = cache.get(key);
     if (cached) {
       const result = withCacheHit(projectThroughEvidenceLedger(cached));
@@ -709,7 +708,7 @@ export function projectMemoryTopicDossierToolV1(
   const tryPush = (target: unknown[], candidate: unknown): void => {
     if (accepted >= itemLimit) return;
     target.push(candidate);
-    if (canonicalJsonStringifyV1(base as never).length > charLimit) {
+    if (canonicalJsonStringifyV1(base).length > charLimit) {
       target.pop();
       return;
     }
@@ -833,7 +832,7 @@ export function projectMemoryResolvedContextToolV1(
     topics,
     spans,
   };
-  while (canonicalJsonStringifyV1(result as never).length > limit) {
+  while (canonicalJsonStringifyV1(result).length > limit) {
     if (topics.length > 0) topics.pop();
     else if (evidence.length > 0) evidence.pop();
     else if (spans.length > 0) spans.pop();
@@ -866,7 +865,7 @@ function toolQuery(
     scopeFingerprint: memoryScopeFingerprintV1(profile.scope),
     maxCards,
     searchTexts,
-  } as unknown as JsonValue);
+  });
   return Object.freeze({
     queryId,
     trigger: "task_start",
@@ -915,7 +914,7 @@ function fitItems<T>(items: readonly T[], maxChars: number): readonly T[] {
   const output: T[] = [];
   let used = 2;
   for (const item of items) {
-    const chars = canonicalJsonStringifyV1(item as never).length + (output.length > 0 ? 1 : 0);
+    const chars = canonicalJsonStringifyV1(item).length + (output.length > 0 ? 1 : 0);
     if (used + chars > maxChars) break;
     output.push(item);
     used += chars;

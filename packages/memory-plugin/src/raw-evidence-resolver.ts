@@ -1,5 +1,5 @@
 import type { SessionInputSnapshot } from "@paw/agent-loop";
-import type { InputFactV1, JsonValue, MemoryRawEvidenceSpanV1 } from "@paw/protocol";
+import type { InputFactV1, MemoryRawEvidenceSpanV1 } from "@paw/protocol";
 
 import { canonicalJsonStringifyV1, hashTextV1 } from "./canonical.js";
 import type {
@@ -78,7 +78,7 @@ export function boundMemoryRawEvidenceSpansV1(
           evidenceRef: span.evidenceRef,
           memoryIds: span.memoryIds,
           contentHash: span.contentHash,
-        })) as unknown as JsonValue,
+        })),
       ),
     ),
     spans: frozen,

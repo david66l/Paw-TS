@@ -1,6 +1,5 @@
 import type { ModelContextSectionV1 } from "@paw/core";
 import {
-  type JsonValue,
   MEMORY_RAW_EVIDENCE_POLICY_VERSION_V1,
   type MemoryRawEvidenceSettledFactV1,
 } from "@paw/protocol";
@@ -17,7 +16,7 @@ export function createMemoryRawEvidenceSectionV1(
     queryId: fact.queryId,
     resolutionRevision: fact.resolutionRevision,
     spans: fact.spans,
-  } as unknown as JsonValue);
+  });
   return Object.freeze({
     schemaVersion: 1,
     kind: "memory_cards",

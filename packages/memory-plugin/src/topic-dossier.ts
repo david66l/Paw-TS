@@ -497,7 +497,7 @@ export function assertMemoryTopicDossierIntegrityV1(dossier: MemoryTopicDossierV
     throw namedError("MemoryTopicDossierVersionInvalid");
   }
   const { id: _id, createdAt: _createdAt, ...body } = dossier;
-  if (hashCanonicalJsonV1(body as unknown as JsonValue) !== dossier.id) {
+  if (hashCanonicalJsonV1(body) !== dossier.id) {
     throw namedError("MemoryTopicDossierHashMismatch");
   }
   isoTime(dossier.createdAt, "MemoryTopicDossierCreatedAtInvalid");

@@ -1,6 +1,4 @@
 import type { MemoryEntry } from "@paw/memory/longterm";
-import type { JsonValue } from "@paw/protocol";
-
 import { hashCanonicalJsonV1 } from "./canonical.js";
 import type {
   MemoryFacetReconcileCatalogItemV2,
@@ -383,7 +381,7 @@ function settleSnapshot(
   };
   return Object.freeze({
     ...body,
-    revision: hashCanonicalJsonV1(body as unknown as JsonValue),
+    revision: hashCanonicalJsonV1(body),
   });
 }
 
@@ -489,7 +487,7 @@ function compareEntriesChronologically(left: MemoryEntry, right: MemoryEntry): n
 }
 
 function hashEntry(entry: MemoryEntry): string {
-  return hashCanonicalJsonV1(entry as unknown as JsonValue);
+  return hashCanonicalJsonV1(entry);
 }
 
 function requiredEntry(entries: ReadonlyMap<string, MemoryEntry>, memoryId: string): MemoryEntry {
@@ -499,7 +497,7 @@ function requiredEntry(entries: ReadonlyMap<string, MemoryEntry>, memoryId: stri
 }
 
 function hashFacet(facet: MemoryFacetV2): string {
-  return hashCanonicalJsonV1(facet as unknown as JsonValue);
+  return hashCanonicalJsonV1(facet);
 }
 
 function stableReason(error: unknown): string {

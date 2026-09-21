@@ -678,7 +678,7 @@ async function projectRuntimeActivitySection(
   const contentValue = immutableCanonicalJsonCloneV1({
     schemaVersion: 1,
     activities,
-  } as unknown as JsonValue);
+  });
   const content = canonicalJsonStringifyV1(contentValue);
   const sourceFromSeq = sourceEntries[0]?.seq;
   const sourceThroughSeq = sourceEntries.at(-1)?.seq;
@@ -858,7 +858,7 @@ async function projectLatestCheckpoint(
     sourceEntries.map((candidate) => ({
       seq: candidate.seq,
       fact: candidate.fact,
-    })) as unknown as JsonValue,
+    })),
   );
   if ((await payloads.hash(sourceValue)) !== fact.sourceInputHash) {
     throw new Error("Context checkpoint source input hash mismatch");
@@ -882,7 +882,7 @@ async function projectLatestCheckpoint(
     sourceFromSeq: fact.sourceFromSeq,
     sourceThroughSeq: fact.sourceThroughSeq,
     contentHash: fact.checkpoint.hash,
-    content: canonicalJsonStringifyV1(checkpoint as unknown as JsonValue),
+    content: canonicalJsonStringifyV1(checkpoint),
   });
   return {
     sections: Object.freeze([section]),

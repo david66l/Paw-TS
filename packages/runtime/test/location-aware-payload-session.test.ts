@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { canonicalJsonStringifyV1 as canonicalJson } from "@paw/core";
 
 import { afterEach, describe, expect, test } from "bun:test";
 import type { SessionInputSnapshot } from "@paw/agent-loop";
@@ -1018,10 +1019,7 @@ class MemorySource implements LocationAwarePayloadSessionSourceV1 {
     if (this.tailSeq !== expectedTailSeq) return "conflict";
     const latest = this.prefix.at(-1);
     if (latest?.record.kind === "derived_decision") {
-      if (
-        canonicalJson(latest.record.decision as unknown as JsonValue) ===
-        canonicalJson(decision as unknown as JsonValue)
-      ) {
+      if (canonicalJson(latest.record.decision) === canonicalJson(decision)) {
         return "committed";
       }
       throw new Error("tail has a conflicting derived decision");
@@ -1128,10 +1126,7 @@ class MemoryMaterializer implements LocationAwarePayloadMaterializerV1 {
     if (payload.kind !== "artifact_ref") throw new Error("expected artifact");
     const item = this.stored.get(payload.artifactRef);
     if (!item) throw new Error("artifact is missing");
-    if (
-      canonicalJson(item.binding as unknown as JsonValue) !==
-      canonicalJson(expectedBinding as unknown as JsonValue)
-    ) {
+    if (canonicalJson(item.binding) !== canonicalJson(expectedBinding)) {
       throw new Error("artifact binding mismatch");
     }
     return clone(this.resolveValues.shift() ?? item.value);
@@ -1521,16 +1516,6 @@ function hashJson(value: JsonValue): string {
 
 function payloadBytes(value: JsonValue): number {
   return Buffer.byteLength(canonicalJson(value), "utf8");
-}
-
-function canonicalJson(value: JsonValue): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const record = value as Readonly<Record<string, JsonValue>>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] as JsonValue)}`)
-    .join(",")}}`;
 }
 
 function tempRoot(): string {

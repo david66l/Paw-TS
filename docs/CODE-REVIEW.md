@@ -770,3 +770,55 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 - **行数口径统一为"含空行"**。`orchestrator.ts` = 5715（非空 5185）、`useAgentRun.ts` = 1920/1921、`harness/registry/execution.ts` = 1898/1899（读工具与行分割略有差异，不影响"~1460 行的函数"这一结论）。
 - **已知的未覆盖面**：`benchmarks/`（约 3 万行）只做了闸门覆盖分析，未逐文件精读；`packages/core`、`packages/store`、`packages/settings`、`packages/web-access`、`packages/output-recall`、`packages/task-progress`、`packages/model-output-recovery`、`packages/progress-advisor`、`packages/completion-review`、`packages/context-compaction`、`packages/collaboration` 未做逐包深读（它们体量较小，且已被跨包扫描覆盖）。
 - **本次审查未修改任何源码逻辑**。仅修了 3 处由上一轮 legacy 迁移造成的失效文档命令（`README.md`、`ARCHITECTURE.md`），已在 §C6 标明。
+
+---
+
+## 11. 执行记录
+
+### 11.1 状态
+
+| # | 状态 | 说明 |
+| --- | --- | --- |
+| 1–5 | ✅ 完成 | 闸门接线：`typecheck` 顺序化跑全部 23 个包、CI 覆盖 memory 全量 + 桌面原生、`biome.json` 修复、`legacy/` 归档 |
+| 6 | ✅ 完成 | canonical JSON 收敛到 `@paw/core`（见 11.2） |
+| 7 | ✅ 完成 | `packages/memory-plugin/test/canonical-json.conformance.test.ts`（86 例，含 golden 与 12 种非法值）＋ `packages/agent/test/loop-v2-canonical.test.ts`（9 例） |
+| 8 | ✅ 完成 | `memoryItemDao.query` 重写为单一参数化查询；新增 `packages/memory/test/memory-item-query.test.ts`（9 例，**其中 6 例在旧实现上失败**） |
+| 9 | ✅ 完成 | 导出 `mcpServerConfigSchema`，`loadMcpServers` 改用 `safeParse` |
+| 10 | ✅ 完成 | `tool-result-detail.ts` 的 `files`/`matches` 元素按类型校验 |
+| 11 | ✅ 完成 | `finalizeToolExecutionContext` 增加长度守卫，并消掉重复的 `calls[i]!` |
+| 12 | ⏳ 待办 | state updater 纯度（§D3）—— 桌面渲染进程，需要动 1920 行的 `useAgentRun.ts` |
+| 13 | ✅ 完成 | 删除 `harness/src/shell/session.ts`（419 行）与 `apps/desktop/src/agent/useOpsPanel.ts`（192 行）；两者全仓零引用（已按符号名逐一确认） |
+| 14–16 | ⏳ 待办 | 见 §8 |
+| 17 | ⏳ 待办（有分歧，见 11.3） | FileLease 失败协议 |
+| 18 | 🟡 部分 | 已消掉「同一正则跑两遍 + 从英文散文抠 code」（`composition.ts`）；`normalizeErrorCode` 拒绝字面量 `"Error"`、`observation.ts` 优先读 `evidence.payload.code` 仍未做 |
+
+批次 B 的闸门实测（`typecheck` 23/23、`lint` 0 error、`test:ts` 2790 pass/6 skip、`test:desktop` 190 pass/0 fail、`test:memory`（真实 Postgres）407 pass）与基线一致，唯一新增失败在逐项 A/B 后确认均为既存问题。
+
+### 11.2 报告本身估错的地方（更正）
+
+1. **§1 说 canonical JSON 有 4 份实现，实际是 11 份。** 除报告点名的 4 份外，还有 `packages/core/src/model-request.ts`（就在 core 内部）、`packages/output-recall/src/index.ts`、`packages/task-progress/src/service.ts`、`packages/progress-advisor/src/projector.ts`、`packages/runtime/src/inbox/durable-input-inbox.ts`，以及 3 份 runtime 测试内的本地副本。§R6 提到的「重复实现」比报告描述的更普遍。
+2. **`as never` 全仓 136 处，本次共消掉 246 处类型逃逸**（94 + ~30 是低估，因为 `as unknown as JsonValue` 的数量被低估）。
+3. **批次 A 结束时 lint 并非 0 error。** `apps/desktop/agent-host/paw-next-attachments.ts` 有 1 处 `noNonNullAssertion`（已按 `match[2]` 可能为 `undefined` 显式守卫修掉）。此前那次「0 error」的读数不准确。
+4. **§D10 的行数**：`harness/src/shell/session.ts` 是 419 行而非 389 行（口径差异，不影响结论）。两个文件确实零引用，删除后闸门无变化。
+
+### 11.3 新发现（报告未覆盖）
+
+1. **`task-progress/src/service.ts` 用 `localeCompare` 排序对象键**（`canonicalJson` 的本地副本）。这比报告里说的 `undefined`/`NaN` 分歧更严重：canonical 文本因而 **hash 依赖宿主机 locale**，同一份数据在不同机器上算出不同的「稳定」哈希。收敛后该文件只剩一处实现。实测差异：code-unit 序为 `"B" "Z" "a" "e" "z"`，`localeCompare` 序为 `"a" "B" "e" "é" "z" "Z"`。
+2. **稀疏数组会产出非法 JSON 而不是报错。** 旧实现的 `value.map(fn)` 会**跳过空洞**，`join(",")` 于是拼出 `"[ ,1]"`（`[,1]`）—— 直接写进 durable payload 文件。新实现改为按索引遍历并显式拒绝空洞与 `undefined` 元素。
+3. **`listMemories()` 存在跨用户返回**（`packages/memory/src/runtime/memory-runtime.ts:537`）。它总是传 `scopeRepoId + scopeUserId` 但通常**不传 type**，于是落进旧实现「有 repo 无 type」的分支 —— 该分支只过滤 repo，`scopeUserId` 被静默丢弃。报告 §M2 只提了 `tags` 与 `types[0]`，但这一条的后果是**同仓库内其他用户的记忆会被返回**，属于信息泄漏而非噪声。
+4. **`tool-result-detail.ts` 的 `matches` 不止是输出噪声，还会抛异常。** 旧代码在未校验的元素上直接读 `m.path`，元素为 `null` 时抛 `TypeError` —— 即报告 §A10 说的「工具执行完之后才崩」确有其事，触发条件是 `null` 元素而非类型不符。
+5. **正文外还有两个既存问题**（都不在报告里，也都没改）：
+   - `test:memory` 在真实 Postgres 上**本身就不稳定**：干净基线上跑两次分别得到 4 与 5 个失败。成因是跨文件互相污染 —— `governor.test.ts:192` 先全局 `DELETE ... WHERE policy_version = 'v2-m5'`、`:251` 再全局 `SELECT` 计数，而 bun 并行跑测试文件、共用同一个库，于是「删」与「查」之间会被另一个文件的写入穿过（生命周期用例的 trial 容量同理）。建议给这两处加 `repo`/测试命名空间过滤，而不是靠删除窗口。
+   - `.understand-anything/`（145 个跟踪文件）是分析工具的输出目录却已入库；`biome check .` 会顺带重排它。`lint` 脚本限定 `packages apps` 是对的，但这批生成物建议移出版本库。
+
+### 11.4 一处需要决策的分歧（#17）
+
+§R3 建议把 `FileLease` 四个迁移统一为「一律 resolve，不抛」，并明确说 `:808` 的裸抛绕过了 `failClosed`。但 `packages/runtime/test/session-execution-lease.test.ts:127` **正是断言这个裸抛**：
+
+```ts
+await expect(
+  lease.linearizeJournalBatch({ ...input, nextHead: { ...input.nextHead, prefixHash: "e".repeat(64) } }),
+).rejects.toThrow("commitId was reused");
+```
+
+该测试把「同一 `commitId` 配不同内容」当作**篡改**（破坏内容寻址不变量）而与「head 冲突」（可重试）区分开。因此 #17 不是纯粹的协议统一，而是**契约变更**：要么按 §R3 改成返回状态并同步改测试，要么保留裸抛、把「哪种失败走哪条通道」写成显式契约。本次先做了后者（在 `linearizeTransition` 与 `LinearizeJournalBatchResultV1` 上写明两条通道的分工），把前者留给决策。

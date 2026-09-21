@@ -128,12 +128,23 @@ export const memoryItemDao = {
     return rows.map((r) => rowToItem(r as Record<string, unknown>));
   },
 
+  /**
+   * Structured lookup by any combination of the declared filters.
+   *
+   * Every filter that is passed is applied. The previous version branched over a
+   * few hand-picked combinations and silently ignored the rest: `tags` never
+   * reached SQL at all, and `scopeUserId` was dropped unless a type *and* a
+   * repository were also supplied. Callers therefore received a wider result set
+   * than they asked for — across users that is a disclosure, not a nuisance.
+   */
   async query(opts: {
     type?: MemoryType;
+    /** Multi-type filter; takes precedence over `type` when provided. */
+    types?: readonly MemoryType[];
     status?: MemoryStatus;
     scopeRepoId?: string;
     scopeUserId?: string;
-    tags?: string[];
+    tags?: readonly string[];
     limit?: number;
     offset?: number;
   }): Promise<MemoryItem[]> {
@@ -141,43 +152,38 @@ export const memoryItemDao = {
     const limit = opts.limit ?? 20;
     const offset = opts.offset ?? 0;
 
-    // Build query using tagged template for proper JSONB support
-    if (opts.scopeRepoId && opts.scopeUserId && opts.type) {
-      const rows = await sql`
-        SELECT * FROM memory_items
-        WHERE type = ${opts.type} AND status = ${opts.status ?? "active"}
-          AND scope->>'repositoryId' = ${opts.scopeRepoId}
-          AND scope->>'userId' = ${opts.scopeUserId}
-        ORDER BY updated_at DESC LIMIT ${limit} OFFSET ${offset}`;
-      return rows.map((r) => rowToItem(r as Record<string, unknown>));
+    const values: (string | number | string[])[] = [];
+    const bind = (value: string | number | string[]): string => {
+      values.push(value);
+      return `$${values.length}`;
+    };
+
+    const conditions = [`status = ${bind(opts.status ?? "active")}`];
+    const types = [...(opts.types ?? (opts.type === undefined ? [] : [opts.type]))];
+    if (types.length > 0) {
+      // `ANY` keeps the single-type case on the same code path as the multi-type
+      // one, and still uses the (type, status) and scope indexes.
+      conditions.push(`type = ANY(${bind(types)})`);
     }
-    if (opts.scopeRepoId && opts.type) {
-      const rows = await sql`
-        SELECT * FROM memory_items
-        WHERE type = ${opts.type} AND status = ${opts.status ?? "active"}
-          AND scope->>'repositoryId' = ${opts.scopeRepoId}
-        ORDER BY updated_at DESC LIMIT ${limit} OFFSET ${offset}`;
-      return rows.map((r) => rowToItem(r as Record<string, unknown>));
+    if (opts.scopeRepoId !== undefined) {
+      conditions.push(`scope->>'repositoryId' = ${bind(opts.scopeRepoId)}`);
     }
-    if (opts.type) {
-      const rows = await sql`
-        SELECT * FROM memory_items
-        WHERE type = ${opts.type} AND status = ${opts.status ?? "active"}
-        ORDER BY updated_at DESC LIMIT ${limit} OFFSET ${offset}`;
-      return rows.map((r) => rowToItem(r as Record<string, unknown>));
+    if (opts.scopeUserId !== undefined) {
+      conditions.push(`scope->>'userId' = ${bind(opts.scopeUserId)}`);
     }
-    if (opts.scopeRepoId) {
-      const rows = await sql`
-        SELECT * FROM memory_items
-        WHERE status = ${opts.status ?? "active"}
-          AND scope->>'repositoryId' = ${opts.scopeRepoId}
-        ORDER BY updated_at DESC LIMIT ${limit} OFFSET ${offset}`;
-      return rows.map((r) => rowToItem(r as Record<string, unknown>));
+    if (opts.tags !== undefined && opts.tags.length > 0) {
+      // `tags` is text[] with a GIN index, so overlap (`&&`) is the indexed test.
+      conditions.push(`tags && ${bind([...opts.tags])}`);
     }
-    const rows = await sql`
-      SELECT * FROM memory_items
-      WHERE status = ${opts.status ?? "active"}
-      ORDER BY updated_at DESC LIMIT ${limit} OFFSET ${offset}`;
+    const limitParam = bind(limit);
+    const offsetParam = bind(offset);
+
+    const rows = await sql.unsafe(
+      `SELECT * FROM memory_items
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY updated_at DESC LIMIT ${limitParam} OFFSET ${offsetParam}`,
+      values,
+    );
     return rows.map((r) => rowToItem(r as Record<string, unknown>));
   },
 
