@@ -1450,3 +1450,34 @@ state->>'goal'      = NULL            <- SQL 层取字段取不到
 读路径靠 `parseJson`（它同时兼容字符串与对象）把值再 parse 一次，所以这个 DAO 自己读写是通的 —— **属于潜伏缺陷**：任何 `state->>'field'` 查询、GIN 索引或外部工具看到的都是字符串。
 
 我试图用 `${JSON.stringify(wm)}::jsonb` 修它（类型干净、不需要 `as any`），**实测无效**：仍然 `jsonb_typeof=string`。原因是 postgres.js 会识别参数目标是 jsonb 并对 JS 字符串再编码一次，所以显式 `::jsonb` 挡不住双重编码。真正的修法是 `sql.json(wm)`（让驱动只编码一次），但它要求 `JSONValue`，而 `WorkingMemory`/`ActorRef` 是 interface，缺索引签名 —— 现有代码的通行做法是 `sql.json(item.scope as any)`，代价是 3 处新的 `as any`（lint warning）。**本轮已回退这次尝试**（`workingMemory.ts` 与 HEAD 逐字节相同，已用 blob 哈希核对），把结论留在这里而不是塞进一个我不确定能验证的改动。
+
+### 11.30 上一轮那个 JSONB 双重编码：修好了，并证明测试能抓住它
+
+§11.29 末尾留的是"缺陷已实测、修法已判明、但没落地"。本轮落地：`workingMemoryDao` 的 `create` / `update` / `createSnapshot` 三处从位置参数 `sql.unsafe` 改为 tagged template + `sql.json(... as any)`，让驱动**只编码一次**。
+
+**落库形态实测（同一张表、同一个探针，改前 vs 改后）：**
+
+| 站点 | 改前 | 改后 |
+|---|---|---|
+| `create` → `state` | `jsonb_typeof=string`，`state->>'goal'` = **NULL** | `jsonb_typeof=object`，`state->>'goal'` = `probe-goal` |
+| `update` → `state` | 同上 | `jsonb_typeof=object`，`state->>'goal'` = `updated-goal` |
+| `createSnapshot` → `snapshot` / `created_by` | 同上 | 两者都是 `object`，`snapshot->>'goal'` = `snap-goal`、`created_by->>'actorId'` = `probe` |
+
+应用层读回不变（`readFiles` 仍为 `["a.ts"]`）—— 读路径本来就靠 `parseJson` 兼容两种形态，所以这次修的是**SQL 层可见性**，不是这个 DAO 的行为。
+
+**回归测试**：`packages/memory/test/working-memory-jsonb.test.ts`（3 例），断言 `jsonb_typeof` 是 `object` **且** `->>` 取得到字段（只断言前者会漏掉"键名不对"这一类）。
+
+**并且验证了这个测试真的能抓住缺陷**：把 `create`/`update` 两处改回 `JSON.stringify`，两条用例立刻红：
+
+```
+Expected: "object"
+Received: "string"
+```
+
+`createSnapshot` 那条仍绿 —— 因为我只回退了 `wm` 的两处、快照的两处保持 `sql.json`，这与预期一致。改回后核对 `sql.json(wm as any)` 命中 2 处。
+
+**顺带把 §M7 的 JSONB 约定在 `db/dao/` 里统一了**：该目录现在**没有任何** `JSON.stringify` 写入 jsonb 的位置参数写法（唯一命中是我写的注释）。剩下的 `JSON.stringify` 都在 `db/dao` 之外。
+
+**代价**：4 处 `as any`（`sql.json` 收 `JSONValue`，`WorkingMemory`/`ActorRef` 是无索引签名的 interface；`wm` 两处 + 快照两处）。这是同目录既有约定（`memoryItem.ts` 的 `sql.json(item.scope as any)`），lint 仍是 0 error，warning 数从 432 升到 **436**。我没有为此新造一个 `as unknown as JSONValue` 的桥接函数 —— 那会把 §R7 要消掉的东西再添一处。
+
+**验收（清库 + 比较失败集合）**：`packages/memory` **1021 pass / 3 fail**，失败集合与改前逐条同名（readonly CLI、memory-mechanism fixtures、Memory Evaluator）；pass 增加 3 = 本轮新增用例。

@@ -34,11 +34,16 @@ function rowToWm(row: Record<string, unknown>): WorkingMemory {
 export const workingMemoryDao = {
   async create(wm: WorkingMemory): Promise<WorkingMemory> {
     const sql = getSql();
-    const rows = await sql.unsafe(
-      `INSERT INTO working_memories (id, task_id, revision, goal, state, created_at, updated_at)
-       VALUES ($1, $2, 1, $3, $4, $5, $6) RETURNING *`,
-      [wm.id, wm.taskId, wm.goal, JSON.stringify(wm), wm.createdAt, wm.updatedAt],
-    );
+    // tagged template + sql.json：让驱动**只编码一次**。
+    // 原先传 `JSON.stringify(wm)`（位置参数），postgres.js 认出目标是 jsonb 后又编码
+    // 一次，落库成**双重编码的 jsonb 字符串**（实测 `jsonb_typeof(state)='string'`、
+    // `state->>'goal'` 为 NULL）。读路径靠 `parseJson` 兼容两种形态所以一直没暴露。
+    // `as any` 是既有约定：`sql.json` 收 `JSONValue`，而 `WorkingMemory` 是 interface，
+    // 没有索引签名（同目录 `memoryItem.ts` 的 `sql.json(item.scope as any)` 同理）。
+    const rows = await sql`
+      INSERT INTO working_memories (id, task_id, revision, goal, state, created_at, updated_at)
+      VALUES (${wm.id}, ${wm.taskId}, 1, ${wm.goal}, ${sql.json(wm as any)}, ${wm.createdAt}, ${wm.updatedAt})
+      RETURNING *`;
     return rowToWm(rows[0] as Record<string, unknown>);
   },
 
@@ -60,11 +65,10 @@ export const workingMemoryDao = {
     wm: WorkingMemory,
   ): Promise<WorkingMemory | null> {
     const sql = getSql();
-    const rows = await sql.unsafe(
-      `UPDATE working_memories SET goal = $3, state = $4, updated_at = now(), revision = revision + 1
-       WHERE id = $1 AND revision = $2 RETURNING *`,
-      [id, expectedRevision, wm.goal, JSON.stringify(wm)],
-    );
+    const rows = await sql`
+      UPDATE working_memories SET goal = ${wm.goal}, state = ${sql.json(wm as any)},
+        updated_at = now(), revision = revision + 1
+       WHERE id = ${id} AND revision = ${expectedRevision} RETURNING *`;
     return rows.length > 0 ? rowToWm(rows[0] as Record<string, unknown>) : null;
   },
 
@@ -72,21 +76,13 @@ export const workingMemoryDao = {
 
   async createSnapshot(snap: WorkingMemorySnapshot): Promise<WorkingMemorySnapshot> {
     const sql = getSql();
-    const rows = await sql.unsafe(
-      `INSERT INTO working_memory_snapshots
+    const rows = await sql`
+      INSERT INTO working_memory_snapshots
         (id, task_id, working_memory_id, working_memory_revision, reason, snapshot, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [
-        snap.id,
-        snap.taskId,
-        snap.workingMemoryId,
-        snap.workingMemoryRevision,
-        snap.reason,
-        JSON.stringify(snap.snapshot),
-        JSON.stringify(snap.createdBy),
-        snap.createdAt,
-      ],
-    );
+      VALUES (${snap.id}, ${snap.taskId}, ${snap.workingMemoryId}, ${snap.workingMemoryRevision},
+        ${snap.reason}, ${sql.json(snap.snapshot as any)}, ${sql.json(snap.createdBy as any)},
+        ${snap.createdAt})
+      RETURNING *`;
     return rowToSnapshot(rows[0] as Record<string, unknown>);
   },
 
