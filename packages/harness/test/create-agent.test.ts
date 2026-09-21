@@ -1,22 +1,30 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { HarnessContext } from "../src/context.js";
 import { executeTool } from "../src/registry/index.js";
 
 /**
  * `workspace.create_agent` 是实测出的最后一个"从未在测试里出现"的工具 id
- * （见 §D9 与上一轮的覆盖率测量）。它是最大的处理器之一，但**注入路径**不需要
- * 文件系统：`ctx.createAgent` 存在时它只负责校验输入、把规范化后的参数转交出去。
+ * （见 §D9 与覆盖率测量）。它有两段：`ctx.createAgent` 存在时只做校验 + 转交；
+ * 不存在时自己往 `.paw/agents/<id>.md` 写一份带 front matter 的定义。
  *
- * 这里只钉这一段契约：两条校验出口 + 委派成功/失败。不碰 `ctx.createAgent` 缺失
- * 时那条自己写盘的兜底（那需要临时目录与真实 fs，属于另一条用例）。
+ * 两段都覆盖：前半用桩，后半用 `mkdtempSync` 出来的临时工作区。
  *
  * 参数规范化的默认值（role←name、tools←"inherit"、model←"inherit"、
  * outputFormat←固定文案）是这条路径真正的行为，所以逐项断言而不是只看 ok。
  */
-function ctxWith(createAgent: unknown): HarnessContext {
-  return { workspaceRoot: "/tmp", createAgent } as HarnessContext;
+function ctxWith(createAgent: unknown, workspaceRoot = "/tmp"): HarnessContext {
+  return { workspaceRoot, createAgent } as HarnessContext;
 }
+
+const WORKSPACE = mkdtempSync(join(tmpdir(), "paw-create-agent-"));
+
+afterAll(() => {
+  rmSync(WORKSPACE, { recursive: true, force: true });
+});
 
 describe("create_agent tool", () => {
   test("rejects an id that is empty or not a safe identifier", async () => {
@@ -90,5 +98,53 @@ describe("create_agent tool", () => {
     );
     expect(r.ok).toBe(false);
     expect(r.summary).toContain("registry rejected the spec");
+  });
+
+  // ---- 兜底路径：没有 ctx.createAgent 时自己写盘 ----
+
+  test("writes the agent definition into .paw/agents when no creator is injected", async () => {
+    const r = await executeTool(ctxWith(undefined, WORKSPACE), "workspace.create_agent", {
+      id: "worker",
+      name: "Worker",
+      prompt: "do the work",
+      emoji: "🔧",
+    });
+
+    expect(r.ok).toBe(true);
+    const file = join(WORKSPACE, ".paw", "agents", "worker.md");
+    expect(existsSync(file)).toBe(true);
+    const text = readFileSync(file, "utf8");
+    // front matter 的关键字段与正文
+    expect(text).toContain("id: worker");
+    expect(text).toContain("name: Worker");
+    expect(text).toContain("tools: inherit");
+    expect(text).toContain("canSpawn: false");
+    expect(text).toContain("emoji: 🔧");
+    expect(text).toContain("do the work");
+    // 摘要里报的是 id，不是路径（与注入路径不同，这点也钉住）
+    expect(r.summary).toContain("wrote worker");
+  });
+
+  test("refuses to clobber an existing definition without overwrite", async () => {
+    const r = await executeTool(ctxWith(undefined, WORKSPACE), "workspace.create_agent", {
+      id: "worker",
+      name: "Worker",
+      prompt: "do the work",
+    });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.payload)).toContain("exists: worker");
+  });
+
+  test("overwrite=true replaces the definition", async () => {
+    const r = await executeTool(ctxWith(undefined, WORKSPACE), "workspace.create_agent", {
+      id: "worker",
+      name: "Worker",
+      prompt: "do the work differently",
+      overwrite: true,
+    });
+    expect(r.ok).toBe(true);
+    expect(readFileSync(join(WORKSPACE, ".paw", "agents", "worker.md"), "utf8")).toContain(
+      "do the work differently",
+    );
   });
 });
