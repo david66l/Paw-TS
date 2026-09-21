@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { hashCanonicalJsonV1 as coreHashCanonicalJsonV1 } from "@paw/core";
 
+import { hashPawNextProductManifestV2 } from "../src/product-manifest-v2.js";
+import { hashPawNextProductManifestV3 } from "../src/product-manifest-v3.js";
 import {
   PAW_NEXT_PRODUCT_MANIFEST_SCHEMA_VERSION_V1,
   createPawNextProductManifestV1,
@@ -99,5 +101,35 @@ describe("paw-next canonical hashing", () => {
       registryHash: "b".repeat(64),
     } as Parameters<typeof createPawNextProductManifestV1>[0]);
     expect(hashCanonicalJsonV1(again)).toBe(hashCanonicalJsonV1(manifest));
+  });
+
+  /**
+   * v2 / v3 与 v1 是三个独立入口。它们共同的承重不变量是：**版本的 hash 函数就是
+   * 把清单交给同一套 canonical 编码**，因此
+   * `hashPawNextProductManifestV<N>(m) === hashCanonicalJsonV1(m)`。批次 B #6 之前
+   * 这几条路径各有一份实现，这条断言是那次收敛的回归网。
+   *
+   * 注意这里**不**去走 `createPawNextProductManifestV2/V3`：那两个构造函数会校验
+   * 输入（v2 要求 durable JSON payload 策略版本、v3 还要求 work-segment 策略版本），
+   * 构造一份合法输入是另一件事，属于它们各自的契约测试。hash 这一半不依赖它。
+   */
+  describe("versioned manifest hashing", () => {
+    const manifest = { schemaVersion: "x", runConfig: { model: "m" }, model: "m" };
+
+    const HASHERS = [
+      { name: "v1", hash: (m: unknown) => hashCanonicalJsonV1(m) },
+      { name: "v2", hash: hashPawNextProductManifestV2 as unknown as (m: unknown) => string },
+      { name: "v3", hash: hashPawNextProductManifestV3 as unknown as (m: unknown) => string },
+    ] as const;
+
+    for (const v of HASHERS) {
+      test(`${v.name} hashes through the shared canonical encoder`, () => {
+        expect(v.hash(manifest)).toBe(hashCanonicalJsonV1(manifest));
+      });
+
+      test(`${v.name} hash does not depend on key order`, () => {
+        expect(v.hash({ b: 1, a: 2 })).toBe(v.hash({ a: 2, b: 1 }));
+      });
+    }
   });
 });
