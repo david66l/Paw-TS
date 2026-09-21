@@ -737,7 +737,7 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 32 | 🟡 (a) 已完成：(b) **早已由批次 B #6 顺带做完**（两个 `canonicalJsonStringifyV1` 现在都收 `unknown`，§R7 的前提过期）。4 个形状校验器改成 `asserts` 谓词，**实测消掉 13 处断言**（3 个 `as unknown as` + 10 个具名断言，去掉注释后计数）。**剩余**：`assertCheckpointSourcesInRange`/`assertJournalCommitShape` 是**关系**校验器，结构上不可能是 `asserts` 谓词（§11.22），`session-execution-lease.ts:1485` 那处需另想办法 | 一次消掉 ~40 处断言，且把"运行时校验"变成类型系统的一部分 |
 | 33 | 🟡 可区分性已完整解决：全文件唯一的那对重复文案消除（实测重复数为 0），14 处 work-segment 守卫改为带稳定 `code` + `detectedAt` 的 `LifecycleInvariantErrorV1`；§R2 第二半（把不变量陈述搬到 `reduceEvent`）也做了。**剩余**：`LifecycleInvariantV1` 表与 29 个累加器的状态对象未立 —— 报告写作时它的收益是"可区分"，那部分已拿到；剩下的只有"可发现性"，**建议与 #25 的 `ResolutionPassState` 一起做**（同类改动、同类风险，见 11.23） | 让"work segment 启动前必须成立什么"可被单点回答 |
 | 34 | 给 `packages/paw-next` 补测试（它是桌面端唯一入口，却零测试，§C7） | 风险最高的模块从零保障到有保障 |
-| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例，含越界→`E_POLICY_DENIED` 的端到端接线）、`run_skill` ✅（7 例，11.31）、`todo_write` ✅（7 例，重点是输入净化，11.33）、`web_fetch`/`web_search` ✅（10 例，注入 service 不碰网络，11.34）。仍为 0 命中：`browser_check`、`notebook_edit`、`workspace.lsp` | 该包测试比 0.28，而它决定策略与审计 |
+| 35 | 🟡 大部分完成：`logShellAudit`/`flushAuditLog` ✅、`errorCodeForToolPayload` ✅（19 例）、`create_agent` ✅、`list_dir`/`glob`/`grep` ✅（14 例）、`run_skill` ✅（7 例，11.31）、`todo_write` ✅（7 例，11.33）、`web_fetch`/`web_search` ✅（10 例，11.34）、`browser_check`/`lsp` ✅（6 例，并发现 `browser_check` 未在 `definitions.ts` 声明、因而不做参数校验，11.35）。仍为 0 命中：`notebook_edit` | 该包测试比 0.28，而它决定策略与审计 |
 
 > 建议在第 12 条之前先落地第 6 条：`canonicalJsonStringifyV1` 签名一变，`orchestrator.ts` 里若干 `as never` / `as unknown as` 会自然消失，重构时的噪声更少。
 
@@ -1581,3 +1581,28 @@ case "unknown":
 **这一轮第一次没被实测纠正** —— 因为先读了 schema 与处理器再写断言，而不是先猜。前四轮各被纠正一次，代价是若干次往返；这次没有，方法上的差别是明显的。
 
 **§D9 剩余**：`browser_check`、`notebook_edit`、`workspace.lsp`。
+
+### 11.35 #35：`browser_check` / `lsp` 补齐，并发现一个「有处理器但未声明」的工具
+
+新增 `packages/harness/test/browser-lsp.test.ts`（6 例），`packages/harness` 从 253 涨到 **259 pass / 0 fail**。一次通过 —— 与上一轮同样是先读 schema 与处理器再写断言。
+
+**`lsp` 只测两条错误出口**：真正启动语言服务器那条会 spawn 子进程，不属于单元测试范围；`detectLspCommand` 按扩展名判断，所以 `.zzz` 不必真实存在。钉住：省略 `file` 由 schema 拦下（`E_SCHEMA_INVALID` + `field`）、空串落到处理器的裸分支（无 `error_code`）、未知扩展名给出 `lsp: no LSP server for .zzz` 而**在任何进程被拉起之前**就返回。
+
+**`browser_check` 顺带钉出一个结构事实：它是一个"有处理器、有派发表条目、但未声明"的工具。**
+
+- `handlers/index.ts:84` 有 `["workspace.browser_check"]: handleBrowserCheck`；
+- `handlers/shell-web.ts:15` 有处理器；
+- **`definitions.ts` 里完全没有它** —— 全仓 grep "browser" 在该文件 0 命中。
+
+后果有两条，都实测过：
+
+1. **不在模型可见的工具清单里**（`createToolDefinitions()` 由那些 `fn(...)` 组成），所以模型无法发现它；
+2. `schemaForTool` 找不到 schema，`validateToolArguments` 在 `tool-support.ts:74-77` 直接返回 `null` —— **不做任何参数校验**。测试里用 `{nonsense:{deeply:["nested"]}}` 验证了任意形状都能直达处理器。
+
+它显然是被**内部按名字调用**的（`paw-next/src/browser-check.ts:6` 定义 `BROWSER_CHECK = "workspace.browser_check"`，`paw-next/src/environment-audit.ts:260` 消费对应事实），所以"不声明"可能是**有意**的：它不是模型工具，只是借道同一个 dispatcher。这里**不下"应该声明"的结论**，只把现状与两条后果记下来。
+
+**顺带解释了一处看起来像命名漂移的东西**：`environment-audit.ts:260` 同时接受 `workspace_browser_check` 与 `workspace.browser_check` 两种拼写。这不是漂移 —— `fn()` 会把点换成下划线（`definitions.ts:216`），所以带点的是逻辑名、带下划线的是上线名；审计层两种都认是为了容忍 journal 里两种来源。**§3 记的"同名不同义"陷阱在这里是反过来的：同一个名字的两副拼写，容易被误判成两个工具。**
+
+**`browser_check` 的另一个对照点**：它缺 checker 时返回的是 `payload.code = "E_POLICY_DENIED"` —— 键是 **`code`**，即喂 journal `errorCode` 的那个（§11.32）。同样写裸 payload，`agents.ts` 的分支既不写 `code` 也不写 `error_code`，而这里写了 `code`。三种做法在同一个 registry 层里并存。
+
+**§D9 剩余**：`notebook_edit`（唯一剩下的）。
