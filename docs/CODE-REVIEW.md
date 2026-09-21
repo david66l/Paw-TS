@@ -1012,3 +1012,13 @@ bunx tsc --noEmit -p benchmarks/tsconfig.json
 **但报告建议的修法（把同一条 `callId` 对齐检查搬过去）在这里无法照抄**：`tool-runner` 侧的 `calls` 类型是 `AgentToolCallAction`，定义为 `{ type, tool, args }`（`packages/core/src/actions.ts:36-42`）—— **它根本没有 id 字段**，因此无法与 `nativeTurn.calls[index].callId` 做身份比对。`action-handlers` 能用 `errors[index]?.id`，是因为那边的 `errors` 来自解析步骤、自带 id。
 
 所以下一步不是抄守卫，而是先回答一个问题：`ctx.nativeToolTurn` 与 `calls` 是否**由同一次解析、同一顺序**产出？若是，下标配对就是构造上安全的，报告里"顺序不同则静默错配"的后果不成立（会列入 §11.12 那类被推翻的断言）；若不是，需要的是在解析处就保留 call id，而不是加一条守卫。要判断这一点必须追 `nativeToolTurn` 的数据流，本轮上下文不足以完成，故只记录到这里，**没有改代码**。
+
+**追完了，结论：报告的后果不成立。** 数据流在 `orchestrator.ts` 的解析函数里是这样一个形状：
+
+- `:1455-1466` 先遍历 `entries` 生成 `rawTurnCalls` —— **每一条 entry 都进**（`"call" in entry` 取 `entry.call`，否则取 `entry.error`）；
+- `:1467-1474` 校验 callId/providerName 非空且唯一，通过则 `nativeTurnCalls = rawTurnCalls`；
+- `:1475` 起**第二次遍历同一批 `entries`** 生成有效调用与 `errors`，途中对无效项 `continue`（`:1478`、`:1491`，以及后续同类分支）。
+
+也就是说 `nativeTurnCalls.length` 是 **entry 总数**，而 `calls`/`toolCalls` 的长度是**有效项数（≤ 总数）**，两者顺序天然一致、只在"有跳过"时长度不同。`tool-runner.ts:1250` 的守卫恰好要求 `nativeTurn.calls.length === calls.length` —— **长度相等 ⇔ 没有任何跳过 ⇔ 顺序逐一对应**。所以那个"只校验长度"的守卫在这条路径上**是充分的**，`nativeTurn.calls[index].callId` 盖到 `modelFacingResults[index]` 上不会错配。
+
+因此 §A4-A 的"两条路径一条拒绝、一条静默错配"归入 §11.12 的被推翻断言。两条路径写法仍不一致（一条多一条身份校验），但那是**冗余的防御**，不是一条路径缺了必需的保护 —— 与 §D8 的 SSE 情形同型。残留假设：`tool-runner` 收到的 `calls` 是解析输出（或其同序过滤），若将来在某处**重排** `calls` 而不重排 `nativeToolTurn.calls`，长度仍可能相等而顺序不同；要防的是那个，而不是今天的代码。
