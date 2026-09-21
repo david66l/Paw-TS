@@ -28,6 +28,18 @@ describe("summarizeToolArgs", () => {
     }
     expect(summarizeToolArgs("workspace.grep", { pattern: "TODO", path: "src" })).toBe("src");
   });
+
+  test("apply_patch 的 relPath 也要显示出来", () => {
+    // apply_patch 的参数用 relPath（处理器在 packages/workspace，不在 harness 的
+    // handlers 目录里）。它一度被误判为死键，于是审批卡上这类调用同样是空摘要。
+    expect(summarizeToolArgs("workspace.apply_patch", { relPath: "src/x.ts", patch: "..." })).toBe(
+      "src/x.ts",
+    );
+    // path 仍然优先于 relPath，顺序与渲染侧保持一致
+    expect(summarizeToolArgs("workspace.edit_file", { path: "a.ts", relPath: "b.ts" })).toBe(
+      "a.ts",
+    );
+  });
 });
 
 describe("previewToolArgs", () => {
