@@ -1040,3 +1040,14 @@ return {
 **但"把 agentId 变成结构化字段"这个看起来很小的修法不成立。** 查了事件路径：`commitToolExecutionResult` 发给渲染进程的 `tool.result` 事件带的是 `tool/ok/summary/detail/provenance/...`（`detail` 由 `formatToolResultEventDetail` 从 payload 渲染成文本），**没有把 `payload` 透出去**。所以要让渲染侧拿到结构化的 `agentId`，就得给 `tool.result` 这个 RunEvent 类型加字段 —— 那是 `packages/core/src/run-events.ts` 的协议改动，牵动所有构造点，正是 §D2 里"导出 `DesktopRunEvent` 联合类型"那一大项，不是顺手能带的。
 
 **可做且有价值的是另一件事：把这条耦合钉成响的而不是哑的。** 现在改一句摘要措辞 → 子 Agent 名册**静默**失效；加一条生产者侧的契约测试（断言 `run_agent` 摘要匹配渲染侧依赖的那个正则形状，含/不含 `[agentId]` 两种），就把"静默失效"变成"改措辞就红"。这不需要动协议，成本是 `packages/harness/test/` 里的一个用例。**本轮未做**（构造 `run_agent` 处理器需要 stub launcher，上下文不足），留给下一轮首选。
+
+### 11.17 #34 已落到哪一步，以及 `createPawNextProductManifestV2/V3` 为什么不是顺手能测的
+
+**已做**：`packages/paw-next` 此前**完全在闸门之外** —— 没有 test 脚本、没有 test 目录、也不在 `test:ts` 里。现在三样都补上了，并落了 18 个用例：v1/v2/v3 三个 manifest 版本的哈希不变量（`hashPawNextProductManifestV<N>(m) === hashCanonicalJsonV1(m)`，即批次 B #6 那次收敛的回归网）、键序无关、非法值拒绝、深冻结克隆、以及 v1 的建清单确定性。`test:ts` 因此从 2842 涨到 2891 pass。
+
+**未做，且实测确认不是小活**：`createPawNextProductManifestV2/V3` 的契约测试。我尝试用构造输入驱动它们，两个都**在构造阶段就被自己的校验拒绝**，随后我把校验链读了出来：
+
+- v3 `create` 从 `:156` 开始是一条连锁校验：work-segment 策略版本 → mutation receipt 策略 → audit retry 需要 environment auditing → evidence repair 需要 single-pass → single-pass 需要 environment auditing → environment audit 策略 → long-task 策略 → audited memory 策略 → stage graph 需要 long-task Manager 模式（`:156-192`，共 9 个 `throw`）。
+- v2 的拒绝信息 "File durable JSON payload runtime policy is invalid" 不在 `product-manifest-v2.ts` 里，来自它依赖的共享校验。
+
+也就是说要驱动这两个构造函数，得先构造**完整合法的 runtime policy 输入**（策略版本常量、审计模式组合、long-task 阶段图……彼此还有相互约束）。这是那两个函数各自的契约测试，不是给现有用例补两行。所以这一轮**没有改代码**，只把校验链的位置与约束记在这里；下一步若要覆盖它们，应从 `CreatePawNextProductManifestInputV3` 的类型与那 9 个 `throw` 反推一份最小合法输入，而不是继续试错。
