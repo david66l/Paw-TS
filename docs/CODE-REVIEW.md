@@ -1708,7 +1708,7 @@ for (const payload of payloads) { /* 各自的解析与发射，未改动 */ }
 | # | 状态 | 下一步（具体动作） | 已探明的前置 / 坑 |
 |---|---|---|---|
 | 17 | 部分：只统一了 `releaseTransition` | 决定是否改那条被钉住的用例，或保留分歧并写清理由 | **§R3 的修法照抄不成立**：`runtime/test/session-execution-lease.test.ts:127` 正是断言 `linearizeJournalBatch` 的裸抛。要看 `file-run-session.ts` 的 `failClosed` 包装才能判断哪种对 |
-| 18 | 部分 | 给 `normalizeErrorCode` 加"拒绝字面量 `Error`"的守卫（小而可测） | **journal 那一半已经修好了**（§11.32）：`observation.ts:88` 现在优先读 `evidence.payload.code`，且 `runtime/test/tool-observation.test.ts:100-127` 已钉住。剩下的是 `LoopError`/settlement 携带显式 code |
+| 18 | 部分（比下表原先写的更小） | 给 `LoopError` 加显式 `code`，并让 `describeError` 填充它 | **§R4 的修法清单里已有两项落地且有用例**：`normalizeErrorCode` 拒绝字面量 `"Error"`（`observation.ts:112` 的 `GENERIC_ERROR_NAMES` + `:117` 守卫，用例在 `tool-observation.test.ts:85`，断言回落到 `E_TOOL_FAILED`）；`observation.ts` 优先读 `evidence.payload.code`（§11.32）。**真正剩下的只有第一项，而它是跨包契约改动**：`LoopError` 现在是 `{name, message}`（`agent-loop/src/contracts.ts:25`），生产中在 `agent-loop.ts:958` 的 `describeError`，消费面跨 `agent-loop` → `runtime` → `paw-next`。**不是小守卫，别当小活做**（见 §11.42） |
 | 20 | 未动 | 先立 `RunSession` 设计，再拆 `initializeRun` | 与 #25 的 `ResolutionPassState` 同类；都属于"先把状态对象立起来" |
 | 24 | 部分 | 把 `TURN_FLAG_CODECS` 从 `section` 扩展成 `{section, omitRule\|sample}` | 见 §11.37：手工 spread **无法**从现有登记表推导（缺的是逐字段的省略规则），且一致性用例只手写了 **7/22** 条 |
 | 25 | 部分（第一刀） | 设计 `ResolutionPassState`，再抽 selector 权威门 | 见 §11.21：selector 门**不自包含**，写 `selectedRefsByRequirement`、读四个上游布尔量 |
@@ -1725,3 +1725,25 @@ for (const payload of payloads) { /* 各自的解析与发射，未改动 */ }
 
 1. **验证"没有"或"不可达"时，必须穷举出口/换工具复核，不能只靠一次搜索。** 正例：§11.39 那段死代码是靠走遍循环的两个出口判定的；反例：§11.20 的 `j()`（用不递归的 glob 得出"无调用者"）与 §11.12 的两处被推翻断言。
 2. **在 `test:memory` 上做对照前必须清库，并比较失败集合而不是失败数量。** 见 §11.26：同一份代码因库状态不同会给出 3 / 5 / 8 / 11 四种失败数，单跑对照会得出错误结论（我据此误退回了一次正确的改动）。`test:ts` 侧还有一个 `fenced FileRunSession` 多进程用例会偶发失败（§11.40 观测到它在总数不变的情况下 fail→pass 翻转），比较时按**集合**看。
+
+### 11.42 我上一节的交接清单里，有一条是照着报告写的而不是照着代码写的
+
+上一条（§11.41）我给 #18 的"下一步"写的是"给 `normalizeErrorCode` 加'拒绝字面量 `Error`'的守卫（小而可测）"。本轮去读代码准备动手，发现**它已经实现了，而且已经有用例**：
+
+```ts
+// observation.ts:112
+const GENERIC_ERROR_NAMES: ReadonlySet<string> = new Set(["Error"]);
+// observation.ts:117
+if (GENERIC_ERROR_NAMES.has(normalized)) return fallback;
+```
+
+```
+tool-observation.test.ts:85  test('a bare `new Error` does not mint `errorCode: "Error"`', …)
+                             → expect.objectContaining({ errorCode: "E_TOOL_FAILED" })
+```
+
+也就是 §R4 修法清单里的三项，**有两项早已落地且有用例**（另一项是 `observation.ts` 优先读 `evidence.payload.code`，§11.32 已记）；真正剩下的只有"让 `LoopError`/settlement 携带显式 `code`"这一项 —— 而它是**跨包契约改动**：`LoopError` 现在是 `{name, message}`（`agent-loop/src/contracts.ts:25`），生产中在 `agent-loop.ts:958` 的 `describeError`，消费面跨 `agent-loop` → `runtime` → `paw-next`。**既不是小活，也不该在只剩一轮时开工。**
+
+**这条更正本身比更正的内容更重要**：§11.41 是**交接清单**，存在的意义就是让后来者不必重新核实 —— 而我写它的时候，是从报告 §R4 的措辞转写的，没有读代码。这正是本会话反复出现的那个失效模式（§11.13、§11.20、§11.29、§11.32 各记过一次），而这一次它落进了"用来防止这种错误"的那份文档里。
+
+**所以 §11.41 该怎么读**：那张表里的**证据与位置**（文件:行号、"为什么这么做不成立"）都是本会话逐条核实过的，可以信；但**"下一步"一栏是线索而不是结论** —— 动手前请先读那段代码。这一条更正就是它自己的例证：唯一一次没读代码就写下"下一步"，结果那件事已经做完了。
