@@ -997,3 +997,18 @@ bunx tsc --noEmit -p benchmarks/tsconfig.json
 **② 一个 §3「跨包同名不同义」的实证。** `\bgitCommit\b` 全仓有 10 处匹配，其中 **7 处是 `packages/memory` 里记忆记录上的 `gitCommit?: string` 字段**（提交哈希），与这个函数毫无关系。这正好是 §3 说的读者陷阱：同一个名字，一个是 git 操作函数，一个是记录字段。做 #27 的改名时可以把这一对当样板。
 
 **关于本轮的方法论教训（补 §11.13）**：上面①我在上下文将尽时连续犯了两个错 —— 先把 `GitCommitResult` 替换成了一个猜的名字（造成重复的 `GitStatusResult`），再把待删函数改写成「保留但弱化返回值」的形态（既没删掉死代码，又静默改变了它的契约）。两次都由 `git checkout --` 回滚。**结论：低上下文时不要做需要多次精确编辑的重构；先把发现写进文档，把执行留给状态更好的下一轮。**
+
+### 11.15 §A4-A 的"两条路径守卫不同"：结构差异属实，但报告给的修法落不了地
+
+已核实的一半：
+
+| 路径 | 守卫 |
+| --- | --- |
+| `action-handlers.ts:495-499` | `nativeToolTurn.calls.length === results.length` **且** `nativeToolTurn.calls.every((call, index) => call.callId === errors[index]?.id)` —— 校验**身份**对齐 |
+| `tool-runner.ts:1248-1252` | `nativeTurn.calls.length === calls.length && calls.length === modelFacingResults.length` —— **只校验长度** |
+
+两条路径随后都做同一件事：按**下标**把 `nativeTurn.calls[index].callId` 盖到结果上（`action-handlers.ts:500-504`、`tool-runner.ts:1253-1257`）。所以身份校验正是让那个下标覆盖安全的前提 —— 这一点报告说得对。
+
+**但报告建议的修法（把同一条 `callId` 对齐检查搬过去）在这里无法照抄**：`tool-runner` 侧的 `calls` 类型是 `AgentToolCallAction`，定义为 `{ type, tool, args }`（`packages/core/src/actions.ts:36-42`）—— **它根本没有 id 字段**，因此无法与 `nativeTurn.calls[index].callId` 做身份比对。`action-handlers` 能用 `errors[index]?.id`，是因为那边的 `errors` 来自解析步骤、自带 id。
+
+所以下一步不是抄守卫，而是先回答一个问题：`ctx.nativeToolTurn` 与 `calls` 是否**由同一次解析、同一顺序**产出？若是，下标配对就是构造上安全的，报告里"顺序不同则静默错配"的后果不成立（会列入 §11.12 那类被推翻的断言）；若不是，需要的是在解析处就保留 call id，而不是加一条守卫。要判断这一点必须追 `nativeToolTurn` 的数据流，本轮上下文不足以完成，故只记录到这里，**没有改代码**。
