@@ -452,6 +452,9 @@ export class AnthropicCompatibleModel implements LanguageModel {
         }
       }
     } finally {
+      // 与 openai-compatible 同一处生命周期缺陷：提前退出时若不 `cancel()`，
+      // 被放弃的响应体会继续占着 socket。`cancel()` 幂等。
+      await reader.cancel().catch(() => {});
       reader.releaseLock();
     }
     if (!sawMessageStop && !lastFinishReason) {

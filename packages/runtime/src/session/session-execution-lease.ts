@@ -700,8 +700,9 @@ class FileLease implements FileSessionExecutionLeaseV1 {
       try {
         authority = readAuthority(this.paths, this.sessionId);
       } catch (error) {
-        this.markLost(error);
-        throw error;
+        // 与 linearizeTransition 一致：读权威/时钟失败一律走类型化错误，
+        // 不再把原始 fs 错误直接抛给调用方（同一个错误只需被 catch 一次）。
+        throw this.markLost(error);
       }
       const current = authority.current;
       if (!current || !sameClaim(current.claim, this.claim)) {
@@ -711,8 +712,9 @@ class FileLease implements FileSessionExecutionLeaseV1 {
       try {
         assertClockNotBehind(authority, now);
       } catch (error) {
-        this.markLost(error);
-        throw error;
+        // 与 linearizeTransition 一致：读权威/时钟失败一律走类型化错误，
+        // 不再把原始 fs 错误直接抛给调用方（同一个错误只需被 catch 一次）。
+        throw this.markLost(error);
       }
       if (current.released) {
         this.finishRelease();

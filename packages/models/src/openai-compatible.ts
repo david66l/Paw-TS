@@ -592,6 +592,10 @@ export class OpenAICompatibleModel implements LanguageModel {
         }
       }
     } finally {
+      // 异常路径（例如看到 done chunk 之后仍继续给数据 → 调用方抛出）会走这里。
+      // 只 `releaseLock()` 的话，锁一放开就再没人能取消这个 body 了：socket 被占住、
+      // provider 继续生成并计费。`cancel()` 幂等，正常读完再调用也安全。
+      await reader.cancel().catch(() => {});
       reader.releaseLock();
     }
     if (!sawDoneMarker && !lastFinishReason?.trim()) {

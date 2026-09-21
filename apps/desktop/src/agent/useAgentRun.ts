@@ -99,6 +99,102 @@ function lastAssistantContent(messages: readonly UiMessage[]): string {
   return "";
 }
 
+/**
+ * 把当前 UI 状态写回对应会话项（纯函数）。
+ *
+ * 仅在消息/历史实质变化时 touch `updatedAt` 并置顶，纯切换不改顺序；
+ * 会话不在列表里时补一条。`now` 由调用方传入，让本函数保持可重复求值。
+ */
+export function persistActiveSession(
+  prev: readonly ChatSession[],
+  id: string,
+  msgs: readonly UiMessage[],
+  history: readonly ConversationTurn[],
+  now: number,
+): ChatSession[] {
+  let touched = false;
+  let next: ChatSession[] = prev.map((s) => {
+    if (s.id !== id) return s;
+    const title = deriveSessionTitle(msgs, s.title || "新对话");
+    const messages = msgs.map((m) => ({ ...m, streaming: false }));
+    const hist = [...history];
+    touched =
+      !sameSessionMessages(s.messages, messages) ||
+      !sameSessionHistory(s.history, hist) ||
+      s.title !== title;
+    return {
+      ...s,
+      title,
+      messages,
+      history: hist,
+      updatedAt: touched ? now : s.updatedAt,
+    };
+  });
+  if (!next.some((s) => s.id === id)) {
+    next = [
+      {
+        id,
+        title: deriveSessionTitle(msgs),
+        messages: msgs.map((m) => ({ ...m, streaming: false })),
+        history: [...history],
+        updatedAt: now,
+      },
+      ...next,
+    ];
+  } else if (touched) {
+    const idx = next.findIndex((s) => s.id === id);
+    if (idx > 0) {
+      const item = next[idx]!;
+      next = [item, ...next.slice(0, idx), ...next.slice(idx + 1)];
+    }
+  }
+  return next;
+}
+
+/**
+ * 把「messages 变化」同步进会话项（纯函数）。
+ *
+ * 与 `persistActiveSession` 的区别是消息的 `streaming` 标记按原值保留
+ * （这里落盘的是渲染中的真实状态），并且不新建会话 —— id 必然已存在。
+ */
+export function syncActiveSessionMessages(
+  prev: readonly ChatSession[],
+  id: string,
+  messages: readonly UiMessage[],
+  history: readonly ConversationTurn[],
+  now: number,
+): ChatSession[] {
+  let touched = false;
+  let next = prev.map((s) => {
+    if (s.id !== id) return s;
+    const title = deriveSessionTitle(messages, s.title || "新对话");
+    const nextMessages = messages.map((m) => ({
+      ...m,
+      streaming: m.streaming === true,
+    }));
+    const hist = [...history];
+    touched =
+      !sameSessionMessages(s.messages, nextMessages) ||
+      !sameSessionHistory(s.history, hist) ||
+      s.title !== title;
+    return {
+      ...s,
+      title,
+      messages: nextMessages,
+      history: hist,
+      updatedAt: touched ? now : s.updatedAt,
+    };
+  });
+  if (touched) {
+    const idx = next.findIndex((s) => s.id === id);
+    if (idx > 0) {
+      const item = next[idx]!;
+      next = [item, ...next.slice(0, idx), ...next.slice(idx + 1)];
+    }
+  }
+  return next;
+}
+
 function upsertAssistant(
   prev: UiMessage[],
   assistantId: string,
@@ -236,6 +332,13 @@ export function useAgentRun() {
   const pendingUserRef = useRef<string | null>(null);
   /** 防止同一 run 重复提交 history */
   const historyCommittedRef = useRef(false);
+  /**
+   * 模型回合结束的「该沉淀 history」请求位。
+   *
+   * 置位方是 `setMessages` 的 updater（它必须保持纯），消费方是下面监听
+   * `messages` 的 effect —— updater 里不能落盘、也不能调用别的 setter。
+   */
+  const historyCommitRequestedRef = useRef(false);
   const sessionsRef = useRef(sessions);
   const activeIdRef = useRef(activeSessionId);
   const messagesRef = useRef(messages);
@@ -276,55 +379,31 @@ export function useAgentRun() {
   }, []);
 
   /**
+   * 提交一次 sessions 变更：同步 ref、落盘、更新 state。
+   *
+   * 这里刻意不用 `setSessions((prev) => …)`。updater 必须是纯函数，而会话变更
+   * 既要写 localStorage，又要在切换会话时顺带调用另外 5 个 setter、改两个 ref
+   * —— `main.tsx` 开着 `<StrictMode>`，React 在开发模式下会**故意重复调用**
+   * updater 来暴露这种不纯，副作用因此会翻倍、`Date.now()` 也会取到两个值。
+   * 所以改为从 ref 取当前值、在 handler 里算完，再把 ref 指向新值，
+   * 使同一 tick 内的连续提交仍能看见彼此的结果。
+   */
+  const commitSessions = useCallback((next: ChatSession[], activeId: string) => {
+    sessionsRef.current = next;
+    saveSessionsToStorage(next, activeId);
+    setSessions(next);
+  }, []);
+
+  /**
    * 把当前 UI 状态写回 sessions 列表中的对应项。
    * 仅在消息/历史实质变化时 touch updatedAt 并置顶；纯切换不改顺序。
    */
   const persistActiveIntoSessions = useCallback(
     (msgs: readonly UiMessage[], history: readonly ConversationTurn[]) => {
       const id = conversationIdRef.current;
-      setSessions((prev) => {
-        let touched = false;
-        let next: ChatSession[] = prev.map((s) => {
-          if (s.id !== id) return s;
-          const title = deriveSessionTitle(msgs, s.title || "新对话");
-          const messages = msgs.map((m) => ({ ...m, streaming: false }));
-          const hist = [...history];
-          touched =
-            !sameSessionMessages(s.messages, messages) ||
-            !sameSessionHistory(s.history, hist) ||
-            s.title !== title;
-          return {
-            ...s,
-            title,
-            messages,
-            history: hist,
-            updatedAt: touched ? Date.now() : s.updatedAt,
-          };
-        });
-        if (!next.some((s) => s.id === id)) {
-          next = [
-            {
-              id,
-              title: deriveSessionTitle(msgs),
-              messages: msgs.map((m) => ({ ...m, streaming: false })),
-              history: [...history],
-              updatedAt: Date.now(),
-            },
-            ...next,
-          ];
-          touched = true;
-        } else if (touched) {
-          const idx = next.findIndex((s) => s.id === id);
-          if (idx > 0) {
-            const item = next[idx]!;
-            next = [item, ...next.slice(0, idx), ...next.slice(idx + 1)];
-          }
-        }
-        saveSessionsToStorage(next, id);
-        return next;
-      });
+      commitSessions(persistActiveSession(sessionsRef.current, id, msgs, history, Date.now()), id);
     },
-    [],
+    [commitSessions],
   );
 
   const finalizeSessionMemory = useCallback((conversationId: string) => {
@@ -427,39 +506,19 @@ export function useAgentRun() {
     // run 结束时 streaming 全部翻 false → 该 effect 再触发一次，落盘一次。
     if (messages.some((m) => m.streaming)) return;
     const id = activeSessionId;
-    setSessions((prev) => {
-      let touched = false;
-      let next = prev.map((s) => {
-        if (s.id !== id) return s;
-        const title = deriveSessionTitle(messages, s.title || "新对话");
-        const nextMessages = messages.map((m) => ({
-          ...m,
-          streaming: m.streaming === true,
-        }));
-        const hist = [...historyRef.current];
-        touched =
-          !sameSessionMessages(s.messages, nextMessages) ||
-          !sameSessionHistory(s.history, hist) ||
-          s.title !== title;
-        return {
-          ...s,
-          title,
-          messages: nextMessages,
-          history: hist,
-          updatedAt: touched ? Date.now() : s.updatedAt,
-        };
-      });
-      if (touched) {
-        const idx = next.findIndex((s) => s.id === id);
-        if (idx > 0) {
-          const item = next[idx]!;
-          next = [item, ...next.slice(0, idx), ...next.slice(idx + 1)];
-        }
-      }
-      saveSessionsToStorage(next, id);
-      return next;
-    });
-  }, [messages, activeSessionId]);
+    commitSessions(
+      syncActiveSessionMessages(sessionsRef.current, id, messages, historyRef.current, Date.now()),
+      id,
+    );
+  }, [messages, activeSessionId, commitSessions]);
+
+  // `commitHistoryIfNeeded` 的副作用出口。声明在上面的 sessions 同步 effect
+  // 之后，保证顺序与旧的「updater 内调用」一致：先同步消息，再沉淀 history。
+  useEffect(() => {
+    if (!historyCommitRequestedRef.current) return;
+    historyCommitRequestedRef.current = false;
+    commitHistoryIfNeeded(lastAssistantContent(messages));
+  }, [messages, commitHistoryIfNeeded]);
 
   useEffect(() => {
     const desk = api();
@@ -619,7 +678,12 @@ export function useAgentRun() {
       if (!ev || typeof ev.type !== "string") return;
       const t = ev.type;
       if (t === "monitor.snapshot" && ev.snapshot && typeof ev.snapshot === "object") {
-        setMonitor(ev.snapshot as DesktopMonitorSnapshot);
+        // 与轮询路径同一守卫：事件与轮询是两条时间线，一次迟到的快照
+        // 会把 monitor 回退到更旧的 revision。
+        const snapshot = ev.snapshot as DesktopMonitorSnapshot;
+        setMonitor((current) =>
+          current && current.updatedAt >= snapshot.updatedAt ? current : snapshot,
+        );
         return;
       }
       if ((t === "input.accepted" || t === "input.promoted") && typeof ev.inputId === "string") {
@@ -1102,7 +1166,10 @@ export function useAgentRun() {
             }
           }
           if (ev.status === "completed" || ev.status === "await_user") {
-            commitHistoryIfNeeded(lastAssistantContent(next));
+            // 不在 updater 里调用：`commitHistoryIfNeeded` 会落盘并触发
+            // `persistActiveIntoSessions`，而 updater 必须是纯函数。
+            // 交给下面监听 messages 的 effect 在提交后执行一次。
+            historyCommitRequestedRef.current = true;
           }
           return next;
         });
@@ -1176,7 +1243,7 @@ export function useAgentRun() {
           }
         }
         if (result.status === "completed" || result.status === "await_user") {
-          commitHistoryIfNeeded(lastAssistantContent(next));
+          historyCommitRequestedRef.current = true;
         }
         return next;
       });
@@ -1351,6 +1418,7 @@ export function useAgentRun() {
             historyRef.current = [];
             pendingUserRef.current = null;
             historyCommittedRef.current = false;
+            historyCommitRequestedRef.current = false;
           } else {
             setMessages((prev) => [
               ...prev,
@@ -1392,6 +1460,7 @@ export function useAgentRun() {
       supplementalInputsRef.current.clear();
       inputIdsRef.current.clear();
       historyCommittedRef.current = false;
+      historyCommitRequestedRef.current = false;
       clearPendingInteractions();
       // 新 run：清空上一轮的变更卡与工具卡（锚点消息保留，按 content 静态渲染）
       toolBatchesRef.current = [];
@@ -1490,7 +1559,12 @@ export function useAgentRun() {
     const desk = api();
     const id = requestIdRef.current;
     if (!desk || !id) return;
-    await desk.abortRun(id);
+    // IPC 也会 reject；不接住的话就是未捕获 rejection，且界面停在「运行中」。
+    try {
+      await desk.abortRun(id);
+    } catch (e) {
+      console.warn("[abortRun]", e);
+    }
     clearPendingInteractions();
     setStatusText("已请求中止…");
   }, [clearPendingInteractions]);
@@ -1501,7 +1575,9 @@ export function useAgentRun() {
     const requestId = requestIdRef.current;
     setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
     if (desk && requestId) {
-      void desk.respondApproval({ requestId, approvalId, approved, always });
+      void desk
+        .respondApproval({ requestId, approvalId, approved, always })
+        .catch((e) => console.warn("[respondApproval]", e));
     }
     setStatusText(approved ? "已批准，继续执行…" : "已拒绝，等待 Agent 调整…");
   }, []);
@@ -1524,7 +1600,9 @@ export function useAgentRun() {
     const desk = api();
     const requestId = requestIdRef.current;
     if (desk && requestId) {
-      void desk.respondAskUser({ requestId, askId: cur.askId, answer });
+      void desk
+        .respondAskUser({ requestId, askId: cur.askId, answer })
+        .catch((e) => console.warn("[respondAskUser]", e));
     }
     setStatusText("已回答，继续执行…");
   }, []);
@@ -1591,6 +1669,7 @@ export function useAgentRun() {
     historyRef.current = [];
     pendingUserRef.current = null;
     historyCommittedRef.current = false;
+    historyCommitRequestedRef.current = false;
     clearLiveActivities();
     clearPendingInteractions();
     persistActiveIntoSessions([], []);
@@ -1604,11 +1683,7 @@ export function useAgentRun() {
     persistActiveIntoSessions(messagesRef.current, historyRef.current);
 
     const s = createEmptySession();
-    setSessions((prev) => {
-      const next = [s, ...prev.filter((x) => x.id !== s.id)];
-      saveSessionsToStorage(next, s.id);
-      return next;
-    });
+    commitSessions([s, ...sessionsRef.current.filter((x) => x.id !== s.id)], s.id);
     setActiveSessionId(s.id);
     conversationIdRef.current = s.id;
     historyRef.current = [];
@@ -1619,6 +1694,7 @@ export function useAgentRun() {
     setStatusText(hostReady ? "Agent 就绪" : "等待 Agent");
     pendingUserRef.current = null;
     historyCommittedRef.current = false;
+    historyCommitRequestedRef.current = false;
     assistantIdRef.current = null;
     streamRawRef.current = "";
     streamThinkingRef.current = "";
@@ -1629,6 +1705,7 @@ export function useAgentRun() {
     hostReady,
     finalizeSessionMemory,
     persistActiveIntoSessions,
+    commitSessions,
     clearLiveActivities,
     clearPendingInteractions,
   ]);
@@ -1655,6 +1732,7 @@ export function useAgentRun() {
       setStatusText(hostReady ? "Agent 就绪" : "等待 Agent");
       pendingUserRef.current = null;
       historyCommittedRef.current = false;
+      historyCommitRequestedRef.current = false;
       assistantIdRef.current = null;
       streamRawRef.current = "";
       streamThinkingRef.current = "";
@@ -1678,29 +1756,25 @@ export function useAgentRun() {
       if (status === "running") return;
       finalizeSessionMemory(sessionId);
 
-      setSessions((prev) => {
-        let next = prev.filter((s) => s.id !== sessionId);
-        if (next.length === 0) {
-          next = [createEmptySession()];
-        }
-        const switchingAway = conversationIdRef.current === sessionId;
-        const nextActive = switchingAway ? next[0]!.id : conversationIdRef.current;
-        saveSessionsToStorage(next, nextActive);
+      const switchingAway = conversationIdRef.current === sessionId;
+      let next = sessionsRef.current.filter((s) => s.id !== sessionId);
+      if (next.length === 0) next = [createEmptySession()];
+      // 切换动作留在 handler 里：`setSessions` 的 updater 不允许改 ref、
+      // 也不允许调用别的 setter（StrictMode 会重复执行它）。
+      const target = switchingAway ? next[0]! : undefined;
+      commitSessions(next, target?.id ?? conversationIdRef.current);
 
-        if (switchingAway) {
-          const t = next[0]!;
-          conversationIdRef.current = t.id;
-          historyRef.current = [...t.history];
-          setActiveSessionId(t.id);
-          setMessages([...t.messages]);
-          setError(null);
-          setStatus("idle");
-          setStatusText(hostReady ? "Agent 就绪" : "等待 Agent");
-        }
-        return next;
-      });
+      if (target) {
+        conversationIdRef.current = target.id;
+        historyRef.current = [...target.history];
+        setActiveSessionId(target.id);
+        setMessages([...target.messages]);
+        setError(null);
+        setStatus("idle");
+        setStatusText(hostReady ? "Agent 就绪" : "等待 Agent");
+      }
     },
-    [status, hostReady, finalizeSessionMemory],
+    [status, hostReady, finalizeSessionMemory, commitSessions],
   );
 
   /** 兼容：清空 → 当前会话消息；侧栏「新对话」用 newConversation */

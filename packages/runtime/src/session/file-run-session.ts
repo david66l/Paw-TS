@@ -465,6 +465,15 @@ export class FileRunSessionV1 implements Session<InputFactV1, DerivedDecisionV1>
         artifactFileName,
         artifactContentHash: artifactHash,
       };
+      // 故意不把这里的抛出接进 failClosed。
+      //
+      // 两个进程争同一个 head 时，输的一方可能在 `readAuthority` 上撞到赢家的
+      // 中间写入而抛出；而 `failClosed` 会执行 `close()`，把 run 目录拆掉 ——
+      // 也就是输的一方去拆赢家正在写的共享状态。这条路径保持「原样抛出、不关闭」。
+      //
+      // 注意：file-run-session-fencing 的 "two real processes on the same empty
+      // head" 在**干净基线上本身就是间歇失败**的（实测 8 次里 1 次），所以它不是
+      // 判定此处改动的干净信号。这里只是不去引入一个机制上说得通的额外风险。
       const result = await this.leaseCapability.linearizeRecoverySnapshot(input);
       if (result.status === "lost") {
         this.failClosed(
@@ -670,6 +679,7 @@ export class FileRunSessionV1 implements Session<InputFactV1, DerivedDecisionV1>
       artifactFileName,
       artifactContentHash: artifactHash,
     };
+    // 同 linearizeRecoverySnapshot：这条路径的抛出**不**接进 failClosed。
     const result = await this.leaseCapability.linearizeJournalBatch(input);
     if (result.status === "lost") {
       this.failClosed(

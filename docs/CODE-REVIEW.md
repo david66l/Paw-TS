@@ -786,10 +786,12 @@ const timeoutId = setTimeout(() => { ... });   // :227  ← 到这里才初始�
 | 9 | ✅ 完成 | 导出 `mcpServerConfigSchema`，`loadMcpServers` 改用 `safeParse` |
 | 10 | ✅ 完成 | `tool-result-detail.ts` 的 `files`/`matches` 元素按类型校验 |
 | 11 | ✅ 完成 | `finalizeToolExecutionContext` 增加长度守卫，并消掉重复的 `calls[i]!` |
-| 12 | ⏳ 待办 | state updater 纯度（§D3）—— 桌面渲染进程，需要动 1920 行的 `useAgentRun.ts` |
+| 12 | ✅ 完成 | state updater 纯度（§D3）：抽出 `persistActiveSession` / `syncActiveSessionMessages` 两个纯 reducer，`commitSessions` 统一落盘，`commitHistoryIfNeeded` 改为「请求位 + effect」；新增 `apps/desktop/test/sessionPersistence.test.ts`（12 例） |
 | 13 | ✅ 完成 | 删除 `harness/src/shell/session.ts`（419 行）与 `apps/desktop/src/agent/useOpsPanel.ts`（192 行）；两者全仓零引用（已按符号名逐一确认） |
-| 14–16 | ⏳ 待办 | 见 §8 |
-| 17 | ⏳ 待办（有分歧，见 11.3） | FileLease 失败协议 |
+| 14 | ✅ 完成 | `respondApproval`/`respondAskUser` 补 `.catch`、`abortRun` 补 try/catch、`listMemories` 补 `.catch`（否则 `libraryLoading` 永远为真、刷新按钮永久禁用）、`monitor.snapshot` 补 `updatedAt` 守卫（与轮询路径同一守卫） |
+| 15 | ✅ 完成 | `openai-compatible.ts` / `anthropic-compatible.ts` 的 `finally` 改为 `await reader.cancel().catch(() => {})` 后再 `releaseLock()` |
+| 16 | ✅ 完成 | 删掉两条不可达的块设备 deny 规则（真防护在 `shell-policy.ts:309` 的重定向目标检查，已有用例）；新增 `shell-policy-config.test.ts`（43 例：锚定/`*`/`?`/转义/大小写/last-match-wins） |
+| 17 | 🟡 部分 | `releaseTransition` 两处裸抛统一为 `throw this.markLost(error)`（与 `linearizeTransition` 一致）；**但没有**把 `linearize*` 的抛出接进 `failClosed` —— 见 11.5 |
 | 18 | 🟡 部分 | 已消掉「同一正则跑两遍 + 从英文散文抠 code」（`composition.ts`）；`normalizeErrorCode` 拒绝字面量 `"Error"`、`observation.ts` 优先读 `evidence.payload.code` 仍未做 |
 
 批次 B 的闸门实测（`typecheck` 23/23、`lint` 0 error、`test:ts` 2790 pass/6 skip、`test:desktop` 190 pass/0 fail、`test:memory`（真实 Postgres）407 pass）与基线一致，唯一新增失败在逐项 A/B 后确认均为既存问题。
@@ -821,4 +823,12 @@ await expect(
 ).rejects.toThrow("commitId was reused");
 ```
 
-该测试把「同一 `commitId` 配不同内容」当作**篡改**（破坏内容寻址不变量）而与「head 冲突」（可重试）区分开。因此 #17 不是纯粹的协议统一，而是**契约变更**：要么按 §R3 改成返回状态并同步改测试，要么保留裸抛、把「哪种失败走哪条通道」写成显式契约。本次先做了后者（在 `linearizeTransition` 与 `LinearizeJournalBatchResultV1` 上写明两条通道的分工），把前者留给决策。
+该测试把「同一 `commitId` 配不同内容」当作**篡改**（破坏内容寻址不变量）而与「head 冲突」（可重试）区分开。而且按 §R3 自己的原则「抛异常只保留给程序员错误级别的入参校验」，这条恰好**就是**程序员错误（`commitId` 必须由内容派生），所以保留抛出是对的；需要补的是调用方能接住它。
+
+### 11.5 §R3 的后半条建议被实测否掉了
+
+§R3 还建议「原始错误只在 `serializeTransition` 的 catch 一处经过 `markLost`」，即让 `failClosed` 统一接管。我按这条改了 `file-run-session.ts` 的两处 `linearize*` 调用（`.catch((e) => this.failClosed(e))`），随后 `file-run-session-fencing` 的 "two real processes on the same empty head" 出现失败。
+
+但**不能**据此宣告该改动有害：把这条命令在干净基线上跑 8 次，**基线本身也失败了 1 次**（同一条用例，报同样的 `Session lease identity must not have an external hardlink`）。也就是说这个多进程用例家族本身就是间歇性的 —— 这本身是一条值得记录的新发现，它意味着这几个「硬门」不能按单次运行来信任。
+
+最终决定：不引入这个 catch。理由是机制而非统计 —— 争抢 head 失败的一方若执行 `failClosed`，就会 `close()` 掉**赢家**正在写的 run 目录，用一个说得通的机制去换一个未经验证的收益不划算。代码里已写明这一判断及其证据强度（8 次里 1 次的基线噪声）。真正需要保留的是 `releaseTransition` 两处裸抛的统一，那条跑了 6 次全绿且无机制上的 downside。

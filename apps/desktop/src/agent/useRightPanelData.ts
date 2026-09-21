@@ -344,9 +344,22 @@ export function useRightPanelData(conversationId?: string, hostReady = false): R
       libraryLoading: true,
       libraryError: undefined,
     }));
-    void desk.listMemories({ limit: 40 }).then((r) => {
-      if (r?.requestId) pendingListReq.current = r.requestId;
-    });
+    void desk
+      .listMemories({ limit: 40 })
+      .then((r) => {
+        if (r?.requestId) pendingListReq.current = r.requestId;
+      })
+      .catch((e) => {
+        // 不接住的话 `libraryLoading` 会永远停在 true，刷新按钮就再也点不动了
+        // （RightPanel 用 !libraryLoading 作为 disabled 条件）。
+        console.warn("[listMemories]", e);
+        setMemory((prev) => ({
+          ...(prev ?? emptyMemory()),
+          libraryOk: false,
+          libraryError: e instanceof Error ? e.message : String(e),
+          libraryLoading: false,
+        }));
+      });
   }, []);
 
   useEffect(() => {

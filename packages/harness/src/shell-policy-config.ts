@@ -490,17 +490,11 @@ function builtinRules(): PolicyConfig {
             action: "ask" as const,
             reason: "ownership change",
           },
-          // 块设备覆写重定向
-          {
-            pattern: "> /dev/sd*",
-            action: "deny" as const,
-            reason: "block device overwrite",
-          },
-          {
-            pattern: "> /dev/hd*",
-            action: "deny" as const,
-            reason: "block device overwrite",
-          },
+          // 块设备覆写不在这里判定。`matchPattern` 两端都加锚（见 globToRegex），
+          // 所以 "> /dev/sd*" 只能匹配「整条命令以它开头」，而真实命令里重定向都在
+          // 命令之后（`echo x > /dev/sda`）—— 这两条规则曾经是不可达的死规则。
+          // 实际防护在 shell-policy.ts 的重定向目标检查（`/dev/sd*`、`/dev/hd*`），
+          // 用例见 shell-guard.test.ts。
         ],
       },
       read: {
