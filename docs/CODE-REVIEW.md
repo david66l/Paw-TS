@@ -648,7 +648,7 @@ setSessions((prev) => {
 - 工具参数摘要器存在两份且**键与截断长度都不同**：`apps/desktop/agent-host/tool-preview.ts:45`（键含 `file`，截断 200）vs `apps/desktop/src/agent/toolCards.ts:11-19`（键含 `relPath`，slice 120）—— 审批卡与工具卡会对同一次调用给出不同描述。
 - 工作区相对 posix 路径归一化**实现了 4 次**：`workspace/src/files/read.ts:304-305` 与**逐字节副本** `:513-514`、`workspace/src/code-index.ts:189-191`、`workspace/src/watch.ts:96`。
 - SSE 读取/解码/切分 + 工具调用累积块**复制 3 份**：`models/src/openai-compatible.ts`（循环内 ~`:458`、尾部缓冲 flush ~`:542`）、`anthropic-compatible.ts`（解码/切分部分）。
-  **更正（见 §11.11）**：报告原文说「`:630` 的工具增量循环完全不测 `isDoneMarker`，因此『我们是否见到 [DONE]』取决于载荷落在哪个缓冲区」—— 结构描述属实（循环内那条路径用 `continue` 短路终结标记，flush 路径改为逐个分支重测，而工具增量循环确实漏了判断），**但行为后果不成立**：`openai-stream-parse.ts` 对 `"[DONE]"` 只返回 `{ textDelta: "", isDoneMarker: true }`，没有 `toolCallDeltas` 字段，所以那个循环本来就恒不执行。两处副本的真实差异只是写法不一致，不是可观测的行为差异；真正剩下的工作是把它抽成共享累积器（可读性），而非修 bug。
+  **更正（见 §11.12）**：报告原文说「`:630` 的工具增量循环完全不测 `isDoneMarker`，因此『我们是否见到 [DONE]』取决于载荷落在哪个缓冲区」—— 结构描述属实（循环内那条路径用 `continue` 短路终结标记，flush 路径改为逐个分支重测，而工具增量循环确实漏了判断），**但行为后果不成立**：`openai-stream-parse.ts` 对 `"[DONE]"` 只返回 `{ textDelta: "", isDoneMarker: true }`，没有 `toolCallDeltas` 字段，所以那个循环本来就恒不执行。两处副本的真实差异只是写法不一致，不是可观测的行为差异；真正剩下的工作是把它抽成共享累积器（可读性），而非修 bug。
 
 **D9. harness 里风险最高的未测逻辑（点名）** — `severity: medium`
 - `shell-audit.ts:115`/`:177`/`:229-238`：模块级 `_flushTimer = setInterval(...)` 与按天滚动写入只有人主动调 `flushAuditLog()` 才会拆除。而 363 个测试文件里 `logShellAudit`/`flushAuditLog`/`getPendingAuditEntries` **0 引用** —— 也就是"把 shell 历史持久化"的定时器完全没测。
@@ -935,7 +935,7 @@ await expect(
 
 落地顺序：先写 `TURN_FLAG_CODECS`（`{ readonly [K in keyof TurnFlags]-?: { toCheckpoint; fromCheckpoint } }`），让编译器把 24 个字段全部点出来；再用它替换两个函数体里的手工 spread；最后删掉 `Omit` 豁免清单。**先把 `loop-control-state.test.ts` 跑一遍留基线，改完必须逐项一致。**
 
-### 11.10 #30 的成本被低估了：benchmarks 有 496 个类型错误
+### 11.11 #30 的成本被低估了：benchmarks 有 496 个类型错误
 
 §2.4 把「给 `benchmarks/` 加 tsconfig 并纳入 typecheck」估为**小**。实测不是：加上 `benchmarks/tsconfig.json`（继承 `tsconfig.base.json`，`noEmit`）后跑一次得到 **496 个 error**：
 
@@ -958,3 +958,24 @@ bunx tsc --noEmit -p benchmarks/tsconfig.json
 ```
 
 建议的推进方式：按文件修（先 `amb/paw-memory-bridge.ts`，一个文件就占 44%），每修一批就缩小 `exclude`，等降到 0 再并入 `check:ts`。不要用放宽 `strict` 的方式换一个绿 —— 那样只是把「未检查」换成「看起来检查过」。
+
+### 11.12 本报告里已被实测推翻的两条断言（不要照着改）
+
+留着这两条是为了避免后来者（包括我自己）按报告去"修"一个不存在的 bug。
+
+**① §D8 的 SSE `[DONE]` 分支。** 报告称两处副本的行为差异导致"「我们是否见到 [DONE]」取决于载荷落在哪个缓冲区"。结构描述属实（循环内那条路径 `continue` 短路，flush 路径逐个分支重测，而工具增量循环漏了判断），但**后果不成立**：解析器对 `"[DONE]"` 只返回 `{ textDelta: "", isDoneMarker: true }`，没有 `toolCallDeltas` 字段，那个循环恒不执行。加不加守卫都不可观测。守卫本身作为「写法一致 + 防御将来解析器变更」保留了，并由 `openai-stream-parse.test.ts`（3 例）钉住它依赖的不变量。
+
+**② §D8 里 `summarizeToolArgs` 的"两侧键表分叉"。** 真实缺陷只有一个方向：**审批卡**漏了 `pattern`（`glob`/`grep`/`search` 的参数只有它），于是这些调用在审批卡上是空摘要。这一点已修（`cb172e4`），并有 4 个用例覆盖。而 `relPath`：报告把它当作分叉的证据，实际上**没有任何工具把它当参数发出** —— `workspace.apply_patch` 的参数是 `patch`，其中的 `relPath` 是 `patch-tools.ts:122-126` 解析 diff 后**派生**的字段。渲染侧键表里的 `relPath` 只是防御性条目，审批卡侧同样保留它只为两侧一致。
+
+### 11.13 一条方法论：断言"不存在"之前先证明搜索范围
+
+本次会话里我自己犯的四个错误，有同一个形状 —— 用**范围未经验证**的检索去断言某物不存在：
+
+| 断言 | 实际情况 |
+| --- | --- |
+| 「这些块的自由标识符只有 2–15 个」 | `ts.forEachChild(node.expression, visit)` 从不访问 `node.expression` 本身，`ctx.foo` / `rec.bar` 的基名全被漏掉 |
+| 「守卫修掉了一个行为缺陷」 | 解析器构造终结标记时根本没有那些字段 |
+| 「`relPath` 是死键」 | 只 grep 了 `packages/harness/src/registry/handlers/`，而 `relPath` 相关代码在 `packages/workspace` |
+| 「`relPath` 是活的，审批卡因此漏了它」 | 反过来过度纠正：把「派生字段」与「单元测试里的合成对象」当成了"有工具发出它"的证据 |
+
+代价是 4 个来回。规矩很简单：**说"没有"之前，先说明你搜了哪里、为什么那个范围是完备的。** 静态扫描给出的是「在我看的地方没找到」，不是「不存在」。
