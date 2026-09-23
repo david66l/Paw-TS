@@ -143,7 +143,7 @@ DATABASE_URL=postgresql:///paw_memory_test bun run legacy/apps/cli/src/main.ts e
 | `packages/memory/src/project/` | 项目指令（PAW/CLAUDE） |
 | `packages/memory/src/compat/` | 旧 MD 读写（仅迁移用） |
 | `packages/agent/src/orchestrator.ts` | 在线路径走 MemoryRuntime（默认 v2） |
-| `packages/harness` | `memory.*` 工具走 Runtime |
+| `packages/tools` | `memory.*` 工具走 Runtime |
 
 ### `packages/memory/src` 目录（按职责拆分，避免单夹文件过多）
 

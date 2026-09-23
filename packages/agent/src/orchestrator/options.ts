@@ -15,8 +15,8 @@ import type {
   SkillRegistry as SkillRegistryType,
   TodoStore,
 } from "@paw/core";
-import type { McpServerConfig, SubAgentLauncher } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
+import type { McpServerConfig, SubAgentLauncher } from "@paw/tools";
 import type { WorkspaceWatcher } from "@paw/workspace";
 import type { CandidateReviewer } from "../candidate-review.js";
 import type { ToolEffectPolicy, ToolExecutionPolicy } from "../execution-policy.js";
@@ -78,7 +78,7 @@ export interface AgentOrchestratorOptions {
   /** MEA 独立审计配置（off/shadow/enforce）；仅顶层运行启用，子运行不继承。 */
   readonly meaAuditor?: MeaAuditorConfig;
   /** 并行子 Agent 的文件锁（仅子 Agent orchestrator 注入；root 不传） */
-  readonly fileLock?: import("@paw/harness").FileLockLike;
+  readonly fileLock?: import("@paw/tools").FileLockLike;
   /** 应用状态存储：用于断点续跑（resume） */
   readonly appStateStore?: AppStateStore;
   /** Skill 注册表 */
@@ -138,7 +138,7 @@ export interface AgentOrchestratorOptions {
   /** 身份/人设附加段（如狸花 body） */
   readonly agentIdentityText?: string;
   /** create_agent 工具实现（写盘 + registry） */
-  readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
+  readonly createAgent?: import("@paw/tools").HarnessContext["createAgent"];
   /** P5.1 侧信道 monitor 配置（采样率/冷却/预算软启动，测试可注入） */
   readonly monitorOptions?: import("@paw/core").ContextMonitorOptions;
   /** Trusted, task-scoped policy checked before tool side effects. */
@@ -148,7 +148,7 @@ export interface AgentOrchestratorOptions {
   /** Trusted completion authority; defaults to local verification. */
   readonly verificationPolicy?: VerificationPolicy;
   /** Trusted execution environment override; workspace settings are the fallback. */
-  readonly shellSandbox?: import("@paw/harness").ShellSandboxConfig;
+  readonly shellSandbox?: import("@paw/tools").ShellSandboxConfig;
   /** Independent semantic review before completing a mutated task. */
   readonly candidateReviewer?: CandidateReviewer;
   /** Independent one-call review model used only by explicit loop v2. */

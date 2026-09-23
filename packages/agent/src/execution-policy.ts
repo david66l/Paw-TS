@@ -1,4 +1,4 @@
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 
 /** Trusted, caller-supplied policy evaluated before any tool side effect. */
 

@@ -3,9 +3,9 @@ import {
   createCollaborationToolPluginV1,
   parseCollaborationDelegationPlanV1,
 } from "@paw/collaboration";
-import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
 import type { InputFactV1 } from "@paw/protocol";
 import type { RuntimeToolPluginV1 } from "@paw/runtime";
+import type { SubAgentLauncher, SubAgentResult } from "@paw/tools";
 import { fingerprintAuditFile } from "./environment-audit.js";
 import { STAGE_GRAPH_POLICY_V1, STAGE_GRAPH_PROMPT, parseStageLinks } from "./stage-graph.js";
 

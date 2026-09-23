@@ -2,7 +2,7 @@
  * 工具名短写 → 完整 workspace.* / memory.* 名。
  */
 
-import { listToolNames } from "@paw/harness";
+import { listToolNames } from "@paw/tools";
 
 const ALIASES: Record<string, string> = {
   read_file: "workspace.read_file",

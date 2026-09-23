@@ -31,7 +31,7 @@ import {
   type ShellSandboxConfig,
   type ShellSandboxMode,
   type ShellSandboxNetwork,
-} from "@paw/harness";
+} from "@paw/tools";
 
 import { readSetting } from "./settings.js";
 

@@ -1,4 +1,4 @@
-import type { SubAgentLaunchOptions, SubAgentLauncher, SubAgentResult } from "@paw/harness";
+import type { SubAgentLaunchOptions, SubAgentLauncher, SubAgentResult } from "@paw/tools";
 
 import {
   type CollaborationPolicyV1,

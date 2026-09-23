@@ -18,9 +18,9 @@ import {
   pruneToolResults,
   shouldCompactHistory,
 } from "@paw/core";
-import { resetPolicyConfig } from "@paw/harness";
 import { SessionMemoryStore } from "@paw/memory";
 import { FakeLanguageModel } from "@paw/models";
+import { resetPolicyConfig } from "@paw/tools";
 import { runCompressionAgent } from "../src/compression-agent.js";
 import { cleanup, tmpDir } from "./fixtures.js";
 

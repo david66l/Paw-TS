@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { InMemoryAppStateStore, type RunEventEnvelope, type SessionStore } from "@paw/core";
-import { CORE_MODEL_EXECUTABLE_TOOLS, resetPolicyConfig } from "@paw/harness";
 import { FakeLanguageModel } from "@paw/models";
+import { CORE_MODEL_EXECUTABLE_TOOLS, resetPolicyConfig } from "@paw/tools";
 
 import type { LoopV2ShadowReport } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";

@@ -3,8 +3,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { CostTracker, type RunEventEnvelope } from "@paw/core";
-import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
 import { FakeLanguageModel } from "@paw/models";
+import type { SubAgentLauncher, SubAgentResult } from "@paw/tools";
 import {
   type CandidateReviewInput,
   type CandidateReviewer,

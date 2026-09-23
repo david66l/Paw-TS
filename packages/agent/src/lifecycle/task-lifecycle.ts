@@ -3,7 +3,7 @@
  */
 
 import type { RunResult } from "@paw/core";
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 import type { TaskState } from "../task-state.js";
 import { formatTaskStateForContext } from "../task-state.js";
 import { type AcceptanceGateDecision, checkAcceptanceCriteria } from "./acceptance-gate.js";

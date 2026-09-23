@@ -1,4 +1,9 @@
 import type { ControlReducer, LoopControlState } from "@paw/agent-loop";
+import type {
+  InputFactV1,
+  RuntimeActivitySettledFactV1,
+  RuntimeActivityStartedFactV1,
+} from "@paw/protocol";
 import {
   MANAGED_JOB_SCHEMA_V1,
   type ManagedJobReadV1,
@@ -7,12 +12,7 @@ import {
   type ManagedJobWaitV1,
   type ShellSandboxConfig,
   startManagedShellInWorkspaceV1,
-} from "@paw/harness";
-import type {
-  InputFactV1,
-  RuntimeActivitySettledFactV1,
-  RuntimeActivityStartedFactV1,
-} from "@paw/protocol";
+} from "@paw/tools";
 
 export const MANAGED_JOB_ACTIVITY_KIND_V1 = "managed_job" as const;
 

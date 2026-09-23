@@ -1,5 +1,5 @@
 import { extractCheckpointTargets } from "@paw/core";
-import { APPLY_PATCH } from "@paw/harness";
+import { APPLY_PATCH } from "@paw/tools";
 
 import type { RuntimeToolPluginV1, ToolClassificationV1 } from "./registry.js";
 import {

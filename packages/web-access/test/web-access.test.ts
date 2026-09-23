@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { WEBFETCH, WEBSEARCH, type WebAccessServiceV1, executeTool } from "@paw/harness";
 import { createFrozenToolRegistryV1 } from "@paw/runtime";
+import { WEBFETCH, WEBSEARCH, type WebAccessServiceV1, executeTool } from "@paw/tools";
 
 import {
   type PublicWebTransportV1,

@@ -11,7 +11,7 @@ Repo-local overview for reviewers and implementers.
 - **Platform**:
   - `packages/core` — sessions, context compression, events, system prompt
   - `packages/memory` — MemoryRuntime + Postgres modules (and legacy file store)
-  - `packages/harness` — tools, MCP, shell guard
+  - `packages/tools` — tools, MCP, shell guard
   - `packages/workspace` — file / git / LSP / code-index
   - `packages/models` — LLM adapters
   - `packages/settings` — local config

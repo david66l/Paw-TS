@@ -2,7 +2,6 @@ import path from "node:path";
 
 import type { ToolBatchOptions, ToolExecutor, ToolSettlement } from "@paw/agent-loop";
 import type { ToolDefinition } from "@paw/core";
-import type { ToolRunResult } from "@paw/harness";
 import type { MemoryEntry } from "@paw/memory/longterm";
 import {
   type RuntimeToolCallV1,
@@ -10,6 +9,7 @@ import {
   type RuntimeToolPluginV1,
   canonicalRuntimeResourcePathV1,
 } from "@paw/runtime";
+import type { ToolRunResult } from "@paw/tools";
 
 import { canonicalJsonStringifyV1, hashCanonicalJsonV1, hashTextV1 } from "./canonical.js";
 import type { MemoryContextResolverV1, MemoryResolvedContextPacketV1 } from "./context-resolver.js";

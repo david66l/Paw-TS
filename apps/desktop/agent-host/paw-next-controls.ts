@@ -17,11 +17,11 @@ export class DesktopNextControls {
   managedJobs(runId: string, jobs: ManagedJobs) {
     this.jobs.set(runId, jobs);
   }
-  onJobSnapshot?: (runId: string, job: import("@paw/harness").ManagedJobReadV1) => void;
+  onJobSnapshot?: (runId: string, job: import("@paw/tools").ManagedJobReadV1) => void;
   refreshJobs() {
     const result: {
       runId: string;
-      job: import("@paw/harness").ManagedJobReadV1;
+      job: import("@paw/tools").ManagedJobReadV1;
     }[] = [];
     for (const [runId, jobs] of this.jobs) {
       try {

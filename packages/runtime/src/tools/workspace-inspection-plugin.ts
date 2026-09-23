@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { GIT_DIFF, GIT_LOG, GIT_STATUS, GLOB, LIST, SEARCH } from "@paw/harness";
+import { GIT_DIFF, GIT_LOG, GIT_STATUS, GLOB, LIST, SEARCH } from "@paw/tools";
 
 import type { RuntimeToolPluginV1, ToolClassificationV1 } from "./registry.js";
 import {

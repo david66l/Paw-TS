@@ -1,9 +1,9 @@
 import path from "node:path";
 import { FileSystemAppStateStore, findPawRoot, isAppStateFinished } from "@paw/core";
 import type { RunEventEnvelope, RunResult } from "@paw/core";
-import type { McpServerConfig } from "@paw/harness";
 import { SessionMemoryStore } from "@paw/memory";
 import { defaultSettingsPath, loadPawSettingsLocal, redactSettingsForDisplay } from "@paw/settings";
+import type { McpServerConfig } from "@paw/tools";
 import { listWorkspaceFiles, readWorkspaceFile } from "@paw/workspace";
 import { createTemporaryWorktree } from "@paw/workspace";
 import { createRunOrchestrator } from "./orchestrator-factory.js";

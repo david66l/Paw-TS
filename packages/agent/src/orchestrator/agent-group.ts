@@ -15,7 +15,7 @@
 
 import type { RunEvent, RunEventEnvelope } from "@paw/core";
 import type { AgentToolCallAction } from "@paw/core";
-import type { SubAgentLauncher } from "@paw/harness";
+import type { SubAgentLauncher } from "@paw/tools";
 import type { WorkspaceWatcher } from "@paw/workspace";
 import { parseRunAgentMaxSteps } from "./agent-args.js";
 import { MULTI_AGENT_LIMITS, PARENT_FORWARD_EVENTS } from "./constants.js";

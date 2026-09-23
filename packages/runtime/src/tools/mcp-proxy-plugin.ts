@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { MCP_PROXY } from "@paw/harness";
+import { MCP_PROXY } from "@paw/tools";
 
 import type { RuntimeToolPluginV1, ToolClassificationV1 } from "./registry.js";
 import {

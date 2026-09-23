@@ -10,7 +10,7 @@ import {
   type RunEvent,
   type RunEventEnvelope,
 } from "@paw/core";
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 
 import { executeToolBatchV2 } from "../src/loop-v2/index.js";
 import { AgentOrchestrator } from "../src/orchestrator.js";

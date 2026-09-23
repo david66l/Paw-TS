@@ -7,7 +7,6 @@ import {
   parseCommandChain,
   projectWorkspaceEffect,
 } from "@paw/core";
-import { ACCEPTANCE_UPDATE, toolDefinitions } from "@paw/harness";
 import type { InputFactV1, ToolCallObservedFactV1 } from "@paw/protocol";
 import {
   type JournalContextAnnotationV1,
@@ -16,6 +15,7 @@ import {
   canonicalRuntimeResourcePathV1,
   projectLatestWorkSegmentBoundaryV1,
 } from "@paw/runtime";
+import { ACCEPTANCE_UPDATE, toolDefinitions } from "@paw/tools";
 
 export const DELIVERY_LEDGER_PLUGIN_V1 = "paw.delivery-ledger";
 const TOOL = "workspace_acceptance_update";

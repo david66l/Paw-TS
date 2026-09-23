@@ -5,7 +5,7 @@ import { SkillRegistry } from "@paw/core";
 import { executeTool } from "../src/registry/index.js";
 
 /**
- * `workspace.run_skill` 在 `packages/harness/test` 里此前 **0 命中**
+ * `workspace.run_skill` 在 `packages/tools/test` 里此前 **0 命中**
  * （docs/CODE-REVIEW.md §D9）。它此前没有任何用例，尽管它是把技能提示词注入
  * 会话的唯一入口 —— 注入错了就是模型照着错的东西干活。
  *

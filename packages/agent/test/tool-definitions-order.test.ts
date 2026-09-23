@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { toolDefinitions } from "@paw/harness";
+import { toolDefinitions } from "@paw/tools";
 
 describe("P5.2 前缀稳定完整版：工具定义固定顺序", () => {
   test("内置工具按名称排序（确定性 schema 顺序，避免迭代抖动破坏缓存）", () => {

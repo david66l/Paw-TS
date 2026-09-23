@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import type { ShellSandboxConfig } from "@paw/harness";
 import { AnthropicCompatibleModel, OpenAICompatibleModel } from "@paw/models";
 import {
   type FrozenPermissionConfigV1,
@@ -11,6 +10,7 @@ import {
   type SessionLeaseHeartbeatPolicyV1,
   freezeSessionLeaseHeartbeatPolicyV1,
 } from "@paw/runtime";
+import type { ShellSandboxConfig } from "@paw/tools";
 
 import type { RunExistingPawNextTaskOptionsV1 } from "./composition.js";
 import type { PawNextProductProfileIdentityV1 } from "./product-manifest.js";

@@ -16,7 +16,7 @@ export {
   parseAgentActionFromModelText,
   parseAgentActionsFromModelText,
 } from "./parse-agent-action.js";
-export type { McpServerConfig, McpToolRef, McpCallResult } from "@paw/harness";
+export type { McpServerConfig, McpToolRef, McpCallResult } from "@paw/tools";
 export {
   DefaultSubAgentLauncher,
   type DefaultSubAgentLauncherOptions,

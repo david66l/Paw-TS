@@ -26,7 +26,6 @@
         "@opentelemetry/sdk-trace-base": "^2.11.0",
         "@paw/agent": "workspace:*",
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/memory": "workspace:*",
         "@paw/memory-plugin": "workspace:*",
         "@paw/models": "workspace:*",
@@ -34,6 +33,7 @@
         "@paw/protocol": "workspace:*",
         "@paw/runtime": "workspace:*",
         "@paw/settings": "workspace:*",
+        "@paw/tools": "workspace:*",
         "lucide-react": "^1.41.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -57,11 +57,11 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/memory": "workspace:*",
         "@paw/models": "workspace:*",
         "@paw/settings": "workspace:*",
         "@paw/store": "workspace:*",
+        "@paw/tools": "workspace:*",
         "@paw/workspace": "workspace:*",
         "diff": "^9.0.0",
       },
@@ -81,9 +81,9 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/protocol": "workspace:*",
         "@paw/runtime": "workspace:*",
+        "@paw/tools": "workspace:*",
         "@paw/workspace": "workspace:*",
       },
     },
@@ -102,9 +102,9 @@
       "dependencies": {
         "@paw/agent-loop": "workspace:*",
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/protocol": "workspace:*",
         "@paw/runtime": "workspace:*",
+        "@paw/tools": "workspace:*",
       },
     },
     "packages/core": {
@@ -112,15 +112,6 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/protocol": "workspace:*",
-      },
-    },
-    "packages/harness": {
-      "name": "@paw/harness",
-      "version": "0.0.1",
-      "dependencies": {
-        "@paw/core": "workspace:*",
-        "@paw/workspace": "workspace:*",
-        "unbash": "^3.0.0",
       },
     },
     "packages/memory": {
@@ -152,11 +143,11 @@
       "dependencies": {
         "@paw/agent-loop": "workspace:*",
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/memory": "workspace:*",
         "@paw/memory-core": "workspace:*",
         "@paw/protocol": "workspace:*",
         "@paw/runtime": "workspace:*",
+        "@paw/tools": "workspace:*",
       },
     },
     "packages/model-output-recovery": {
@@ -183,9 +174,9 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/protocol": "workspace:*",
         "@paw/runtime": "workspace:*",
+        "@paw/tools": "workspace:*",
       },
     },
     "packages/paw-next": {
@@ -198,7 +189,6 @@
         "@paw/completion-review": "workspace:*",
         "@paw/context-compaction": "workspace:*",
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/memory-plugin": "workspace:*",
         "@paw/model-output-recovery": "workspace:*",
         "@paw/models": "workspace:*",
@@ -208,6 +198,7 @@
         "@paw/runtime": "workspace:*",
         "@paw/settings": "workspace:*",
         "@paw/task-progress": "workspace:*",
+        "@paw/tools": "workspace:*",
         "@paw/web-access": "workspace:*",
         "@paw/workspace": "workspace:*",
         "playwright": "^1.62.1",
@@ -233,8 +224,8 @@
       "dependencies": {
         "@paw/agent-loop": "workspace:*",
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/protocol": "workspace:*",
+        "@paw/tools": "workspace:*",
         "@paw/workspace": "workspace:*",
       },
     },
@@ -255,9 +246,18 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/protocol": "workspace:*",
         "@paw/runtime": "workspace:*",
+        "@paw/tools": "workspace:*",
+      },
+    },
+    "packages/tools": {
+      "name": "@paw/tools",
+      "version": "0.0.1",
+      "dependencies": {
+        "@paw/core": "workspace:*",
+        "@paw/workspace": "workspace:*",
+        "unbash": "^3.0.0",
       },
     },
     "packages/web-access": {
@@ -265,8 +265,8 @@
       "version": "0.0.1",
       "dependencies": {
         "@paw/core": "workspace:*",
-        "@paw/harness": "workspace:*",
         "@paw/runtime": "workspace:*",
+        "@paw/tools": "workspace:*",
       },
     },
     "packages/workspace": {
@@ -455,8 +455,6 @@
 
     "@paw/desktop": ["@paw/desktop@workspace:apps/desktop"],
 
-    "@paw/harness": ["@paw/harness@workspace:packages/harness"],
-
     "@paw/memory": ["@paw/memory@workspace:packages/memory"],
 
     "@paw/memory-core": ["@paw/memory-core@workspace:packages/memory-core"],
@@ -482,6 +480,8 @@
     "@paw/store": ["@paw/store@workspace:packages/store"],
 
     "@paw/task-progress": ["@paw/task-progress@workspace:packages/task-progress"],
+
+    "@paw/tools": ["@paw/tools@workspace:packages/tools"],
 
     "@paw/web-access": ["@paw/web-access@workspace:packages/web-access"],
 

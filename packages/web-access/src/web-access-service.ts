@@ -1,4 +1,4 @@
-import type { WebAccessServiceV1, WebFetchPayloadV1, WebSearchPayloadV1 } from "@paw/harness";
+import type { WebAccessServiceV1, WebFetchPayloadV1, WebSearchPayloadV1 } from "@paw/tools";
 
 import {
   DEFAULT_WEB_ACCESS_POLICY_V1,

@@ -14,7 +14,7 @@
     "@paw/completion-review": "workspace:*",
     "@paw/context-compaction": "workspace:*",
     "@paw/core": "workspace:*",
-    "@paw/harness": "workspace:*",
+    "@paw/tools": "workspace:*",
     "@paw/memory-plugin": "workspace:*",
     "@paw/model-output-recovery": "workspace:*",
     "@paw/models": "workspace:*",

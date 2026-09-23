@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
 import type { InputFactV1, JsonValue, RuntimeActivitySettledFactV1 } from "@paw/protocol";
+import type { SubAgentLauncher, SubAgentResult } from "@paw/tools";
 
 import {
   COLLABORATION_COORDINATOR_POLICY_VERSION_V1,

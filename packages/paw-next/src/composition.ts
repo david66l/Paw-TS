@@ -119,26 +119,6 @@ import {
   projectWorkspaceEffect,
   resolveEstimatorForModel,
 } from "@paw/core";
-import type {
-  ShellSandboxConfig,
-  SubAgentCommandEvidenceV1,
-  SubAgentLauncher,
-  SubAgentOutcomeV1,
-  SubAgentResult,
-  ToolRunResult,
-} from "@paw/harness";
-import {
-  EDIT,
-  JOB_KILL,
-  JOB_LIST,
-  JOB_READ,
-  JOB_START,
-  JOB_WAIT,
-  McpClientManager,
-  READ,
-  SHELL,
-  WRITE,
-} from "@paw/harness";
 import {
   type MemoryAtomWriterStoreV1,
   type MemoryContextResolverV1,
@@ -298,6 +278,26 @@ import {
   createTaskProgressServiceV1,
   createTaskProgressToolPluginV1,
 } from "@paw/task-progress";
+import type {
+  ShellSandboxConfig,
+  SubAgentCommandEvidenceV1,
+  SubAgentLauncher,
+  SubAgentOutcomeV1,
+  SubAgentResult,
+  ToolRunResult,
+} from "@paw/tools";
+import {
+  EDIT,
+  JOB_KILL,
+  JOB_LIST,
+  JOB_READ,
+  JOB_START,
+  JOB_WAIT,
+  McpClientManager,
+  READ,
+  SHELL,
+  WRITE,
+} from "@paw/tools";
 import {
   WEB_ACCESS_TOOL_PLUGIN_ID_V1,
   createWebAccessServiceV1,
@@ -386,10 +386,7 @@ export interface RunFreshPawNextTaskOptionsV1 {
     runId: string,
     jobs: Pick<RuntimeManagedJobControllerV1, "list" | "peek" | "kill">,
   ) => void;
-  readonly onManagedJobUpdate?: (
-    runId: string,
-    job: import("@paw/harness").ManagedJobReadV1,
-  ) => void;
+  readonly onManagedJobUpdate?: (runId: string, job: import("@paw/tools").ManagedJobReadV1) => void;
   readonly initialAttachments?: readonly InputAttachmentV1[];
   readonly onLiveInputReady?: (input: PawNextLiveInputV1) => void;
   readonly onChildControl?: (child: PawNextChildControlV1) => void;

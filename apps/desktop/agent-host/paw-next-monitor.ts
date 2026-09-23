@@ -1,6 +1,6 @@
-import type { ManagedJobReadV1, SubAgentResult } from "@paw/harness";
 import type { StageGraphSnapshot } from "@paw/paw-next";
 import type { RunJournalEnvelopeV1 } from "@paw/protocol";
+import type { ManagedJobReadV1, SubAgentResult } from "@paw/tools";
 import type { DesktopMonitorSnapshot, MonitorTask } from "../src/agent/monitorTypes.js";
 const record = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};

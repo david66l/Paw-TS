@@ -1,5 +1,5 @@
-import type { ShellSandboxConfig } from "@paw/harness";
-import { runShellInWorkspace } from "@paw/harness";
+import type { ShellSandboxConfig } from "@paw/tools";
+import { runShellInWorkspace } from "@paw/tools";
 
 import {
   type TestMapEntryV1,

@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { CostTracker, FileSystemSessionStore, type RunEventEnvelope } from "@paw/core";
-import { McpClientManager, type McpServerConfig } from "@paw/harness";
 import { resolveScope } from "@paw/memory";
 import { type MemoryKind, PostgresMemoryStoreEngine } from "@paw/memory/longterm";
 import { type LanguageModel, createDefaultLanguageModel } from "@paw/models";
@@ -30,6 +29,7 @@ import {
   createToolCheckpointNamespaceIdV1,
 } from "@paw/runtime";
 import { type PawSettingsLocal, defaultSettingsPath, loadPawSettingsLocal } from "@paw/settings";
+import { McpClientManager, type McpServerConfig } from "@paw/tools";
 import { PAW_INCREMENTAL_VERIFICATION_GUIDANCE } from "./agent-system-prompt.js";
 import { type CloudRunTelemetry, desktopCloudTelemetry } from "./cloud-telemetry.js";
 import type { DesktopNextControls } from "./paw-next-controls.js";

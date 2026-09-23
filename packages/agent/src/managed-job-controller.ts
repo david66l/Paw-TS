@@ -12,7 +12,7 @@ import {
   type ShellSandboxConfig,
   type ToolRunResult,
   startManagedShellInWorkspaceV1,
-} from "@paw/harness";
+} from "@paw/tools";
 
 import type { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import type { ToolEffectPolicy, ToolExecutionPolicy } from "./execution-policy.js";

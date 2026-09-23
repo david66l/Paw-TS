@@ -1,4 +1,4 @@
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 
 const CONTROL_PLANE_CODES = new Set([
   "E_LOOP_POLICY",

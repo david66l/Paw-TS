@@ -6,7 +6,7 @@ import {
   MCP_PROXY,
   toolDefinitions,
   toolNameReverseMap,
-} from "@paw/harness";
+} from "@paw/tools";
 
 import { resolveCapabilitySetV1 } from "../src/capability-set.js";
 import { executeToolCalls } from "../src/orchestrator/tool-runner.js";

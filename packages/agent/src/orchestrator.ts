@@ -141,7 +141,7 @@ import {
 } from "./loop-v2/index.js";
 
 // ─────────────────────────────────────────────────────────────
-// @paw/harness：执行层 — MCP 客户端、工具定义、Shell 沙箱
+// @paw/tools：执行层 — MCP 客户端、工具定义、Shell 沙箱
 // ─────────────────────────────────────────────────────────────
 import {
   McpClientManager,
@@ -150,7 +150,7 @@ import {
   runShellInWorkspace,
   toolDefinitions,
   toolNameReverseMap,
-} from "@paw/harness";
+} from "@paw/tools";
 import type { MeaAuditorConfig } from "./mea/index.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -3529,7 +3529,7 @@ export class AgentOrchestrator {
     emitRunMetrics: () => void;
     seq: { n: number };
     checkpointSeq: { n: number };
-    shellSandbox: import("@paw/harness").ShellSandboxConfig;
+    shellSandbox: import("@paw/tools").ShellSandboxConfig;
   }> {
     const runId = spec.runId;
     this._interactionState = parseWaitingUserInteractionV1(spec.resumeFromState?.interaction);

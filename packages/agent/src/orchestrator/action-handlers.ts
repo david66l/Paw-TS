@@ -31,8 +31,8 @@ import type {
   TodoStore,
   WaitingUserInteractionV1,
 } from "@paw/core";
-import type { ToolRunResult } from "@paw/harness";
 import type { TaskPlanner } from "@paw/store";
+import type { ToolRunResult } from "@paw/tools";
 import { candidateReviewInput, candidateSummaryFingerprint } from "../candidate-review.js";
 import { createWaitingUserInteractionV1 } from "../durable-interaction.js";
 import type { ToolEffectPolicy, ToolExecutionPolicy } from "../execution-policy.js";
@@ -128,7 +128,7 @@ interface ActionHandlerContext {
   readonly meaParentRunId?: string;
   /** 子 Agent 权限策略：read_only 或 read_write */
   readonly childPolicy?: "read_only" | "read_write";
-  readonly subAgentLauncher?: import("@paw/harness").SubAgentLauncher;
+  readonly subAgentLauncher?: import("@paw/tools").SubAgentLauncher;
   readonly skillRegistry?: SkillRegistry;
   readonly watcher?: import("@paw/workspace").WorkspaceWatcher;
   readonly evalHooks?: EvalHooks;
@@ -136,9 +136,9 @@ interface ActionHandlerContext {
   readonly memoryTaskId?: string;
   /** Publish a bounded retrieval result into request-only HostState memory. */
   readonly publishMemoryHint?: (content?: string) => void;
-  readonly createAgent?: import("@paw/harness").HarnessContext["createAgent"];
+  readonly createAgent?: import("@paw/tools").HarnessContext["createAgent"];
   /** 并行子 Agent 的文件锁（仅子 Agent 注入） */
-  readonly fileLock?: import("@paw/harness").FileLockLike;
+  readonly fileLock?: import("@paw/tools").FileLockLike;
   readonly toolExecutionPolicy?: ToolExecutionPolicy;
   readonly toolEffectPolicy?: ToolEffectPolicy;
 }

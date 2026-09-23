@@ -2,14 +2,6 @@ import path from "node:path";
 import { projectMutationReceiptV1 } from "./mutation-receipt.js";
 export { MUTATION_RECEIPT_POLICY_V1 } from "./mutation-receipt.js";
 import { type ToolDefinition, canonicalJsonStringifyV1 } from "@paw/core";
-import {
-  CONTEXT_RECALL,
-  type PayloadRecallRequestV1,
-  type PayloadRecallServiceV1,
-  type ToolRunResult,
-  toolDefinitions,
-  validateToolArguments,
-} from "@paw/harness";
 import type { JsonValue, RunJournalEnvelopeV1 } from "@paw/protocol";
 import {
   type RuntimeToolPluginEntryV1,
@@ -20,6 +12,14 @@ import {
   projectCanonicalDurableJsonPayloadBindingsV1,
   projectCanonicalSessionInputSnapshotV1,
 } from "@paw/runtime";
+import {
+  CONTEXT_RECALL,
+  type PayloadRecallRequestV1,
+  type PayloadRecallServiceV1,
+  type ToolRunResult,
+  toolDefinitions,
+  validateToolArguments,
+} from "@paw/tools";
 
 export const OUTPUT_RECALL_TOOL_PLUGIN_ID_V1 = "paw.output-recall" as const;
 export const OUTPUT_RECALL_TOOL_PLUGIN_VERSION_V1 =

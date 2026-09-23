@@ -1,12 +1,12 @@
 import type { ToolDefinition } from "@paw/core";
 import type { InputFactV1 } from "@paw/protocol";
 
-import { CONTEXT_COMPACT, type ToolRunResult, toolDefinitions } from "@paw/harness";
 import {
   type RuntimeToolPluginEntryV1,
   type RuntimeToolPluginV1,
   canonicalRuntimeResourcePathV1,
 } from "@paw/runtime";
+import { CONTEXT_COMPACT, type ToolRunResult, toolDefinitions } from "@paw/tools";
 
 /** Provider-visible name of the model-invoked compaction request tool. */
 export const CONTEXT_COMPACT_PROVIDER_TOOL_V1 = "context_compact" as const;

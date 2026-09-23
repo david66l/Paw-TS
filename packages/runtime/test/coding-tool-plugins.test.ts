@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { OFF_SHELL_SANDBOX, type ToolRunResult } from "@paw/harness";
+import { OFF_SHELL_SANDBOX, type ToolRunResult } from "@paw/tools";
 
 import {
   FrozenPermissionEngineV1,

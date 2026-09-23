@@ -22,7 +22,7 @@
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@paw/agent": "workspace:*",
     "@paw/core": "workspace:*",
-    "@paw/harness": "workspace:*",
+    "@paw/tools": "workspace:*",
     "@paw/memory": "workspace:*",
     "@paw/memory-plugin": "workspace:*",
     "@paw/models": "workspace:*",

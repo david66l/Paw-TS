@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 import type { ControlReducer, LoopControlState } from "@paw/agent-loop";
-import { OFF_SHELL_SANDBOX } from "@paw/harness";
 import type { InputFactV1 } from "@paw/protocol";
+import { OFF_SHELL_SANDBOX } from "@paw/tools";
 
 import {
   RuntimeManagedJobControllerV1,

@@ -39,7 +39,7 @@ import {
   isMutatingTool,
   saveCheckpoint,
 } from "@paw/core";
-import type { HarnessContext, ShellSandboxConfig, ToolRunResult } from "@paw/harness";
+import type { HarnessContext, ShellSandboxConfig, ToolRunResult } from "@paw/tools";
 import {
   JOB_KILL,
   JOB_LIST,
@@ -49,8 +49,8 @@ import {
   MCP_PROXY,
   UNDO_LAST_EDIT,
   toolRequiresApproval,
-} from "@paw/harness";
-import type { FileLockLike } from "@paw/harness";
+} from "@paw/tools";
+import type { FileLockLike } from "@paw/tools";
 import type { ExecutionEnvironmentRegistryV1 } from "../execution-environment.js";
 import type { ToolEffectPolicy, ToolExecutionPolicy } from "../execution-policy.js";
 import { collectToolRecoveryMessage } from "../lifecycle/task-lifecycle.js";
@@ -546,7 +546,7 @@ export async function executeToolCalls(
   // 步骤 4：执行工具。注入 effect policy 时必须串行，确保每个 before/after
   // 快照只归因于一个工具；没有 effect policy 时保留原有并行语义。
   // 使用动态 import 避免循环依赖
-  const { executeTool } = await import("@paw/harness");
+  const { executeTool } = await import("@paw/tools");
   const executeOne = async (plan: ToolCallPlan): Promise<ToolRunResult> => {
     const call = plan.call;
     // 被策略阻止 → 返回 block 结果

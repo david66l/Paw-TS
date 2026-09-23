@@ -5,7 +5,7 @@
  * only the default resolvers and shell policy differ.
  */
 
-import { type AutonomyShellLevel, applyAutonomyShellPolicy } from "@paw/harness";
+import { type AutonomyShellLevel, applyAutonomyShellPolicy } from "@paw/tools";
 import type { AskUserResolveInput, ToolApprovalInput } from "../orchestrator.js";
 
 export type AutonomyLevel = AutonomyShellLevel;

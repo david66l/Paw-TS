@@ -205,7 +205,7 @@ describe("findWp1aSourceImportViolations", () => {
         [
           'import path from "node:path";',
           'import type { ToolExecutor } from "@paw/agent-loop";',
-          'import { executeTool } from "@paw/harness";',
+          'import { executeTool } from "@paw/tools";',
           'export type { LocalRuntime } from "./local.js";',
         ].join("\n"),
       );

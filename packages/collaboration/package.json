@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@paw/core": "workspace:*",
-    "@paw/harness": "workspace:*",
+    "@paw/tools": "workspace:*",
     "@paw/protocol": "workspace:*",
     "@paw/runtime": "workspace:*",
     "@paw/workspace": "workspace:*"

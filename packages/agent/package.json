@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "@paw/core": "workspace:*",
-    "@paw/harness": "workspace:*",
+    "@paw/tools": "workspace:*",
     "@paw/memory": "workspace:*",
     "@paw/models": "workspace:*",
     "@paw/settings": "workspace:*",

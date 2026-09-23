@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { type ToolRunResult, toolDefinitions, validateToolArguments } from "@paw/harness";
+import { type ToolRunResult, toolDefinitions, validateToolArguments } from "@paw/tools";
 import { checkWorkspacePath } from "@paw/workspace";
 
 import type { RuntimeToolPluginEntryV1, ToolClassificationV1 } from "./registry.js";

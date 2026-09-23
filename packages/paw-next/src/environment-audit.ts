@@ -6,9 +6,9 @@ import type {
   CompletionReviewerResultV1,
 } from "@paw/completion-review";
 import { createCompletionReviewEvidencePacketV1 } from "@paw/completion-review";
-import type { SubAgentResult } from "@paw/harness";
 import type { EnvironmentAuditEvidenceV1, InputFactV1, RunJournalEnvelopeV1 } from "@paw/protocol";
 import { type BrowserAuditCheckV1, assertBrowserAuditCheckV1 } from "@paw/protocol";
+import type { SubAgentResult } from "@paw/tools";
 import {
   BROWSER_AUDIT_POLICY,
   BROWSER_PROOF_PREFIX,

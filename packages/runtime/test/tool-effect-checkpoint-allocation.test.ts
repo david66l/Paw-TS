@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { OFF_SHELL_SANDBOX, UNDO_LAST_EDIT } from "@paw/harness";
 import type { InputFactV1 } from "@paw/protocol";
+import { OFF_SHELL_SANDBOX, UNDO_LAST_EDIT } from "@paw/tools";
 
 import {
   FrozenPermissionEngineV1,

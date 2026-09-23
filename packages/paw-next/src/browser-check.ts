@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import type { ToolRunResult } from "@paw/harness";
 import type { RuntimeToolPluginV1 } from "@paw/runtime";
+import type { ToolRunResult } from "@paw/tools";
 
 export const BROWSER_CHECK = "workspace.browser_check";
 export const BROWSER_AUDIT_POLICY = "paw.browser-audit.v1" as const;

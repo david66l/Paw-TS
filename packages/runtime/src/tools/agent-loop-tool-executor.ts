@@ -1,5 +1,10 @@
 import type { ToolExecutor, ToolSettlement } from "@paw/agent-loop";
 import { requiresToolCheckpointV1 } from "@paw/core";
+import type {
+  InputFactV1,
+  ToolEffectCheckpointAllocatedFactV1,
+  ToolPermissionResolvedFactV1,
+} from "@paw/protocol";
 import {
   type HarnessContext,
   type ToolEffectPolicy,
@@ -7,12 +12,7 @@ import {
   type ToolExecutionTransactionOutcome,
   type ToolRunResult,
   executeToolTransaction,
-} from "@paw/harness";
-import type {
-  InputFactV1,
-  ToolEffectCheckpointAllocatedFactV1,
-  ToolPermissionResolvedFactV1,
-} from "@paw/protocol";
+} from "@paw/tools";
 
 import type {
   ApprovalPromptV1,

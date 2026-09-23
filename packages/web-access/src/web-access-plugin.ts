@@ -1,12 +1,12 @@
 import path from "node:path";
 
 import type { ToolDefinition } from "@paw/core";
-import { type ToolRunResult, WEBFETCH, WEBSEARCH, validateToolArguments } from "@paw/harness";
 import {
   type RuntimeToolPluginEntryV1,
   type RuntimeToolPluginV1,
   canonicalRuntimeResourcePathV1,
 } from "@paw/runtime";
+import { type ToolRunResult, WEBFETCH, WEBSEARCH, validateToolArguments } from "@paw/tools";
 
 import {
   DEFAULT_WEB_ACCESS_POLICY_V1,

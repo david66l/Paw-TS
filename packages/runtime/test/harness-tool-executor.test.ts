@@ -3,12 +3,12 @@ import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { type McpClientManager, OFF_SHELL_SANDBOX, type ToolRunResult } from "@paw/harness";
 import {
   RUN_JOURNAL_SCHEMA_VERSION_V1,
   type ToolPermissionResolvedFactV1,
   parseRunJournalPrefixV1,
 } from "@paw/protocol";
+import { type McpClientManager, OFF_SHELL_SANDBOX, type ToolRunResult } from "@paw/tools";
 
 import {
   type ApprovalPromptV1,

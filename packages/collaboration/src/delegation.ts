@@ -3,7 +3,7 @@ import type {
   SubAgentLauncher,
   SubAgentOutcomeV1,
   SubAgentResult,
-} from "@paw/harness";
+} from "@paw/tools";
 
 import {
   type CollaborationPolicyV1,

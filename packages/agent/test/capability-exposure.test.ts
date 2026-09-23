@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { toolDefinitions, toolNameReverseMap } from "@paw/harness";
+import { toolDefinitions, toolNameReverseMap } from "@paw/tools";
 
 import {
   CapabilityExposureShadowV1,

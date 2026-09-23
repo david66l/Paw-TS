@@ -22,7 +22,7 @@ flowchart TB
 
     subgraph 平台服务层
         CORE[@paw/core<br/>会话 / 上下文 / 记忆 / 事件]
-        HARNESS[@paw/harness<br/>工具注册表 / MCP 客户端 / Shell Guard]
+        HARNESS[@paw/tools<br/>工具注册表 / MCP 客户端 / Shell Guard]
         WORKSPACE[@paw/workspace<br/>文件 / Git / LSP / 网络 / @mention]
         MODELS[@paw/models<br/>LLM 适配器]
         SETTINGS[@paw/settings<br/>本地配置 / 凭据]

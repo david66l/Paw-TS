@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { SubAgentLauncher } from "@paw/harness";
 import type { InputFactV1 } from "@paw/protocol";
 import { createFrozenToolRegistryV1 } from "@paw/runtime";
+import type { SubAgentLauncher } from "@paw/tools";
 
 import {
   DEFAULT_COLLABORATION_POLICY_V1,

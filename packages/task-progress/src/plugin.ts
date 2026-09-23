@@ -1,12 +1,12 @@
 import path from "node:path";
 
 import type { ToolDefinition } from "@paw/core";
-import { PROGRESS_READ, TODO_WRITE, type ToolRunResult, toolDefinitions } from "@paw/harness";
 import {
   type RuntimeToolPluginEntryV1,
   type RuntimeToolPluginV1,
   canonicalRuntimeResourcePathV1,
 } from "@paw/runtime";
+import { PROGRESS_READ, TODO_WRITE, type ToolRunResult, toolDefinitions } from "@paw/tools";
 
 import {
   DEFAULT_TASK_PROGRESS_POLICY_V1,

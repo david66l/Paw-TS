@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { PROGRESS_READ, TODO_WRITE, type TaskProgressServiceV1, executeTool } from "@paw/harness";
 import type { InputFactV1, JsonValue, RunJournalEnvelopeV1 } from "@paw/protocol";
 import { createFrozenToolRegistryV1 } from "@paw/runtime";
+import { PROGRESS_READ, TODO_WRITE, type TaskProgressServiceV1, executeTool } from "@paw/tools";
 
 import {
   TASK_PROGRESS_TOOL_PLUGIN_VERSION_V1,

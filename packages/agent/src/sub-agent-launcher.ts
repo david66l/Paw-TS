@@ -7,16 +7,16 @@
 
 import type { CostTracker, RunEventEnvelope } from "@paw/core";
 import { ContextManager } from "@paw/core";
+import type { LanguageModel } from "@paw/models";
 import type {
   McpServerConfig,
   ShellSandboxConfig,
   SubAgentLaunchOptions,
   SubAgentLauncher,
   SubAgentResult,
-} from "@paw/harness";
-import type { LanguageModel } from "@paw/models";
+} from "@paw/tools";
 
-import type { FileLockLike } from "@paw/harness";
+import type { FileLockLike } from "@paw/tools";
 import { materializeAgent } from "./agents/factory.js";
 import type { AgentRegistry } from "./agents/registry.js";
 import type { ToolEffectPolicy, ToolExecutionPolicy } from "./execution-policy.js";

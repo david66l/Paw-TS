@@ -3,13 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { type ModelTokenUsage, atomicWrite } from "@paw/core";
+import type { LanguageModel } from "@paw/models";
 import {
   type ShellSandboxConfig,
   type ToolRunResult,
   isShellSandboxEnabled,
   runShellInWorkspace,
-} from "@paw/harness";
-import type { LanguageModel } from "@paw/models";
+} from "@paw/tools";
 
 import { parseCommandChain } from "../shell-command.js";
 import { classifyVerificationOutcome } from "../task-state.js";

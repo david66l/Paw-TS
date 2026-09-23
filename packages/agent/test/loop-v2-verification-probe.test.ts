@@ -3,8 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { type ShellSandboxConfig, runShellInWorkspace } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
+import { type ShellSandboxConfig, runShellInWorkspace } from "@paw/tools";
 
 import { sha256Canonical } from "../src/loop-v2/canonical.js";
 import {

@@ -1,12 +1,12 @@
 import path from "node:path";
 
 import type { ToolDefinition } from "@paw/core";
-import { RUN_AGENT, type ToolRunResult } from "@paw/harness";
 import {
   type RuntimeToolPluginEntryV1,
   type RuntimeToolPluginV1,
   canonicalRuntimeResourcePathV1,
 } from "@paw/runtime";
+import { RUN_AGENT, type ToolRunResult } from "@paw/tools";
 
 import {
   collaborationDelegationRequiresWriteV1,

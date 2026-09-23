@@ -13,7 +13,7 @@
  * - 文件写入：提取 path + bytes_written
  */
 
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 
 /** 详情文本最大字符数 */
 const MAX_DETAIL_CHARS = 6000;

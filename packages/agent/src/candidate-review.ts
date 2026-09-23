@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { ChatMessage, CostTracker, ModelTokenUsage, RunEventEnvelope } from "@paw/core";
-import type { SubAgentLauncher } from "@paw/harness";
 import type { LanguageModel } from "@paw/models";
+import type { SubAgentLauncher } from "@paw/tools";
 import { gitDiff } from "@paw/workspace";
 import {
   type AcceptanceCriterion,

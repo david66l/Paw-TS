@@ -11,7 +11,7 @@
  */
 
 import type { RunEvent } from "@paw/core";
-import type { SubAgentLauncher } from "@paw/harness";
+import type { SubAgentLauncher } from "@paw/tools";
 import { type CompletionDecision, decideIncomplete } from "../lifecycle/completion-policy.js";
 import type { TaskStateManager } from "../task-state.js";
 import type { MeaAuditReportV1 } from "./audit-report.js";

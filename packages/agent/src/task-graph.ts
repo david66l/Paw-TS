@@ -1,5 +1,5 @@
 import type { AgentToolCallAction } from "@paw/core";
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 import type { TaskState } from "./task-state.js";
 
 export const TASK_GRAPH_SCHEMA_V1 = "paw.task-graph.v1" as const;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { ArtifactRegistry, ContextManager, parseArchiveStub } from "@paw/core";
-import { CONTEXT_RECALL, executeTool } from "@paw/harness";
+import { CONTEXT_RECALL, executeTool } from "@paw/tools";
 
 import { finalizeToolExecution } from "../src/orchestrator/tool-runner.js";
 import {

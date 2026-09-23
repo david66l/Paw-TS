@@ -23,10 +23,10 @@ import type {
   RunEvent,
   RunEventEnvelope,
 } from "@paw/core";
-import type { McpClientManager } from "@paw/harness";
 import type { MemoryRuntime } from "@paw/memory";
 import type { LanguageModel, ToolDefinition } from "@paw/models";
 import type { TaskPlanner } from "@paw/store";
+import type { McpClientManager } from "@paw/tools";
 import type { CandidateReviewer } from "../candidate-review.js";
 import type { CapabilityExposureShadowV1 } from "../capability-exposure.js";
 import type { CapabilitySetV1 } from "../capability-set.js";
@@ -230,7 +230,7 @@ export interface PhaseContext {
   /** 用户的原始目标文本 */
   readonly specGoal: string;
   /** Shell 沙箱配置 */
-  readonly shellSandbox?: import("@paw/harness").ShellSandboxConfig;
+  readonly shellSandbox?: import("@paw/tools").ShellSandboxConfig;
   /** 会话级工具输出去重器（P1 入口闸，orchestrator 每 run 一个） */
   readonly payloadDeduper?: import("./truncate-payload.js").PayloadDeduper;
   /** P3 冷库：会话级可寻址归档注册表（context.recall 工具 + 截断全文归档） */

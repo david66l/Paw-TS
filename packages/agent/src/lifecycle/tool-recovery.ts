@@ -2,7 +2,7 @@
  * ToolFailureRecovery — structured next-step hints from tool error codes / summaries.
  */
 
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 import { isControlPlaneToolResult } from "./control-plane.js";
 
 export type RecoveryAction =

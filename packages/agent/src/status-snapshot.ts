@@ -1,5 +1,5 @@
 import type { AgentToolCallAction } from "@paw/core";
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 import type { ExecutionEnvironmentRegistryV1 } from "./execution-environment.js";
 import { toolCallDedupKey } from "./parse-agent-action.js";
 import {

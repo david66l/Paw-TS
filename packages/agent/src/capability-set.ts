@@ -1,5 +1,5 @@
-import { CORE_MODEL_ACTIONS, MCP_PROXY } from "@paw/harness";
 import type { ToolDefinition } from "@paw/models";
+import { CORE_MODEL_ACTIONS, MCP_PROXY } from "@paw/tools";
 
 export const CAPABILITY_SET_SCHEMA_V1 = "paw.capability-set.v1" as const;
 

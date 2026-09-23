@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ToolSettlement } from "@paw/agent-loop";
-import type { ToolRunResult } from "@paw/harness";
 import type { DurableJsonPayloadV1, JsonValue } from "@paw/protocol";
+import type { ToolRunResult } from "@paw/tools";
 import { type DurableJsonEncoderV1, toDurableToolSettlementV1 } from "../src/index.js";
 
 describe("durable tool observations", () => {

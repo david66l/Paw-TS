@@ -114,7 +114,7 @@ export function findWp1aSourceImportViolations(
         return ![
           "@paw/agent-loop",
           "@paw/core",
-          "@paw/harness",
+          "@paw/tools",
           "@paw/protocol",
           "@paw/workspace",
         ].some(

@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { ToolRunResult } from "@paw/harness";
 import type { LanguageModel, ModelCompletionResult } from "@paw/models";
 import { type VisualAuditCheckV1, assertVisualAuditCheckV1 } from "@paw/protocol";
+import type { ToolRunResult } from "@paw/tools";
 import { BROWSER_PROOF_PREFIX, runBrowserCheck } from "./browser-check.js";
 
 const hash = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");

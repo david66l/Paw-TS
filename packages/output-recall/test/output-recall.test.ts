@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { CONTEXT_RECALL } from "@paw/harness";
 import type { JsonValue, RunJournalEnvelopeV1 } from "@paw/protocol";
 import { createFrozenToolRegistryV1 } from "@paw/runtime";
+import { CONTEXT_RECALL } from "@paw/tools";
 
 import {
   type OutputRecallPolicyV1,

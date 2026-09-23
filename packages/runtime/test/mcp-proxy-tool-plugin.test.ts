@@ -1,7 +1,7 @@
 import os from "node:os";
 
 import { describe, expect, test } from "bun:test";
-import { MCP_PROXY } from "@paw/harness";
+import { MCP_PROXY } from "@paw/tools";
 
 import {
   type RuntimeToolCallV1,

@@ -21,7 +21,7 @@ import { z } from "zod";
 /**
  * MCP 服务器配置的 schema。
  *
- * 与 `@paw/harness` 的 `McpServerConfig` 同形；对来自用户手写 JSON 的
+ * 与 `@paw/tools` 的 `McpServerConfig` 同形；对来自用户手写 JSON 的
  * `mcp_servers` 做运行时校验，避免把字符串当成服务器数组使用。
  */
 export const mcpServerConfigSchema = z.object({

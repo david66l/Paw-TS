@@ -13,7 +13,7 @@
   "dependencies": {
     "@paw/core": "workspace:*",
     "@paw/agent-loop": "workspace:*",
-    "@paw/harness": "workspace:*",
+    "@paw/tools": "workspace:*",
     "@paw/protocol": "workspace:*",
     "@paw/runtime": "workspace:*"
   }

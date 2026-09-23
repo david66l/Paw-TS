@@ -1,4 +1,4 @@
-import type { TaskProgressItemV1 } from "@paw/harness";
+import type { TaskProgressItemV1 } from "@paw/tools";
 
 export interface TaskProgressPolicyV1 {
   readonly maxItems: number;

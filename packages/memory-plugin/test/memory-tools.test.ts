@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ToolSettlement } from "@paw/agent-loop";
-import type { ToolRunResult } from "@paw/harness";
 import type { MemoryCardV1 } from "@paw/protocol";
 import type { RuntimeToolCallV1 } from "@paw/runtime";
+import type { ToolRunResult } from "@paw/tools";
 
 import {
   type MemoryProviderQueryV1,

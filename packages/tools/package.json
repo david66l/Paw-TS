@@ -1,7 +1,8 @@
 {
-  "name": "@paw/harness",
+  "name": "@paw/tools",
   "version": "0.0.1",
   "private": true,
+  "description": "工具层：工具定义/派发/处理器、shell 策略与沙箱、托管作业、MCP 客户端，以及外部能力的端口定义（HarnessContext）。不含 agent 循环、上下文、状态、权限与成本 —— 那些在 @paw/agent 与 @paw/runtime。",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

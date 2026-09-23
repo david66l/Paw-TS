@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { LSP, SYMBOL_SEARCH } from "@paw/harness";
+import { LSP, SYMBOL_SEARCH } from "@paw/tools";
 
 import type { RuntimeToolPluginV1, ToolClassificationV1 } from "./registry.js";
 import {

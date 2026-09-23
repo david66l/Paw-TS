@@ -1,6 +1,5 @@
 import path from "node:path";
 
-import type { ShellSandboxConfig } from "@paw/harness";
 import type { LanguageModel, PawModelTransport, PawProviderProtocol } from "@paw/models";
 import {
   type FileDurableJsonPayloadRuntimePolicyV1,
@@ -8,6 +7,7 @@ import {
   type SessionLeaseHeartbeatPolicyV1,
   freezeFileDurableJsonPayloadRuntimePolicyV1,
 } from "@paw/runtime";
+import type { ShellSandboxConfig } from "@paw/tools";
 
 import { preparePawNextProductRuntimeV1 } from "./composition.js";
 import {

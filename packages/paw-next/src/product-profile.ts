@@ -1,9 +1,9 @@
 import path from "node:path";
 
-import type { ShellSandboxConfig } from "@paw/harness";
 import type { PawModelTransport, PawProviderProtocol } from "@paw/models";
 import type { FrozenPermissionConfigV1, SessionLeaseHeartbeatPolicyV1 } from "@paw/runtime";
 import { defaultSettingsPath, pawSettingsLocalSchema } from "@paw/settings";
+import type { ShellSandboxConfig } from "@paw/tools";
 
 import {
   type RunExistingPawNextTaskOptionsV1,

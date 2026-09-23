@@ -20,7 +20,7 @@ Do not import Python code or depend on `../src/paw` from this tree.
 | `packages/memory-core` | Runtime-independent evidence-first memory; standalone repository boundary |
 | `packages/memory-plugin` | Paw storage, composition, and migration adapters for memory |
 | `packages/agent` | `AgentOrchestrator`, compression & sub-agents |
-| `packages/harness` | Tool registry, MCP, shell guard |
+| `packages/tools` | Tool registry, MCP, shell guard |
 | `packages/workspace` | File/git/LSP tools |
 | `packages/models` | OpenAI / Anthropic / Ollama adapters |
 | `packages/settings` | Local settings / credentials |

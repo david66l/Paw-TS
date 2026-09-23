@@ -1,11 +1,11 @@
 import type { ToolSettlement } from "@paw/agent-loop";
-import type { ToolRunResult } from "@paw/harness";
 import {
   type DurableJsonPayloadV1,
   type JsonValue,
   TOOL_OBSERVATION_SCHEMA_VERSION_V1,
   type ToolSettledFactV1,
 } from "@paw/protocol";
+import type { ToolRunResult } from "@paw/tools";
 
 /** The storage layer decides whether JSON remains inline or becomes an artifact. */
 export interface DurableJsonEncoderV1 {

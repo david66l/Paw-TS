@@ -7,7 +7,7 @@
     "baseUrl": "../..",
     "paths": {
       "@paw/core": ["packages/core/src/index.ts"],
-      "@paw/harness": ["packages/harness/src/index.ts"],
+      "@paw/tools": ["packages/tools/src/index.ts"],
       "@paw/protocol": ["packages/protocol/src/index.ts"],
       "@paw/runtime": ["packages/runtime/src/index.ts"],
       "@paw/workspace": ["packages/workspace/src/index.ts"]

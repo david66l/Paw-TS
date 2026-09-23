@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 
 import type { AgentToolCallAction } from "@paw/core";
-import type { ShellSandboxConfig, ToolRunResult } from "@paw/harness";
+import type { ShellSandboxConfig, ToolRunResult } from "@paw/tools";
 
 export const EXECUTION_ENVIRONMENT_SCHEMA_V1 = "paw.execution-environment.v1" as const;
 

@@ -1,5 +1,5 @@
 import type { AgentAcceptanceUpdateAction, AgentToolCallAction } from "@paw/core";
-import type { ToolRunResult } from "@paw/harness";
+import type { ToolRunResult } from "@paw/tools";
 import { isControlPlaneToolResult } from "./lifecycle/control-plane.js";
 import type { VerificationFailureRecordV2 } from "./loop-v2/failure-records.js";
 import {

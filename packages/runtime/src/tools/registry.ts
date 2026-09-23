@@ -19,7 +19,7 @@ import {
   classifyShellCommand,
   toolDefinitions,
   validateToolArguments,
-} from "@paw/harness";
+} from "@paw/tools";
 import { type WorkspacePathPolicyV1, checkWorkspacePath } from "@paw/workspace";
 
 export const PAW_NEXT_INITIAL_TOOLS_V1 = [

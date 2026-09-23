@@ -1,16 +1,16 @@
 import { canonicalJsonStringifyV1 } from "@paw/core";
+import type { JsonValue, RunJournalEnvelopeV1, ToolSettledFactV1 } from "@paw/protocol";
+import {
+  type VerifiedCanonicalPayloadEvidenceV1,
+  projectCanonicalSessionInputSnapshotV1,
+} from "@paw/runtime";
 import type {
   ManagedJobSnapshotV1,
   TaskProgressActivityV1,
   TaskProgressItemV1,
   TaskProgressServiceV1,
   TaskProgressSnapshotV1,
-} from "@paw/harness";
-import type { JsonValue, RunJournalEnvelopeV1, ToolSettledFactV1 } from "@paw/protocol";
-import {
-  type VerifiedCanonicalPayloadEvidenceV1,
-  projectCanonicalSessionInputSnapshotV1,
-} from "@paw/runtime";
+} from "@paw/tools";
 
 import {
   DEFAULT_TASK_PROGRESS_POLICY_V1,

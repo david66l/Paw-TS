@@ -38,7 +38,7 @@ do
 done
 
 if rg -n 'FileProvider|retrieveRoutedMemories|UnifiedMemoryStore|createMemoryWriter|KeywordMemoryRetriever' \
-  packages/agent/src packages/harness/src --glob '*.ts' 2>/dev/null; then
+  packages/agent/src packages/tools/src --glob '*.ts' 2>/dev/null; then
   echo "FAIL: agent/harness still references deleted legacy online memory APIs"
   fail=1
 fi

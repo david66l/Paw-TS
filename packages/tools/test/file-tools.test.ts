@@ -7,7 +7,7 @@ import { executeTool } from "../src/registry/index.js";
 
 /**
  * `workspace.list_dir` / `workspace.glob` / `workspace.grep` 在
- * `packages/harness/test` 里此前 **0 命中**（docs/CODE-REVIEW.md §D9）。
+ * `packages/tools/test` 里此前 **0 命中**（docs/CODE-REVIEW.md §D9）。
  * 这三个是模型最常用的入口，也是"路径能不能跑出工作区"这条策略边界所在，
  * 所以先补它们 —— 其余未覆盖的工具 id 记在 §11.20。
  *

@@ -10,7 +10,7 @@
       "@paw/memory-core/*": ["packages/memory-core/src/*.ts"],
       "@paw/agent-loop": ["packages/agent-loop/src/index.ts"],
       "@paw/core": ["packages/core/src/index.ts"],
-      "@paw/harness": ["packages/harness/src/index.ts"],
+      "@paw/tools": ["packages/tools/src/index.ts"],
       "@paw/memory": ["packages/memory/src/index.ts"],
       "@paw/memory/db": ["packages/memory/src/db/index.ts"],
       "@paw/memory/longterm": ["packages/memory/src/longterm/index.ts"],

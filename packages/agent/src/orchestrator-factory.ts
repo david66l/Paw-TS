@@ -12,14 +12,14 @@ import {
   InMemoryTodoStore,
 } from "@paw/core";
 import type { RunEventEnvelope } from "@paw/core";
+import { createDeepSeekFlashModel, createDefaultLanguageModel } from "@paw/models";
+import type { LanguageModel } from "@paw/models";
+import { defaultSettingsPath, loadPawSettingsLocal, mcpServerConfigSchema } from "@paw/settings";
 import {
   CORE_MODEL_EXECUTABLE_TOOLS,
   type McpServerConfig,
   type ShellSandboxConfig,
-} from "@paw/harness";
-import { createDeepSeekFlashModel, createDefaultLanguageModel } from "@paw/models";
-import type { LanguageModel } from "@paw/models";
-import { defaultSettingsPath, loadPawSettingsLocal, mcpServerConfigSchema } from "@paw/settings";
+} from "@paw/tools";
 import { WorkspaceWatcher } from "@paw/workspace";
 import {
   type AgentRegistry,

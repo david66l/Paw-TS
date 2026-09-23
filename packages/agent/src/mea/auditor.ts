@@ -6,7 +6,7 @@
  * 原始目标、验收标准账本与执行者报告摘要；产出结构化审计报告。
  */
 
-import type { SubAgentLauncher } from "@paw/harness";
+import type { SubAgentLauncher } from "@paw/tools";
 import {
   type MeaAuditReportV1,
   parseMeaAuditReportV1,

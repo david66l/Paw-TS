@@ -5,9 +5,9 @@ import {
   normalizeCollaborationDelegationV1,
   parseCollaborationDelegationPlanV1,
 } from "@paw/collaboration";
-import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
 import type { InputFactV1, JsonValue } from "@paw/protocol";
 import { type BrowserAuditCheckV1, assertBrowserAuditCheckV1 } from "@paw/protocol";
+import type { SubAgentLauncher, SubAgentResult } from "@paw/tools";
 import { fingerprintAuditFile } from "./environment-audit.js";
 
 export const STAGE_GRAPH_POLICY_V1 = "paw.stage-graph.v1" as const;

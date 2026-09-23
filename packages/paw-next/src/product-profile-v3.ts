@@ -1,7 +1,6 @@
 import path from "node:path";
 
 import { createHash } from "node:crypto";
-import type { McpServerConfig, ShellSandboxConfig } from "@paw/harness";
 import {
   type PawNextMemoryPluginProfileV1,
   freezePawNextMemoryPluginProfileV1,
@@ -16,6 +15,7 @@ import {
   type SessionLeaseHeartbeatPolicyV1,
   freezeFileDurableJsonPayloadRuntimePolicyV1,
 } from "@paw/runtime";
+import type { McpServerConfig, ShellSandboxConfig } from "@paw/tools";
 
 import { preparePawNextProductRuntimeIdentityV3 } from "./composition.js";
 import {

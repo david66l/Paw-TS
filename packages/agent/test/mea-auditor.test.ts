@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SubAgentLauncher, SubAgentResult } from "@paw/harness";
+import type { SubAgentLauncher, SubAgentResult } from "@paw/tools";
 import { parseMeaAuditReportV1, renderMeaAuditProtocolV1 } from "../src/mea/audit-report.js";
 import { checkMeaAuditGate, resolveMeaAuditorConfig } from "../src/mea/auditor-gate.js";
 import { runMeaAuditor } from "../src/mea/auditor.js";
